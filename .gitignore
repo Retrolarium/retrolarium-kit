@@ -1,0 +1,25 @@
+# Build output
+build/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+venv/
+
+# Editors and operating systems
+.vs/
+.vscode/
+.idea/
+*.swp
+*~
+Thumbs.db
+desktop.ini
+Desktop.ini
+
+# Downloaded toolchain caches
+.cache/
+
+# Assemblers built by tools/build_toolchains.ps1 (pinned by the manifest)
+src/retrolarium_kit/core/toolchains/payloads/

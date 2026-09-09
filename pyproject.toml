@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "retrolarium-kit"
+version = "0.1.0"
+description = "Reproducible build and reverse-engineering services for Retrolarium"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+rltool = "retrolarium_kit.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+retrolarium_kit = ["ghidra_scripts/*.java", "profiles/*.json", "schemas/*.json", "toolchains/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
