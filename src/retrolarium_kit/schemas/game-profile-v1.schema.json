@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://retrolarium.local/schemas/game-profile-v1.schema.json",
+  "title": "Retrolarium game profile v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schema_version",
+    "profile_version",
+    "id",
+    "name",
+    "platform",
+    "capabilities",
+    "revisions",
+    "resources"
+  ],
+  "properties": {
+    "schema": {"const": "retrolarium.game-profile"},
+    "schema_version": {"const": 1},
+    "profile_version": {"type": "integer", "minimum": 1},
+    "id": {"$ref": "#/$defs/identifier"},
+    "name": {"type": "string", "minLength": 1},
+    "platform": {"$ref": "#/$defs/identifier"},
+    "capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/identifier"}
+    },
+    "revisions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/revision"}
+    },
+    "resources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/resource"}
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "size", "sha1", "sha256", "container"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "name": {"type": "string", "minLength": 1},
+        "size": {"type": "integer", "minimum": 1},
+        "sha1": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "container": {"$ref": "#/$defs/identifier"},
+        "mapper": {"type": "integer", "minimum": 0}
+      }
+    },
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "codec", "capacity_policy", "parameters"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "kind": {"$ref": "#/$defs/identifier"},
+        "codec": {"$ref": "#/$defs/identifier"},
+        "capacity_policy": {"$ref": "#/$defs/identifier"},
+        "parameters": {"type": "object"}
+      }
+    }
+  }
+}

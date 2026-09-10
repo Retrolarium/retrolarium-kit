@@ -1,0 +1,97 @@
+{
+  "schema": "retrolarium.game-profile",
+  "schema_version": 1,
+  "profile_version": 1,
+  "id": "castle-excellent",
+  "name": "Castle Excellent / Castlequest",
+  "platform": "nes",
+  "capabilities": [
+    "rooms",
+    "objects",
+    "fixed-arena-write",
+    "exact-round-trip"
+  ],
+  "revisions": [
+    {
+      "id": "castle-excellent-japan-hsp-05",
+      "name": "Castle Excellent (Japan), HSP-05",
+      "size": 65552,
+      "sha1": "42f7975da9a68a74e141353eb6e2bdc676fc1f77",
+      "sha256": "fd6214cdc441070b9edab74b9c31ad16007bd0873e32c0c883de4544ca69f261",
+      "container": "ines",
+      "mapper": 3
+    },
+    {
+      "id": "castlequest-usa",
+      "name": "Castlequest (USA)",
+      "size": 65552,
+      "sha1": "600b0d2ae76722a62b42be02c0b0becd7ff0a178",
+      "sha256": "35815cd107289a8273fb46dd7c49247a8217ca4e2a7f235fef3aa54566d0ba8c",
+      "container": "ines",
+      "mapper": 3
+    }
+  ],
+  "resources": [
+    {
+      "id": "rooms",
+      "kind": "room-collection",
+      "codec": "castle.prefix-rooms.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "room_count": 100,
+        "width": 20,
+        "height": 20,
+        "codebook_cpu": 58461,
+        "pointer_table_cpu": 59164,
+        "fill_byte": 255,
+        "arenas": [
+          {
+            "bank": 2,
+            "first_room": 0,
+            "last_room": 67,
+            "start": 0,
+            "end": 8192
+          },
+          {
+            "bank": 3,
+            "first_room": 67,
+            "last_room": 100,
+            "start": 0,
+            "end": 5120
+          }
+        ]
+      }
+    },
+    {
+      "id": "objects",
+      "kind": "object-layer",
+      "codec": "castle.object-stream.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "room_count": 100,
+        "width": 20,
+        "height": 20,
+        "stream_cpu": 61291,
+        "stream_end_cpu": 63740,
+        "count_table_cpu": 43850,
+        "state_offsets_cpu": 61190,
+        "state_capacity": 141,
+        "type_count": 61,
+        "maximum_per_room": 24,
+        "fill_byte": 255
+      }
+    },
+    {
+      "id": "mutable-cell-state",
+      "kind": "derived-state-layout",
+      "codec": "castle.mutable-cell-state.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "state_offsets_cpu": 43950,
+        "state_capacity": 108,
+        "final_room_minimum_bytes": 3,
+        "persistent_cell_values": [25, 28, 31, 34, 37, 41, 84]
+      }
+    }
+  ]
+}

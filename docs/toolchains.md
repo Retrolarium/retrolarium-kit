@@ -85,13 +85,18 @@ The native gate currently rebuilds real modular emitter output byte-identically
 for NES, SNES and Mega Drive. This validates AS-specific `binclude` output as
 well as the compiler probes.
 
+The complete Castle Excellent source at commit `72e08e03...` was also copied
+to an ignored clean workspace without its repository-local `bin/`, previous
+build directory or ROM inputs. The materialized NES suite passed the source
+project's own pinned-binary audit and produced the canonical 65,552-byte image
+with SHA-256 `fd6214cdc441070b9edab74b9c31ad16007bd0873e32c0c883de4544ca69f261`.
+Neither the source checkout nor the resulting image is tracked here.
+
 ## Next compatibility gates
 
-1. Build the complete Castle source using the materialized cc65 suite and
-   record the resulting ROM identity without committing the ROM.
-2. Build Flicky using materialized AS/p2bin with its repo-local compiler
+1. Build Flicky using materialized AS/p2bin with its repo-local compiler
    directory hidden.
-3. Produce and smoke-test Linux cc65 payloads before marking the Linux NES
+2. Produce and smoke-test Linux cc65 payloads before marking the Linux NES
    suite complete.
-4. Add modified AS and historical Shining Force profiles only alongside exact
+3. Add modified AS and historical Shining Force profiles only alongside exact
    build fixtures and their complete GPL corresponding sources.
