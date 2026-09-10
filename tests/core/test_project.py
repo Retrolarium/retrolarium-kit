@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -114,6 +115,29 @@ def write_project(root: Path, rom: bytes | None = None) -> Path:
 
 
 class ProjectOperationTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "nt", "bundled PE smoke runs on Windows")
+    def test_bundled_runner_builds_generated_snes_without_docker(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rom = root / "probe.sfc"
+            rom.write_bytes(probe_image("lorom").container_data)
+            project = root / "project"
+            disassemble_snes(rom, project)
+
+            result = build_project(
+                project / "retrolarium-project.json",
+                toolchain_cache=root / "toolchains",
+            )
+
+            self.assertEqual("retrolarium-kit", result["runner"]["kind"])
+            self.assertEqual("ca65-ld65-v1", result["runner"]["recipe"])
+            rebuilt = project / "generated/build/rebuilt.sfc"
+            self.assertEqual(rom.read_bytes(), rebuilt.read_bytes())
+            self.assertEqual(
+                "exact",
+                verify_project(project / "retrolarium-project.json")["status"],
+            )
+
     def test_snes_launch_plan_uses_declared_machine_and_explicit_argv(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
