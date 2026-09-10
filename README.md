@@ -83,6 +83,44 @@ the wheel includes the exact corresponding Flamewing source snapshot for each
 host binary and the full license alongside the executables. cc65 and p2bin
 notices are bundled as well.
 
+## Castle Excellent / Castlequest authoring
+
+The first profile-driven authoring slice recognizes both supported revisions
+by exact hash and validates the complete room/object layout before exposing an
+editable document. The source image is immutable; `build` writes a new image
+and may also write a machine-readable capacity/diff report.
+
+```powershell
+rltool game profiles
+rltool game inspect "Castle Excellent (J).nes"
+rltool game extract "Castle Excellent (J).nes" `
+  --output build/castle/levels.json
+rltool game validate "Castle Excellent (J).nes" build/castle/levels.json
+rltool game build "Castle Excellent (J).nes" build/castle/levels.json `
+  --output build/castle/edited.nes `
+  --report build/castle/build-report.json
+```
+
+Game/revision identities, resource codecs, addresses, arenas and capacity
+rules live in `profiles/game_castle_excellent.json`. A user-supplied profile
+can be selected with `--profile`; it is parsed with the same strict v1
+contract. The shipped codec repacks the two room arenas, room pointers,
+terminated object stream, object count/state offsets and mutable-cell state
+offsets as one transactional `BuildPlan`. Zero-edit builds of both known
+revisions are byte-identical.
+
+The generic Python layer (`Address`, `AddressRange`, `BinaryReader`,
+`BinaryWriter`, `GameProfile`, `ResourceSpec`, `ResourceDocument`,
+`ChangeSet`, `BuildPlan` and `Registry`) is game-independent. The Castle
+adapter is selected by codec id rather than game-specific CLI branching.
+See
+[`Retrolarium_Castle_Integration_Contract.md`](../docs/Retrolarium_Castle_Integration_Contract.md).
+
+The Qt 5.15 consumer calls the same commands with explicit `QProcess`
+arguments. Its first editor presents Castle rooms/cells/objects with undo/redo
+and atomic document saves; it intentionally delegates all codec and capacity
+validation back to this package.
+
 ## Quick start
 
 Run the source-checkout launcher from the repository root. Python 3.11+, Java
