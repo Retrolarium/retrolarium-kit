@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 from typing import Any
 
+from .build_toolchains import ResolvedToolchain, materialize_build_toolchain
 from .contracts import artifact_path, load_disassembly_manifest
 from .ines import load_ines
 from .megadrive import load_megadrive
@@ -82,25 +83,34 @@ def classify_mame_failure(stderr: str) -> tuple[str, dict[str, Any] | None]:
     )
 
 
-def build_project(
-    manifest_path: Path, *, container: str | None = None
-) -> dict[str, Any]:
-    manifest_path = manifest_path.resolve()
-    manifest = load_disassembly_manifest(manifest_path, verify_rebuilt=False)
-    root = manifest_path.parent
-    operation = manifest["operations"]["build"]
-    selected_container = container or operation.get("default_container")
-    if not isinstance(selected_container, str) or not selected_container:
-        raise ProjectError(
-            "build operation needs --container because the manifest has no default"
-        )
-    project_directory = artifact_path(root, operation["project_directory"])
-    output = artifact_path(root, operation["output"])
+def _operation_argv(operation: dict[str, Any]) -> list[str]:
     argv = operation.get("argv", ["make", "all"])
     if not isinstance(argv, list) or not argv or any(
         not isinstance(value, str) or not value for value in argv
     ):
         raise ProjectError("build operation argv must be a non-empty string array")
+    return argv
+
+
+def _run_build_process(
+    command: list[str],
+    *,
+    project_directory: Path,
+    environment: dict[str, str] | None = None,
+) -> None:
+    result = subprocess.run(
+        command,
+        cwd=project_directory,
+        env=environment,
+        text=True,
+    )
+    if result.returncode:
+        raise ProjectError(f"project build failed with exit code {result.returncode}")
+
+
+def _docker_build(
+    operation: dict[str, Any], project_directory: Path, selected_container: str
+) -> dict[str, str]:
     command = [
         "docker",
         "run",
@@ -110,11 +120,183 @@ def build_project(
         "--workdir",
         "/work",
         selected_container,
-        *argv,
+        *_operation_argv(operation),
     ]
-    result = subprocess.run(command, text=True)
-    if result.returncode:
-        raise ProjectError(f"project build failed with exit code {result.returncode}")
+    _run_build_process(command, project_directory=project_directory)
+    return {"kind": "docker", "container": selected_container}
+
+
+def _project_relative_path(
+    project_directory: Path, value: object, name: str
+) -> tuple[Path, str]:
+    try:
+        path = artifact_path(project_directory, value)
+    except (OSError, ValueError) as exc:
+        raise ProjectError(f"invalid {name}: {exc}") from exc
+    relative = path.relative_to(project_directory).as_posix()
+    return path, relative
+
+
+def _ca65_build(
+    operation: dict[str, Any],
+    project_directory: Path,
+    output: Path,
+    suite: ResolvedToolchain,
+) -> None:
+    source, source_relative = _project_relative_path(
+        project_directory, operation.get("source"), "ca65 source"
+    )
+    linker, linker_relative = _project_relative_path(
+        project_directory, operation.get("linker_config"), "linker config"
+    )
+    object_file, object_relative = _project_relative_path(
+        project_directory, operation.get("object"), "object output"
+    )
+    map_file, map_relative = _project_relative_path(
+        project_directory, operation.get("map"), "map output"
+    )
+    if not source.is_file() or not linker.is_file():
+        raise ProjectError("ca65 recipe input is missing")
+    object_file.parent.mkdir(parents=True, exist_ok=True)
+    map_file.parent.mkdir(parents=True, exist_ok=True)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    object_file.unlink(missing_ok=True)
+    output.unlink(missing_ok=True)
+    _run_build_process(
+        [str(suite.command("ca65")), "-g", "-o", object_relative, source_relative],
+        project_directory=project_directory,
+        environment=suite.process_environment(),
+    )
+    _run_build_process(
+        [
+            str(suite.command("ld65")),
+            "-C",
+            linker_relative,
+            "-m",
+            map_relative,
+            "-o",
+            output.relative_to(project_directory).as_posix(),
+            object_relative,
+        ],
+        project_directory=project_directory,
+        environment=suite.process_environment(),
+    )
+
+
+def _asl_build(
+    operation: dict[str, Any],
+    project_directory: Path,
+    output: Path,
+    suite: ResolvedToolchain,
+) -> None:
+    source, source_relative = _project_relative_path(
+        project_directory, operation.get("source"), "AS source"
+    )
+    object_file, object_relative = _project_relative_path(
+        project_directory, operation.get("object"), "AS object output"
+    )
+    if not source.is_file():
+        raise ProjectError("AS recipe input is missing")
+    if '"' in source_relative or "\n" in source_relative or "\r" in source_relative:
+        raise ProjectError("AS source path cannot be represented in an include")
+    object_file.parent.mkdir(parents=True, exist_ok=True)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    wrapper = object_file.parent / "retrolarium-main.68k"
+    wrapper_relative = wrapper.relative_to(project_directory).as_posix()
+    wrapper.write_text(
+        "                cpu 68000\n"
+        f'                include "{source_relative}"\n'
+        "                end\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    object_file.unlink(missing_ok=True)
+    output.unlink(missing_ok=True)
+    _run_build_process(
+        [
+            str(suite.command("asl")),
+            "-xx",
+            "-n",
+            "-q",
+            "-A",
+            "-L",
+            "-U",
+            "-i",
+            ".",
+            "-o",
+            object_relative,
+            wrapper_relative,
+        ],
+        project_directory=project_directory,
+        environment=suite.process_environment(),
+    )
+    _run_build_process(
+        [
+            str(suite.command("p2bin")),
+            object_relative,
+            output.relative_to(project_directory).as_posix(),
+            "-p=FF",
+        ],
+        project_directory=project_directory,
+        environment=suite.process_environment(),
+    )
+
+
+def _bundled_build(
+    operation: dict[str, Any],
+    project_directory: Path,
+    output: Path,
+    cache_root: Path | None,
+) -> dict[str, str]:
+    suite_id = operation.get("toolchain_suite")
+    recipe = operation.get("recipe")
+    if not isinstance(suite_id, str) or not isinstance(recipe, str):
+        raise ProjectError("bundled build operation has no toolchain suite or recipe")
+    suite = materialize_build_toolchain(suite_id, cache_root=cache_root)
+    if recipe == "ca65-ld65-v1" and suite_id == "nes":
+        _ca65_build(operation, project_directory, output, suite)
+    elif recipe == "asl-p2bin-v1" and suite_id == "megadrive":
+        _asl_build(operation, project_directory, output, suite)
+    else:
+        raise ProjectError(f"unsupported bundled build recipe: {suite_id}/{recipe}")
+    return {
+        "kind": "retrolarium-kit",
+        "suite": suite.suite,
+        "release": suite.release,
+        "host": suite.host,
+        "recipe": recipe,
+    }
+
+
+def build_project(
+    manifest_path: Path,
+    *,
+    container: str | None = None,
+    toolchain_cache: Path | None = None,
+) -> dict[str, Any]:
+    manifest_path = manifest_path.resolve()
+    manifest = load_disassembly_manifest(manifest_path, verify_rebuilt=False)
+    root = manifest_path.parent
+    operation = manifest["operations"]["build"]
+    project_directory = artifact_path(root, operation["project_directory"])
+    output = artifact_path(root, operation["output"])
+    try:
+        output.relative_to(project_directory)
+    except ValueError as exc:
+        raise ProjectError("build output must be inside the project directory") from exc
+    if container is not None:
+        runner = _docker_build(operation, project_directory, container)
+    elif operation.get("runner") == "retrolarium-kit":
+        runner = _bundled_build(
+            operation, project_directory, output, toolchain_cache
+        )
+    else:
+        default_container = operation.get("default_container")
+        if not isinstance(default_container, str) or not default_container:
+            raise ProjectError(
+                "build operation has neither a bundled recipe nor a container"
+            )
+        runner = _docker_build(operation, project_directory, default_container)
     if not output.is_file():
         raise ProjectError(f"build did not produce declared artifact: {output}")
     document = {
@@ -123,7 +305,7 @@ def build_project(
         "status": "built",
         "manifest_sha256": sha256_file(manifest_path),
         "operation": operation["id"],
-        "runner": {"kind": "docker", "container": selected_container},
+        "runner": runner,
         "artifact": {
             "path": operation["output"],
             "size": output.stat().st_size,

@@ -45,6 +45,44 @@ NES 2.0 and unprofiled mappers are rejected explicitly. Overlapping PRG windows
 are analyzed independently and emitted as ordered ca65 segments with
 bank-qualified symbols.
 
+## Bundled compiler suites
+
+Installing the wheel now installs the pinned compilers used by the first NES
+and Mega Drive authoring projects. No compiler download is performed at first
+use: the command only copies hash-verified package data into a writable cache.
+
+```powershell
+python -m pip install retrolarium-kit
+rltool build-tools status
+rltool build-tools materialize nes
+rltool build-tools materialize megadrive
+rltool build-tools path nes ca65
+rltool build-tools path megadrive asl
+```
+
+Python build integrations should use the public API instead of locating a
+repository-local `bin/` directory:
+
+```python
+from retrolarium_kit.build_toolchains import materialize_build_toolchain
+
+nes = materialize_build_toolchain("nes")
+ca65 = nes.command("ca65")
+ld65 = nes.command("ld65")
+
+sega = materialize_build_toolchain("megadrive")
+asl = sega.command("asl")
+p2bin = sega.command("p2bin")
+environment = sega.process_environment()
+```
+
+The `2026.09.11` payload provides both suites on Windows x86-64 and the Mega
+Drive suite on Linux x86-64. Linux cc65 and macOS suites remain explicitly
+unavailable until native wheel smoke tests exist. AS is GPL-2.0-or-later, so
+the wheel includes the exact corresponding Flamewing source snapshot for each
+host binary and the full license alongside the executables. cc65 and p2bin
+notices are bundled as well.
+
 ## Quick start
 
 Run the source-checkout launcher from the repository root. Python 3.11+, Java
@@ -57,8 +95,11 @@ python retrolarium/fixtures/scripts/build_fixtures.py build `
 python retrolarium/kit/rltool.py ghidra install
 python retrolarium/kit/rltool.py nes disassemble `
   retrolarium/fixtures/nes/bin/HonkeyPong.nes `
-  --output retrolarium/build/honkey-disassembly `
-  --build-container retrolarium-fixtures-nes:2026-09-09
+  --output retrolarium/build/honkey-disassembly
+python retrolarium/kit/rltool.py project build `
+  retrolarium/build/honkey-disassembly/manifest.json
+python retrolarium/kit/rltool.py project verify `
+  retrolarium/build/honkey-disassembly/manifest.json
 ```
 
 `ghidra install` downloads the versions recorded in
@@ -80,8 +121,11 @@ python retrolarium/fixtures/scripts/build_fixtures.py build `
   megadrive.miniplanets
 python retrolarium/kit/rltool.py megadrive disassemble `
   retrolarium/fixtures/megadrive/bin/megadrive-dualcpu-probe.bin `
-  --output retrolarium/build/megadrive-disassembly `
-  --build-container retrolarium-fixtures-megadrive:2026-09-09
+  --output retrolarium/build/megadrive-disassembly
+python retrolarium/kit/rltool.py project build `
+  retrolarium/build/megadrive-disassembly/retrolarium-project.json
+python retrolarium/kit/rltool.py project verify `
+  retrolarium/build/megadrive-disassembly/retrolarium-project.json
 python retrolarium/kit/rltool.py project launch `
   retrolarium/build/megadrive-disassembly/retrolarium-project.json `
   --mame mame_testing/mame/consoles.exe --machine genesis --seconds 2
@@ -99,8 +143,11 @@ python retrolarium/kit/rltool.py snes analyze `
   --output retrolarium/build/snes-lorom-analysis
 python retrolarium/kit/rltool.py snes disassemble `
   retrolarium/fixtures/snes/bin/snes-lorom-probe.sfc `
-  --output retrolarium/build/snes-lorom-disassembly `
-  --build-container retrolarium-fixtures-snes:2026-09-09
+  --output retrolarium/build/snes-lorom-disassembly
+python retrolarium/kit/rltool.py project build `
+  retrolarium/build/snes-lorom-disassembly/retrolarium-project.json
+python retrolarium/kit/rltool.py project verify `
+  retrolarium/build/snes-lorom-disassembly/retrolarium-project.json
 ```
 
 Inspection and independent state-aware W65C816 decoding are available. Full
@@ -131,7 +178,7 @@ generated/linker.cfg                    exact ordered memory layout
 generated/Makefile                      ca65/ld65 rebuild recipe
 generated/emission.json                 source coverage statistics
 generated/symbols.json                  bank-qualified integration symbols
-generated/build/rebuilt.nes             rebuilt image when verification is requested
+generated/build/rebuilt.nes             rebuilt image after project build
 manifest.json                           input, backend, coverage and verification result
 ```
 
@@ -160,6 +207,11 @@ python retrolarium/kit/rltool.py benchmark pointers `
   retrolarium/fixtures/oracles/nes.honkeypong.pointer-tables.json
 python -m unittest discover retrolarium/kit/tests -v
 ```
+
+Generated NES/SNES projects use the bundled `ca65-ld65-v1` recipe, and Mega
+Drive projects use `asl-p2bin-v1`. `project build` therefore needs neither
+Docker nor a local compiler directory; pass `--container IMAGE` only when an
+explicit compatibility build is wanted.
 
 `nes analyze` writes one isolated `banks/bankNN/` workspace per canonical PRG
 projection plus a merged `instructions.json`. Every instruction and flow has an

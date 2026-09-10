@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "retrolarium-kit"
-version = "0.1.0"
+version = "0.2.0"
 description = "Reproducible build and reverse-engineering services for Retrolarium"
 requires-python = ">=3.11"
 dependencies = []
@@ -16,7 +16,16 @@ rltool = "retrolarium_kit.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-retrolarium_kit = ["ghidra_scripts/*.java", "profiles/*.json", "schemas/*.json", "toolchains/*.json"]
+retrolarium_kit = [
+  "ghidra_scripts/*.java",
+  "profiles/*.json",
+  "schemas/*.json",
+  "toolchains/*.json",
+  "_toolchains/manifest.json",
+  "_toolchains/licenses/*.txt",
+  "_toolchains/payloads/*/*/*",
+  "_toolchains/sources/*",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
