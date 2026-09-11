@@ -216,6 +216,7 @@ class StudioProjectTests(unittest.TestCase):
                         "revision": "fixture-v1",
                         "source_sha256": SHA256,
                         "resources": [
+                            {"id": "world", "kind": "world", "codec": "smb.world.v1"},
                             {"id": "maze", "kind": "level", "codec": "pacman.maze-rle.v1"},
                             {"id": "screen", "kind": "screen", "codec": "nes.nametable.v1"},
                             {"id": "text", "kind": "text", "codec": "nes.fixed-text-fields.v1"},
@@ -242,14 +243,14 @@ class StudioProjectTests(unittest.TestCase):
                 )
             tabs = result["workspace"]["tabs"]
             self.assertEqual(
-                ["maze", "screens", "text", "graphics", "palettes", "animations", "code"],
+                ["world", "maze", "screens", "text", "graphics", "palettes", "animations", "code"],
                 [tab["id"] for tab in tabs],
             )
             self.assertEqual(
-                [["graphics"], ["graphics", "palettes"], [], ["palettes"], [], ["graphics"], []],
+                [[], ["graphics"], ["graphics", "palettes"], [], ["palettes"], [], ["graphics"], []],
                 [tab["depends_on"] for tab in tabs],
             )
-            self.assertEqual("maze", result["workspace"]["startup_tab"])
+            self.assertEqual("world", result["workspace"]["startup_tab"])
 
     def test_create_selects_profile_palette_codec(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -295,6 +296,37 @@ class StudioProjectTests(unittest.TestCase):
             palettes = result["workspace"]["tabs"][0]
             self.assertEqual("palettes", palettes["id"])
             self.assertEqual("pacman.palette-table.v1", palettes["codec"])
+
+    def test_create_maps_smb_levels_to_procedural_editor(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "manifest.json"
+            source.write_text(json.dumps(manifest()), encoding="utf-8")
+            resources = root / "resources.json"
+            resources.write_text(json.dumps({
+                "schema": "retrolarium.nes-resource-bundle",
+                "schema_version": 1,
+                "game": "smb1",
+                "revision": "ju",
+                "source_sha256": SHA256,
+                "resources": [
+                    {"id": "levels", "kind": "level", "codec": "smb.levels.v1"},
+                    {"id": "chr", "kind": "graphics", "codec": "nes.chr-2bpp.v1"},
+                ],
+            }), encoding="utf-8")
+            with patch(
+                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                return_value=manifest(),
+            ):
+                result = create_studio_project(
+                    source, root / "smb.retrolarium", project_id="smb",
+                    name="SMB", profile="smb1.v1", resource_document=resources,
+                )
+            levels = result["workspace"]["tabs"][0]
+            self.assertEqual("levels", levels["id"])
+            self.assertEqual("level.procedural", levels["kind"])
+            self.assertEqual("smb.levels.v1", levels["codec"])
+            self.assertEqual(["graphics"], levels["depends_on"])
 
 
 if __name__ == "__main__":

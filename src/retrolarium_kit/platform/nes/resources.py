@@ -46,6 +46,16 @@ from .nes_text import (
     decode_text_fields,
     encode_text_fields,
 )
+from .smb_world import (
+    CODEC as SMB_WORLD_CODEC,
+    decode_world as decode_smb_world,
+    encode_world as encode_smb_world,
+)
+from .smb_level import (
+    CODEC as SMB_LEVEL_CODEC,
+    decode_levels as decode_smb_levels,
+    encode_levels as encode_smb_levels,
+)
 
 
 DOCUMENT_SCHEMA = "retrolarium.nes-resource-bundle"
@@ -60,6 +70,8 @@ SUPPORTED_CODECS = (
     PACMAN_ACTOR_CODEC, FIXED_TEXT_CODEC,
     PACMAN_SOUND_CODEC,
     PACMAN_SCREEN_CODEC,
+    SMB_WORLD_CODEC,
+    SMB_LEVEL_CODEC,
 )
 
 
@@ -385,6 +397,70 @@ def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
             "codec": resource.codec,
             **decode_screen_collection(image, resource.parameters),
         }
+    if resource.codec == SMB_WORLD_CODEC:
+        routing_offset = _integer(
+            resource.parameters.get("routing_file_offset"),
+            f"{resource.resource_id}.routing_file_offset",
+        )
+        routing_size = _integer(
+            resource.parameters.get("routing_size"),
+            f"{resource.resource_id}.routing_size",
+            minimum=1,
+        )
+        physics_offset = _integer(
+            resource.parameters.get("physics_file_offset"),
+            f"{resource.resource_id}.physics_file_offset",
+        )
+        physics_size = _integer(
+            resource.parameters.get("physics_size"),
+            f"{resource.resource_id}.physics_size",
+            minimum=1,
+        )
+        routing = image[routing_offset : routing_offset + routing_size]
+        physics = image[physics_offset : physics_offset + physics_size]
+        if len(routing) != routing_size or len(physics) != physics_size:
+            raise NesResourceError(f"{resource.resource_id} exceeds the source image")
+        try:
+            decoded = decode_smb_world(routing, physics, resource.parameters)
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return {
+            "id": resource.resource_id,
+            "kind": resource.kind,
+            "codec": resource.codec,
+            **decoded,
+        }
+    if resource.codec == SMB_LEVEL_CODEC:
+        area_offset = _integer(
+            resource.parameters.get("area_file_offset"),
+            f"{resource.resource_id}.area_file_offset",
+        )
+        area_size = _integer(
+            resource.parameters.get("area_size"),
+            f"{resource.resource_id}.area_size", minimum=1,
+        )
+        enemy_offset = _integer(
+            resource.parameters.get("enemy_file_offset"),
+            f"{resource.resource_id}.enemy_file_offset",
+        )
+        enemy_size = _integer(
+            resource.parameters.get("enemy_size"),
+            f"{resource.resource_id}.enemy_size", minimum=1,
+        )
+        area = image[area_offset : area_offset + area_size]
+        enemy = image[enemy_offset : enemy_offset + enemy_size]
+        if len(area) != area_size or len(enemy) != enemy_size:
+            raise NesResourceError(f"{resource.resource_id} exceeds the source image")
+        try:
+            decoded = decode_smb_levels(area, enemy, resource.parameters)
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return {
+            "id": resource.resource_id,
+            "kind": resource.kind,
+            "codec": resource.codec,
+            **decoded,
+        }
     raise NesResourceError(f"unsupported NES resource codec {resource.codec}")
 
 
@@ -552,6 +628,90 @@ def _parse_resource(
             {key: raw.get(key) for key in expected_fields - {"id", "kind", "codec"}},
             spec.parameters,
         )
+    elif spec.codec == SMB_WORLD_CODEC:
+        expected_fields = {
+            "id", "kind", "codec", "area_types", "worlds", "physics_tables"
+        }
+        try:
+            routing, physics = encode_smb_world(
+                {
+                    key: raw.get(key)
+                    for key in expected_fields - {"id", "kind", "codec"}
+                },
+                spec.parameters,
+            )
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        routing_size = _integer(
+            spec.parameters.get("routing_size"),
+            f"{spec.resource_id}.routing_size",
+            minimum=1,
+        )
+        physics_size = _integer(
+            spec.parameters.get("physics_size"),
+            f"{spec.resource_id}.physics_size",
+            minimum=1,
+        )
+        if len(routing) != routing_size or len(physics) != physics_size:
+            raise NesResourceError(
+                f"{spec.resource_id} encoded sizes differ from the profile"
+            )
+        encoded_spans = (
+            (
+                _integer(
+                    spec.parameters.get("routing_file_offset"),
+                    f"{spec.resource_id}.routing_file_offset",
+                ),
+                routing,
+            ),
+            (
+                _integer(
+                    spec.parameters.get("physics_file_offset"),
+                    f"{spec.resource_id}.physics_file_offset",
+                ),
+                physics,
+            ),
+        )
+    elif spec.codec == SMB_LEVEL_CODEC:
+        expected_fields = {"id", "kind", "codec", "area_types", "areas"}
+        try:
+            area, enemy = encode_smb_levels(
+                {
+                    key: raw.get(key)
+                    for key in expected_fields - {"id", "kind", "codec"}
+                },
+                spec.parameters,
+            )
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        area_size = _integer(
+            spec.parameters.get("area_size"),
+            f"{spec.resource_id}.area_size", minimum=1,
+        )
+        enemy_size = _integer(
+            spec.parameters.get("enemy_size"),
+            f"{spec.resource_id}.enemy_size", minimum=1,
+        )
+        if len(area) != area_size or len(enemy) != enemy_size:
+            raise NesResourceError(
+                f"{spec.resource_id} encoded sizes differ from the profile"
+            )
+        encoded_spans = (
+            (
+                _integer(
+                    spec.parameters.get("area_file_offset"),
+                    f"{spec.resource_id}.area_file_offset",
+                ),
+                area,
+            ),
+            (
+                _integer(
+                    spec.parameters.get("enemy_file_offset"),
+                    f"{spec.resource_id}.enemy_file_offset",
+                ),
+                enemy,
+            ),
+        )
     else:
         raise NesResourceError(f"unsupported NES resource codec {spec.codec}")
     if set(raw) != expected_fields:
@@ -702,6 +862,39 @@ def inspection_details(document: NesResourceBundleDocument) -> dict[str, int]:
         if item.get("codec") == PACMAN_SOUND_CODEC
         for slot in item.get("slots", [])
     )
+    smb_worlds = sum(
+        len(item.get("worlds", []))
+        for item in document.resources
+        if item.get("codec") == SMB_WORLD_CODEC
+    )
+    smb_routes = sum(
+        len(world.get("areas", []))
+        for item in document.resources
+        if item.get("codec") == SMB_WORLD_CODEC
+        for world in item.get("worlds", [])
+    )
+    smb_physics_tables = sum(
+        len(item.get("physics_tables", []))
+        for item in document.resources
+        if item.get("codec") == SMB_WORLD_CODEC
+    )
+    smb_levels = sum(
+        len(item.get("areas", []))
+        for item in document.resources
+        if item.get("codec") == SMB_LEVEL_CODEC
+    )
+    smb_area_objects = sum(
+        len(area.get("objects", []))
+        for item in document.resources
+        if item.get("codec") == SMB_LEVEL_CODEC
+        for area in item.get("areas", [])
+    )
+    smb_enemy_records = sum(
+        len(area.get("enemies", []))
+        for item in document.resources
+        if item.get("codec") == SMB_LEVEL_CODEC
+        for area in item.get("areas", [])
+    )
     return {
         "resource_count": len(document.resources),
         "screens": screens,
@@ -713,4 +906,10 @@ def inspection_details(document: NesResourceBundleDocument) -> dict[str, int]:
         "sound_slots": sound_slots,
         "sound_notes": sound_notes,
         "sound_used_bytes": sound_used_bytes,
+        "smb_worlds": smb_worlds,
+        "smb_routes": smb_routes,
+        "smb_physics_tables": smb_physics_tables,
+        "smb_levels": smb_levels,
+        "smb_area_objects": smb_area_objects,
+        "smb_enemy_records": smb_enemy_records,
     }

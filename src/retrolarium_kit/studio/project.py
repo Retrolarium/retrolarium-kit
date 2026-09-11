@@ -49,6 +49,7 @@ EDITOR_KINDS = frozenset(
         "graphics.tile-set",
         "level.procedural",
         "level.tile-grid",
+        "level.procedural",
         "palette.set",
         "screen.tilemap",
         "text.fixed",
@@ -76,6 +77,8 @@ CODECS = frozenset(
         "retrolarium.snes.disassembly@1",
         "smb.apu@1",
         "smb.area@1",
+        "smb.world.v1",
+        "smb.levels.v1",
     }
 )
 
@@ -835,6 +838,8 @@ def create_studio_project(
         if kinds.get("screen") == {"pacman.screen-collection.v1"}:
             kinds["text"] = {"pacman.screen-collection.v1"}
         templates = (
+            ("world", "world", "World", "world.routing", "content",
+             "smb.world.v1", ["edit", "restore", "undo"]),
             ("level", "maze", "Maze", "level.tile-grid", "content",
              "pacman.maze-rle.v1", ["paint", "eyedropper", "semantic-overlays", "undo"]),
             ("screen", "screens", "Screens", "screen.tilemap", "content",
@@ -855,7 +860,15 @@ def create_studio_project(
             if kind not in kinds:
                 continue
             selected_codec = expected_codec
-            if kind in ("screen", "text") \
+            if kind == "level" and kinds[kind] == {"smb.levels.v1"}:
+                tab_id = "levels"
+                title = "Levels"
+                editor_kind = "level.procedural"
+                selected_codec = "smb.levels.v1"
+                capabilities = [
+                    "edit", "preview", "restore", "semantic-overlays", "undo"
+                ]
+            elif kind in ("screen", "text") \
                     and kinds[kind] == {"pacman.screen-collection.v1"}:
                 selected_codec = "pacman.screen-collection.v1"
             elif kind == "palette" and kinds[kind] == {"pacman.palette-table.v1"}:
@@ -878,6 +891,7 @@ def create_studio_project(
         available_ids = {str(tab["id"]) for tab in tabs}
         desired_dependencies = {
             "maze": ("graphics",),
+            "levels": ("graphics",),
             "screens": ("graphics", "palettes"),
             "graphics": ("palettes",),
             "animations": ("graphics",),

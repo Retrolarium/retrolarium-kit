@@ -339,6 +339,17 @@ the profile owns the glyph map, case folding, labels, widths and addresses.
 See
 [`Retrolarium_NES_Text_Authoring_Contract.md`](docs/Retrolarium_NES_Text_Authoring_Contract.md).
 
+## Super Mario Bros. World authoring
+
+The packaged `smb1.v1` profile recognizes the verified byte-identical JU build
+from the open `smb1_src` reconstruction. `game extract` exposes all 36 course
+routes, nine signed/unsigned player-physics tables, and the complete CHR bank.
+The generated Studio workspace owns World, Graphics, and Code & Analysis tabs.
+The Qt World editor provides routing and physics pages with shared undo/redo,
+restore, and atomic save. The zero-edit disassemble/extract/build/verify path is
+byte-identical. See
+[`Retrolarium_SMB_World_Authoring_Contract.md`](docs/Retrolarium_SMB_World_Authoring_Contract.md).
+
 ## Other commands
 
 ```powershell
