@@ -86,7 +86,23 @@ one nametable byte, reports exactly that resource and completes a two-second
 MAME NES run with exit code zero and a hashed screenshot. Generated documents,
 ROMs, logs and screenshots remain ignored.
 
+The fixed-resource adapter also supports two structured visual codecs used by
+the SMB profile:
+
+- `nes.metatile-2x2.v1` stores named groups of fixed four-tile records and a
+  CHR tile base. Record order is preserved exactly for lossless rebuilding;
+- `nes.ppu-palette-packets.v1` stores named fixed-capacity PPU command packets,
+  including address, orientation/repeat flags, NES color values and the
+  profile's Day/Night universal background colors.
+
+For the byte-identical SMB1 JU fixture these codecs cover 101 background
+metatiles and eight area palette packets. Together with the existing 512-tile
+CHR resource they feed the native procedural level preview without flattening
+SMB object streams into a tilemap. An unchanged extraction still rebuilds with
+zero changed bytes.
+
 The Qt 5.15 application now supplies generic CHR and palette editors plus
-typed nametable and Pac-Man screen-collection views. HonkeyPong remains the
-open-source proof of the Kit/profile/build boundary; game-specific layouts are
-added through profiles and codecs rather than new CLI branches.
+typed nametable, Pac-Man screen-collection and SMB procedural level views.
+HonkeyPong remains the open-source proof of the Kit/profile/build boundary;
+game-specific layouts are added through profiles and codecs rather than new
+CLI branches.

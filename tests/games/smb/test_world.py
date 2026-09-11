@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from retrolarium_kit.authoring import GameProfile, ResourceSpec, RevisionSpec
 from retrolarium_kit.game_profiles import packaged_game_profiles
+from retrolarium_kit.games import profile_catalog
 from retrolarium_kit.nes_resources import (
     build_resources,
     decode_resources,
@@ -102,16 +103,97 @@ class SmbWorldTests(unittest.TestCase):
         with self.assertRaisesRegex(Exception, "must contain 2 routes"):
             parse_resource_document(raw, profile, revision)
 
-    def test_packaged_ju_profile_matches_open_source_build_identity(self) -> None:
+    def test_packaged_profile_matches_verified_ju_and_pal_identities(self) -> None:
         profile = packaged_game_profiles().get("smb1")
-        self.assertEqual(profile.revisions[0].revision_id, "ju")
+        self.assertEqual(
+            [revision.revision_id for revision in profile.revisions],
+            [
+                "ju", "pal", "pc10", "vs_smb", "fds_smb", "ann_fds",
+                "smb2_jp_fds",
+            ],
+        )
         self.assertEqual(
             profile.revisions[0].sha256,
             "f61548fdf1670cffefcc4f0b7bdcdd9eaba0c226e3b74f8666071496988248de",
         )
+        self.assertEqual(
+            profile.revisions[1].sha256,
+            "ec299b990e8bfee8ba46e3f61d63b2e1ae5b8a2e431de84e2e4bbd692dc53586",
+        )
+        self.assertEqual(profile.resources_for("pal"), profile.resources)
+        self.assertEqual(
+            profile.revisions[2].sha256,
+            "f586afeaaaa7a6cf2e3b69e5b17f2f0f1eb3fd9aa1de1e3e14b75f90dc21ae87",
+        )
+        self.assertEqual(profile.revisions[2].container, "ines-pc10")
+        self.assertEqual(
+            profile.revisions[3].sha256,
+            "60098a93322a9e07a2b164a02e5517bc22664ca33f6323c2ae23a62941ad393b",
+        )
+        self.assertEqual(profile.capabilities_for("vs_smb"), ("graphics",))
+        self.assertEqual(
+            [resource.resource_id for resource in profile.resources_for("vs_smb")],
+            ["authoring-bundle", "character-graphics"],
+        )
+        self.assertEqual(
+            profile.revisions[4].sha256,
+            "56ba4c39fd7f9628bffac4c6ee0d5364f86de36d27c904ffc70f0abc97ae0d3a",
+        )
+        self.assertEqual(profile.capabilities_for("fds_smb"), ("graphics",))
+        self.assertEqual(
+            profile.resources_for("fds_smb")[1].payload, "chr"
+        )
+        self.assertEqual(profile.payload_for("fds_smb", "chr").record_ids, (2,))
+        self.assertEqual(profile.payload_for("fds_smb", "prg").record_ids, (3, 4))
+        self.assertEqual(
+            profile.revisions[5].sha256,
+            "a762d0a90d16c84b5f2b014816b37675cf5115320be7e815effbb64d91b2014d",
+        )
+        self.assertEqual(
+            profile.revisions[6].sha256,
+            "ff8afb9ae6b705b4e51dbcb193dcebadf4c049800a71003d3a45052648e52eda",
+        )
+        for revision_id in ("ann_fds", "smb2_jp_fds"):
+            self.assertEqual(profile.capabilities_for(revision_id), ("graphics",))
+            self.assertEqual(
+                profile.resources_for(revision_id)[1].payload, "chr"
+            )
+            self.assertEqual(
+                profile.payload_for(revision_id, "chr").record_ids, (1,)
+            )
+        self.assertEqual(
+            [payload.payload_id for payload in profile.revisions[5].payloads],
+            ["prg", "nsmdata2", "nsmdata3", "nsmdata4", "chr"],
+        )
+        self.assertEqual(
+            [payload.payload_id for payload in profile.revisions[6].payloads],
+            ["prg", "sm2data2", "sm2data3", "sm2data4", "chr"],
+        )
         world = next(item for item in profile.resources if item.kind == "world")
         self.assertEqual(world.codec, "smb.world.v1")
-        self.assertEqual(world.parameters["world_lengths"], [5, 5, 4, 5, 4, 4, 5, 4])
+        self.assertEqual(
+            world.parameters["world_lengths"], [5, 5, 4, 5, 4, 4, 5, 4]
+        )
+
+    def test_profile_catalog_resolves_each_revision_override(self) -> None:
+        catalog = profile_catalog()
+        smb = next(item for item in catalog["profiles"] if item["id"] == "smb1")
+        details = {item["id"]: item for item in smb["revision_details"]}
+        self.assertEqual(details["ju"]["capabilities"], ["world", "levels", "graphics"])
+        self.assertEqual(details["pc10"]["resources"], smb["resources"])
+        for revision_id in ("vs_smb", "fds_smb", "ann_fds", "smb2_jp_fds"):
+            self.assertEqual(details[revision_id]["capabilities"], ["graphics"])
+            self.assertEqual(
+                details[revision_id]["resources"],
+                ["authoring-bundle", "character-graphics"],
+            )
+        self.assertEqual(
+            [payload["id"] for payload in details["ann_fds"]["payloads"]],
+            ["prg", "nsmdata2", "nsmdata3", "nsmdata4", "chr"],
+        )
+        self.assertEqual(
+            details["smb2_jp_fds"]["payloads"][3]["load_address"], 49844
+        )
 
 
 if __name__ == "__main__":

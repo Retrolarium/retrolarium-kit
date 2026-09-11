@@ -125,8 +125,10 @@ def _mapping(value: object, name: str) -> Mapping[str, Any]:
     return value
 
 
-def _resource(profile: GameProfile, resource_id: str, codec: str) -> ResourceSpec:
-    resource = profile.resource(resource_id)
+def _resource(
+    profile: GameProfile, revision: RevisionSpec, resource_id: str, codec: str
+) -> ResourceSpec:
+    resource = profile.resource(resource_id, revision)
     if resource.codec != codec or resource.capacity_policy != "fixed":
         raise CastleError(
             f"resource {resource_id!r} does not use required fixed codec {codec}"
@@ -465,10 +467,10 @@ def decode_levels(
         raise CastleError(
             f"input mapper {image.mapper} does not match revision mapper {revision.mapper}"
         )
-    rooms_resource = _resource(profile, "rooms", "castle.prefix-rooms.v1")
-    objects_resource = _resource(profile, "objects", "castle.object-stream.v1")
+    rooms_resource = _resource(profile, revision, "rooms", "castle.prefix-rooms.v1")
+    objects_resource = _resource(profile, revision, "objects", "castle.object-stream.v1")
     mutable_resource = _resource(
-        profile, "mutable-cell-state", "castle.mutable-cell-state.v1"
+        profile, revision, "mutable-cell-state", "castle.mutable-cell-state.v1"
     )
     rooms, _codebook = _decode_rooms(image, rooms_resource)
     objects = _decode_objects(image, objects_resource)
@@ -510,8 +512,8 @@ def parse_level_document(
     for field, expected in expected_header.items():
         if value.get(field) != expected:
             raise CastleError(f"level document {field} must be {expected!r}")
-    rooms_resource = _resource(profile, "rooms", "castle.prefix-rooms.v1")
-    objects_resource = _resource(profile, "objects", "castle.object-stream.v1")
+    rooms_resource = _resource(profile, revision, "rooms", "castle.prefix-rooms.v1")
+    objects_resource = _resource(profile, revision, "objects", "castle.object-stream.v1")
     count, width, height, _codebook, _pointers, _arenas = _room_configuration(
         rooms_resource
     )
@@ -604,10 +606,10 @@ def build_levels(
     if source_sha256 != revision.sha256:
         raise CastleError("build source does not match the selected revision")
     image = parse_ines(source)
-    rooms_resource = _resource(profile, "rooms", "castle.prefix-rooms.v1")
-    objects_resource = _resource(profile, "objects", "castle.object-stream.v1")
+    rooms_resource = _resource(profile, revision, "rooms", "castle.prefix-rooms.v1")
+    objects_resource = _resource(profile, revision, "objects", "castle.object-stream.v1")
     mutable_resource = _resource(
-        profile, "mutable-cell-state", "castle.mutable-cell-state.v1"
+        profile, revision, "mutable-cell-state", "castle.mutable-cell-state.v1"
     )
     count, width, height, codebook_cpu, pointers_cpu, arenas = _room_configuration(
         rooms_resource

@@ -65,6 +65,7 @@ CODECS = frozenset(
         "nes.fixed-text-fields.v1",
         "nes.nametable.v1",
         "nes.palette-table.v1",
+        "nes.ppu-palette-packets.v1",
         "pacman.maze-rle.v1",
         "pacman.maze-rle@1",
         "pacman.actor-mapping.v1",
@@ -213,6 +214,101 @@ def _read_toml(path: Path) -> Mapping[str, Any]:
         ) from exc
     except (OSError, UnicodeError) as exc:
         raise StudioProjectError(f"cannot read Studio project {path}: {exc}") from exc
+
+
+def _replace_schema_version(payload: str, version: int) -> str:
+    pattern = re.compile(
+        r"^(?P<prefix>[ \t]*schema_version[ \t]*=[ \t]*)\d+"
+        r"(?P<suffix>[ \t]*(?:#.*)?(?:\r?\n|$))",
+        re.MULTILINE,
+    )
+    replacement = rf"\g<prefix>{version}\g<suffix>"
+    migrated, count = pattern.subn(replacement, payload, count=1)
+    if count == 1:
+        return migrated
+
+    schema = re.compile(
+        r'^(?P<line>[ \t]*schema[ \t]*=[ \t]*["\']retrolarium\.project["\']'
+        r"[ \t]*(?:#.*)?)(?P<newline>\r?\n)",
+        re.MULTILINE,
+    )
+
+    def insert(match: re.Match[str]) -> str:
+        newline = match.group("newline")
+        return (
+            match.group("line") + newline
+            + f"schema_version = {version}" + newline
+        )
+
+    migrated, count = schema.subn(insert, payload, count=1)
+    if count != 1:
+        raise StudioProjectError("project: cannot locate the schema declaration")
+    return migrated
+
+
+def migrate_studio_project(
+    path: Path,
+    *,
+    output: Path | None = None,
+    target_version: int = SCHEMA_VERSION,
+) -> dict[str, Any]:
+    """Upgrade a project in place while preserving unrelated TOML text."""
+
+    source_path = path.resolve()
+    destination = (output or source_path).resolve()
+    if source_path.suffix.lower() != PROJECT_SUFFIX \
+            or destination.suffix.lower() != PROJECT_SUFFIX:
+        raise StudioProjectError(
+            f"Studio migrations require the {PROJECT_SUFFIX} extension"
+        )
+    if destination.parent != source_path.parent:
+        raise StudioProjectError(
+            "migration output must stay beside the source so relative paths remain valid"
+        )
+    if target_version != SCHEMA_VERSION:
+        raise StudioProjectError(
+            f"unsupported Studio migration target version {target_version}"
+        )
+    try:
+        payload = source_path.read_bytes().decode("utf-8")
+        parsed = _mapping(tomllib.loads(payload), str(source_path))
+    except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
+        raise StudioProjectError(
+            f"cannot read Studio project for migration {source_path}: {exc}"
+        ) from exc
+    if parsed.get("schema") != SCHEMA:
+        raise _error("project.schema", f"expected {SCHEMA!r}")
+    raw_version = parsed.get("schema_version", 0)
+    if not isinstance(raw_version, int) or isinstance(raw_version, bool):
+        raise _error("project.schema_version", "must be an integer")
+    if raw_version < 0 or raw_version > target_version:
+        raise _error(
+            "project.schema_version",
+            f"cannot migrate version {raw_version} to {target_version}",
+        )
+
+    migrated = payload
+    version = raw_version
+    while version < target_version:
+        if version == 0:
+            migrated = _replace_schema_version(migrated, 1)
+            version = 1
+        else:
+            raise StudioProjectError(
+                f"no Studio migration is registered for version {version}"
+            )
+    if destination != source_path or migrated != payload:
+        _atomic_write(destination, migrated)
+    inspection = load_studio_project(destination)
+    return {
+        "schema": "retrolarium.project-migration",
+        "schema_version": 1,
+        "status": "migrated" if migrated != payload else "current",
+        "from_version": raw_version,
+        "to_version": version,
+        "project_file": str(destination),
+        "inspection": inspection,
+    }
 
 
 def _validate_dependency_graph(tabs: list[dict[str, Any]]) -> None:
@@ -707,6 +803,217 @@ def studio_launch_plan(
     return plan
 
 
+def _smb_area_pointer(name: str) -> int:
+    area_types = ("water", "ground", "underground", "castle")
+    area_type, separator, index_text = name.rpartition("_")
+    if not separator or area_type not in area_types:
+        raise StudioProjectError(f"unsupported SMB area name: {name!r}")
+    try:
+        area_index = int(index_text) - 1
+    except ValueError as exc:
+        raise StudioProjectError(f"unsupported SMB area name: {name!r}") from exc
+    if not 0 <= area_index <= 31:
+        raise StudioProjectError(f"SMB area index is outside 1..32: {name!r}")
+    return (area_types.index(area_type) << 5) | area_index
+
+
+def _bounded_integer(value: object, name: str, minimum: int, maximum: int) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) \
+            or not minimum <= value <= maximum:
+        raise StudioProjectError(f"{name} must be in range {minimum}..{maximum}")
+    return value
+
+
+def studio_smb_point_playtest_plan(
+    path: Path,
+    *,
+    fceux: Path,
+    course_bank: str,
+    area: str,
+    world: int,
+    course: int,
+    column: int,
+    row: int,
+    theme: str,
+    infinite_time: bool = True,
+    invincible: bool = True,
+    wrap_pits: bool = True,
+) -> dict[str, Any]:
+    """Emit the fixed FCEUX/Lua process contract for an SMB JU editor point."""
+
+    inspection = load_studio_project(path)
+    _require_declared_operation(inspection, "launch")
+    if inspection["project"]["platform"] != "nes" \
+            or inspection["project"]["profile"] != "smb1.v1":
+        raise StudioProjectError(
+            "SMB point playtest currently supports only the smb1.v1 NES profile"
+        )
+    matching_tabs = [
+        tab for tab in inspection["workspace"]["tabs"]
+        if tab["enabled"] and tab["codec"] == "smb.levels.v1"
+        and "playtest" in tab["capabilities"]
+    ]
+    if len(matching_tabs) != 1:
+        raise StudioProjectError(
+            "Studio project must expose one enabled playtest-capable SMB Levels tab"
+        )
+
+    verification = verify_studio_project(path)
+    if verification["status"] != "current":
+        raise StudioProjectError(
+            "Studio artifact is stale; build it again before point playtest"
+        )
+    executable = fceux.resolve()
+    if not executable.is_file():
+        raise StudioProjectError(f"FCEUX executable does not exist: {executable}")
+
+    document_path = Path(matching_tabs[0]["document_path"])
+    try:
+        document = _mapping(
+            json.loads(document_path.read_text(encoding="utf-8")),
+            "SMB resource document",
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise StudioProjectError(f"cannot read SMB resource document: {exc}") from exc
+    if document.get("schema") != "retrolarium.nes-resource-bundle" \
+            or document.get("game") != "smb1" or document.get("revision") != "ju":
+        raise StudioProjectError(
+            "SMB point playtest currently requires an smb1/ju resource document"
+        )
+    resources = document.get("resources")
+    if not isinstance(resources, list):
+        raise StudioProjectError("SMB resource document resources must be an array")
+    level_resources = [
+        item for item in resources if isinstance(item, Mapping)
+        and item.get("id") == course_bank and item.get("codec") == "smb.levels.v1"
+    ]
+    if len(level_resources) != 1:
+        raise StudioProjectError(f"unknown SMB course bank: {course_bank!r}")
+    level_resource = level_resources[0]
+    areas = level_resource.get("areas")
+    if not isinstance(areas, list) or not any(
+        isinstance(item, Mapping) and item.get("name") == area for item in areas
+    ):
+        raise StudioProjectError(
+            f"SMB area {area!r} does not belong to course bank {course_bank!r}"
+        )
+
+    world = _bounded_integer(world, "world", 1, 8)
+    course = _bounded_integer(course, "course", 1, 8)
+    column = _bounded_integer(column, "column", 0, 511)
+    row = _bounded_integer(row, "row", 1, 12)
+    if theme not in {"day", "night"}:
+        raise StudioProjectError("theme must be 'day' or 'night'")
+    for name, value in (
+        ("infinite_time", infinite_time),
+        ("invincible", invincible),
+        ("wrap_pits", wrap_pits),
+    ):
+        if not isinstance(value, bool):
+            raise StudioProjectError(f"{name} must be a boolean")
+
+    declared_world_resource = level_resource.get("world_resource")
+    if declared_world_resource is not None and not isinstance(
+        declared_world_resource, str
+    ):
+        raise StudioProjectError(
+            f"SMB course bank {course_bank!r} has an invalid world resource"
+        )
+    world_resources = [
+        item
+        for item in resources
+        if isinstance(item, Mapping)
+        and item.get("codec") == "smb.world.v1"
+        and (
+            declared_world_resource is None
+            or item.get("id") == declared_world_resource
+        )
+    ]
+    if len(world_resources) != 1:
+        if declared_world_resource is None:
+            raise StudioProjectError("SMB point playtest requires one world resource")
+        raise StudioProjectError(
+            f"SMB course bank {course_bank!r} refers to an unknown world resource: "
+            f"{declared_world_resource!r}"
+        )
+    worlds = world_resources[0].get("worlds")
+    if not isinstance(worlds, list) or world > len(worlds):
+        raise StudioProjectError(f"world {world} is not present in the SMB document")
+    route = _mapping(worlds[world - 1], f"SMB world {world}").get("areas")
+    if not isinstance(route, list) or course > len(route):
+        raise StudioProjectError(
+            f"course {course} is not present in SMB world {world}"
+        )
+
+    palette_resources = [
+        item for item in resources if isinstance(item, Mapping)
+        and item.get("codec") == "nes.ppu-palette-packets.v1"
+    ]
+    if len(palette_resources) != 1:
+        raise StudioProjectError("SMB point playtest requires one area palette resource")
+    day_color = _bounded_integer(
+        palette_resources[0].get("day_background"), "day_background", 0, 63
+    )
+    night_color = _bounded_integer(
+        palette_resources[0].get("night_background"), "night_background", 0, 63
+    )
+
+    pointer = _smb_area_pointer(area)
+    selected_route = _mapping(
+        route[course - 1], f"SMB world {world} course {course}"
+    )
+    route_pointer = (
+        _bounded_integer(selected_route.get("area_type"), "area_type", 0, 3) << 5
+    ) | _bounded_integer(selected_route.get("area_index"), "area_index", 0, 31)
+    artifact = Path(verification["artifact"]["absolute_path"]).resolve()
+    lua = Path(__file__).with_name("runtime") / "smb1_point_playtest.lua"
+    if not lua.is_file():
+        raise StudioProjectError(f"packaged SMB point playtest script is missing: {lua}")
+    environment = {
+        "SMB1_PLAYTEST_AREA": str(pointer),
+        "SMB1_PLAYTEST_WORLD": str(world - 1),
+        "SMB1_PLAYTEST_LEVEL": str(course - 1),
+        "SMB1_PLAYTEST_PAGE": str(column // 16),
+        "SMB1_PLAYTEST_X": str((column % 16) * 16),
+        "SMB1_PLAYTEST_Y": str((row + 1) * 16),
+        "SMB1_PLAYTEST_THEME": theme,
+        "SMB1_PLAYTEST_DAY_COLOR": str(day_color),
+        "SMB1_PLAYTEST_NIGHT_COLOR": str(night_color),
+        "SMB1_PLAYTEST_INFINITE_TIME": "1" if infinite_time else "0",
+        "SMB1_PLAYTEST_INVINCIBLE": "1" if invincible else "0",
+        "SMB1_PLAYTEST_WRAP_PITS": "1" if wrap_pits else "0",
+    }
+    return {
+        "schema": "retrolarium.process-spec",
+        "schema_version": 1,
+        "operation": "retrolarium.studio.smb-point-playtest",
+        "platform": "nes",
+        "backend": "fceux-lua",
+        "program": str(executable),
+        "arguments": ["-lua", str(lua.resolve()), str(artifact)],
+        "working_directory": str(executable.parent),
+        "environment": environment,
+        "project_file": inspection["project_file"],
+        "rom": {
+            "path": str(artifact),
+            "size": artifact.stat().st_size,
+            "sha256": sha256_file(artifact),
+        },
+        "script": {"path": str(lua.resolve()), "sha256": sha256_file(lua)},
+        "point": {
+            "course_bank": course_bank,
+            "area": area,
+            "area_pointer": pointer,
+            "world": world,
+            "course": course,
+            "route_matches_area": route_pointer == pointer,
+            "column": column,
+            "row": row,
+            "theme": theme,
+        },
+    }
+
+
 def launch_studio_smoke(
     path: Path,
     *,
@@ -868,11 +1175,17 @@ def create_studio_project(
                 capabilities = [
                     "edit", "preview", "restore", "semantic-overlays", "undo"
                 ]
+                if (
+                    resource_root.get("game"), resource_root.get("revision")
+                ) == ("smb1", "ju"):
+                    capabilities.insert(1, "playtest")
             elif kind in ("screen", "text") \
                     and kinds[kind] == {"pacman.screen-collection.v1"}:
                 selected_codec = "pacman.screen-collection.v1"
             elif kind == "palette" and kinds[kind] == {"pacman.palette-table.v1"}:
                 selected_codec = "pacman.palette-table.v1"
+            elif kind == "palette" and kinds[kind] == {"nes.ppu-palette-packets.v1"}:
+                selected_codec = "nes.ppu-palette-packets.v1"
             elif kinds[kind] != {expected_codec}:
                 raise StudioProjectError(
                     f"resource document {kind} resources require codec {expected_codec!r}"
@@ -891,7 +1204,7 @@ def create_studio_project(
         available_ids = {str(tab["id"]) for tab in tabs}
         desired_dependencies = {
             "maze": ("graphics",),
-            "levels": ("graphics",),
+            "levels": ("graphics", "palettes"),
             "screens": ("graphics", "palettes"),
             "graphics": ("palettes",),
             "animations": ("graphics",),

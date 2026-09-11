@@ -10,7 +10,7 @@ from pathlib import Path
 import tempfile
 from typing import Any, Mapping
 
-from .authoring import AuthoringError, GameProfile, ResourceSpec
+from .authoring import AuthoringError, GameProfile, ResourceSpec, RevisionSpec
 from .game_profiles import load_game_profile, packaged_game_profiles
 from .pacman_sound import (
     CODEC,
@@ -35,7 +35,9 @@ def _load_document(path: Path) -> dict[str, Any]:
     return value
 
 
-def _profile(document: Mapping[str, object], profile_path: Path | None) -> GameProfile:
+def _profile(
+    document: Mapping[str, object], profile_path: Path | None
+) -> tuple[GameProfile, RevisionSpec]:
     game = document.get("game")
     if not isinstance(game, str) or not game:
         raise AuthoringError("audio document game must be a non-empty string")
@@ -48,23 +50,30 @@ def _profile(document: Mapping[str, object], profile_path: Path | None) -> GameP
         raise AuthoringError("audio document game differs from the selected profile")
     digest = document.get("source_sha256")
     revision = document.get("revision")
-    if not any(
-        item.sha256 == digest and item.revision_id == revision
-        for item in profile.revisions
-    ):
+    matches = [
+        item for item in profile.revisions
+        if item.sha256 == digest and item.revision_id == revision
+    ]
+    if len(matches) != 1:
         raise AuthoringError("audio document revision differs from the selected profile")
-    return profile
+    return profile, matches[0]
 
 
 def _sound_resource(
-    document: Mapping[str, object], profile: GameProfile, resource_id: str
+    document: Mapping[str, object],
+    profile: GameProfile,
+    revision: RevisionSpec,
+    resource_id: str,
 ) -> tuple[dict[str, Any], ResourceSpec]:
     resources = document.get("resources")
     if not isinstance(resources, list):
         raise AuthoringError("audio document resources must be an array")
     matches = [item for item in resources
                if isinstance(item, dict) and item.get("id") == resource_id]
-    specs = [item for item in profile.resources if item.resource_id == resource_id]
+    specs = [
+        item for item in profile.resources_for(revision)
+        if item.resource_id == resource_id
+    ]
     if len(matches) != 1 or len(specs) != 1:
         raise AuthoringError(f"audio resource {resource_id!r} is not uniquely defined")
     resource = matches[0]
@@ -143,8 +152,8 @@ def _prepare_midi_import(
     profile_path: Path | None,
 ) -> tuple[dict[str, Any], dict[str, object]]:
     document = _load_document(document_path)
-    profile = _profile(document, profile_path)
-    resource, spec = _sound_resource(document, profile, resource_id)
+    profile, revision = _profile(document, profile_path)
+    resource, spec = _sound_resource(document, profile, revision, resource_id)
     before = sound_summary(resource, spec.parameters)
     try:
         midi_data = midi_path.read_bytes()
@@ -152,7 +161,9 @@ def _prepare_midi_import(
         raise AuthoringError(f"cannot read MIDI file {midi_path}: {exc}") from exc
     commands, conversion = import_midi_commands(midi_data, track, channel)
     edited = copy.deepcopy(document)
-    edited_resource, edited_spec = _sound_resource(edited, profile, resource_id)
+    edited_resource, edited_spec = _sound_resource(
+        edited, profile, revision, resource_id
+    )
     edited_slot = _slot(edited_resource, slot)
     stream = edited_slot.get("stream")
     if not isinstance(stream, dict):
@@ -199,8 +210,8 @@ def render_document_wav(
     """Render one validated sound slot into deterministic mono PCM WAV."""
 
     document = _load_document(document_path)
-    profile = _profile(document, profile_path)
-    resource, _spec = _sound_resource(document, profile, resource_id)
+    profile, revision = _profile(document, profile_path)
+    resource, _spec = _sound_resource(document, profile, revision, resource_id)
     item = _slot(resource, slot)
     stream = item.get("stream")
     if not isinstance(stream, Mapping):
