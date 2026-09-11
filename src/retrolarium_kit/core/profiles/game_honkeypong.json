@@ -1,0 +1,89 @@
+{
+  "schema": "retrolarium.game-profile",
+  "schema_version": 1,
+  "id": "honkeypong",
+  "profile_version": 1,
+  "name": "HonkeyPong",
+  "platform": "nes",
+  "capabilities": [
+    "screens",
+    "palettes",
+    "graphics"
+  ],
+  "revisions": [
+    {
+      "id": "honkeypong-f9ab7ad",
+      "name": "HonkeyPong open-source fixture at f9ab7ad",
+      "size": 24592,
+      "sha1": "efdb529788269041c3fd4adf0ce2611ca40e280b",
+      "sha256": "cce7bf2f71eb9e63de0dba15098679dde06a1da9d7553f2319aa60ea57a1193b",
+      "container": "ines",
+      "mapper": 0
+    }
+  ],
+  "resources": [
+    {
+      "id": "authoring-bundle",
+      "kind": "resource-bundle",
+      "codec": "nes.resource-bundle.v1",
+      "capacity_policy": "fixed",
+      "parameters": {}
+    },
+    {
+      "id": "logo-palette",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 994,
+        "size": 32,
+        "entries": 32
+      }
+    },
+    {
+      "id": "title-palette",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 1026,
+        "size": 32,
+        "entries": 32
+      }
+    },
+    {
+      "id": "game-palette",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 1058,
+        "size": 32,
+        "entries": 32
+      }
+    },
+    {
+      "id": "title-screen",
+      "kind": "screen",
+      "codec": "nes.nametable.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 1090,
+        "size": 1024,
+        "width": 32,
+        "height": 30,
+        "attribute_bytes": 64
+      }
+    },
+    {
+      "id": "character-graphics",
+      "kind": "graphics",
+      "codec": "nes.chr-2bpp.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 16400,
+        "size": 8192
+      }
+    }
+  ]
+}

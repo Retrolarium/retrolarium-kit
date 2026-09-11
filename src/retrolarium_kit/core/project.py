@@ -422,6 +422,174 @@ def launch_plan(
     }
 
 
+def launch_image_plan(
+    rom: Path,
+    *,
+    platform: str,
+    mame: Path,
+    machine: str | None = None,
+    attach_window: str | None = None,
+) -> dict[str, Any]:
+    """Create the same strict process-spec for a direct authoring artifact."""
+    default_machines = {"nes": "nes", "megadrive": "genesis", "snes": "snes"}
+    allowed_machines = MAME_MACHINES.get(platform)
+    selected_machine = machine or default_machines.get(platform)
+    if allowed_machines is None or selected_machine not in allowed_machines:
+        raise ProjectError(
+            f"unsupported {platform} MAME machine: {selected_machine}"
+        )
+    mame = mame.resolve()
+    if not mame.is_file():
+        raise ProjectError(f"MAME executable does not exist: {mame}")
+    rom = rom.resolve()
+    if not rom.is_file():
+        raise ProjectError(f"launch artifact does not exist: {rom}")
+    if platform == "nes":
+        load_ines(rom)
+    elif platform == "megadrive":
+        load_megadrive(rom)
+    elif platform == "snes":
+        load_snes(rom)
+    else:
+        raise ProjectError(f"unsupported launch platform: {platform}")
+    arguments = [
+        selected_machine,
+        "-cart",
+        str(rom),
+        "-skip_gameinfo",
+        "-window",
+        "-nomouse",
+        "-nolightgun",
+        "-nofilter",
+        "-nounevenstretch",
+        "-bgfx_screen_chains",
+        "unfiltered",
+    ]
+    if attach_window is not None:
+        if re.fullmatch(r"(?:0[xX][0-9a-fA-F]+|[0-9]+)", attach_window) is None:
+            raise ProjectError("attach-window must be a decimal or hexadecimal handle")
+        arguments.extend(["-attach_window", attach_window])
+    return {
+        "schema": "retrolarium.process-spec",
+        "schema_version": 1,
+        "operation": "retrolarium.game.launch",
+        "program": str(mame),
+        "arguments": arguments,
+        "working_directory": str(mame.parent),
+        "platform": platform,
+        "machine": selected_machine,
+        "rom": {
+            "path": str(rom),
+            "size": rom.stat().st_size,
+            "sha256": sha256_file(rom),
+        },
+    }
+
+
+def launch_image_smoke(
+    rom: Path,
+    *,
+    platform: str,
+    mame: Path,
+    output: Path,
+    machine: str | None = None,
+    seconds: int = 2,
+    timeout: int = 60,
+) -> dict[str, Any]:
+    """Run a direct authoring artifact headlessly and retain reproducible evidence."""
+    if seconds <= 0 or timeout <= 0:
+        raise ProjectError("seconds and timeout must be positive")
+    plan = launch_image_plan(rom, platform=platform, mame=mame, machine=machine)
+    run_root = output.resolve()
+    run_root.mkdir(parents=True, exist_ok=True)
+    run_directory = Path(
+        tempfile.mkdtemp(prefix=f"{plan['platform']}-authoring-smoke-", dir=run_root)
+    )
+    snapshot_directory = run_directory / "snapshots"
+    snapshot_directory.mkdir()
+    arguments = list(plan["arguments"])
+    arguments.extend(
+        [
+            "-seconds_to_run",
+            str(seconds),
+            "-video",
+            "none",
+            "-sound",
+            "none",
+            "-nothrottle",
+            "-noreadconfig",
+            "-nowriteconfig",
+            "-snapshot_directory",
+            str(snapshot_directory),
+            "-cfg_directory",
+            str(run_directory / "cfg"),
+            "-nvram_directory",
+            str(run_directory / "nvram"),
+            "-state_directory",
+            str(run_directory / "state"),
+        ]
+    )
+    status = "failed"
+    exit_code: int | None = None
+    stdout = ""
+    stderr = ""
+    failure: dict[str, Any] | None = None
+    try:
+        result = subprocess.run(
+            [plan["program"], *arguments],
+            cwd=plan["working_directory"],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=timeout,
+        )
+        exit_code = result.returncode
+        stdout = result.stdout
+        stderr = result.stderr
+        if exit_code == 0:
+            status = "completed"
+        else:
+            status, failure = classify_mame_failure(stderr)
+    except subprocess.TimeoutExpired as exc:
+        status = "timeout"
+        stdout = process_text(exc.stdout)
+        stderr = process_text(exc.stderr)
+    (run_directory / "stdout.log").write_text(
+        stdout, encoding="utf-8", newline="\n"
+    )
+    (run_directory / "stderr.log").write_text(
+        stderr, encoding="utf-8", newline="\n"
+    )
+    snapshots = sorted(snapshot_directory.rglob("*.png"))
+    document = {
+        "schema": "retrolarium.run-result",
+        "schema_version": 1,
+        "status": status,
+        "run_directory": str(run_directory),
+        "process": {**plan, "arguments": arguments},
+        "runner": {
+            "id": "mame",
+            "executable_sha256": sha256_file(Path(plan["program"])),
+        },
+        "limits": {"emulated_seconds": seconds, "timeout_seconds": timeout},
+        "exit_code": exit_code,
+        "stdout": "stdout.log",
+        "stderr": "stderr.log",
+        "snapshots": [
+            {
+                "path": path.relative_to(run_directory).as_posix(),
+                "size": path.stat().st_size,
+                "sha256": sha256_file(path),
+            }
+            for path in snapshots
+        ],
+    }
+    if failure is not None:
+        document["failure"] = failure
+    write_document(run_directory / "run-result.json", document)
+    return document
+
+
 def launch_project_smoke(
     manifest_path: Path,
     *,

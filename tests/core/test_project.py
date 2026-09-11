@@ -16,6 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from retrolarium_kit.project import (
     ProjectError,
     build_project,
+    launch_image_plan,
+    launch_image_smoke,
     launch_plan,
     launch_project_smoke,
     verify_project,
@@ -115,6 +117,53 @@ def write_project(root: Path, rom: bytes | None = None) -> Path:
 
 
 class ProjectOperationTests(unittest.TestCase):
+    def test_direct_image_launch_plan_validates_container_and_machine(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rom = root / "edited.nes"
+            rom.write_bytes(
+                b"NES\x1a" + bytes((1, 0, 0, 0)) + bytes(8) + bytes(0x4000)
+            )
+            mame = root / "consoles.exe"
+            mame.write_bytes(b"mame")
+            plan = launch_image_plan(
+                rom, platform="nes", mame=mame, machine="famicom"
+            )
+            self.assertEqual("retrolarium.game.launch", plan["operation"])
+            self.assertEqual("famicom", plan["arguments"][0])
+            self.assertEqual(str(rom), plan["arguments"][2])
+            with self.assertRaises(ProjectError):
+                launch_image_plan(
+                    rom, platform="nes", mame=mame, machine="genesis"
+                )
+
+    def test_direct_image_smoke_retains_a_run_result(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rom = root / "edited.nes"
+            rom.write_bytes(
+                b"NES\x1a" + bytes((1, 0, 0, 0)) + bytes(8) + bytes(0x4000)
+            )
+            mame = root / "consoles.exe"
+            mame.write_bytes(b"mame")
+            completed = subprocess.CompletedProcess([], 0, "out", "err")
+            with patch(
+                "retrolarium_kit.project.subprocess.run", return_value=completed
+            ) as run:
+                result = launch_image_smoke(
+                    rom,
+                    platform="nes",
+                    mame=mame,
+                    output=root / "runs",
+                    seconds=1,
+                    timeout=5,
+                )
+            self.assertEqual("completed", result["status"])
+            self.assertIn("-seconds_to_run", run.call_args.args[0])
+            self.assertTrue(
+                (Path(result["run_directory"]) / "run-result.json").is_file()
+            )
+
     @unittest.skipUnless(os.name == "nt", "bundled PE smoke runs on Windows")
     def test_bundled_runner_builds_generated_snes_without_docker(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
