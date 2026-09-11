@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 from typing import Any
 
@@ -116,6 +117,59 @@ def _adapter(profile: GameProfile) -> Any:
             f"game profile {profile.game_id} must select exactly one authoring adapter"
         )
     return registry.get(matches[0])
+
+
+def resolve_profile_revision(
+    profile_reference: str, source_sha256: str
+) -> tuple[GameProfile, RevisionSpec]:
+    """Resolve a ``game-id.vN`` Studio reference and its immutable revision."""
+
+    match = re.fullmatch(r"([a-z0-9][a-z0-9._-]*)\.v([1-9][0-9]*)", profile_reference)
+    if match is None:
+        raise AuthoringError(
+            "Studio profile must use the packaged game-id.vN form"
+        )
+    game_id, version_text = match.groups()
+    registry = packaged_game_profiles()
+    try:
+        profile = registry.get(game_id)
+    except AuthoringError as exc:
+        raise AuthoringError(f"unknown Studio game profile: {game_id}") from exc
+    version = int(version_text)
+    if profile.profile_version != version:
+        raise AuthoringError(
+            f"Studio profile {profile_reference} does not match packaged profile "
+            f"version {profile.profile_version}"
+        )
+    matches = [
+        revision for revision in profile.revisions
+        if revision.sha256 == source_sha256
+    ]
+    if len(matches) != 1:
+        raise AuthoringError(
+            f"Studio source is not a recognized revision of {profile_reference}"
+        )
+    return profile, matches[0]
+
+
+def validate_game_document_for_revision(
+    document_path: Path, *, profile_reference: str, source_sha256: str
+) -> dict[str, object]:
+    """Validate an authoring document without requiring a commercial ROM path."""
+
+    profile, revision = resolve_profile_revision(profile_reference, source_sha256)
+    adapter = _adapter(profile)
+    document = adapter.parse(_load_json(document_path), profile, revision)
+    return {
+        "schema": "retrolarium.game-document-validation",
+        "schema_version": 1,
+        "status": "valid",
+        "game": profile.game_id,
+        "profile_version": profile.profile_version,
+        "revision": revision.revision_id,
+        "document": str(document_path.resolve()),
+        "details": adapter.details(document),
+    }
 
 
 def _read_image(

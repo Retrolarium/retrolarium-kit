@@ -1,0 +1,181 @@
+{
+  "schema": "retrolarium.game-profile",
+  "schema_version": 1,
+  "id": "pacman",
+  "profile_version": 1,
+  "name": "Pac-Man (NES)",
+  "platform": "nes",
+  "capabilities": [
+    "levels",
+    "graphics",
+    "animations",
+    "palettes",
+    "screens",
+    "text"
+  ],
+  "revisions": [
+    {
+      "id": "japan-v10",
+      "name": "Pac-Man Japan v1.0",
+      "size": 24592,
+      "sha1": "adb4d7d7d28c89ca177aad231e0fdad992c0fbfb",
+      "sha256": "c67e20d7144dac97ba9d4cef1ad90f13d6504e8492e60a6193c33695d68c4b22",
+      "container": "ines",
+      "mapper": 0
+    },
+    {
+      "id": "japan-v11",
+      "name": "Pac-Man Japan v1.1",
+      "size": 24592,
+      "sha1": "b8be2bffb4592873cc211becb529bf64071c7f90",
+      "sha256": "06ed4f706d87940728d623d289caa7fd0abd5c0d6466cb52d4c491ff3b8c0ed9",
+      "container": "ines",
+      "mapper": 0
+    }
+  ],
+  "resources": [
+    {
+      "id": "authoring-bundle",
+      "kind": "resource-bundle",
+      "codec": "nes.resource-bundle.v1",
+      "capacity_policy": "fixed",
+      "parameters": {}
+    },
+    {
+      "id": "maze",
+      "kind": "level",
+      "codec": "pacman.maze-rle.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 11400,
+        "size": 416,
+        "tokens": 416,
+        "width": 22,
+        "height": 27
+      }
+    },
+    {
+      "id": "title-background",
+      "kind": "palette",
+      "codec": "pacman.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 933,
+        "size": 16,
+        "entries": 16,
+        "mirror_pairs": []
+      }
+    },
+    {
+      "id": "title-logo",
+      "kind": "screen",
+      "codec": "nes.nametable.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 687,
+        "size": 138,
+        "width": 23,
+        "height": 6,
+        "attribute_bytes": 0
+      }
+    },
+    {
+      "id": "game-text",
+      "kind": "text",
+      "codec": "nes.fixed-text-fields.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "encoding": {
+          "characters": " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.;",
+          "codes": [32, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 46, 59],
+          "case_fold": "upper",
+          "padding": 32
+        },
+        "fields": [
+          {"key": "title-one-player", "label": "Title: 1 PLAYER", "file_offset": 853, "width": 8},
+          {"key": "title-two-players", "label": "Title: 2 PLAYERS", "file_offset": 864, "width": 9},
+          {"key": "title-copyright", "label": "Title: copyright line", "file_offset": 889, "width": 20},
+          {"key": "title-rights", "label": "Title: rights line", "file_offset": 913, "width": 19},
+          {"key": "attract-header", "label": "Attract: character header", "file_offset": 1529, "width": 21},
+          {"key": "attract-chaser", "label": "Attract: CHASER", "file_offset": 1553, "width": 11},
+          {"key": "attract-red", "label": "Attract: RED", "file_offset": 1569, "width": 6},
+          {"key": "attract-ambusher", "label": "Attract: AMBUSHER", "file_offset": 1579, "width": 11},
+          {"key": "attract-pink", "label": "Attract: PINK", "file_offset": 1595, "width": 5},
+          {"key": "attract-feigner", "label": "Attract: FEIGNER", "file_offset": 1630, "width": 11},
+          {"key": "attract-orange", "label": "Attract: ORANGE", "file_offset": 1646, "width": 6},
+          {"key": "points-ten", "label": "Attract: 10 PTS", "file_offset": 1658, "width": 6},
+          {"key": "points-fifty", "label": "Attract: 50 PTS", "file_offset": 1669, "width": 6},
+          {"key": "pause", "label": "Gameplay: PAUSE", "file_offset": 2721, "width": 5}
+        ]
+      }
+    },
+    {
+      "id": "attract-bg-sprite",
+      "kind": "palette",
+      "codec": "pacman.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 1475,
+        "size": 32,
+        "entries": 32,
+        "mirror_pairs": [[0, 16], [4, 20], [8, 24], [12, 28]]
+      }
+    },
+    {
+      "id": "round-gameplay",
+      "kind": "palette",
+      "codec": "pacman.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 4208,
+        "size": 32,
+        "entries": 32,
+        "mirror_pairs": [[0, 16], [4, 20], [8, 24], [12, 28]]
+      }
+    },
+    {
+      "id": "intermission-sprites",
+      "kind": "palette",
+      "codec": "pacman.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 10059,
+        "size": 16,
+        "entries": 16,
+        "mirror_pairs": []
+      }
+    },
+    {
+      "id": "fruit-by-stage",
+      "kind": "palette",
+      "codec": "pacman.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 9813,
+        "size": 16,
+        "entries": 16,
+        "mirror_pairs": []
+      }
+    },
+    {
+      "id": "character-graphics",
+      "kind": "graphics",
+      "codec": "nes.chr-2bpp.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 16400,
+        "size": 8192
+      }
+    },
+    {
+      "id": "actor-frames",
+      "kind": "animation",
+      "codec": "pacman.actor-mapping.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 7017,
+        "size": 624
+      }
+    }
+  ]
+}

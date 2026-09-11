@@ -19,6 +19,22 @@ from .authoring import (
     RevisionSpec,
 )
 from .ines import parse_ines
+from .pacman_maze import (
+    CODEC as PACMAN_MAZE_CODEC,
+    decode_maze_rle,
+    encode_maze_grid,
+    inspect_maze,
+)
+from .pacman_actor import (
+    CODEC as PACMAN_ACTOR_CODEC,
+    decode_actor_mapping,
+    encode_actor_mapping,
+)
+from .nes_text import (
+    CODEC as FIXED_TEXT_CODEC,
+    decode_text_fields,
+    encode_text_fields,
+)
 
 
 DOCUMENT_SCHEMA = "retrolarium.nes-resource-bundle"
@@ -26,8 +42,12 @@ DOCUMENT_VERSION = 1
 ADAPTER_CODEC = "nes.resource-bundle.v1"
 NAMETABLE_CODEC = "nes.nametable.v1"
 PALETTE_CODEC = "nes.palette-table.v1"
+PACMAN_PALETTE_CODEC = "pacman.palette-table.v1"
 CHR_CODEC = "nes.chr-2bpp.v1"
-SUPPORTED_CODECS = (NAMETABLE_CODEC, PALETTE_CODEC, CHR_CODEC)
+SUPPORTED_CODECS = (
+    NAMETABLE_CODEC, PALETTE_CODEC, PACMAN_PALETTE_CODEC, CHR_CODEC, PACMAN_MAZE_CODEC,
+    PACMAN_ACTOR_CODEC, FIXED_TEXT_CODEC,
+)
 
 
 class NesResourceError(AuthoringError):
@@ -206,7 +226,7 @@ def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
             ],
             "attributes": list(payload[width * height :]),
         }
-    if resource.codec == PALETTE_CODEC:
+    if resource.codec in (PALETTE_CODEC, PACMAN_PALETTE_CODEC):
         entries = _integer(
             resource.parameters.get("entries"),
             f"{resource.resource_id}.entries",
@@ -218,12 +238,15 @@ def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
             raise NesResourceError(f"{resource.resource_id} exceeds the source image")
         for index, value in enumerate(payload):
             _byte(value, f"{resource.resource_id}.values[{index}]", maximum=0x3F)
-        return {
+        result = {
             "id": resource.resource_id,
             "kind": resource.kind,
             "codec": resource.codec,
             "values": list(payload),
         }
+        if resource.codec == PACMAN_PALETTE_CODEC:
+            result["mirror_pairs"] = resource.parameters.get("mirror_pairs", [])
+        return result
     if resource.codec == CHR_CODEC:
         offset = _integer(
             resource.parameters.get("file_offset"),
@@ -245,6 +268,48 @@ def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
             "codec": resource.codec,
             "tiles": [[list(row) for row in tile] for tile in decode_chr_2bpp(payload)],
         }
+    if resource.codec == PACMAN_MAZE_CODEC:
+        width = _integer(
+            resource.parameters.get("width"), f"{resource.resource_id}.width", minimum=1
+        )
+        height = _integer(
+            resource.parameters.get("height"), f"{resource.resource_id}.height", minimum=1
+        )
+        offset, size = _span(resource, _integer(
+            resource.parameters.get("tokens"), f"{resource.resource_id}.tokens", minimum=1
+        ))
+        payload = image[offset : offset + size]
+        if len(payload) != size:
+            raise NesResourceError(f"{resource.resource_id} exceeds the source image")
+        return {
+            "id": resource.resource_id,
+            "kind": resource.kind,
+            "codec": resource.codec,
+            "width": width,
+            "height": height,
+            "tokens": list(payload),
+            "tiles": [list(row) for row in decode_maze_rle(
+                payload, rows=height, columns=width
+            )],
+        }
+    if resource.codec == PACMAN_ACTOR_CODEC:
+        offset, size = _span(resource, 624)
+        payload = image[offset : offset + size]
+        if len(payload) != size:
+            raise NesResourceError(f"{resource.resource_id} exceeds the source image")
+        return {
+            "id": resource.resource_id,
+            "kind": resource.kind,
+            "codec": resource.codec,
+            **decode_actor_mapping(payload),
+        }
+    if resource.codec == FIXED_TEXT_CODEC:
+        return {
+            "id": resource.resource_id,
+            "kind": resource.kind,
+            "codec": resource.codec,
+            **decode_text_fields(image, resource.parameters),
+        }
     raise NesResourceError(f"unsupported NES resource codec {resource.codec}")
 
 
@@ -264,13 +329,14 @@ def decode_resources(
 
 def _parse_resource(
     raw: object, spec: ResourceSpec
-) -> tuple[Mapping[str, object], bytes]:
+) -> tuple[Mapping[str, object], tuple[tuple[int, bytes], ...]]:
     if not isinstance(raw, dict):
         raise NesResourceError(f"resource {spec.resource_id} must be an object")
     if raw.get("id") != spec.resource_id or raw.get("codec") != spec.codec:
         raise NesResourceError(f"resource {spec.resource_id} identity differs from profile")
     if raw.get("kind") != spec.kind:
         raise NesResourceError(f"resource {spec.resource_id} kind differs from profile")
+    encoded_spans: tuple[tuple[int, bytes], ...] | None = None
     if spec.codec == NAMETABLE_CODEC:
         expected_fields = {
             "id", "kind", "codec", "width", "height", "tiles", "attributes"
@@ -296,8 +362,10 @@ def _parse_resource(
             for index, item in enumerate(values)
         )
         payload = bytes(cell for row in tiles for cell in row) + attributes
-    elif spec.codec == PALETTE_CODEC:
+    elif spec.codec in (PALETTE_CODEC, PACMAN_PALETTE_CODEC):
         expected_fields = {"id", "kind", "codec", "values"}
+        if spec.codec == PACMAN_PALETTE_CODEC:
+            expected_fields.add("mirror_pairs")
         count = _integer(
             spec.parameters.get("entries"), f"{spec.resource_id}.entries", minimum=1
         )
@@ -312,6 +380,28 @@ def _parse_resource(
             )
             for index, item in enumerate(values)
         )
+        if spec.codec == PACMAN_PALETTE_CODEC:
+            configured_pairs = spec.parameters.get("mirror_pairs", [])
+            raw_pairs = raw.get("mirror_pairs")
+            if raw_pairs != configured_pairs:
+                raise NesResourceError(
+                    f"{spec.resource_id}.mirror_pairs differ from the profile"
+                )
+            for pair_index, pair in enumerate(configured_pairs):
+                if (not isinstance(pair, list) or len(pair) != 2
+                        or any(not isinstance(item, int) for item in pair)):
+                    raise NesResourceError(
+                        f"{spec.resource_id}.mirror_pairs[{pair_index}] is invalid"
+                    )
+                left, right = pair
+                if not 0 <= left < count or not 0 <= right < count or left == right:
+                    raise NesResourceError(
+                        f"{spec.resource_id}.mirror_pairs[{pair_index}] is out of range"
+                    )
+                if values[left] != values[right]:
+                    raise NesResourceError(
+                        f"{spec.resource_id} mirrored colors {left} and {right} differ"
+                    )
     elif spec.codec == CHR_CODEC:
         expected_fields = {"id", "kind", "codec", "tiles"}
         size = _integer(
@@ -321,14 +411,61 @@ def _parse_resource(
         if not isinstance(values, list):
             raise NesResourceError(f"{spec.resource_id}.tiles must be an array")
         payload = encode_chr_2bpp(values, size // 16)
+    elif spec.codec == PACMAN_MAZE_CODEC:
+        expected_fields = {
+            "id", "kind", "codec", "width", "height", "tokens", "tiles"
+        }
+        width = _integer(spec.parameters.get("width"), f"{spec.resource_id}.width", minimum=1)
+        height = _integer(spec.parameters.get("height"), f"{spec.resource_id}.height", minimum=1)
+        tokens = _integer(spec.parameters.get("tokens"), f"{spec.resource_id}.tokens", minimum=1)
+        if raw.get("width") != width or raw.get("height") != height:
+            raise NesResourceError(f"resource {spec.resource_id} geometry differs from profile")
+        raw_tokens = raw.get("tokens")
+        if not isinstance(raw_tokens, list) or len(raw_tokens) != tokens:
+            raise NesResourceError(
+                f"{spec.resource_id}.tokens must contain {tokens} bytes"
+            )
+        preserved = bytes(
+            _byte(item, f"{spec.resource_id}.tokens[{index}]")
+            for index, item in enumerate(raw_tokens)
+        )
+        try:
+            preserved_grid = decode_maze_rle(
+                preserved, rows=height, columns=width
+            )
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        normalized_grid = _matrix(
+            raw.get("tiles"), height, width, f"{spec.resource_id}.tiles", maximum=0x3F
+        )
+        payload = preserved if preserved_grid == normalized_grid else encode_maze_grid(
+            raw.get("tiles"), rows=height, columns=width, token_count=tokens
+        )
+        report = inspect_maze(raw.get("tiles"))
+        if report["errors"]:
+            raise NesResourceError("invalid Pac-Man maze: " + "; ".join(report["errors"]))
+    elif spec.codec == PACMAN_ACTOR_CODEC:
+        expected_fields = {
+            "id", "kind", "codec", "standard_tile_quads",
+            "alternate_tile_quads", "standard_attribute_quads",
+            "alternate_attribute_quads", "oam_offsets_yx",
+        }
+        payload = encode_actor_mapping({
+            key: raw.get(key) for key in expected_fields - {"id", "kind", "codec"}
+        })
+    elif spec.codec == FIXED_TEXT_CODEC:
+        expected_fields = {"id", "kind", "codec", "encoding", "messages"}
+        encoded_spans = encode_text_fields(raw, spec.parameters)
     else:
         raise NesResourceError(f"unsupported NES resource codec {spec.codec}")
     if set(raw) != expected_fields:
         raise NesResourceError(
             f"resource {spec.resource_id} fields differ from its codec contract"
         )
-    _span(spec, len(payload))
-    return raw, payload
+    if encoded_spans is None:
+        offset, _size = _span(spec, len(payload))
+        encoded_spans = ((offset, payload),)
+    return raw, encoded_spans
 
 
 def parse_resource_document(
@@ -373,29 +510,38 @@ def build_resources(
     changes = []
     reports = []
     for raw, spec in zip(document.resources, specs):
-        _normalized, replacement = _parse_resource(dict(raw), spec)
-        offset, size = _span(spec, len(replacement))
-        expected = source[offset : offset + size]
-        if len(expected) != size:
-            raise NesResourceError(f"resource {spec.resource_id} exceeds the source image")
-        changes.append(
-            Change(
-                AddressRange(Address("file", offset), size),
-                expected,
-                replacement,
-                Provenance(source_sha256, spec.resource_id, "encode"),
+        _normalized, replacements = _parse_resource(dict(raw), spec)
+        range_reports = []
+        for span_index, (offset, replacement) in enumerate(replacements):
+            size = len(replacement)
+            expected = source[offset : offset + size]
+            if len(expected) != size:
+                raise NesResourceError(f"resource {spec.resource_id} exceeds the source image")
+            changes.append(
+                Change(
+                    AddressRange(Address("file", offset), size),
+                    expected,
+                    replacement,
+                    Provenance(source_sha256, spec.resource_id, f"encode-{span_index}"),
+                )
             )
-        )
-        reports.append(
-            {
-                "id": spec.resource_id,
-                "kind": spec.kind,
-                "codec": spec.codec,
+            range_reports.append({
                 "file_offset": offset,
                 "size": size,
                 "changed_bytes": sum(a != b for a, b in zip(expected, replacement)),
-            }
-        )
+            })
+        report = {
+            "id": spec.resource_id,
+            "kind": spec.kind,
+            "codec": spec.codec,
+            "size": sum(item["size"] for item in range_reports),
+            "changed_bytes": sum(item["changed_bytes"] for item in range_reports),
+        }
+        if len(range_reports) == 1:
+            report["file_offset"] = range_reports[0]["file_offset"]
+        else:
+            report["ranges"] = range_reports
+        reports.append(report)
     output = BuildPlan(source_sha256, ChangeSet.from_iterable(changes)).apply(source)
     return output, {
         "schema": "retrolarium.nes-resource-build",
@@ -415,16 +561,31 @@ def inspection_details(document: NesResourceBundleDocument) -> dict[str, int]:
     palettes = sum(
         len(item.get("values", []))
         for item in document.resources
-        if item.get("codec") == PALETTE_CODEC
+        if item.get("codec") in (PALETTE_CODEC, PACMAN_PALETTE_CODEC)
     )
     chr_tiles = sum(
         len(item.get("tiles", []))
         for item in document.resources
         if item.get("codec") == CHR_CODEC
     )
+    mazes = sum(item.get("codec") == PACMAN_MAZE_CODEC for item in document.resources)
+    actor_frames = sum(
+        len(item.get("standard_tile_quads", []))
+        + len(item.get("alternate_tile_quads", []))
+        for item in document.resources
+        if item.get("codec") == PACMAN_ACTOR_CODEC
+    )
+    text_messages = sum(
+        len(item.get("messages", []))
+        for item in document.resources
+        if item.get("codec") == FIXED_TEXT_CODEC
+    )
     return {
         "resource_count": len(document.resources),
         "screens": screens,
         "palette_bytes": palettes,
         "chr_tiles": chr_tiles,
+        "mazes": mazes,
+        "actor_frames": actor_frames,
+        "text_messages": text_messages,
     }

@@ -216,9 +216,12 @@ class StudioProjectTests(unittest.TestCase):
                         "revision": "fixture-v1",
                         "source_sha256": SHA256,
                         "resources": [
+                            {"id": "maze", "kind": "level", "codec": "pacman.maze-rle.v1"},
                             {"id": "screen", "kind": "screen", "codec": "nes.nametable.v1"},
+                            {"id": "text", "kind": "text", "codec": "nes.fixed-text-fields.v1"},
                             {"id": "chr", "kind": "graphics", "codec": "nes.chr-2bpp.v1"},
                             {"id": "palette", "kind": "palette", "codec": "nes.palette-table.v1"},
+                            {"id": "actors", "kind": "animation", "codec": "pacman.actor-mapping.v1"},
                         ],
                     }
                 ),
@@ -239,10 +242,59 @@ class StudioProjectTests(unittest.TestCase):
                 )
             tabs = result["workspace"]["tabs"]
             self.assertEqual(
-                ["screens", "graphics", "palettes", "code"],
+                ["maze", "screens", "text", "graphics", "palettes", "animations", "code"],
                 [tab["id"] for tab in tabs],
             )
-            self.assertEqual("screens", result["workspace"]["startup_tab"])
+            self.assertEqual(
+                [["graphics"], ["graphics", "palettes"], [], ["palettes"], [], ["graphics"], []],
+                [tab["depends_on"] for tab in tabs],
+            )
+            self.assertEqual("maze", result["workspace"]["startup_tab"])
+
+    def test_create_selects_profile_palette_codec(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "disassembly/manifest.json"
+            source.parent.mkdir()
+            source.write_text(json.dumps(manifest()), encoding="utf-8")
+            resources = root / "documents/resources.json"
+            resources.parent.mkdir()
+            resources.write_text(
+                json.dumps(
+                    {
+                        "schema": "retrolarium.nes-resource-bundle",
+                        "schema_version": 1,
+                        "game": "fixture",
+                        "revision": "fixture-v1",
+                        "source_sha256": SHA256,
+                        "resources": [
+                            {
+                                "id": "palette",
+                                "kind": "palette",
+                                "codec": "pacman.palette-table.v1",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            output = root / "fixture.retrolarium"
+            with patch(
+                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                return_value=manifest(),
+            ):
+                result = create_studio_project(
+                    source,
+                    output,
+                    project_id="fixture",
+                    name="Fixture",
+                    profile="fixture.v1",
+                    resource_document=resources,
+                )
+
+            palettes = result["workspace"]["tabs"][0]
+            self.assertEqual("palettes", palettes["id"])
+            self.assertEqual("pacman.palette-table.v1", palettes["codec"])
 
 
 if __name__ == "__main__":

@@ -12,6 +12,18 @@ import tomllib
 from typing import Any
 
 from .contracts import ContractError, load_disassembly_manifest
+from .games import build_game, validate_game_document_for_revision
+from .ines import load_ines
+from .megadrive import load_megadrive
+from .project import (
+    build_project,
+    launch_image_plan,
+    launch_image_smoke,
+    sha256_file,
+    verify_project,
+    write_document,
+)
+from .snes import load_snes
 
 
 class StudioProjectError(ValueError):
@@ -49,9 +61,13 @@ CODECS = frozenset(
         "castle.object-stream@1",
         "castle.prefix-rooms@1",
         "nes.chr-2bpp.v1",
+        "nes.fixed-text-fields.v1",
         "nes.nametable.v1",
         "nes.palette-table.v1",
+        "pacman.maze-rle.v1",
         "pacman.maze-rle@1",
+        "pacman.actor-mapping.v1",
+        "pacman.palette-table.v1",
         "pacman.sound@1",
         "retrolarium.megadrive.disassembly@1",
         "retrolarium.nes.disassembly@1",
@@ -64,6 +80,7 @@ CODECS = frozenset(
 CAPABILITIES = frozenset(
     {
         "changed-markers",
+        "edit",
         "eyedropper",
         "midi-import",
         "navigate",
@@ -85,6 +102,9 @@ OPERATIONS = frozenset(
 
 _IDENTIFIER = re.compile(r"^[a-z][a-z0-9_.-]*$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
+_AUTHORING_SCHEMAS = frozenset(
+    {"retrolarium.castle-levels", "retrolarium.nes-resource-bundle"}
+)
 
 
 def _error(context: str, message: str) -> StudioProjectError:
@@ -370,7 +390,13 @@ def load_studio_project(path: Path) -> dict[str, Any]:
     )
     operations: dict[str, str] = {}
     for name, value in operations_table.items():
-        operations[name] = _choice(value, f"operations.{name}", OPERATIONS)
+        operation = _choice(value, f"operations.{name}", OPERATIONS)
+        expected = f"project.{name}"
+        if operation != expected:
+            raise _error(
+                f"operations.{name}", f"must use registered operation {expected!r}"
+            )
+        operations[name] = operation
 
     return {
         "schema": INSPECTION_SCHEMA,
@@ -395,6 +421,8 @@ def load_studio_project(path: Path) -> dict[str, Any]:
 
 def validate_studio_project(path: Path) -> dict[str, Any]:
     inspection = load_studio_project(path)
+    _require_declared_operation(inspection, "validate")
+    documents = _validate_editor_documents(inspection)
     return {
         "schema": "retrolarium.project-validation",
         "schema_version": 1,
@@ -404,7 +432,300 @@ def validate_studio_project(path: Path) -> dict[str, Any]:
         "enabled_tabs": [
             tab["id"] for tab in inspection["workspace"]["tabs"] if tab["enabled"]
         ],
+        "documents": documents,
     }
+
+
+def _require_declared_operation(
+    inspection: Mapping[str, Any], name: str
+) -> None:
+    operations = _mapping(inspection.get("operations", {}), "inspection.operations")
+    if operations.get(name) != f"project.{name}":
+        raise StudioProjectError(
+            f"Studio project does not declare the {name!r} operation"
+        )
+
+
+def _validate_editor_documents(
+    inspection: Mapping[str, Any]
+) -> list[dict[str, object]]:
+    documents = []
+    for document_path in _unique_editor_documents(inspection):
+        schema = _document_schema(document_path)
+        if schema in _AUTHORING_SCHEMAS:
+            documents.append(
+                validate_game_document_for_revision(
+                    document_path,
+                    profile_reference=inspection["project"]["profile"],
+                    source_sha256=inspection["source"]["sha256"],
+                )
+            )
+        else:
+            documents.append(
+                {
+                    "status": "contract-only",
+                    "document": str(document_path),
+                    "schema": schema,
+                }
+            )
+    return documents
+
+
+def _unique_editor_documents(inspection: Mapping[str, Any]) -> list[Path]:
+    result: list[Path] = []
+    seen: set[Path] = set()
+    workspace = _mapping(inspection["workspace"], "inspection.workspace")
+    for item in workspace["tabs"]:
+        tab = _mapping(item, "inspection.workspace.tabs")
+        value = tab.get("document_path")
+        if not tab.get("enabled") or value is None:
+            continue
+        resolved = Path(_string(value, "inspection tab document_path")).resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            result.append(resolved)
+    return result
+
+
+def _document_schema(path: Path) -> str:
+    if path.suffix.lower() != ".json":
+        return "unregistered"
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise StudioProjectError(f"cannot read Studio document {path}: {exc}") from exc
+    if not isinstance(value, Mapping):
+        raise StudioProjectError(f"Studio document {path} must be an object")
+    schema = value.get("schema")
+    return schema if isinstance(schema, str) and schema else "unregistered"
+
+
+def _studio_output(root: Path, project_id: str, platform: str) -> Path:
+    extension = {"nes": ".nes", "megadrive": ".bin", "snes": ".sfc"}[platform]
+    return root / "build" / f"{project_id}-edited{extension}"
+
+
+def _validate_container(path: Path, platform: str) -> None:
+    if platform == "nes":
+        load_ines(path)
+    elif platform == "megadrive":
+        load_megadrive(path)
+    elif platform == "snes":
+        load_snes(path)
+    else:
+        raise StudioProjectError(f"unsupported Studio platform: {platform}")
+
+
+def build_studio_project(
+    path: Path,
+    *,
+    container: str | None = None,
+    toolchain_cache: Path | None = None,
+) -> dict[str, Any]:
+    """Build the exact source project, then transactionally apply typed resources."""
+
+    inspection = load_studio_project(path)
+    _require_declared_operation(inspection, "build")
+    _validate_editor_documents(inspection)
+    manifest_path = Path(inspection["source"]["disassembly_path"])
+    base_build = build_project(
+        manifest_path, container=container, toolchain_cache=toolchain_cache
+    )
+    base_verification = verify_project(manifest_path)
+    if base_verification["status"] != "exact":
+        raise StudioProjectError(
+            "Studio source project does not rebuild the immutable source exactly"
+        )
+    base_artifact = (
+        manifest_path.parent / base_build["artifact"]["path"]
+    ).resolve()
+    root = Path(inspection["project_root"])
+    output = _studio_output(
+        root, inspection["project"]["id"], inspection["project"]["platform"]
+    ).resolve()
+    if not output.is_relative_to(root.resolve()):
+        raise StudioProjectError("Studio build output escapes the project directory")
+
+    editor_documents = _unique_editor_documents(inspection)
+    authoring_documents = [
+        document for document in editor_documents
+        if _document_schema(document) in _AUTHORING_SCHEMAS
+    ]
+    unhandled = [
+        document for document in editor_documents if document not in authoring_documents
+    ]
+    if unhandled:
+        raise StudioProjectError(
+            "Studio build has no registered writer for "
+            + ", ".join(str(document) for document in unhandled)
+        )
+    if len(authoring_documents) > 1:
+        raise StudioProjectError(
+            "Studio build currently requires one composed authoring document"
+        )
+
+    authoring: dict[str, object] | None = None
+    if authoring_documents:
+        authoring = build_game(base_artifact, authoring_documents[0], output)
+    else:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{output.name}.", suffix=".tmp", dir=output.parent
+        )
+        temporary = Path(temporary_name)
+        try:
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(base_artifact.read_bytes())
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, output)
+        finally:
+            temporary.unlink(missing_ok=True)
+    _validate_container(output, inspection["project"]["platform"])
+
+    report = {
+        "schema": "retrolarium.studio-build-result",
+        "schema_version": 1,
+        "status": "built",
+        "project": {
+            "path": Path(inspection["project_file"]).name,
+            "sha256": sha256_file(Path(inspection["project_file"])),
+        },
+        "source_sha256": inspection["source"]["sha256"],
+        "base": base_build["artifact"],
+        "documents": [
+            {
+                "path": document.relative_to(root).as_posix(),
+                "sha256": sha256_file(document),
+            }
+            for document in editor_documents
+        ],
+        "artifact": {
+            "path": output.relative_to(root).as_posix(),
+            "size": output.stat().st_size,
+            "sha256": sha256_file(output),
+        },
+        "authoring": authoring,
+    }
+    write_document(root / "build" / "studio-build-result.json", report)
+    return report
+
+
+def verify_studio_project(path: Path) -> dict[str, Any]:
+    """Prove that the edited artifact matches the current project and documents."""
+
+    inspection = load_studio_project(path)
+    _require_declared_operation(inspection, "verify")
+    root = Path(inspection["project_root"])
+    report_path = root / "build" / "studio-build-result.json"
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise StudioProjectError(f"cannot read Studio build result: {exc}") from exc
+    if not isinstance(report, Mapping) or report.get("schema") != "retrolarium.studio-build-result" \
+            or report.get("schema_version") != 1:
+        raise StudioProjectError("Studio build result has an unsupported schema")
+
+    differences: list[str] = []
+    project_record = _mapping(report.get("project"), "build result project")
+    if project_record.get("sha256") != sha256_file(Path(inspection["project_file"])):
+        differences.append("project")
+    if report.get("source_sha256") != inspection["source"]["sha256"]:
+        differences.append("source")
+
+    expected_documents = {
+        document.relative_to(root).as_posix(): sha256_file(document)
+        for document in _unique_editor_documents(inspection)
+    }
+    records = report.get("documents")
+    built_documents: dict[str, str] = {}
+    if isinstance(records, list):
+        for record in records:
+            if isinstance(record, Mapping) and isinstance(record.get("path"), str) \
+                    and isinstance(record.get("sha256"), str):
+                built_documents[record["path"]] = record["sha256"]
+    if built_documents != expected_documents:
+        differences.append("documents")
+
+    artifact_record = _mapping(report.get("artifact"), "build result artifact")
+    artifact_relative, artifact = _project_path(
+        root, artifact_record.get("path"), "build result artifact.path"
+    )
+    if artifact_record.get("size") != artifact.stat().st_size \
+            or artifact_record.get("sha256") != sha256_file(artifact):
+        differences.append("artifact")
+    manifest = load_disassembly_manifest(
+        Path(inspection["source"]["disassembly_path"]), verify_rebuilt=False
+    )
+    if artifact.stat().st_size != manifest["input"]["size"]:
+        differences.append("artifact-size")
+    _validate_container(artifact, inspection["project"]["platform"])
+
+    result = {
+        "schema": "retrolarium.studio-verification-result",
+        "schema_version": 1,
+        "status": "current" if not differences else "mismatch",
+        "project_file": inspection["project_file"],
+        "artifact": {
+            "path": artifact_relative,
+            "absolute_path": str(artifact),
+            "size": artifact.stat().st_size,
+            "sha256": sha256_file(artifact),
+        },
+        "differences": differences,
+    }
+    write_document(root / "build" / "studio-verification-result.json", result)
+    return result
+
+
+def studio_launch_plan(
+    path: Path,
+    *,
+    mame: Path,
+    machine: str | None = None,
+    attach_window: str | None = None,
+) -> dict[str, Any]:
+    inspection = load_studio_project(path)
+    _require_declared_operation(inspection, "launch")
+    verification = verify_studio_project(path)
+    if verification["status"] != "current":
+        raise StudioProjectError("Studio artifact is stale; build it again before launch")
+    plan = launch_image_plan(
+        Path(verification["artifact"]["absolute_path"]),
+        platform=inspection["project"]["platform"],
+        mame=mame,
+        machine=machine,
+        attach_window=attach_window,
+    )
+    plan["operation"] = "retrolarium.studio.launch"
+    plan["project_file"] = inspection["project_file"]
+    return plan
+
+
+def launch_studio_smoke(
+    path: Path,
+    *,
+    mame: Path,
+    output: Path | None = None,
+    machine: str | None = None,
+    seconds: int = 2,
+    timeout: int = 60,
+) -> dict[str, Any]:
+    inspection = load_studio_project(path)
+    _require_declared_operation(inspection, "launch")
+    verification = verify_studio_project(path)
+    if verification["status"] != "current":
+        raise StudioProjectError("Studio artifact is stale; build it again before launch")
+    root = Path(inspection["project_root"])
+    return launch_image_smoke(
+        Path(verification["artifact"]["absolute_path"]),
+        platform=inspection["project"]["platform"],
+        mame=mame,
+        output=(output or root / "build" / "runs"),
+        machine=machine,
+        seconds=seconds,
+        timeout=timeout,
+    )
 
 
 def _toml_string(value: str) -> str:
@@ -510,17 +831,26 @@ def create_studio_project(
             )
             kinds.setdefault(kind, set()).add(resource_codec)
         templates = (
+            ("level", "maze", "Maze", "level.tile-grid", "content",
+             "pacman.maze-rle.v1", ["paint", "eyedropper", "semantic-overlays", "undo"]),
             ("screen", "screens", "Screens", "screen.tilemap", "content",
              "nes.nametable.v1", ["paint", "preview", "undo"]),
+            ("text", "text", "Text", "text.fixed", "content",
+             "nes.fixed-text-fields.v1", ["edit", "restore", "undo"]),
             ("graphics", "graphics", "Graphics", "graphics.tile-set", "assets",
              "nes.chr-2bpp.v1", ["pixel-paint", "restore", "undo"]),
             ("palette", "palettes", "Palettes", "palette.set", "assets",
              "nes.palette-table.v1", ["paint", "preview", "undo"]),
+            ("animation", "animations", "Animations & Mappings", "animation.mapping", "assets",
+             "pacman.actor-mapping.v1", ["paint", "preview", "restore", "undo"]),
         )
         for kind, tab_id, title, editor_kind, group, expected_codec, capabilities in templates:
             if kind not in kinds:
                 continue
-            if kinds[kind] != {expected_codec}:
+            selected_codec = expected_codec
+            if kind == "palette" and kinds[kind] == {"pacman.palette-table.v1"}:
+                selected_codec = "pacman.palette-table.v1"
+            elif kinds[kind] != {expected_codec}:
                 raise StudioProjectError(
                     f"resource document {kind} resources require codec {expected_codec!r}"
                 )
@@ -531,10 +861,23 @@ def create_studio_project(
                     "kind": editor_kind,
                     "group": group,
                     "document": portable_document,
-                    "codec": expected_codec,
+                    "codec": selected_codec,
                     "capabilities": capabilities,
                 }
             )
+        available_ids = {str(tab["id"]) for tab in tabs}
+        desired_dependencies = {
+            "maze": ("graphics",),
+            "screens": ("graphics", "palettes"),
+            "graphics": ("palettes",),
+            "animations": ("graphics",),
+        }
+        for tab in tabs:
+            tab["depends_on"] = [
+                dependency
+                for dependency in desired_dependencies.get(str(tab["id"]), ())
+                if dependency in available_ids
+            ]
     tabs.append(
         {
             "id": "code",
@@ -563,6 +906,12 @@ def create_studio_project(
             _toml_string(str(item)) for item in tab["capabilities"]  # type: ignore[union-attr]
         )
         lines.append(f"capabilities = [{capabilities}]")
+        dependencies = tab.get("depends_on", [])
+        if dependencies:
+            rendered_dependencies = ", ".join(
+                _toml_string(str(item)) for item in dependencies  # type: ignore[union-attr]
+            )
+            lines.append(f"depends_on = [{rendered_dependencies}]")
         tab_blocks.append("\n".join(lines))
     tabs_toml = "\n\n".join(tab_blocks)
 
