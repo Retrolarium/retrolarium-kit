@@ -27,11 +27,17 @@ from retrolarium_kit.castle import (
     validate_prefix_codebook,
 )
 from retrolarium_kit.game_profiles import packaged_game_profiles
-from retrolarium_kit.games import build_game, extract_game, inspect_game, validate_game
+from retrolarium_kit.games import (
+    build_game,
+    extract_game,
+    game_launch_plan,
+    inspect_game,
+    validate_game,
+)
 
 
 ORACLE = (
-    Path(__file__).resolve().parents[2]
+    Path(__file__).resolve().parents[1]
     / "fixtures"
     / "synthetic"
     / "nes"
@@ -247,7 +253,9 @@ class CastleCodecTests(unittest.TestCase):
             document_path = root / "levels.json"
             output_path = root / "rebuilt.nes"
             report_path = root / "report.json"
+            mame_path = root / "consoles.exe"
             image_path.write_bytes(image)
+            mame_path.write_bytes(b"mame")
             write_profile(profile_path, profile)
 
             inspected = inspect_game(image_path, custom_profile=profile_path)
@@ -270,6 +278,14 @@ class CastleCodecTests(unittest.TestCase):
             self.assertEqual(output_path.read_bytes(), image)
             self.assertEqual(result["changed_bytes"], 0)
             self.assertTrue(report_path.is_file())
+            launch = game_launch_plan(
+                image_path,
+                output_path,
+                mame=mame_path,
+                custom_profile=profile_path,
+            )
+            self.assertEqual(launch["game"], "castle-probe")
+            self.assertEqual(launch["arguments"][0], "nes")
 
             with self.assertRaisesRegex(AuthoringError, "must not overwrite"):
                 build_game(
@@ -277,6 +293,21 @@ class CastleCodecTests(unittest.TestCase):
                     document_path,
                     image_path,
                     custom_profile=profile_path,
+                )
+
+            unknown_path = root / "unknown-revision.nes"
+            unknown = bytearray(image)
+            unknown[-1] ^= 0x01
+            unknown_path.write_bytes(unknown)
+            with self.assertRaisesRegex(AuthoringError, "unsupported game revision"):
+                inspect_game(unknown_path, custom_profile=profile_path)
+
+            overflowing = json.loads(document_path.read_text(encoding="utf-8"))
+            overflowing["rooms"][0]["cells"] = [[0x30, 0x30], [0x30, 0x30]]
+            document_path.write_text(json.dumps(overflowing), encoding="utf-8")
+            with self.assertRaisesRegex(CastleError, "overflows CHR bank 2"):
+                validate_game(
+                    image_path, document_path, custom_profile=profile_path
                 )
 
     def test_invalid_codebook_and_unknown_cell_are_rejected(self) -> None:

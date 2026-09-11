@@ -20,6 +20,16 @@ from .game_profiles import (
     packaged_game_profiles,
     recognize_revision,
 )
+from .ines import load_ines
+from .nes_resources import (
+    ADAPTER_CODEC as NES_RESOURCE_ADAPTER_CODEC,
+    NesResourceBundleDocument,
+    build_resources,
+    decode_resources,
+    inspection_details as nes_resource_details,
+    parse_resource_document,
+)
+from .project import launch_image_plan, launch_image_smoke
 
 
 def _profiles(custom_profile: Path | None) -> tuple[GameProfile, ...]:
@@ -29,7 +39,7 @@ def _profiles(custom_profile: Path | None) -> tuple[GameProfile, ...]:
     return tuple(registry.get(identifier) for identifier in registry.identifiers())
 
 
-class _AuthoringAdapter:
+class _CastleAuthoringAdapter:
     def decode(
         self, payload: bytes, profile: GameProfile, revision: RevisionSpec
     ) -> CastleLevelDocument:
@@ -49,15 +59,63 @@ class _AuthoringAdapter:
     ) -> tuple[bytes, dict[str, object]]:
         return build_levels(payload, document, profile, revision)
 
+    @staticmethod
+    def details(document: CastleLevelDocument) -> dict[str, int]:
+        return {
+            "rooms": len(document.rooms),
+            "objects": sum(len(room) for room in document.objects),
+            "width": document.width,
+            "height": document.height,
+        }
 
-def authoring_adapters() -> Registry[_AuthoringAdapter]:
-    registry: Registry[_AuthoringAdapter] = Registry("authoring adapter")
-    registry.register("castle.prefix-rooms.v1", _AuthoringAdapter())
+    resource_id = "levels"
+
+
+class _NesResourceAuthoringAdapter:
+    def decode(
+        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
+    ) -> NesResourceBundleDocument:
+        return decode_resources(payload, profile, revision)
+
+    def parse(
+        self, document: object, profile: GameProfile, revision: RevisionSpec
+    ) -> NesResourceBundleDocument:
+        return parse_resource_document(document, profile, revision)
+
+    def build(
+        self,
+        payload: bytes,
+        document: NesResourceBundleDocument,
+        profile: GameProfile,
+        revision: RevisionSpec,
+    ) -> tuple[bytes, dict[str, object]]:
+        return build_resources(payload, document, profile, revision)
+
+    @staticmethod
+    def details(document: NesResourceBundleDocument) -> dict[str, int]:
+        return nes_resource_details(document)
+
+    resource_id = "resource-bundle"
+
+
+def authoring_adapters() -> Registry[object]:
+    registry: Registry[object] = Registry("authoring adapter")
+    registry.register("castle.prefix-rooms.v1", _CastleAuthoringAdapter())
+    registry.register(NES_RESOURCE_ADAPTER_CODEC, _NesResourceAuthoringAdapter())
     return registry
 
 
-def _adapter(profile: GameProfile) -> _AuthoringAdapter:
-    return authoring_adapters().get(profile.resource("rooms").codec)
+def _adapter(profile: GameProfile) -> Any:
+    registry = authoring_adapters()
+    identifiers = set(registry.identifiers())
+    matches = [
+        resource.codec for resource in profile.resources if resource.codec in identifiers
+    ]
+    if len(matches) != 1:
+        raise AuthoringError(
+            f"game profile {profile.game_id} must select exactly one authoring adapter"
+        )
+    return registry.get(matches[0])
 
 
 def _read_image(
@@ -130,13 +188,9 @@ def profile_catalog() -> dict[str, object]:
 
 def inspect_game(path: Path, *, custom_profile: Path | None = None) -> dict[str, object]:
     payload, profile, revision = _read_image(path, custom_profile)
-    levels = _adapter(profile).decode(payload, profile, revision)
-    details = {
-        "rooms": len(levels.rooms),
-        "objects": sum(len(room) for room in levels.objects),
-        "width": levels.width,
-        "height": levels.height,
-    }
+    adapter = _adapter(profile)
+    document = adapter.decode(payload, profile, revision)
+    details = adapter.details(document)
     return {
         "schema": "retrolarium.game-inspection",
         "schema_version": 1,
@@ -165,18 +219,20 @@ def extract_game(
     path: Path, output: Path, *, custom_profile: Path | None = None
 ) -> dict[str, object]:
     payload, profile, revision = _read_image(path, custom_profile)
-    levels = _adapter(profile).decode(payload, profile, revision)
-    document = levels.as_dict()
-    _atomic_write_json(output, document)
-    return {
+    adapter = _adapter(profile)
+    document = adapter.decode(payload, profile, revision)
+    details = adapter.details(document)
+    _atomic_write_json(output, document.as_dict())
+    result = {
         "schema": "retrolarium.game-extract-result",
         "schema_version": 1,
         "game": profile.game_id,
         "revision": revision.revision_id,
-        "resource": "levels",
+        "resource": adapter.resource_id,
         "output": str(output.resolve()),
-        "rooms": len(levels.rooms),
     }
+    result.update(details)
+    return result
 
 
 def validate_game(
@@ -220,4 +276,72 @@ def build_game(
     if report_path is not None:
         _atomic_write_json(report_path, result)
         result["report"] = str(report_path.resolve())
+    return result
+
+
+def _validate_built_image(
+    artifact: Path, profile: GameProfile, revision: RevisionSpec
+) -> None:
+    if profile.platform != "nes":
+        raise AuthoringError(
+            f"no direct authoring launch validator for {profile.platform}"
+        )
+    image = load_ines(artifact)
+    if artifact.stat().st_size != revision.size or image.mapper != revision.mapper:
+        raise AuthoringError(
+            "edited image container, size or mapper differs from its base revision"
+        )
+
+
+def game_launch_plan(
+    source: Path,
+    artifact: Path,
+    *,
+    mame: Path,
+    machine: str | None = None,
+    attach_window: str | None = None,
+    custom_profile: Path | None = None,
+) -> dict[str, object]:
+    _payload, profile, revision = _read_image(source, custom_profile)
+    _validate_built_image(artifact, profile, revision)
+    plan = launch_image_plan(
+        artifact,
+        platform=profile.platform,
+        mame=mame,
+        machine=machine,
+        attach_window=attach_window,
+    )
+    plan["game"] = profile.game_id
+    plan["revision"] = revision.revision_id
+    plan["source_sha256"] = revision.sha256
+    return plan
+
+
+def launch_game_smoke(
+    source: Path,
+    artifact: Path,
+    *,
+    mame: Path,
+    output: Path,
+    machine: str | None = None,
+    seconds: int = 2,
+    timeout: int = 60,
+    custom_profile: Path | None = None,
+) -> dict[str, object]:
+    _payload, profile, revision = _read_image(source, custom_profile)
+    _validate_built_image(artifact, profile, revision)
+    result = launch_image_smoke(
+        artifact,
+        platform=profile.platform,
+        mame=mame,
+        output=output,
+        machine=machine,
+        seconds=seconds,
+        timeout=timeout,
+    )
+    result["game"] = profile.game_id
+    result["revision"] = revision.revision_id
+    result["source_sha256"] = revision.sha256
+    run_directory = Path(str(result["run_directory"]))
+    _atomic_write_json(run_directory / "run-result.json", result)
     return result
