@@ -34,6 +34,11 @@ entrypoint used by the GUI. A game profile supplies an initial template, but
 the created project explicitly owns which editor tabs exist, their order,
 groups, documents, codecs, capabilities and dependencies.
 
+Generated NES resource workspaces declare `Screens -> Graphics/Palettes` and
+`Graphics -> Palettes` dependencies explicitly. The GUI uses this graph for
+immediate preview invalidation; hand-edited projects may change these edges,
+and the Kit rejects missing nodes, disabled dependencies and cycles.
+
 ```powershell
 rltool studio create path\to\manifest.json `
   --output path\to\game.retrolarium `
@@ -41,6 +46,10 @@ rltool studio create path\to\manifest.json `
   --resource-document path\to\documents\resources.json
 rltool studio inspect path\to\game.retrolarium
 rltool studio validate path\to\game.retrolarium
+rltool studio build path\to\game.retrolarium
+rltool studio verify path\to\game.retrolarium
+rltool studio launch-plan path\to\game.retrolarium `
+  --mame mame_testing\mame\consoles.exe
 ```
 
 `inspect` emits the versioned normalized JSON projection consumed by the Qt
@@ -51,6 +60,15 @@ identifiers rather than executable command strings. The resource document is
 optional; a recognized `retrolarium.nes-resource-bundle` materializes ordered
 Screens, Graphics, Palettes and Code & Analysis tabs with their actual codecs
 and capabilities, while omitting it creates the minimal Code-only workspace.
+
+`studio build` first rebuilds the generated source and requires its normal
+exact verification to pass. It then applies the current typed authoring
+document transactionally and writes the edited image plus a hash-bound build
+report below the Studio project's ignored `build/` directory. `studio verify`
+rejects a stale artifact whenever the TOML project, a referenced document or
+the output image has changed. `launch-plan` accepts only a current artifact and
+returns the same allowlisted MAME process specification used by the Qt shell;
+`studio launch` provides the bounded headless form for automation.
 
 ## Current NES boundary
 
@@ -285,6 +303,41 @@ manifest.json                           input, backend, coverage and verificatio
 
 All of these are reproducible build artifacts and should stay below an ignored
 `build/` directory.
+
+## Pac-Man maze authoring
+
+The packaged `pacman.v1` profile currently recognizes the two verified
+layout-compatible Japan v1.0/v1.1 revisions. `game extract` produces one
+`retrolarium.nes-resource-bundle` containing the 27x22 maze, 23x6 title logo,
+14 fixed-width messages, five main palette contexts, complete CHR bank and
+fixed actor mappings; no ROM bytes are distributed with the Kit.
+`pacman.maze-rle.v1`
+preserves the source's 416 token bytes for a byte-exact zero-edit build and
+deterministically repacks changed tiles without moving later data.
+
+The codec rejects invalid geometry, tile IDs, pellet/power-pellet counts,
+blocked actor spawns or tunnels, broken door placement, unexpected path
+components and RLE overflow. A Studio project generated from the bundle owns
+Maze, Graphics, Palettes, Animations & Mappings and Code tabs, with Maze and
+Animations depending on Graphics for immediate preview refresh.
+`pacman.palette-table.v1` exposes the title, attract,
+round-gameplay, intermission-sprite and fruit-by-stage tables. Its declared
+mirror pairs are validated and written together, preventing a GUI edit from
+breaking the NES universal-background slots. Frightened/normal color command
+copies are intentionally deferred until the bundle supports replicated ranges.
+`pacman.actor-mapping.v1` round-trips the original 624-byte
+table as 64 standard and 13 alternate four-quadrant frames, validates OAM
+attribute bits and keeps the shared 16x16 offset layout read-only. See
+[`Retrolarium_Pacman_Maze_Authoring_Contract.md`](docs/Retrolarium_Pacman_Maze_Authoring_Contract.md).
+
+The title logo reuses `nes.nametable.v1` as a tile-only 23x6 region. Both
+verified revisions rebuild exactly, and the common Screens editor disables its
+palette brush when a region has no attribute bytes. The addressed PPU packets,
+HUD/intermission regions are not bundled yet. `nes.fixed-text-fields.v1`
+projects 14 disjoint title, attract and pause ranges into one Text resource;
+the profile owns the glyph map, case folding, labels, widths and addresses.
+See
+[`Retrolarium_NES_Text_Authoring_Contract.md`](docs/Retrolarium_NES_Text_Authoring_Contract.md).
 
 ## Other commands
 
