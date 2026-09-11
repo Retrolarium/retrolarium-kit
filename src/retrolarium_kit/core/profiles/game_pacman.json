@@ -11,7 +11,8 @@
     "animations",
     "palettes",
     "screens",
-    "text"
+    "text",
+    "audio"
   ],
   "revisions": [
     {
@@ -67,46 +68,109 @@
       }
     },
     {
-      "id": "title-logo",
+      "id": "screen-content",
       "kind": "screen",
-      "codec": "nes.nametable.v1",
+      "codec": "pacman.screen-collection.v1",
       "capacity_policy": "fixed",
       "parameters": {
-        "file_offset": 687,
-        "size": 138,
-        "width": 23,
-        "height": 6,
-        "attribute_bytes": 0
-      }
-    },
-    {
-      "id": "game-text",
-      "kind": "text",
-      "codec": "nes.fixed-text-fields.v1",
-      "capacity_policy": "fixed",
-      "parameters": {
+        "prg_cpu_base": 49152,
+        "prg_file_offset": 16,
+        "title_logo": {
+          "file_offset": 687,
+          "ppu_address": 8421,
+          "width": 23,
+          "height": 6
+        },
+        "title_packets": {
+          "file_offset": 825,
+          "payload_sizes": [21, 10, 9, 9, 22, 19]
+        },
+        "title_attributes": {
+          "file_offset": 949,
+          "ppu_address": 9160,
+          "size": 24
+        },
+        "fixed_blocks": [
+          {"key": "menu_prompt", "label": "Menu prompt", "file_offset": 1117, "size": 8},
+          {"key": "player_count_glyphs", "label": "Player-count glyphs", "file_offset": 1125, "size": 3},
+          {"key": "hud_blocks", "label": "HUD blocks", "file_offset": 9414, "size": 23},
+          {"key": "hud_player_packets", "label": "HUD player packets", "file_offset": 4190, "size": 18},
+          {"key": "pause_tiles", "label": "Pause visible/blank packets", "file_offset": 2721, "size": 12}
+        ],
+        "attract": {
+          "pointer_file_offset": 1507,
+          "packet_file_offsets": [1527, 1551, 1566, 1577, 1592, 1602, 1617, 1628, 1643, 1654],
+          "payload_sizes": [21, 11, 8, 11, 7, 11, 8, 11, 8, 31]
+        },
+        "intermission_visual": [
+          {"key": "cycle_tiles", "file_offset": 10858, "size": 8, "allowed_values": []},
+          {"key": "cycle_pattern_indexes", "file_offset": 10949, "size": 8, "allowed_values": [0, 4, 8]},
+          {"key": "banner_tile_quads", "file_offset": 10957, "size": 12, "allowed_values": []}
+        ],
+        "read_only_tables": [
+          {"key": "scene_dispatch", "cpu_address": 59241, "kind": "words", "count": 3},
+          {"key": "scene_0_states", "cpu_address": 59262, "kind": "words", "count": 4},
+          {"key": "scene_1_states", "cpu_address": 59490, "kind": "words", "count": 3},
+          {"key": "scene_2_states", "cpu_address": 59657, "kind": "words", "count": 4},
+          {"key": "animation_scene_dispatch", "cpu_address": 59951, "kind": "words", "count": 3},
+          {"key": "animation_scene_0_states", "cpu_address": 59972, "kind": "words", "count": 4},
+          {"key": "animation_scene_1_states", "cpu_address": 60120, "kind": "words", "count": 3},
+          {"key": "animation_scene_2_states", "cpu_address": 60168, "kind": "words", "count": 4}
+        ],
         "encoding": {
           "characters": " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.;",
           "codes": [32, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 46, 59],
           "case_fold": "upper",
           "padding": 32
         },
-        "fields": [
-          {"key": "title-one-player", "label": "Title: 1 PLAYER", "file_offset": 853, "width": 8},
-          {"key": "title-two-players", "label": "Title: 2 PLAYERS", "file_offset": 864, "width": 9},
-          {"key": "title-copyright", "label": "Title: copyright line", "file_offset": 889, "width": 20},
-          {"key": "title-rights", "label": "Title: rights line", "file_offset": 913, "width": 19},
-          {"key": "attract-header", "label": "Attract: character header", "file_offset": 1529, "width": 21},
-          {"key": "attract-chaser", "label": "Attract: CHASER", "file_offset": 1553, "width": 11},
-          {"key": "attract-red", "label": "Attract: RED", "file_offset": 1569, "width": 6},
-          {"key": "attract-ambusher", "label": "Attract: AMBUSHER", "file_offset": 1579, "width": 11},
-          {"key": "attract-pink", "label": "Attract: PINK", "file_offset": 1595, "width": 5},
-          {"key": "attract-feigner", "label": "Attract: FEIGNER", "file_offset": 1630, "width": 11},
-          {"key": "attract-orange", "label": "Attract: ORANGE", "file_offset": 1646, "width": 6},
-          {"key": "points-ten", "label": "Attract: 10 PTS", "file_offset": 1658, "width": 6},
-          {"key": "points-fifty", "label": "Attract: 50 PTS", "file_offset": 1669, "width": 6},
-          {"key": "pause", "label": "Gameplay: PAUSE", "file_offset": 2721, "width": 5}
+        "text_fields": [
+          {"key": "title-one-player", "label": "Title: 1 PLAYER", "path": ["title_packets", 1, "bytes"], "start": 2, "width": 8},
+          {"key": "title-two-players", "label": "Title: 2 PLAYERS", "path": ["title_packets", 2, "bytes"], "start": 0, "width": 9},
+          {"key": "title-copyright", "label": "Title: copyright line", "path": ["title_packets", 4, "bytes"], "start": 1, "width": 20},
+          {"key": "title-rights", "label": "Title: rights line", "path": ["title_packets", 5, "bytes"], "start": 0, "width": 19},
+          {"key": "attract-header", "label": "Attract: character header", "path": ["attract_packets", 0, "bytes"], "start": 0, "width": 21},
+          {"key": "attract-chaser", "label": "Attract: CHASER", "path": ["attract_packets", 1, "bytes"], "start": 0, "width": 11},
+          {"key": "attract-red", "label": "Attract: RED", "path": ["attract_packets", 2, "bytes"], "start": 1, "width": 6},
+          {"key": "attract-ambusher", "label": "Attract: AMBUSHER", "path": ["attract_packets", 3, "bytes"], "start": 0, "width": 11},
+          {"key": "attract-pink", "label": "Attract: PINK", "path": ["attract_packets", 4, "bytes"], "start": 1, "width": 5},
+          {"key": "attract-feigner", "label": "Attract: FEIGNER", "path": ["attract_packets", 7, "bytes"], "start": 0, "width": 11},
+          {"key": "attract-orange", "label": "Attract: ORANGE", "path": ["attract_packets", 8, "bytes"], "start": 1, "width": 6},
+          {"key": "points-ten", "label": "Attract: 10 PTS", "path": ["attract_packets", 9, "bytes"], "start": 2, "width": 6},
+          {"key": "points-fifty", "label": "Attract: 50 PTS", "path": ["attract_packets", 9, "bytes"], "start": 13, "width": 6},
+          {"key": "pause", "label": "Gameplay: PAUSE", "path": ["fixed_blocks", "pause_tiles"], "start": 0, "width": 5}
         ]
+      }
+    },
+    {
+      "id": "sound-streams",
+      "kind": "audio",
+      "codec": "pacman.sound-streams.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "pointer_file_offset": 12446,
+        "arena_file_offset": 12478,
+        "arena_cpu_address": 61614,
+        "capacity": 890,
+        "storage_order": [2, 6, 10, 11, 12, 9, 7, 13, 14, 8, 3, 0, 1, 4, 5, 15],
+        "labels": [
+          "Player ready channel A",
+          "Player ready channel B",
+          "Extra life",
+          "Death",
+          "Pellet even",
+          "Pellet odd",
+          "Fruit",
+          "Eat ghost",
+          "Ghost house state 6 marker",
+          "Ghost house release marker",
+          "Release counter high",
+          "Release counter middle",
+          "Release counter low",
+          "Intermission flag A",
+          "Intermission flag B",
+          "Pause toggle"
+        ],
+        "trailing_sizes": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2]
       }
     },
     {
@@ -131,6 +195,17 @@
         "size": 32,
         "entries": 32,
         "mirror_pairs": [[0, 16], [4, 20], [8, 24], [12, 28]]
+      }
+    },
+    {
+      "id": "frightened-active-normal",
+      "kind": "palette",
+      "codec": "pacman.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "entries": 2,
+        "replicated_file_offsets": [[4632, 8302], [4637]],
+        "mirror_pairs": []
       }
     },
     {

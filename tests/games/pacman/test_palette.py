@@ -65,6 +65,46 @@ class PacmanPaletteTests(unittest.TestCase):
         with self.assertRaisesRegex(Exception, "differ from the profile"):
             parse_resource_document(raw, profile, revision)
 
+    def test_replicated_palette_values_decode_and_write_every_copy(self) -> None:
+        image = bytearray(b"NES\x1a" + bytes((1, 0, 0, 0)) + bytes(8) + bytes(0x4000))
+        image[20] = image[40] = 0x12
+        image[60] = 0x23
+        image = bytes(image)
+        revision = RevisionSpec(
+            "probe-v1", "replicated palette probe", len(image),
+            hashlib.sha1(image).hexdigest(), hashlib.sha256(image).hexdigest(),
+            "ines", 0,
+        )
+        profile = GameProfile(
+            "palette-probe", 1, "palette probe", "nes", ("palettes",),
+            (revision,), (
+                ResourceSpec("bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"),
+                ResourceSpec("dynamic", "palette", "pacman.palette-table.v1", "fixed", {
+                    "entries": 2,
+                    "replicated_file_offsets": [[20, 40], [60]],
+                    "mirror_pairs": [],
+                }),
+            ),
+        )
+        document = decode_resources(image, profile, revision)
+        self.assertEqual(document.resources[0]["values"], [0x12, 0x23])
+        raw = document.as_dict()
+        raw["resources"][0]["values"] = [0x2A, 0x31]
+        edited, report = build_resources(
+            image, parse_resource_document(raw, profile, revision), profile, revision
+        )
+        self.assertEqual((edited[20], edited[40], edited[60]), (0x2A, 0x2A, 0x31))
+        self.assertEqual((report["resources"][0]["size"], report["changed_bytes"]), (3, 3))
+
+        mismatched = bytearray(image)
+        mismatched[40] = 0x13
+        bad_revision = RevisionSpec(
+            "bad", "bad", len(mismatched), hashlib.sha1(mismatched).hexdigest(),
+            hashlib.sha256(mismatched).hexdigest(), "ines", 0,
+        )
+        with self.assertRaisesRegex(Exception, "replicas differ"):
+            decode_resources(bytes(mismatched), profile, bad_revision)
+
 
 if __name__ == "__main__":
     unittest.main()

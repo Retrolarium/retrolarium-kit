@@ -68,6 +68,8 @@ CODECS = frozenset(
         "pacman.maze-rle@1",
         "pacman.actor-mapping.v1",
         "pacman.palette-table.v1",
+        "pacman.screen-collection.v1",
+        "pacman.sound-streams.v1",
         "pacman.sound@1",
         "retrolarium.megadrive.disassembly@1",
         "retrolarium.nes.disassembly@1",
@@ -830,11 +832,16 @@ def create_studio_project(
                 resource.get("codec"), f"resource document resources[{index}].codec"
             )
             kinds.setdefault(kind, set()).add(resource_codec)
+        if kinds.get("screen") == {"pacman.screen-collection.v1"}:
+            kinds["text"] = {"pacman.screen-collection.v1"}
         templates = (
             ("level", "maze", "Maze", "level.tile-grid", "content",
              "pacman.maze-rle.v1", ["paint", "eyedropper", "semantic-overlays", "undo"]),
             ("screen", "screens", "Screens", "screen.tilemap", "content",
              "nes.nametable.v1", ["paint", "preview", "undo"]),
+            ("audio", "music-sounds", "Music & Sounds", "audio.sequencer", "content",
+             "pacman.sound-streams.v1",
+             ["edit", "piano-roll", "midi-import", "wav-preview", "restore", "undo"]),
             ("text", "text", "Text", "text.fixed", "content",
              "nes.fixed-text-fields.v1", ["edit", "restore", "undo"]),
             ("graphics", "graphics", "Graphics", "graphics.tile-set", "assets",
@@ -848,7 +855,10 @@ def create_studio_project(
             if kind not in kinds:
                 continue
             selected_codec = expected_codec
-            if kind == "palette" and kinds[kind] == {"pacman.palette-table.v1"}:
+            if kind in ("screen", "text") \
+                    and kinds[kind] == {"pacman.screen-collection.v1"}:
+                selected_codec = "pacman.screen-collection.v1"
+            elif kind == "palette" and kinds[kind] == {"pacman.palette-table.v1"}:
                 selected_codec = "pacman.palette-table.v1"
             elif kinds[kind] != {expected_codec}:
                 raise StudioProjectError(

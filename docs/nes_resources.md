@@ -52,6 +52,13 @@ them through the same common `BuildPlan` used by Castle. The source ROM remains
 immutable. The build report records total changed bytes and per-resource file
 offset, size and changed-byte count.
 
+Palette resources may replace a contiguous `file_offset`/`size` range with
+`replicated_file_offsets`. The latter contains one non-empty offset list per
+logical color. Decode requires all physical copies of an entry to agree;
+encode emits a one-byte provenance-bearing span for every copy. This keeps the
+Qt palette model generic while safely covering command-embedded colors such as
+Pac-Man's duplicated frightened-active PPU command.
+
 The public flow is unchanged:
 
 ```text
@@ -79,7 +86,7 @@ one nametable byte, reports exactly that resource and completes a two-second
 MAME NES run with exit code zero and a hashed screenshot. Generated documents,
 ROMs, logs and screenshots remain ignored.
 
-The current Qt 5.15 editor has a typed Castle room/object view only. HonkeyPong
-therefore proves the Kit/profile/build boundary, not yet a generic Qt
-screen/palette/CHR editor. Adding those reusable views is product expansion on
-top of this document contract and does not require another game-specific CLI.
+The Qt 5.15 application now supplies generic CHR and palette editors plus
+typed nametable and Pac-Man screen-collection views. HonkeyPong remains the
+open-source proof of the Kit/profile/build boundary; game-specific layouts are
+added through profiles and codecs rather than new CLI branches.

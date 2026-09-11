@@ -75,15 +75,19 @@ class PacmanMazeTests(unittest.TestCase):
         self.assertEqual(
             [item.resource_id for item in profile.resources if item.kind == "palette"],
             ["title-background", "attract-bg-sprite", "round-gameplay",
-             "intermission-sprites", "fruit-by-stage"],
+             "frightened-active-normal", "intermission-sprites", "fruit-by-stage"],
         )
         self.assertEqual(
             [item.resource_id for item in profile.resources if item.kind == "screen"],
-            ["title-logo"],
+            ["screen-content"],
         )
         self.assertEqual(
             [item.resource_id for item in profile.resources if item.kind == "text"],
-            ["game-text"],
+            [],
+        )
+        self.assertEqual(
+            next(item for item in profile.resources if item.kind == "screen").codec,
+            "pacman.screen-collection.v1",
         )
 
     def test_fixed_rle_and_semantics(self) -> None:
