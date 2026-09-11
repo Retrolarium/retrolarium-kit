@@ -1,0 +1,94 @@
+{
+  "schema": "retrolarium.game-profile",
+  "schema_version": 1,
+  "id": "smb1",
+  "profile_version": 1,
+  "name": "Super Mario Bros. (NES)",
+  "platform": "nes",
+  "capabilities": ["world", "levels", "graphics"],
+  "revisions": [
+    {
+      "id": "ju",
+      "name": "Super Mario Bros. (Japan, USA)",
+      "size": 40976,
+      "sha1": "ea343f4e445a9050d4b4fbac2c77d0693b1d0922",
+      "sha256": "f61548fdf1670cffefcc4f0b7bdcdd9eaba0c226e3b74f8666071496988248de",
+      "container": "ines",
+      "mapper": 0
+    }
+  ],
+  "resources": [
+    {
+      "id": "authoring-bundle",
+      "kind": "resource-bundle",
+      "codec": "nes.resource-bundle.v1",
+      "capacity_policy": "fixed",
+      "parameters": {}
+    },
+    {
+      "id": "world",
+      "kind": "world",
+      "codec": "smb.world.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "routing_file_offset": 7372,
+        "routing_size": 36,
+        "world_lengths": [5, 5, 4, 5, 4, 4, 5, 4],
+        "physics_file_offset": 13364,
+        "physics_size": 44,
+        "physics_tables": [
+          {"name": "jump_gravity", "length": 7, "signed": false},
+          {"name": "fall_gravity", "length": 7, "signed": false},
+          {"name": "initial_y_speed", "length": 7, "signed": true},
+          {"name": "initial_y_fraction", "length": 7, "signed": false},
+          {"name": "maximum_left_speed", "length": 3, "signed": true},
+          {"name": "maximum_right_speed", "length": 4, "signed": true},
+          {"name": "horizontal_friction", "length": 3, "signed": false},
+          {"name": "climb_y_speed", "length": 3, "signed": true},
+          {"name": "climb_y_fraction", "length": 3, "signed": false}
+        ]
+      }
+    },
+    {
+      "id": "levels",
+      "kind": "level",
+      "codec": "smb.levels.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "area_file_offset": 8639,
+        "area_size": 3373,
+        "enemy_file_offset": 7552,
+        "enemy_size": 1087,
+        "stream_names": [
+          "castle_1", "castle_2", "castle_3", "castle_4", "castle_5", "castle_6",
+          "ground_1", "ground_2", "ground_3", "ground_4", "ground_5", "ground_6",
+          "ground_7", "ground_8", "ground_9", "ground_10", "ground_11", "ground_12",
+          "ground_13", "ground_14", "ground_15", "ground_16", "ground_17", "ground_18",
+          "ground_19", "ground_20", "ground_21", "ground_22",
+          "underground_1", "underground_2", "underground_3",
+          "water_1", "water_2", "water_3"
+        ],
+        "area_capacities": [
+          97, 127, 115, 109, 139, 113, 99, 105, 83, 143, 117, 101, 85, 133,
+          101, 9, 63, 21, 103, 101, 115, 49, 147, 115, 121, 89, 43, 51,
+          163, 161, 141, 63, 123, 28
+        ],
+        "enemy_capacities": [
+          39, 25, 47, 43, 21, 58, 37, 29, 14, 39, 49, 30, 29, 21,
+          42, 1, 36, 9, 37, 35, 9, 1, 58, 43, 46, 28, 9, 37,
+          45, 46, 45, 17, 42, 20
+        ]
+      }
+    },
+    {
+      "id": "character-graphics",
+      "kind": "graphics",
+      "codec": "nes.chr-2bpp.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 32784,
+        "size": 8192
+      }
+    }
+  ]
+}
