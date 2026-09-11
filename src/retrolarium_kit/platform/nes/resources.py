@@ -30,6 +30,17 @@ from .pacman_actor import (
     decode_actor_mapping,
     encode_actor_mapping,
 )
+from .pacman_sound import (
+    CODEC as PACMAN_SOUND_CODEC,
+    decode_sound_bundle,
+    encode_sound_bundle,
+    encode_stream as encode_sound_stream,
+)
+from .pacman_screen import (
+    CODEC as PACMAN_SCREEN_CODEC,
+    decode_screen_collection,
+    encode_screen_collection,
+)
 from .nes_text import (
     CODEC as FIXED_TEXT_CODEC,
     decode_text_fields,
@@ -47,6 +58,8 @@ CHR_CODEC = "nes.chr-2bpp.v1"
 SUPPORTED_CODECS = (
     NAMETABLE_CODEC, PALETTE_CODEC, PACMAN_PALETTE_CODEC, CHR_CODEC, PACMAN_MAZE_CODEC,
     PACMAN_ACTOR_CODEC, FIXED_TEXT_CODEC,
+    PACMAN_SOUND_CODEC,
+    PACMAN_SCREEN_CODEC,
 )
 
 
@@ -107,6 +120,38 @@ def _span(resource: ResourceSpec, expected_size: int) -> tuple[int, int]:
             f"{resource.resource_id}.size is {size}, expected {expected_size}"
         )
     return offset, size
+
+
+def _replicated_palette_offsets(
+    resource: ResourceSpec, entries: int
+) -> tuple[tuple[int, ...], ...] | None:
+    raw = resource.parameters.get("replicated_file_offsets")
+    if raw is None:
+        return None
+    if not isinstance(raw, list) or len(raw) != entries:
+        raise NesResourceError(
+            f"{resource.resource_id}.replicated_file_offsets must contain "
+            f"{entries} entry lists"
+        )
+    result = []
+    seen: set[int] = set()
+    for entry, offsets in enumerate(raw):
+        if not isinstance(offsets, list) or not offsets:
+            raise NesResourceError(
+                f"{resource.resource_id}.replicated_file_offsets[{entry}] "
+                "must be a non-empty list"
+            )
+        normalized = tuple(
+            _integer(offset, f"{resource.resource_id}.replicated_file_offsets[{entry}]")
+            for offset in offsets
+        )
+        if len(set(normalized)) != len(normalized) or seen.intersection(normalized):
+            raise NesResourceError(
+                f"{resource.resource_id}.replicated_file_offsets overlap or repeat"
+            )
+        seen.update(normalized)
+        result.append(normalized)
+    return tuple(result)
 
 
 def _matrix(
@@ -232,10 +277,26 @@ def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
             f"{resource.resource_id}.entries",
             minimum=1,
         )
-        offset, size = _span(resource, entries)
-        payload = image[offset : offset + size]
-        if len(payload) != size:
-            raise NesResourceError(f"{resource.resource_id} exceeds the source image")
+        replicated = _replicated_palette_offsets(resource, entries)
+        if replicated is None:
+            offset, size = _span(resource, entries)
+            payload = image[offset : offset + size]
+            if len(payload) != size:
+                raise NesResourceError(f"{resource.resource_id} exceeds the source image")
+        else:
+            decoded = []
+            for entry, offsets in enumerate(replicated):
+                copies = []
+                for offset in offsets:
+                    if offset >= len(image):
+                        raise NesResourceError(f"{resource.resource_id} exceeds the source image")
+                    copies.append(image[offset])
+                if len(set(copies)) != 1:
+                    raise NesResourceError(
+                        f"{resource.resource_id}.values[{entry}] replicas differ"
+                    )
+                decoded.append(copies[0])
+            payload = bytes(decoded)
         for index, value in enumerate(payload):
             _byte(value, f"{resource.resource_id}.values[{index}]", maximum=0x3F)
         result = {
@@ -310,6 +371,20 @@ def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
             "codec": resource.codec,
             **decode_text_fields(image, resource.parameters),
         }
+    if resource.codec == PACMAN_SOUND_CODEC:
+        return {
+            "id": resource.resource_id,
+            "kind": resource.kind,
+            "codec": resource.codec,
+            **decode_sound_bundle(image, resource.parameters),
+        }
+    if resource.codec == PACMAN_SCREEN_CODEC:
+        return {
+            "id": resource.resource_id,
+            "kind": resource.kind,
+            "codec": resource.codec,
+            **decode_screen_collection(image, resource.parameters),
+        }
     raise NesResourceError(f"unsupported NES resource codec {resource.codec}")
 
 
@@ -380,6 +455,13 @@ def _parse_resource(
             )
             for index, item in enumerate(values)
         )
+        replicated = _replicated_palette_offsets(spec, count)
+        if replicated is not None:
+            encoded_spans = tuple(
+                (offset, bytes((payload[entry],)))
+                for entry, offsets in enumerate(replicated)
+                for offset in offsets
+            )
         if spec.codec == PACMAN_PALETTE_CODEC:
             configured_pairs = spec.parameters.get("mirror_pairs", [])
             raw_pairs = raw.get("mirror_pairs")
@@ -456,6 +538,20 @@ def _parse_resource(
     elif spec.codec == FIXED_TEXT_CODEC:
         expected_fields = {"id", "kind", "codec", "encoding", "messages"}
         encoded_spans = encode_text_fields(raw, spec.parameters)
+    elif spec.codec == PACMAN_SOUND_CODEC:
+        expected_fields = {"id", "kind", "codec", "capacity", "slots"}
+        encoded_spans = encode_sound_bundle(raw, spec.parameters)
+    elif spec.codec == PACMAN_SCREEN_CODEC:
+        expected_fields = {
+            "id", "kind", "codec", "title_logo", "title_packets",
+            "title_attributes", "fixed_blocks", "attract_packets",
+            "intermission_visual", "read_only_code_tables", "encoding",
+            "text_fields",
+        }
+        encoded_spans = encode_screen_collection(
+            {key: raw.get(key) for key in expected_fields - {"id", "kind", "codec"}},
+            spec.parameters,
+        )
     else:
         raise NesResourceError(f"unsupported NES resource codec {spec.codec}")
     if set(raw) != expected_fields:
@@ -557,7 +653,10 @@ def build_resources(
 
 
 def inspection_details(document: NesResourceBundleDocument) -> dict[str, int]:
-    screens = sum(item.get("codec") == NAMETABLE_CODEC for item in document.resources)
+    screens = sum(
+        item.get("codec") in (NAMETABLE_CODEC, PACMAN_SCREEN_CODEC)
+        for item in document.resources
+    )
     palettes = sum(
         len(item.get("values", []))
         for item in document.resources
@@ -580,6 +679,29 @@ def inspection_details(document: NesResourceBundleDocument) -> dict[str, int]:
         for item in document.resources
         if item.get("codec") == FIXED_TEXT_CODEC
     )
+    text_messages += sum(
+        len(item.get("text_fields", []))
+        for item in document.resources
+        if item.get("codec") == PACMAN_SCREEN_CODEC
+    )
+    sound_slots = sum(
+        len(item.get("slots", []))
+        for item in document.resources
+        if item.get("codec") == PACMAN_SOUND_CODEC
+    )
+    sound_notes = sum(
+        command.get("kind") == "note"
+        for item in document.resources
+        if item.get("codec") == PACMAN_SOUND_CODEC
+        for slot in item.get("slots", [])
+        for command in slot.get("stream", {}).get("commands", [])
+    )
+    sound_used_bytes = sum(
+        len(encode_sound_stream(slot["stream"]))
+        for item in document.resources
+        if item.get("codec") == PACMAN_SOUND_CODEC
+        for slot in item.get("slots", [])
+    )
     return {
         "resource_count": len(document.resources),
         "screens": screens,
@@ -588,4 +710,7 @@ def inspection_details(document: NesResourceBundleDocument) -> dict[str, int]:
         "mazes": mazes,
         "actor_frames": actor_frames,
         "text_messages": text_messages,
+        "sound_slots": sound_slots,
+        "sound_notes": sound_notes,
+        "sound_used_bytes": sound_used_bytes,
     }
