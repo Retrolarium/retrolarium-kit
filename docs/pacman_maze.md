@@ -124,6 +124,6 @@ known balanced edits, semantic rejection, exact palette and actor-table round
 trips, mirrored and byte-local edits, C++ document access, widget
 undo/restore/save guarding and factory selection. A local ignored Japan v1.0
 fixture additionally proves exact Ghidra/ca65 disassembly, extraction, Studio
-creation, validation, build, verification and `--project-smoke` loading. Japan
+creation, validation, build, verification and `--studio-smoke` loading. Japan
 v1.1 also passes a standalone ten-resource exact rebuild. A known v1.0 edit
 changes only the expected byte at file offset `$355`.

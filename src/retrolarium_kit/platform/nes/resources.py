@@ -14,11 +14,13 @@ from .authoring import (
     Change,
     ChangeSet,
     GameProfile,
+    PayloadSpec,
     Provenance,
     ResourceSpec,
     RevisionSpec,
 )
-from .ines import parse_ines
+from .fds import FdsError, fds_payload, fds_payload_ranges, parse_fds_side
+from .ines import parse_ines, parse_ines_prefix
 from .pacman_maze import (
     CODEC as PACMAN_MAZE_CODEC,
     decode_maze_rle,
@@ -56,6 +58,14 @@ from .smb_level import (
     decode_levels as decode_smb_levels,
     encode_levels as encode_smb_levels,
 )
+from .nes_visuals import (
+    METATILE_CODEC,
+    PALETTE_PACKET_CODEC,
+    decode_metatiles,
+    decode_palette_packets,
+    encode_metatiles,
+    encode_palette_packets,
+)
 
 
 DOCUMENT_SCHEMA = "retrolarium.nes-resource-bundle"
@@ -72,6 +82,8 @@ SUPPORTED_CODECS = (
     PACMAN_SCREEN_CODEC,
     SMB_WORLD_CODEC,
     SMB_LEVEL_CODEC,
+    METATILE_CODEC,
+    PALETTE_PACKET_CODEC,
 )
 
 
@@ -92,12 +104,15 @@ def _byte(value: object, name: str, *, maximum: int = 0xFF) -> int:
     return result
 
 
-def _resource_specs(profile: GameProfile) -> tuple[ResourceSpec, ...]:
-    markers = [item for item in profile.resources if item.codec == ADAPTER_CODEC]
-    resources = [item for item in profile.resources if item.codec in SUPPORTED_CODECS]
+def _resource_specs(
+    profile: GameProfile, revision: RevisionSpec
+) -> tuple[ResourceSpec, ...]:
+    profile_resources = profile.resources_for(revision)
+    markers = [item for item in profile_resources if item.codec == ADAPTER_CODEC]
+    resources = [item for item in profile_resources if item.codec in SUPPORTED_CODECS]
     unsupported = [
         item.resource_id
-        for item in profile.resources
+        for item in profile_resources
         if item.codec not in (*SUPPORTED_CODECS, ADAPTER_CODEC)
     ]
     if len(markers) != 1 or not resources or unsupported:
@@ -114,7 +129,137 @@ def _resource_specs(profile: GameProfile) -> tuple[ResourceSpec, ...]:
         raise NesResourceError(
             f"NES resource bundle v1 requires fixed capacities: {nonfixed}"
         )
+    resources_by_id = {item.resource_id: item for item in resources}
+    for item in resources:
+        if item.codec != SMB_LEVEL_CODEC:
+            continue
+        world_resource_id = item.parameters.get("world_resource")
+        if world_resource_id is None:
+            continue
+        if not isinstance(world_resource_id, str) or not world_resource_id:
+            raise NesResourceError(
+                f"{item.resource_id}.world_resource must be a non-empty string"
+            )
+        world_resource = resources_by_id.get(world_resource_id)
+        if world_resource is None or world_resource.codec != SMB_WORLD_CODEC:
+            raise NesResourceError(
+                f"{item.resource_id}.world_resource must name an SMB world resource"
+            )
     return tuple(resources)
+
+
+def _revision_image(source: bytes, revision: RevisionSpec):
+    if revision.container == "ines":
+        return parse_ines(source)
+    if revision.container == "ines-pc10":
+        image, trailing = parse_ines_prefix(source)
+        if len(trailing) != 0x2000:
+            raise NesResourceError(
+                "PlayChoice-10 container must have an 8192-byte instruction ROM"
+            )
+        return image
+    if revision.container == "ines-vs":
+        if len(source) != revision.size or source[:4] != b"NES\x1a":
+            raise NesResourceError(
+                "Vs. container size or iNES signature differs from its profile"
+            )
+        return None
+    if revision.container == "fds":
+        try:
+            parse_fds_side(source)
+        except FdsError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return None
+    raise NesResourceError(
+        f"NES resource bundle does not support container {revision.container!r}"
+    )
+
+
+def _resource_payload(
+    profile: GameProfile, revision: RevisionSpec, resource: ResourceSpec
+) -> PayloadSpec | None:
+    if resource.payload is None:
+        if revision.container == "fds":
+            raise NesResourceError(
+                f"FDS resource {resource.resource_id} must select a named payload"
+            )
+        return None
+    try:
+        return profile.payload_for(revision, resource.payload)
+    except AuthoringError as exc:
+        raise NesResourceError(str(exc)) from exc
+
+
+def _payload_source(source: bytes, payload: PayloadSpec) -> bytes:
+    if payload.storage == "range":
+        assert payload.file_offset is not None
+        result = source[payload.file_offset:payload.file_offset + payload.size]
+    elif payload.storage == "fds-records":
+        try:
+            result = fds_payload(source, payload.record_ids)
+        except FdsError as exc:
+            raise NesResourceError(str(exc)) from exc
+    else:
+        raise NesResourceError(f"unsupported payload storage {payload.storage!r}")
+    if len(result) != payload.size:
+        raise NesResourceError(
+            f"payload {payload.payload_id} is {len(result)} bytes, expected {payload.size}"
+        )
+    if hashlib.sha1(result).hexdigest() != payload.sha1:
+        raise NesResourceError(f"payload {payload.payload_id} SHA-1 differs from profile")
+    return result
+
+
+def _resource_source(
+    source: bytes,
+    profile: GameProfile,
+    revision: RevisionSpec,
+    resource: ResourceSpec,
+) -> bytes:
+    payload = _resource_payload(profile, revision, resource)
+    if payload is None:
+        return source
+    return _payload_source(source, payload)
+
+
+def _physical_replacements(
+    source: bytes,
+    profile: GameProfile,
+    revision: RevisionSpec,
+    resource: ResourceSpec,
+    replacements: tuple[tuple[int, bytes], ...],
+) -> tuple[tuple[int, bytes], ...]:
+    payload = _resource_payload(profile, revision, resource)
+    if payload is None:
+        return replacements
+    result = []
+    for offset, replacement in replacements:
+        if offset < 0 or offset + len(replacement) > payload.size:
+            raise NesResourceError(
+                f"resource {resource.resource_id} exceeds payload {payload.payload_id}"
+            )
+        if payload.storage == "range":
+            assert payload.file_offset is not None
+            result.append((payload.file_offset + offset, replacement))
+        elif payload.storage == "fds-records":
+            try:
+                for item in fds_payload_ranges(
+                    source, payload.record_ids, offset, len(replacement)
+                ):
+                    start = item.payload_offset
+                    result.append(
+                        (
+                            item.file_offset,
+                            replacement[start:start + item.size],
+                        )
+                    )
+            except FdsError as exc:
+                raise NesResourceError(str(exc)) from exc
+        else:
+            raise NesResourceError(
+                f"unsupported payload storage {payload.storage!r}"
+            )
+    return tuple(result)
 
 
 def _span(resource: ResourceSpec, expected_size: int) -> tuple[int, int]:
@@ -341,6 +486,46 @@ def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
             "codec": resource.codec,
             "tiles": [[list(row) for row in tile] for tile in decode_chr_2bpp(payload)],
         }
+    if resource.codec == METATILE_CODEC:
+        offset, size = _span(
+            resource,
+            sum(
+                _integer(item, f"{resource.resource_id}.group_sizes[{index}]", minimum=1)
+                for index, item in enumerate(resource.parameters.get("group_sizes", []))
+            ) * 4,
+        )
+        payload = image[offset : offset + size]
+        if len(payload) != size:
+            raise NesResourceError(f"{resource.resource_id} exceeds the source image")
+        try:
+            decoded = decode_metatiles(payload, resource.parameters)
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return {
+            "id": resource.resource_id,
+            "kind": resource.kind,
+            "codec": resource.codec,
+            **decoded,
+        }
+    if resource.codec == PALETTE_PACKET_CODEC:
+        expected = sum(
+            _integer(item, f"{resource.resource_id}.packet_capacities[{index}]", minimum=5)
+            for index, item in enumerate(resource.parameters.get("packet_capacities", []))
+        )
+        offset, size = _span(resource, expected)
+        payload = image[offset : offset + size]
+        if len(payload) != size:
+            raise NesResourceError(f"{resource.resource_id} exceeds the source image")
+        try:
+            decoded = decode_palette_packets(payload, resource.parameters)
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return {
+            "id": resource.resource_id,
+            "kind": resource.kind,
+            "codec": resource.codec,
+            **decoded,
+        }
     if resource.codec == PACMAN_MAZE_CODEC:
         width = _integer(
             resource.parameters.get("width"), f"{resource.resource_id}.width", minimum=1
@@ -455,12 +640,16 @@ def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
             decoded = decode_smb_levels(area, enemy, resource.parameters)
         except AuthoringError as exc:
             raise NesResourceError(str(exc)) from exc
-        return {
+        result = {
             "id": resource.resource_id,
             "kind": resource.kind,
             "codec": resource.codec,
             **decoded,
         }
+        world_resource_id = resource.parameters.get("world_resource")
+        if world_resource_id is not None:
+            result["world_resource"] = world_resource_id
+        return result
     raise NesResourceError(f"unsupported NES resource codec {resource.codec}")
 
 
@@ -469,10 +658,17 @@ def decode_resources(
 ) -> NesResourceBundleDocument:
     if hashlib.sha256(source).hexdigest() != revision.sha256:
         raise NesResourceError("resource source does not match the selected revision")
-    image = parse_ines(source)
-    if revision.mapper is not None and image.mapper != revision.mapper:
+    image = _revision_image(source, revision)
+    if (
+        revision.mapper is not None
+        and image is not None
+        and image.mapper != revision.mapper
+    ):
         raise NesResourceError("resource profile mapper differs from the source image")
-    resources = tuple(_decode_resource(source, item) for item in _resource_specs(profile))
+    resources = tuple(
+        _decode_resource(_resource_source(source, profile, revision, item), item)
+        for item in _resource_specs(profile, revision)
+    )
     return NesResourceBundleDocument(
         profile.game_id, revision.revision_id, revision.sha256, resources
     )
@@ -569,6 +765,28 @@ def _parse_resource(
         if not isinstance(values, list):
             raise NesResourceError(f"{spec.resource_id}.tiles must be an array")
         payload = encode_chr_2bpp(values, size // 16)
+    elif spec.codec == METATILE_CODEC:
+        expected_fields = {
+            "id", "kind", "codec", "group_names", "group_sizes", "tile_base", "records"
+        }
+        try:
+            payload = encode_metatiles(
+                {key: raw.get(key) for key in expected_fields - {"id", "kind", "codec"}},
+                spec.parameters,
+            )
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+    elif spec.codec == PALETTE_PACKET_CODEC:
+        expected_fields = {
+            "id", "kind", "codec", "day_background", "night_background", "packets"
+        }
+        try:
+            payload = encode_palette_packets(
+                {key: raw.get(key) for key in expected_fields - {"id", "kind", "codec"}},
+                spec.parameters,
+            )
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
     elif spec.codec == PACMAN_MAZE_CODEC:
         expected_fields = {
             "id", "kind", "codec", "width", "height", "tokens", "tiles"
@@ -674,11 +892,19 @@ def _parse_resource(
         )
     elif spec.codec == SMB_LEVEL_CODEC:
         expected_fields = {"id", "kind", "codec", "area_types", "areas"}
+        world_resource_id = spec.parameters.get("world_resource")
+        if world_resource_id is not None:
+            expected_fields.add("world_resource")
+            if raw.get("world_resource") != world_resource_id:
+                raise NesResourceError(
+                    f"{spec.resource_id}.world_resource differs from the profile"
+                )
         try:
             area, enemy = encode_smb_levels(
                 {
                     key: raw.get(key)
-                    for key in expected_fields - {"id", "kind", "codec"}
+                    for key in expected_fields
+                    - {"id", "kind", "codec", "world_resource"}
                 },
                 spec.parameters,
             )
@@ -741,7 +967,7 @@ def parse_resource_document(
     if value.get("source_sha256") != revision.sha256:
         raise NesResourceError("NES resource document source identity mismatch")
     raw_resources = value.get("resources")
-    specs = _resource_specs(profile)
+    specs = _resource_specs(profile, revision)
     if not isinstance(raw_resources, list) or len(raw_resources) != len(specs):
         raise NesResourceError("NES resource document has the wrong resource count")
     parsed = []
@@ -762,13 +988,17 @@ def build_resources(
     source_sha256 = hashlib.sha256(source).hexdigest()
     if source_sha256 != revision.sha256 or document.source_sha256 != revision.sha256:
         raise NesResourceError("NES resource build source identity mismatch")
-    specs = _resource_specs(profile)
+    _revision_image(source, revision)
+    specs = _resource_specs(profile, revision)
     changes = []
     reports = []
     for raw, spec in zip(document.resources, specs):
         _normalized, replacements = _parse_resource(dict(raw), spec)
         range_reports = []
-        for span_index, (offset, replacement) in enumerate(replacements):
+        physical_replacements = _physical_replacements(
+            source, profile, revision, spec, replacements
+        )
+        for span_index, (offset, replacement) in enumerate(physical_replacements):
             size = len(replacement)
             expected = source[offset : offset + size]
             if len(expected) != size:
@@ -821,6 +1051,22 @@ def inspection_details(document: NesResourceBundleDocument) -> dict[str, int]:
         len(item.get("values", []))
         for item in document.resources
         if item.get("codec") in (PALETTE_CODEC, PACMAN_PALETTE_CODEC)
+    )
+    palettes += sum(
+        len(packet.get("values", []))
+        for item in document.resources
+        if item.get("codec") == PALETTE_PACKET_CODEC
+        for packet in item.get("packets", [])
+    )
+    palette_packets = sum(
+        len(item.get("packets", []))
+        for item in document.resources
+        if item.get("codec") == PALETTE_PACKET_CODEC
+    )
+    metatiles = sum(
+        len(item.get("records", []))
+        for item in document.resources
+        if item.get("codec") == METATILE_CODEC
     )
     chr_tiles = sum(
         len(item.get("tiles", []))
@@ -899,6 +1145,8 @@ def inspection_details(document: NesResourceBundleDocument) -> dict[str, int]:
         "resource_count": len(document.resources),
         "screens": screens,
         "palette_bytes": palettes,
+        "palette_packets": palette_packets,
+        "metatiles": metatiles,
         "chr_tiles": chr_tiles,
         "mazes": mazes,
         "actor_frames": actor_frames,

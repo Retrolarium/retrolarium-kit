@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+from dataclasses import replace
 import hashlib
 import json
 from pathlib import Path
@@ -11,7 +12,13 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.authoring import GameProfile, ResourceSpec, RevisionSpec
+from retrolarium_kit.authoring import (
+    AuthoringError,
+    GameProfile,
+    PayloadSpec,
+    ResourceSpec,
+    RevisionSpec,
+)
 from retrolarium_kit.game_profiles import packaged_game_profiles
 from retrolarium_kit.games import build_game, extract_game, inspect_game, validate_game
 from retrolarium_kit.nes_resources import (
@@ -88,6 +95,56 @@ def fixture_profile(image: bytes) -> tuple[GameProfile, RevisionSpec]:
 
 
 def write_profile(path: Path, profile: GameProfile) -> None:
+    def resource_value(item: ResourceSpec) -> dict[str, object]:
+        value = {
+            "id": item.resource_id,
+            "kind": item.kind,
+            "codec": item.codec,
+            "capacity_policy": item.capacity_policy,
+            "parameters": dict(item.parameters),
+        }
+        if item.payload is not None:
+            value["payload"] = item.payload
+        return value
+
+    def revision_value(item: RevisionSpec) -> dict[str, object]:
+        value: dict[str, object] = {
+            "id": item.revision_id,
+            "name": item.name,
+            "size": item.size,
+            "sha1": item.sha1,
+            "sha256": item.sha256,
+            "container": item.container,
+            "mapper": item.mapper,
+        }
+        if item.capabilities is not None:
+            value["capabilities"] = list(item.capabilities)
+        if item.resources is not None:
+            value["resources"] = [resource_value(resource) for resource in item.resources]
+        if item.payloads:
+            value["payloads"] = [
+                {
+                    "id": payload.payload_id,
+                    "storage": payload.storage,
+                    "size": payload.size,
+                    "sha1": payload.sha1,
+                    **(
+                        {"file_offset": payload.file_offset}
+                        if payload.file_offset is not None else {}
+                    ),
+                    **(
+                        {"record_ids": list(payload.record_ids)}
+                        if payload.record_ids else {}
+                    ),
+                    **(
+                        {"load_address": payload.load_address}
+                        if payload.load_address is not None else {}
+                    ),
+                }
+                for payload in item.payloads
+            ]
+        return value
+
     path.write_text(
         json.dumps(
             {
@@ -98,28 +155,8 @@ def write_profile(path: Path, profile: GameProfile) -> None:
                 "name": profile.name,
                 "platform": profile.platform,
                 "capabilities": list(profile.capabilities),
-                "revisions": [
-                    {
-                        "id": item.revision_id,
-                        "name": item.name,
-                        "size": item.size,
-                        "sha1": item.sha1,
-                        "sha256": item.sha256,
-                        "container": item.container,
-                        "mapper": item.mapper,
-                    }
-                    for item in profile.revisions
-                ],
-                "resources": [
-                    {
-                        "id": item.resource_id,
-                        "kind": item.kind,
-                        "codec": item.codec,
-                        "capacity_policy": item.capacity_policy,
-                        "parameters": dict(item.parameters),
-                    }
-                    for item in profile.resources
-                ],
+                "revisions": [revision_value(item) for item in profile.revisions],
+                "resources": [resource_value(item) for item in profile.resources],
             },
             indent=2,
         ),
@@ -216,6 +253,148 @@ class NesResourceTests(unittest.TestCase):
             )
             self.assertEqual(result["schema"], "retrolarium.nes-resource-build")
             self.assertEqual(output.read_bytes(), image)
+
+    def test_revision_overrides_drive_capabilities_and_resource_offsets(self) -> None:
+        image = fixture_image()
+        base_profile, base_revision = fixture_profile(image)
+        wrong_palette = replace(
+            base_profile.resources[1],
+            parameters={"file_offset": 24, "size": 4, "entries": 4},
+        )
+        revision = replace(
+            base_revision,
+            capabilities=("revision-palettes",),
+            resources=base_profile.resources,
+        )
+        profile = replace(
+            base_profile,
+            capabilities=("default-capability",),
+            revisions=(revision,),
+            resources=(base_profile.resources[0], wrong_palette, *base_profile.resources[2:]),
+        )
+
+        self.assertEqual(profile.capabilities_for(revision), ("revision-palettes",))
+        self.assertEqual(
+            profile.resources_for(revision)[1].parameters["file_offset"], 16
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rom = root / "probe.nes"
+            profile_path = root / "profile.json"
+            document_path = root / "resources.json"
+            rom.write_bytes(image)
+            write_profile(profile_path, profile)
+
+            inspected = inspect_game(rom, custom_profile=profile_path)
+            self.assertEqual(inspected["capabilities"], ["revision-palettes"])
+            extract_game(rom, document_path, custom_profile=profile_path)
+            extracted = json.loads(document_path.read_text(encoding="utf-8"))
+            self.assertEqual(extracted["resources"][0]["values"], [15, 1, 17, 33])
+
+    def test_revision_defaults_and_override_identity_are_strict(self) -> None:
+        image = fixture_image()
+        profile, revision = fixture_profile(image)
+        self.assertEqual(profile.capabilities_for(revision), profile.capabilities)
+        self.assertEqual(profile.resources_for(revision), profile.resources)
+        with self.assertRaisesRegex(AuthoringError, "unknown revision"):
+            profile.resources_for("missing")
+        with self.assertRaisesRegex(AuthoringError, "capabilities must be unique"):
+            replace(revision, capabilities=("levels", "levels"))
+        with self.assertRaisesRegex(AuthoringError, "resource ids must be unique"):
+            replace(
+                revision,
+                resources=(profile.resources[0], profile.resources[0]),
+            )
+        payload = PayloadSpec(
+            "prg", "range", 16, hashlib.sha1(bytes(16)).hexdigest(),
+            file_offset=16, load_address=0x8000,
+        )
+        payload_resource = replace(profile.resources[1], payload="prg")
+        payload_revision = replace(
+            revision, payloads=(payload,),
+            resources=(profile.resources[0], payload_resource),
+        )
+        payload_profile = replace(profile, revisions=(payload_revision,))
+        self.assertEqual(
+            payload_profile.payload_for(payload_revision, "prg"), payload
+        )
+        with self.assertRaisesRegex(AuthoringError, "payload ids must be unique"):
+            replace(payload_revision, payloads=(payload, payload))
+        with self.assertRaisesRegex(AuthoringError, "unknown resource payload"):
+            replace(
+                profile,
+                resources=(profile.resources[0], payload_resource),
+            )
+
+    def test_pc10_container_preserves_its_instruction_rom(self) -> None:
+        core = fixture_image()
+        instruction_rom = bytes((index & 0xFF for index in range(0x2000)))
+        image = core + instruction_rom
+        base_profile, _base_revision = fixture_profile(core)
+        revision = RevisionSpec(
+            "pc10", "PC10 probe", len(image), hashlib.sha1(image).hexdigest(),
+            hashlib.sha256(image).hexdigest(), "ines-pc10", 0,
+        )
+        profile = replace(base_profile, revisions=(revision,))
+
+        document = decode_resources(image, profile, revision)
+        rebuilt, report = build_resources(image, document, profile, revision)
+        self.assertEqual(report["changed_bytes"], 0)
+        self.assertEqual(rebuilt, image)
+        self.assertEqual(rebuilt[-0x2000:], instruction_rom)
+
+        malformed = image[:-1]
+        malformed_revision = replace(
+            revision,
+            size=len(malformed),
+            sha1=hashlib.sha1(malformed).hexdigest(),
+            sha256=hashlib.sha256(malformed).hexdigest(),
+        )
+        with self.assertRaisesRegex(NesResourceError, "8192-byte"):
+            decode_resources(malformed, profile, malformed_revision)
+
+    def test_vs_container_uses_its_revision_specific_graphics(self) -> None:
+        source = bytearray(b"NES\x1a" + bytes(28))
+        source[24:40] = bytes((0x80,)) + bytes(15)
+        image = bytes(source)
+        revision_resources = (
+            ResourceSpec(
+                "bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"
+            ),
+            ResourceSpec(
+                "graphics", "graphics", "nes.chr-2bpp.v1", "fixed",
+                {"file_offset": 24, "size": 16},
+            ),
+        )
+        revision = RevisionSpec(
+            "vs_smb", "Vs. probe", len(image), hashlib.sha1(image).hexdigest(),
+            hashlib.sha256(image).hexdigest(), "ines-vs",
+            capabilities=("graphics",),
+            resources=(
+                revision_resources[0],
+                replace(
+                    revision_resources[1],
+                    parameters={"file_offset": 0, "size": 16},
+                    payload="chr",
+                ),
+            ),
+            payloads=(
+                PayloadSpec(
+                    "chr", "range", 16,
+                    hashlib.sha1(image[24:40]).hexdigest(), file_offset=24,
+                ),
+            ),
+        )
+        base_profile, _base_revision = fixture_profile(fixture_image())
+        profile = replace(base_profile, revisions=(revision,))
+
+        document = decode_resources(image, profile, revision)
+        self.assertEqual(len(document.resources), 1)
+        self.assertEqual(document.resources[0]["id"], "graphics")
+        rebuilt, report = build_resources(image, document, profile, revision)
+        self.assertEqual(report["changed_bytes"], 0)
+        self.assertEqual(rebuilt, image)
 
 
 if __name__ == "__main__":

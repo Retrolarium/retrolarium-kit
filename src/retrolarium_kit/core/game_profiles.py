@@ -11,6 +11,7 @@ from typing import Any, Iterable
 from .authoring import (
     AuthoringError,
     GameProfile,
+    PayloadSpec,
     Registry,
     ResourceSpec,
     RevisionSpec,
@@ -33,6 +34,63 @@ def _string(value: object, name: str) -> str:
     return value
 
 
+def _capabilities(value: object, name: str) -> tuple[str, ...]:
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise AuthoringError(f"{name} must be a string array")
+    return tuple(value)
+
+
+def _resources(value: object, name: str) -> tuple[ResourceSpec, ...]:
+    if not isinstance(value, list) or not value:
+        raise AuthoringError(f"{name} must be a non-empty array")
+    specs = []
+    for index, raw in enumerate(value):
+        item_name = f"{name}[{index}]"
+        item = _mapping(raw, item_name)
+        parameters = _mapping(item.get("parameters", {}), f"{item_name}.parameters")
+        specs.append(
+            ResourceSpec(
+                resource_id=_string(item.get("id"), f"{item_name}.id"),
+                kind=_string(item.get("kind"), f"{item_name}.kind"),
+                codec=_string(item.get("codec"), f"{item_name}.codec"),
+                capacity_policy=_string(
+                    item.get("capacity_policy"), f"{item_name}.capacity_policy"
+                ),
+                parameters=parameters,
+                payload=(
+                    _string(item.get("payload"), f"{item_name}.payload")
+                    if "payload" in item
+                    else None
+                ),
+            )
+        )
+    return tuple(specs)
+
+
+def _payloads(value: object, name: str) -> tuple[PayloadSpec, ...]:
+    if not isinstance(value, list):
+        raise AuthoringError(f"{name} must be an array")
+    payloads = []
+    for index, raw in enumerate(value):
+        item_name = f"{name}[{index}]"
+        item = _mapping(raw, item_name)
+        record_ids = item.get("record_ids", [])
+        if not isinstance(record_ids, list):
+            raise AuthoringError(f"{item_name}.record_ids must be an array")
+        payloads.append(
+            PayloadSpec(
+                payload_id=_string(item.get("id"), f"{item_name}.id"),
+                storage=_string(item.get("storage"), f"{item_name}.storage"),
+                size=item.get("size"),
+                sha1=_string(item.get("sha1"), f"{item_name}.sha1"),
+                file_offset=item.get("file_offset"),
+                record_ids=tuple(record_ids),
+                load_address=item.get("load_address"),
+            )
+        )
+    return tuple(payloads)
+
+
 def parse_game_profile(document: object) -> GameProfile:
     value = _mapping(document, "game profile")
     if value.get("schema") != PROFILE_SCHEMA:
@@ -44,16 +102,27 @@ def parse_game_profile(document: object) -> GameProfile:
     capabilities_value = value.get("capabilities")
     if not isinstance(revisions_value, list) or not revisions_value:
         raise AuthoringError("game profile revisions must be a non-empty array")
-    if not isinstance(resources_value, list) or not resources_value:
-        raise AuthoringError("game profile resources must be a non-empty array")
-    if not isinstance(capabilities_value, list) or any(
-        not isinstance(item, str) for item in capabilities_value
-    ):
-        raise AuthoringError("game profile capabilities must be a string array")
+    capabilities = _capabilities(capabilities_value, "game profile capabilities")
+    resource_specs = _resources(resources_value, "resources")
 
     revisions = []
     for index, raw in enumerate(revisions_value):
         item = _mapping(raw, f"revisions[{index}]")
+        revision_capabilities = (
+            _capabilities(
+                item.get("capabilities"), f"revisions[{index}].capabilities"
+            )
+            if "capabilities" in item
+            else None
+        )
+        revision_resources = (
+            _resources(item.get("resources"), f"revisions[{index}].resources")
+            if "resources" in item
+            else None
+        )
+        revision_payloads = _payloads(
+            item.get("payloads", []), f"revisions[{index}].payloads"
+        )
         revisions.append(
             RevisionSpec(
                 revision_id=_string(item.get("id"), f"revisions[{index}].id"),
@@ -67,25 +136,9 @@ def parse_game_profile(document: object) -> GameProfile:
                     item.get("container"), f"revisions[{index}].container"
                 ),
                 mapper=item.get("mapper"),
-            )
-        )
-
-    resource_specs = []
-    for index, raw in enumerate(resources_value):
-        item = _mapping(raw, f"resources[{index}]")
-        parameters = _mapping(
-            item.get("parameters", {}), f"resources[{index}].parameters"
-        )
-        resource_specs.append(
-            ResourceSpec(
-                resource_id=_string(item.get("id"), f"resources[{index}].id"),
-                kind=_string(item.get("kind"), f"resources[{index}].kind"),
-                codec=_string(item.get("codec"), f"resources[{index}].codec"),
-                capacity_policy=_string(
-                    item.get("capacity_policy"),
-                    f"resources[{index}].capacity_policy",
-                ),
-                parameters=parameters,
+                capabilities=revision_capabilities,
+                resources=revision_resources,
+                payloads=revision_payloads,
             )
         )
 
@@ -94,9 +147,9 @@ def parse_game_profile(document: object) -> GameProfile:
         profile_version=value.get("profile_version"),
         name=_string(value.get("name"), "game profile name"),
         platform=_string(value.get("platform"), "game profile platform"),
-        capabilities=tuple(capabilities_value),
+        capabilities=capabilities,
         revisions=tuple(revisions),
-        resources=tuple(resource_specs),
+        resources=resource_specs,
     )
 
 

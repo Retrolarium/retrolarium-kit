@@ -20,6 +20,7 @@ where = ["src"]
 retrolarium_kit = [
   "ghidra_scripts/*.java",
   "profiles/*.json",
+  "runtime/*.lua",
   "schemas/*.json",
   "toolchains/*.json",
   "_toolchains/manifest.json",

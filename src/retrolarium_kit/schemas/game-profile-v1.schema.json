@@ -54,7 +54,41 @@
         "sha1": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
         "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "container": {"$ref": "#/$defs/identifier"},
-        "mapper": {"type": "integer", "minimum": 0}
+        "mapper": {"type": "integer", "minimum": 0},
+        "capabilities": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "resources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/resource"}
+        },
+        "payloads": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/payload"}
+        }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "storage", "size", "sha1"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "storage": {"enum": ["range", "fds-records"]},
+        "size": {"type": "integer", "minimum": 1},
+        "sha1": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "file_offset": {"type": "integer", "minimum": 0},
+        "record_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "integer", "minimum": 0, "maximum": 255}
+        },
+        "load_address": {"type": "integer", "minimum": 0, "maximum": 65535}
       }
     },
     "resource": {
@@ -66,7 +100,8 @@
         "kind": {"$ref": "#/$defs/identifier"},
         "codec": {"$ref": "#/$defs/identifier"},
         "capacity_policy": {"$ref": "#/$defs/identifier"},
-        "parameters": {"type": "object"}
+        "parameters": {"type": "object"},
+        "payload": {"$ref": "#/$defs/identifier"}
       }
     }
   }

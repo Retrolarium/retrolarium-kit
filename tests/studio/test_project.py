@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -10,6 +11,7 @@ from retrolarium_kit.studio_project import (
     StudioProjectError,
     create_studio_project,
     load_studio_project,
+    migrate_studio_project,
     validate_studio_project,
 )
 
@@ -156,6 +158,26 @@ class StudioProjectTests(unittest.TestCase):
             with self.assertRaisesRegex(StudioProjectError, "dependency cycle"):
                 self.load(project)
 
+    def test_project_relocates_without_rewriting_internal_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            original = base / "original"
+            original.mkdir()
+            project = write_project(original, LEVELS_TAB)
+            source_text = project.read_text(encoding="utf-8")
+            relocated = base / "relocated"
+            shutil.copytree(original, relocated)
+            relocated_project = relocated / project.name
+            with patch(
+                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                return_value=manifest(),
+            ):
+                inspection = load_studio_project(relocated_project)
+            self.assertEqual(source_text, relocated_project.read_text(encoding="utf-8"))
+            self.assertEqual(str(relocated.resolve()), inspection["project_root"])
+            document_path = inspection["workspace"]["tabs"][0]["document_path"]
+            self.assertTrue(Path(document_path).is_relative_to(relocated.resolve()))
+
     def test_reports_toml_line_and_column(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             project = Path(temporary) / "broken.retrolarium"
@@ -164,6 +186,48 @@ class StudioProjectTests(unittest.TestCase):
                 StudioProjectError, r"broken\.retrolarium:\d+:\d+:"
             ):
                 load_studio_project(project)
+
+    def test_migration_preserves_comments_and_line_endings(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = write_project(Path(temporary), LEVELS_TAB)
+            legacy = project.read_text(encoding="utf-8").replace(
+                'schema = "retrolarium.project"\n',
+                '# project identity\nschema = "retrolarium.project" # keep schema\n',
+            ).replace(
+                "schema_version = 1",
+                "schema_version = 0 # legacy version",
+            ).replace("\n", "\r\n")
+            project.write_bytes(legacy.encode("utf-8"))
+            with patch(
+                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                return_value=manifest(),
+            ):
+                result = migrate_studio_project(project)
+            expected = legacy.replace(
+                "schema_version = 0", "schema_version = 1", 1
+            )
+            self.assertEqual(expected.encode("utf-8"), project.read_bytes())
+            self.assertEqual("migrated", result["status"])
+            self.assertEqual(0, result["from_version"])
+            self.assertEqual(1, result["to_version"])
+
+    def test_migration_inserts_missing_legacy_version_without_reformatting(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = write_project(Path(temporary), LEVELS_TAB)
+            legacy = project.read_text(encoding="utf-8").replace(
+                "schema_version = 1\n", "# version was implicit in v0\n", 1
+            )
+            project.write_text(legacy, encoding="utf-8")
+            with patch(
+                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                return_value=manifest(),
+            ):
+                migrate_studio_project(project)
+            migrated = project.read_text(encoding="utf-8")
+            self.assertIn(
+                'schema = "retrolarium.project"\nschema_version = 1\n', migrated
+            )
+            self.assertIn("# version was implicit in v0", migrated)
 
     def test_validate_returns_only_enabled_tabs(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -311,6 +375,8 @@ class StudioProjectTests(unittest.TestCase):
                 "source_sha256": SHA256,
                 "resources": [
                     {"id": "levels", "kind": "level", "codec": "smb.levels.v1"},
+                    {"id": "metatiles", "kind": "metatile", "codec": "nes.metatile-2x2.v1"},
+                    {"id": "palettes", "kind": "palette", "codec": "nes.ppu-palette-packets.v1"},
                     {"id": "chr", "kind": "graphics", "codec": "nes.chr-2bpp.v1"},
                 ],
             }), encoding="utf-8")
@@ -326,7 +392,26 @@ class StudioProjectTests(unittest.TestCase):
             self.assertEqual("levels", levels["id"])
             self.assertEqual("level.procedural", levels["kind"])
             self.assertEqual("smb.levels.v1", levels["codec"])
-            self.assertEqual(["graphics"], levels["depends_on"])
+            self.assertIn("playtest", levels["capabilities"])
+            self.assertEqual(["graphics", "palettes"], levels["depends_on"])
+            palettes = next(
+                tab for tab in result["workspace"]["tabs"] if tab["id"] == "palettes"
+            )
+            self.assertEqual("nes.ppu-palette-packets.v1", palettes["codec"])
+
+            resource_value = json.loads(resources.read_text(encoding="utf-8"))
+            resource_value["revision"] = "pal"
+            resources.write_text(json.dumps(resource_value), encoding="utf-8")
+            with patch(
+                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                return_value=manifest(),
+            ):
+                pal_result = create_studio_project(
+                    source, root / "smb-pal.retrolarium", project_id="smb-pal",
+                    name="SMB PAL", profile="smb1.v1", resource_document=resources,
+                )
+            pal_levels = pal_result["workspace"]["tabs"][0]
+            self.assertNotIn("playtest", pal_levels["capabilities"])
 
 
 if __name__ == "__main__":

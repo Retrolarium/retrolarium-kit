@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 from pathlib import Path
 import sys
 import unittest
@@ -12,7 +13,7 @@ from retrolarium_kit.authoring import GameProfile, ResourceSpec, RevisionSpec
 from retrolarium_kit.game_profiles import packaged_game_profiles
 from retrolarium_kit.nes_resources import build_resources, decode_resources, parse_resource_document
 from retrolarium_kit.smb_level import decode_levels, encode_levels, positioned_area_objects, positioned_enemy_records
-from retrolarium_kit.smb_level_render import render_level_scene
+from retrolarium_kit.smb_level_render import object_width, render_level_scene
 
 
 PARAMETERS = {
@@ -115,6 +116,7 @@ class SmbLevelTests(unittest.TestCase):
         profile = packaged_game_profiles().get("smb1")
         levels = next(item for item in profile.resources if item.kind == "level")
         self.assertEqual(levels.codec, "smb.levels.v1")
+        self.assertEqual(levels.parameters["world_resource"], "world")
         self.assertEqual(len(levels.parameters["stream_names"]), 34)
         self.assertEqual(sum(levels.parameters["area_capacities"]), 3373)
         self.assertEqual(sum(levels.parameters["enemy_capacities"]), 1087)
@@ -145,6 +147,69 @@ class SmbLevelTests(unittest.TestCase):
         self.assertEqual(scene.metatiles[20][0], 0x24)
         self.assertEqual(scene.metatiles[20][10], 0x61)
         self.assertEqual(scene.enemies[0]["x"], 38)
+
+    def test_ju_golden_corpus_matches_all_34_python_scenes(self) -> None:
+        fixture_path = (
+            Path(__file__).resolve().parents[2]
+            / "retrolarium" / "tests" / "fixtures" / "smb1_ju_level_scenes.json"
+        )
+        fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+        self.assertEqual(fixture["schema"], "retrolarium.smb-level-scene-golden")
+        self.assertEqual(fixture["schema_version"], 1)
+        self.assertEqual(fixture["profile"], "smb1.ju")
+        self.assertEqual(fixture["source"]["area_streams_sha1"],
+                         "63119cee5b53a6c64ef4a203bdbb9fcd7c0a2f42")
+        self.assertEqual(fixture["source"]["enemy_streams_sha1"],
+                         "16bd5a146588d7731f254e7722bab5467111c7c2")
+
+        profile = packaged_game_profiles().get("smb1")
+        levels = next(item for item in profile.resources if item.kind == "level")
+        areas = fixture["areas"]
+        self.assertEqual([area["name"] for area in areas],
+                         list(levels.parameters["stream_names"]))
+        self.assertEqual(len(areas), 34)
+        header_fields = (
+            "timer_setting", "entrance_control", "foreground_or_color",
+            "area_style", "background_scenery", "terrain_control",
+        )
+        for area in areas:
+            header = dict(zip(header_fields, area["header"], strict=True))
+            objects = [
+                {
+                    "column": item[0], "row": item[1],
+                    "page_advance": item[2], "object_control": item[3],
+                }
+                for item in area["objects"]
+            ]
+            enemies = [
+                {
+                    "kind": item[0], "column": item[1], "row": item[2],
+                    "page_advance": item[3], "hard_mode": item[4],
+                    "object_or_page": item[5], "destination_world": item[6],
+                    "destination_page": item[7],
+                }
+                for item in area["enemies"]
+            ]
+            scene = render_level_scene(
+                area["name"], header, objects, enemies, world=area["world"],
+            )
+            flat_grid = bytes(value for column in scene.metatiles for value in column)
+            expected = area["expected"]
+            self.assertEqual(scene.width, expected["width"], area["name"])
+            self.assertEqual(hashlib.sha256(flat_grid).hexdigest(),
+                             expected["metatile_sha256"], area["name"])
+            self.assertEqual(
+                [[item["index"], item["page"], item["x"]] for item in scene.enemies],
+                expected["enemies"], area["name"],
+            )
+            positioned_objects = positioned_area_objects(objects)
+            self.assertEqual(
+                [
+                    [item["index"], item["page"], item["x"], object_width(item)]
+                    for item in positioned_objects
+                ],
+                expected["objects"], area["name"],
+            )
 
 
 if __name__ == "__main__":

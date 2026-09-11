@@ -106,11 +106,13 @@ def authoring_adapters() -> Registry[object]:
     return registry
 
 
-def _adapter(profile: GameProfile) -> Any:
+def _adapter(profile: GameProfile, revision: RevisionSpec) -> Any:
     registry = authoring_adapters()
     identifiers = set(registry.identifiers())
     matches = [
-        resource.codec for resource in profile.resources if resource.codec in identifiers
+        resource.codec
+        for resource in profile.resources_for(revision)
+        if resource.codec in identifiers
     ]
     if len(matches) != 1:
         raise AuthoringError(
@@ -158,7 +160,7 @@ def validate_game_document_for_revision(
     """Validate an authoring document without requiring a commercial ROM path."""
 
     profile, revision = resolve_profile_revision(profile_reference, source_sha256)
-    adapter = _adapter(profile)
+    adapter = _adapter(profile, revision)
     document = adapter.parse(_load_json(document_path), profile, revision)
     return {
         "schema": "retrolarium.game-document-validation",
@@ -231,6 +233,30 @@ def profile_catalog() -> dict[str, object]:
                 "capabilities": list(profile.capabilities),
                 "revisions": [revision.revision_id for revision in profile.revisions],
                 "resources": [resource.resource_id for resource in profile.resources],
+                "revision_details": [
+                    {
+                        "id": revision.revision_id,
+                        "name": revision.name,
+                        "size": revision.size,
+                        "sha256": revision.sha256,
+                        "container": revision.container,
+                        "capabilities": list(profile.capabilities_for(revision)),
+                        "resources": [
+                            resource.resource_id
+                            for resource in profile.resources_for(revision)
+                        ],
+                        "payloads": [
+                            {
+                                "id": payload.payload_id,
+                                "storage": payload.storage,
+                                "size": payload.size,
+                                "load_address": payload.load_address,
+                            }
+                            for payload in revision.payloads
+                        ],
+                    }
+                    for revision in profile.revisions
+                ],
             }
         )
     return {
@@ -242,7 +268,7 @@ def profile_catalog() -> dict[str, object]:
 
 def inspect_game(path: Path, *, custom_profile: Path | None = None) -> dict[str, object]:
     payload, profile, revision = _read_image(path, custom_profile)
-    adapter = _adapter(profile)
+    adapter = _adapter(profile, revision)
     document = adapter.decode(payload, profile, revision)
     details = adapter.details(document)
     return {
@@ -255,7 +281,7 @@ def inspect_game(path: Path, *, custom_profile: Path | None = None) -> dict[str,
         "platform": profile.platform,
         "revision": revision.revision_id,
         "sha256": revision.sha256,
-        "capabilities": list(profile.capabilities),
+        "capabilities": list(profile.capabilities_for(revision)),
         "resources": [
             {
                 "id": resource.resource_id,
@@ -263,7 +289,7 @@ def inspect_game(path: Path, *, custom_profile: Path | None = None) -> dict[str,
                 "codec": resource.codec,
                 "capacity_policy": resource.capacity_policy,
             }
-            for resource in profile.resources
+            for resource in profile.resources_for(revision)
         ],
         "details": details,
     }
@@ -273,7 +299,7 @@ def extract_game(
     path: Path, output: Path, *, custom_profile: Path | None = None
 ) -> dict[str, object]:
     payload, profile, revision = _read_image(path, custom_profile)
-    adapter = _adapter(profile)
+    adapter = _adapter(profile, revision)
     document = adapter.decode(payload, profile, revision)
     details = adapter.details(document)
     _atomic_write_json(output, document.as_dict())
@@ -293,7 +319,7 @@ def validate_game(
     path: Path, document_path: Path, *, custom_profile: Path | None = None
 ) -> dict[str, object]:
     payload, profile, revision = _read_image(path, custom_profile)
-    adapter = _adapter(profile)
+    adapter = _adapter(profile, revision)
     document = adapter.parse(_load_json(document_path), profile, revision)
     _output, report = adapter.build(payload, document, profile, revision)
     return {
@@ -318,7 +344,7 @@ def build_game(
     if path.resolve() == output.resolve():
         raise AuthoringError("game build output must not overwrite the source image")
     payload, profile, revision = _read_image(path, custom_profile)
-    adapter = _adapter(profile)
+    adapter = _adapter(profile, revision)
     document = adapter.parse(_load_json(document_path), profile, revision)
     rebuilt, report = adapter.build(payload, document, profile, revision)
     _atomic_write(output, rebuilt)

@@ -137,6 +137,55 @@ class Provenance:
 
 
 @dataclass(frozen=True)
+class PayloadSpec:
+    payload_id: str
+    storage: str
+    size: int
+    sha1: str
+    file_offset: int | None = None
+    record_ids: tuple[int, ...] = ()
+    load_address: int | None = None
+
+    def __post_init__(self) -> None:
+        stable_identifier(self.payload_id, "payload id")
+        stable_identifier(self.storage, "payload storage")
+        if not isinstance(self.size, int) or isinstance(self.size, bool) or self.size <= 0:
+            raise AuthoringError("payload size must be a positive integer")
+        if not re.fullmatch(r"[0-9a-f]{40}", self.sha1):
+            raise AuthoringError("payload sha1 must be lowercase SHA-1")
+        record_ids = tuple(self.record_ids)
+        if self.storage == "range":
+            if (
+                not isinstance(self.file_offset, int)
+                or isinstance(self.file_offset, bool)
+                or self.file_offset < 0
+                or record_ids
+            ):
+                raise AuthoringError(
+                    "range payload needs a non-negative file offset and no record IDs"
+                )
+        elif self.storage == "fds-records":
+            if self.file_offset is not None or not record_ids or any(
+                not isinstance(item, int)
+                or isinstance(item, bool)
+                or not 0 <= item <= 0xFF
+                for item in record_ids
+            ) or len(set(record_ids)) != len(record_ids):
+                raise AuthoringError(
+                    "FDS payload needs unique byte record IDs and no file offset"
+                )
+        else:
+            raise AuthoringError(f"unsupported payload storage {self.storage!r}")
+        if self.load_address is not None and (
+            not isinstance(self.load_address, int)
+            or isinstance(self.load_address, bool)
+            or not 0 <= self.load_address <= 0xFFFF
+        ):
+            raise AuthoringError("payload load address must be a 16-bit integer")
+        object.__setattr__(self, "record_ids", record_ids)
+
+
+@dataclass(frozen=True)
 class RevisionSpec:
     revision_id: str
     name: str
@@ -145,6 +194,9 @@ class RevisionSpec:
     sha256: str
     container: str
     mapper: int | None = None
+    capabilities: tuple[str, ...] | None = None
+    resources: tuple[ResourceSpec, ...] | None = None
+    payloads: tuple[PayloadSpec, ...] = ()
 
     def __post_init__(self) -> None:
         stable_identifier(self.revision_id, "revision id")
@@ -161,6 +213,26 @@ class RevisionSpec:
             not isinstance(self.mapper, int) or self.mapper < 0
         ):
             raise AuthoringError("revision mapper must be a non-negative integer")
+        if self.capabilities is not None:
+            capabilities = tuple(self.capabilities)
+            if len(set(capabilities)) != len(capabilities):
+                raise AuthoringError("revision capabilities must be unique")
+            for capability in capabilities:
+                stable_identifier(capability, "revision capability")
+            object.__setattr__(self, "capabilities", capabilities)
+        if self.resources is not None:
+            resources = tuple(self.resources)
+            if not resources:
+                raise AuthoringError("revision resources must be non-empty")
+            resource_ids = [value.resource_id for value in resources]
+            if len(set(resource_ids)) != len(resource_ids):
+                raise AuthoringError("revision resource ids must be unique")
+            object.__setattr__(self, "resources", resources)
+        payloads = tuple(self.payloads)
+        payload_ids = [value.payload_id for value in payloads]
+        if len(set(payload_ids)) != len(payload_ids):
+            raise AuthoringError("revision payload ids must be unique")
+        object.__setattr__(self, "payloads", payloads)
 
 
 @dataclass(frozen=True)
@@ -170,6 +242,7 @@ class ResourceSpec:
     codec: str
     capacity_policy: str
     parameters: Mapping[str, Any] = field(default_factory=dict)
+    payload: str | None = None
 
     def __post_init__(self) -> None:
         stable_identifier(self.resource_id, "resource id")
@@ -178,6 +251,8 @@ class ResourceSpec:
         stable_identifier(self.capacity_policy, "capacity policy")
         if not isinstance(self.parameters, Mapping):
             raise AuthoringError("resource parameters must be a mapping")
+        if self.payload is not None:
+            stable_identifier(self.payload, "resource payload")
         object.__setattr__(self, "parameters", MappingProxyType(dict(self.parameters)))
 
 
@@ -208,9 +283,63 @@ class GameProfile:
             raise AuthoringError("game profile revision ids must be unique")
         if len(set(resource_ids)) != len(resource_ids):
             raise AuthoringError("game profile resource ids must be unique")
+        for revision in self.revisions:
+            payload_ids = {payload.payload_id for payload in revision.payloads}
+            unknown_payloads = {
+                resource.payload
+                for resource in self.resources_for(revision)
+                if resource.payload is not None and resource.payload not in payload_ids
+            }
+            if unknown_payloads:
+                raise AuthoringError(
+                    f"revision {revision.revision_id} has unknown resource payload "
+                    f"{sorted(unknown_payloads)[0]!r}"
+                )
 
-    def resource(self, resource_id: str) -> ResourceSpec:
-        matches = [item for item in self.resources if item.resource_id == resource_id]
+    def _revision(self, revision: RevisionSpec | str) -> RevisionSpec:
+        if isinstance(revision, RevisionSpec):
+            return revision
+        revision_id = revision
+        matches = [
+            item for item in self.revisions if item.revision_id == revision_id
+        ]
+        if len(matches) != 1:
+            raise AuthoringError(
+                f"unknown revision {revision_id!r} in {self.game_id}"
+            )
+        return matches[0]
+
+    def capabilities_for(self, revision: RevisionSpec | str) -> tuple[str, ...]:
+        selected = self._revision(revision)
+        return (
+            self.capabilities
+            if selected.capabilities is None
+            else selected.capabilities
+        )
+
+    def resources_for(self, revision: RevisionSpec | str) -> tuple[ResourceSpec, ...]:
+        selected = self._revision(revision)
+        return self.resources if selected.resources is None else selected.resources
+
+    def payload_for(
+        self, revision: RevisionSpec | str, payload_id: str
+    ) -> PayloadSpec:
+        selected = self._revision(revision)
+        matches = [
+            payload for payload in selected.payloads
+            if payload.payload_id == payload_id
+        ]
+        if len(matches) != 1:
+            raise AuthoringError(
+                f"unknown payload {payload_id!r} in {self.game_id}/{selected.revision_id}"
+            )
+        return matches[0]
+
+    def resource(
+        self, resource_id: str, revision: RevisionSpec | str | None = None
+    ) -> ResourceSpec:
+        resources = self.resources if revision is None else self.resources_for(revision)
+        matches = [item for item in resources if item.resource_id == resource_id]
         if len(matches) != 1:
             raise AuthoringError(f"unknown resource {resource_id!r} in {self.game_id}")
         return matches[0]

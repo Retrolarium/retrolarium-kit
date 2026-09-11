@@ -15,6 +15,256 @@
       "sha256": "f61548fdf1670cffefcc4f0b7bdcdd9eaba0c226e3b74f8666071496988248de",
       "container": "ines",
       "mapper": 0
+    },
+    {
+      "id": "pal",
+      "name": "Super Mario Bros. (Europe, Rev A)",
+      "size": 40976,
+      "sha1": "ab30029efec6ccfc5d65dfda7fbc6e6489a80805",
+      "sha256": "ec299b990e8bfee8ba46e3f61d63b2e1ae5b8a2e431de84e2e4bbd692dc53586",
+      "container": "ines",
+      "mapper": 0
+    },
+    {
+      "id": "pc10",
+      "name": "Super Mario Bros. (PlayChoice-10 container)",
+      "size": 49168,
+      "sha1": "d48d2c65fda380217ead73ffa6a46cae62939194",
+      "sha256": "f586afeaaaa7a6cf2e3b69e5b17f2f0f1eb3fd9aa1de1e3e14b75f90dc21ae87",
+      "container": "ines-pc10",
+      "mapper": 0
+    },
+    {
+      "id": "vs_smb",
+      "name": "Vs. Super Mario Bros.",
+      "size": 49168,
+      "sha1": "3546486ba461536545daf9f27c9bcf275fc162da",
+      "sha256": "60098a93322a9e07a2b164a02e5517bc22664ca33f6323c2ae23a62941ad393b",
+      "container": "ines-vs",
+      "capabilities": ["graphics"],
+      "payloads": [
+        {
+          "id": "prg",
+          "storage": "range",
+          "file_offset": 16,
+          "size": 32768,
+          "sha1": "f25ab9354e24e3cd99b6cfd8331f9be40b603c5b",
+          "load_address": 32768
+        },
+        {
+          "id": "chr",
+          "storage": "range",
+          "file_offset": 32784,
+          "size": 16384,
+          "sha1": "19385a81d2abea3ad6ff6b0d220390950ac9d2ee"
+        }
+      ],
+      "resources": [
+        {
+          "id": "authoring-bundle",
+          "kind": "resource-bundle",
+          "codec": "nes.resource-bundle.v1",
+          "capacity_policy": "fixed",
+          "parameters": {}
+        },
+        {
+          "id": "character-graphics",
+          "kind": "graphics",
+          "codec": "nes.chr-2bpp.v1",
+          "capacity_policy": "fixed",
+          "payload": "chr",
+          "parameters": {
+            "file_offset": 0,
+            "size": 8192
+          }
+        }
+      ]
+    },
+    {
+      "id": "fds_smb",
+      "name": "Super Mario Bros. (Famicom Disk System reissue)",
+      "size": 65500,
+      "sha1": "383ad8e3890a95de9595f0a6087648f51177da13",
+      "sha256": "56ba4c39fd7f9628bffac4c6ee0d5364f86de36d27c904ffc70f0abc97ae0d3a",
+      "container": "fds",
+      "capabilities": ["graphics"],
+      "payloads": [
+        {
+          "id": "prg",
+          "storage": "fds-records",
+          "record_ids": [3, 4],
+          "size": 32768,
+          "sha1": "3634eb60ad0fbc60a07683cdf98cc6a1701b56a0",
+          "load_address": 24576
+        },
+        {
+          "id": "chr",
+          "storage": "fds-records",
+          "record_ids": [2],
+          "size": 8192,
+          "sha1": "394badaf0b0bdd0ea279a1bca89a9d9ddc00b1b5"
+        }
+      ],
+      "resources": [
+        {
+          "id": "authoring-bundle",
+          "kind": "resource-bundle",
+          "codec": "nes.resource-bundle.v1",
+          "capacity_policy": "fixed",
+          "parameters": {}
+        },
+        {
+          "id": "character-graphics",
+          "kind": "graphics",
+          "codec": "nes.chr-2bpp.v1",
+          "capacity_policy": "fixed",
+          "payload": "chr",
+          "parameters": {
+            "file_offset": 0,
+            "size": 8192
+          }
+        }
+      ]
+    },
+    {
+      "id": "ann_fds",
+      "name": "All Night Nippon Super Mario Bros.",
+      "size": 65500,
+      "sha1": "f30bdd3c556604d7eaa6d0f4864d5566e519b5d4",
+      "sha256": "a762d0a90d16c84b5f2b014816b37675cf5115320be7e815effbb64d91b2014d",
+      "container": "fds",
+      "capabilities": ["graphics"],
+      "payloads": [
+        {
+          "id": "prg",
+          "storage": "fds-records",
+          "record_ids": [5],
+          "size": 32768,
+          "sha1": "8f07dfdda5829983a1deec8c82dd26e196826cd9",
+          "load_address": 24576
+        },
+        {
+          "id": "nsmdata2",
+          "storage": "fds-records",
+          "record_ids": [32],
+          "size": 3584,
+          "sha1": "48447986778a9c39fc8cabf4e5494d99fab7e020",
+          "load_address": 50288
+        },
+        {
+          "id": "nsmdata3",
+          "storage": "fds-records",
+          "record_ids": [48],
+          "size": 3346,
+          "sha1": "8941894b39a959aab87338728919a8b475e4f691",
+          "load_address": 50640
+        },
+        {
+          "id": "nsmdata4",
+          "storage": "fds-records",
+          "record_ids": [64],
+          "size": 3568,
+          "sha1": "eec327d5ebde3891439971986ae23afeefbdd1a7",
+          "load_address": 49814
+        },
+        {
+          "id": "chr",
+          "storage": "fds-records",
+          "record_ids": [1],
+          "size": 8192,
+          "sha1": "d286c6490183760d0f8da2099dd42e386b8b95ed"
+        }
+      ],
+      "resources": [
+        {
+          "id": "authoring-bundle",
+          "kind": "resource-bundle",
+          "codec": "nes.resource-bundle.v1",
+          "capacity_policy": "fixed",
+          "parameters": {}
+        },
+        {
+          "id": "character-graphics",
+          "kind": "graphics",
+          "codec": "nes.chr-2bpp.v1",
+          "capacity_policy": "fixed",
+          "payload": "chr",
+          "parameters": {
+            "file_offset": 0,
+            "size": 8192
+          }
+        }
+      ]
+    },
+    {
+      "id": "smb2_jp_fds",
+      "name": "Super Mario Bros. 2 / The Lost Levels",
+      "size": 65500,
+      "sha1": "20e50128742162ee47561db9e82b2836399c880c",
+      "sha256": "ff8afb9ae6b705b4e51dbcb193dcebadf4c049800a71003d3a45052648e52eda",
+      "container": "fds",
+      "capabilities": ["graphics"],
+      "payloads": [
+        {
+          "id": "prg",
+          "storage": "fds-records",
+          "record_ids": [5],
+          "size": 32768,
+          "sha1": "511bdb385ae63f07e6077e33786b172caaf46806",
+          "load_address": 24576
+        },
+        {
+          "id": "sm2data2",
+          "storage": "fds-records",
+          "record_ids": [32],
+          "size": 3631,
+          "sha1": "909ce686c1e6612bb6625c712eddb6cadbdde40c",
+          "load_address": 50288
+        },
+        {
+          "id": "sm2data3",
+          "storage": "fds-records",
+          "record_ids": [48],
+          "size": 3279,
+          "sha1": "e34432ec9e5310430f0a11445b6a439ef73e2cad",
+          "load_address": 50640
+        },
+        {
+          "id": "sm2data4",
+          "storage": "fds-records",
+          "record_ids": [64],
+          "size": 3916,
+          "sha1": "1882308b0d4b8d0b4c762856d873225b25142adb",
+          "load_address": 49844
+        },
+        {
+          "id": "chr",
+          "storage": "fds-records",
+          "record_ids": [1],
+          "size": 8192,
+          "sha1": "f5ec342a44c909d99d46ae311a4b77ed00e645eb"
+        }
+      ],
+      "resources": [
+        {
+          "id": "authoring-bundle",
+          "kind": "resource-bundle",
+          "codec": "nes.resource-bundle.v1",
+          "capacity_policy": "fixed",
+          "parameters": {}
+        },
+        {
+          "id": "character-graphics",
+          "kind": "graphics",
+          "codec": "nes.chr-2bpp.v1",
+          "capacity_policy": "fixed",
+          "payload": "chr",
+          "parameters": {
+            "file_offset": 0,
+            "size": 8192
+          }
+        }
+      ]
     }
   ],
   "resources": [
@@ -55,6 +305,7 @@
       "codec": "smb.levels.v1",
       "capacity_policy": "fixed",
       "parameters": {
+        "world_resource": "world",
         "area_file_offset": 8639,
         "area_size": 3373,
         "enemy_file_offset": 7552,
@@ -78,6 +329,37 @@
           42, 1, 36, 9, 37, 35, 9, 1, 58, 43, 46, 28, 9, 37,
           45, 46, 45, 17, 42, 20
         ]
+      }
+    },
+    {
+      "id": "background-metatiles",
+      "kind": "metatile",
+      "codec": "nes.metatile-2x2.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 2848,
+        "size": 404,
+        "group_names": ["palette_0", "palette_1", "palette_2", "palette_3"],
+        "group_sizes": [39, 46, 10, 6],
+        "tile_base": 256
+      }
+    },
+    {
+      "id": "area-palette-packets",
+      "kind": "palette",
+      "codec": "nes.ppu-palette-packets.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 3252,
+        "size": 176,
+        "packet_names": [
+          "water", "ground", "underground", "castle",
+          "day_snow", "night_snow", "mushroom", "boss"
+        ],
+        "packet_capacities": [36, 36, 36, 36, 8, 8, 8, 8],
+        "terminator": 0,
+        "day_background": 34,
+        "night_background": 15
       }
     },
     {
