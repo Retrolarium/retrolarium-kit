@@ -7,7 +7,9 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.midi import MidiError, parse_midi, tick_seconds
+from retrolarium_kit.midi import (
+    MidiError, MidiNote, encode_midi, parse_midi, tick_seconds,
+)
 
 
 def variable(value: int) -> bytes:
@@ -30,6 +32,13 @@ def midi_file(*tracks: bytes, division: int = 96, format_type: int = 1) -> bytes
 
 
 class MidiTests(unittest.TestCase):
+    def test_encode_round_trip_preserves_notes_and_tempo(self) -> None:
+        notes = (MidiNote(60, 0, 240), MidiNote(64, 360, 840))
+        encoded = encode_midi(notes, division=960, tempo=500_000)
+        parsed = parse_midi(encoded, 0, 0)
+        self.assertEqual(notes, parsed.notes)
+        self.assertEqual(((0, 500_000),), parsed.tempos)
+
     def test_parses_selected_channel_running_status_and_global_tempo(self) -> None:
         tempo = b"\x00\xff\x51\x03\x03\xd0\x90\x00\xff\x2f\x00"
         notes = (

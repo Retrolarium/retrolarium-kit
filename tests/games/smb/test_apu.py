@@ -11,6 +11,7 @@ import tempfile
 import unittest
 
 from retrolarium_kit.audio_operations import (
+    export_smb_document_midi,
     preview_smb_midi_import,
     render_smb_document_wav,
 )
@@ -22,6 +23,7 @@ from retrolarium_kit.nes_resources import (
     decode_resources,
     inspection_details,
 )
+from retrolarium_kit.midi import parse_midi
 from retrolarium_kit.smb_apu import (
     SmbApuError,
     apply_midi_channel_commands,
@@ -161,6 +163,7 @@ class SmbApuTests(unittest.TestCase):
             profile_path = root / "profile.json"
             midi_path = root / "channel.mid"
             output_path = root / "edited.json"
+            exported_midi_path = root / "exported.mid"
             document_path.write_text(json.dumps(bundle), encoding="utf-8")
             profile_path.write_text(json.dumps(profile), encoding="utf-8")
             midi_path.write_bytes(
@@ -201,6 +204,18 @@ class SmbApuTests(unittest.TestCase):
                 [0x80, 0x04, 0x00],
                 edited["resources"][0]["shared_stream_arena"][:3],
             )
+            exported = export_smb_document_midi(
+                output_path,
+                exported_midi_path,
+                resource_id="music",
+                header="song",
+                selector="event",
+                channel="square2",
+                profile_path=profile_path,
+            )
+            parsed_midi = parse_midi(exported_midi_path.read_bytes(), 0, 0)
+            self.assertEqual(1, exported["notes"])
+            self.assertEqual(70, parsed_midi.notes[0].note)
 
     def test_midi_apply_changes_only_exclusive_consumed_prefix(self) -> None:
         parameters, document = midi_lowering_fixture()

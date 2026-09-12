@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import tempfile
@@ -14,11 +15,14 @@ from .authoring import AuthoringError, GameProfile, ResourceSpec, RevisionSpec
 from .game_profiles import load_game_profile, packaged_game_profiles
 from .pacman_sound import (
     CODEC,
+    NTSC_FRAME_RATE as PACMAN_NTSC_FRAME_RATE,
     encode_sound_bundle,
     import_midi_commands,
     render_stream_wav,
+    sound_byte_to_midi,
     sound_summary,
 )
+from .midi import MidiNote, encode_midi
 from .smb_apu import (
     CODEC as SMB_APU_CODEC,
     NTSC_CPU_FREQUENCY,
@@ -154,6 +158,66 @@ def _atomic_write(path: Path, payload: bytes) -> None:
         os.replace(temporary, destination)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+MIDI_DIVISION = 960
+MIDI_TEMPO = 500_000
+
+
+def _midi_tick(frame: int, frame_rate: float) -> int:
+    return round(frame * MIDI_DIVISION * 1_000_000 / (frame_rate * MIDI_TEMPO))
+
+
+def export_document_midi(
+    document_path: Path,
+    output_path: Path,
+    *,
+    resource_id: str,
+    slot: int,
+    profile_path: Path | None = None,
+) -> dict[str, object]:
+    """Export one Pac-Man sound slot as a format-0 Standard MIDI file."""
+    document = _load_document(document_path)
+    profile, revision = _profile(document, profile_path)
+    resource, _spec = _sound_resource(document, profile, revision, resource_id)
+    item = _slot(resource, slot)
+    stream = item.get("stream")
+    if not isinstance(stream, Mapping):
+        raise AuthoringError(f"sound slot {slot} stream must be an object")
+    commands = stream.get("commands")
+    if not isinstance(commands, list):
+        raise AuthoringError(f"sound slot {slot} commands must be an array")
+    frame = 0
+    notes: list[MidiNote] = []
+    for command in commands:
+        if not isinstance(command, Mapping):
+            raise AuthoringError(f"sound slot {slot} contains an invalid command")
+        duration = command.get("duration", -1)
+        if command.get("kind") == "note":
+            if not isinstance(duration, int) or duration < 1:
+                raise AuthoringError("Pac-Man note duration is invalid")
+            start = _midi_tick(frame, PACMAN_NTSC_FRAME_RATE)
+            end = _midi_tick(frame + duration, PACMAN_NTSC_FRAME_RATE)
+            notes.append(MidiNote(
+                sound_byte_to_midi(int(command.get("value", -1))),
+                start, max(start + 1, end),
+            ))
+        if isinstance(duration, int) and duration > 0:
+            frame += duration
+    payload = encode_midi(tuple(notes), division=MIDI_DIVISION, tempo=MIDI_TEMPO)
+    _atomic_write(output_path, payload)
+    return {
+        "schema": "retrolarium.midi-export",
+        "schema_version": 1,
+        "engine": CODEC,
+        "resource": resource_id,
+        "slot": slot,
+        "notes": len(notes),
+        "duration_frames": frame,
+        "output": str(output_path.resolve()),
+        "size": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    }
 
 
 def import_midi_into_document(
@@ -340,6 +404,87 @@ def render_smb_document_wav(
         "cpu_frequency": spec.parameters.get(
             "cpu_frequency", NTSC_CPU_FREQUENCY
         ),
+        "output": str(output_path.resolve()),
+        "size": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    }
+
+
+def export_smb_document_midi(
+    document_path: Path,
+    output_path: Path,
+    *,
+    resource_id: str,
+    header: str,
+    channel: str,
+    selector: str | None = None,
+    length_table_adder: int | None = None,
+    profile_path: Path | None = None,
+) -> dict[str, object]:
+    """Export one tonal SMB music channel as a format-0 MIDI file."""
+    if channel not in {"square2", "square1", "triangle"}:
+        raise AuthoringError("SMB MIDI export requires a tonal channel")
+    document = _load_document(document_path)
+    profile, revision = _profile(document, profile_path)
+    resource, spec = _smb_music_resource(
+        document, profile, revision, resource_id
+    )
+    selector_context = (
+        music_selector_context(resource, spec.parameters, selector)
+        if selector is not None else None
+    )
+    if selector_context is not None and selector_context["header"] != header:
+        raise AuthoringError(
+            f"SMB music selector {selector!r} does not select header {header!r}"
+        )
+    resolved_adder = (
+        int(selector_context["length_table_adder"])
+        if length_table_adder is None and selector_context is not None
+        else 0 if length_table_adder is None else length_table_adder
+    )
+    timeline = music_header_timeline(
+        resource, spec.parameters, header,
+        length_table_adder=resolved_adder,
+    )
+    raw_channel = next(
+        (item for item in timeline["channels"] if item["channel"] == channel),
+        None,
+    )
+    if raw_channel is None:
+        raise AuthoringError(f"SMB header {header!r} has no {channel} channel")
+    frame_rate = float(spec.parameters.get("frame_rate", NTSC_FRAME_RATE))
+    cpu_frequency = float(spec.parameters.get(
+        "cpu_frequency", NTSC_CPU_FREQUENCY
+    ))
+    divider = 32.0 if channel == "triangle" else 16.0
+    notes: list[MidiNote] = []
+    for event in raw_channel["events"]:
+        if event.get("kind") != "note":
+            continue
+        period = int(event["period"])
+        if period < 8 or (period & 0xFF) == 0:
+            continue
+        frequency = cpu_frequency / (divider * ((period & 0x7FF) + 1))
+        pitch = max(0, min(127, round(
+            69.0 + 12.0 * math.log2(frequency / 440.0)
+        )))
+        start_frame = int(event["tick"])
+        end_frame = start_frame + int(event["duration"])
+        start = _midi_tick(start_frame, frame_rate)
+        end = _midi_tick(end_frame, frame_rate)
+        notes.append(MidiNote(pitch, start, max(start + 1, end)))
+    payload = encode_midi(tuple(notes), division=MIDI_DIVISION, tempo=MIDI_TEMPO)
+    _atomic_write(output_path, payload)
+    return {
+        "schema": "retrolarium.midi-export",
+        "schema_version": 1,
+        "engine": SMB_APU_CODEC,
+        "resource": resource_id,
+        "header": header,
+        "selector": selector,
+        "channel": channel,
+        "notes": len(notes),
+        "duration_ticks": timeline["duration"],
         "output": str(output_path.resolve()),
         "size": len(payload),
         "sha256": hashlib.sha256(payload).hexdigest(),

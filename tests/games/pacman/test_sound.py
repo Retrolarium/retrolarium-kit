@@ -23,10 +23,12 @@ from retrolarium_kit.pacman_sound import (
 )
 from retrolarium_kit.authoring import GameProfile, ResourceSpec, RevisionSpec
 from retrolarium_kit.audio_operations import (
+    export_document_midi,
     import_midi_into_document,
     preview_midi_import,
     render_document_wav,
 )
+from retrolarium_kit.midi import parse_midi
 from retrolarium_kit.nes_resources import (
     build_resources,
     decode_resources,
@@ -242,6 +244,7 @@ class PacmanSoundTests(unittest.TestCase):
             midi_path = root / "note.mid"
             edited_path = root / "edited.json"
             wav_path = root / "preview.wav"
+            exported_midi_path = root / "exported.mid"
             document_path.write_text(json.dumps(bundle), encoding="utf-8")
             profile_path.write_text(json.dumps(profile), encoding="utf-8")
             midi_path.write_bytes(midi_file(events))
@@ -269,6 +272,14 @@ class PacmanSoundTests(unittest.TestCase):
             )
             self.assertEqual(preview["size"], wav_path.stat().st_size)
             self.assertEqual(wav_path.read_bytes()[:4], b"RIFF")
+            exported = export_document_midi(
+                edited_path, exported_midi_path, resource_id="sounds", slot=3,
+                profile_path=profile_path,
+            )
+            parsed_midi = parse_midi(exported_midi_path.read_bytes(), 0, 0)
+            self.assertEqual(1, exported["notes"])
+            self.assertEqual(45, parsed_midi.notes[0].note)
+            self.assertGreater(parsed_midi.notes[0].end_tick, 0)
 
 
 if __name__ == "__main__":
