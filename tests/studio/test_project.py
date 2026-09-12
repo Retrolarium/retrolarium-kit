@@ -285,6 +285,7 @@ class StudioProjectTests(unittest.TestCase):
                             {"id": "screen", "kind": "screen", "codec": "nes.nametable.v1"},
                             {"id": "text", "kind": "text", "codec": "nes.fixed-text-fields.v1"},
                             {"id": "chr", "kind": "graphics", "codec": "nes.chr-2bpp.v1"},
+                            {"id": "metatiles", "kind": "metatile", "codec": "nes.metatile-2x2.v1"},
                             {"id": "palette", "kind": "palette", "codec": "nes.palette-table.v1"},
                             {"id": "actors", "kind": "animation", "codec": "pacman.actor-mapping.v1"},
                         ],
@@ -307,11 +308,12 @@ class StudioProjectTests(unittest.TestCase):
                 )
             tabs = result["workspace"]["tabs"]
             self.assertEqual(
-                ["world", "maze", "screens", "text", "graphics", "palettes", "animations", "code"],
+                ["world", "maze", "screens", "text", "graphics", "metatiles", "palettes", "animations", "code"],
                 [tab["id"] for tab in tabs],
             )
             self.assertEqual(
-                [[], ["graphics"], ["graphics", "palettes"], [], ["palettes"], [], ["graphics"], []],
+                [[], ["graphics"], ["graphics", "palettes"], [], ["palettes"],
+                 ["graphics", "palettes"], [], ["graphics"], []],
                 [tab["depends_on"] for tab in tabs],
             )
             self.assertEqual("world", result["workspace"]["startup_tab"])
@@ -375,9 +377,13 @@ class StudioProjectTests(unittest.TestCase):
                 "source_sha256": SHA256,
                 "resources": [
                     {"id": "levels", "kind": "level", "codec": "smb.levels.v1"},
+                    {"id": "levels-extended", "kind": "level", "codec": "smb.levels.v1"},
                     {"id": "metatiles", "kind": "metatile", "codec": "nes.metatile-2x2.v1"},
                     {"id": "palettes", "kind": "palette", "codec": "nes.ppu-palette-packets.v1"},
+                    {"id": "player-palettes", "kind": "palette", "codec": "nes.palette-table.v1"},
+                    {"id": "ui-text", "kind": "text", "codec": "nes.fixed-text-fields.v1"},
                     {"id": "chr", "kind": "graphics", "codec": "nes.chr-2bpp.v1"},
+                    {"id": "player-frames", "kind": "animation", "codec": "smb.player-frames.v1"},
                 ],
             }), encoding="utf-8")
             with patch(
@@ -392,12 +398,35 @@ class StudioProjectTests(unittest.TestCase):
             self.assertEqual("levels", levels["id"])
             self.assertEqual("level.procedural", levels["kind"])
             self.assertEqual("smb.levels.v1", levels["codec"])
+            self.assertEqual(
+                1,
+                sum(tab["id"] == "levels" for tab in result["workspace"]["tabs"]),
+            )
             self.assertIn("playtest", levels["capabilities"])
             self.assertEqual(["graphics", "palettes"], levels["depends_on"])
+            metatiles = next(
+                tab for tab in result["workspace"]["tabs"] if tab["id"] == "metatiles"
+            )
+            self.assertEqual("metatile.composer", metatiles["kind"])
+            self.assertEqual(["graphics", "palettes"], metatiles["depends_on"])
+            player_frames = next(
+                tab for tab in result["workspace"]["tabs"]
+                if tab["id"] == "player-frames"
+            )
+            self.assertEqual("animation.mapping", player_frames["kind"])
+            self.assertEqual("smb.player-frames.v1", player_frames["codec"])
+            self.assertEqual(
+                ["graphics", "palettes"], player_frames["depends_on"]
+            )
             palettes = next(
                 tab for tab in result["workspace"]["tabs"] if tab["id"] == "palettes"
             )
-            self.assertEqual("nes.ppu-palette-packets.v1", palettes["codec"])
+            self.assertEqual("nes.palette-table.v1", palettes["codec"])
+            text = next(
+                tab for tab in result["workspace"]["tabs"] if tab["id"] == "text"
+            )
+            self.assertEqual("text.fixed", text["kind"])
+            self.assertEqual("nes.fixed-text-fields.v1", text["codec"])
 
             resource_value = json.loads(resources.read_text(encoding="utf-8"))
             resource_value["revision"] = "pal"

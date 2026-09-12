@@ -86,20 +86,37 @@ one nametable byte, reports exactly that resource and completes a two-second
 MAME NES run with exit code zero and a hashed screenshot. Generated documents,
 ROMs, logs and screenshots remain ignored.
 
-The fixed-resource adapter also supports two structured visual codecs used by
-the SMB profile:
+The fixed-resource adapter also supports structured visual and animation
+codecs used by the SMB profile:
 
 - `nes.metatile-2x2.v1` stores named groups of fixed four-tile records and a
   CHR tile base. Record order is preserved exactly for lossless rebuilding;
 - `nes.ppu-palette-packets.v1` stores named fixed-capacity PPU command packets,
   including address, orientation/repeat flags, NES color values and the
-  profile's Day/Night universal background colors.
+  profile's Day/Night universal background colors;
+- `smb.player-frames.v1` preserves the 16 action offsets, 26 fixed 2-by-4 tile
+  mappings and two swim-kick replacement tiles as one transactional resource.
 
 For the byte-identical SMB1 JU fixture these codecs cover 101 background
 metatiles and eight area palette packets. Together with the existing 512-tile
 CHR resource they feed the native procedural level preview without flattening
 SMB object streams into a tilemap. An unchanged extraction still rebuilds with
 zero changed bytes.
+
+All seven accepted SMB revisions now publish their player-frame table and its
+runtime player palettes. The ordinary NES revisions use `nes` master colors;
+the VS revision carries `rp2c04_0004` through the generic palette document and
+preview; ANN and SMB2 expose their shorter two-row player palette tables. The
+player-frame editor selects this dependency instead of an area-background
+palette packet.
+
+JU, PAL, PC10, VS and the original FDS reissue also expose seven independently
+addressed fixed-width UI fields through `nes.fixed-text-fields.v1`: the status
+player name and headings, lives-screen world label, time-up and game-over
+messages, warp-zone welcome message and Brother name. Their offsets were checked
+against the public disassembly linker labels and built PRG bytes. ANN and SMB2
+are deliberately excluded from this text resource until their distinct
+Japanese packet layouts receive their own profile definitions.
 
 The Qt 5.15 application now supplies generic CHR and palette editors plus
 typed nametable, Pac-Man screen-collection and SMB procedural level views.

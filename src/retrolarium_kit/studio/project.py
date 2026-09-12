@@ -49,7 +49,7 @@ EDITOR_KINDS = frozenset(
         "graphics.tile-set",
         "level.procedural",
         "level.tile-grid",
-        "level.procedural",
+        "metatile.composer",
         "palette.set",
         "screen.tilemap",
         "text.fixed",
@@ -63,6 +63,7 @@ CODECS = frozenset(
         "castle.prefix-rooms@1",
         "nes.chr-2bpp.v1",
         "nes.fixed-text-fields.v1",
+        "nes.metatile-2x2.v1",
         "nes.nametable.v1",
         "nes.palette-table.v1",
         "nes.ppu-palette-packets.v1",
@@ -80,12 +81,14 @@ CODECS = frozenset(
         "smb.area@1",
         "smb.world.v1",
         "smb.levels.v1",
+        "smb.player-frames.v1",
     }
 )
 
 CAPABILITIES = frozenset(
     {
         "changed-markers",
+        "compose",
         "edit",
         "eyedropper",
         "midi-import",
@@ -1158,6 +1161,8 @@ def create_studio_project(
              "nes.fixed-text-fields.v1", ["edit", "restore", "undo"]),
             ("graphics", "graphics", "Graphics", "graphics.tile-set", "assets",
              "nes.chr-2bpp.v1", ["pixel-paint", "restore", "undo"]),
+            ("metatile", "metatiles", "Metatiles", "metatile.composer", "assets",
+             "nes.metatile-2x2.v1", ["compose", "preview", "restore", "undo"]),
             ("palette", "palettes", "Palettes", "palette.set", "assets",
              "nes.palette-table.v1", ["paint", "preview", "undo"]),
             ("animation", "animations", "Animations & Mappings", "animation.mapping", "assets",
@@ -1184,8 +1189,19 @@ def create_studio_project(
                 selected_codec = "pacman.screen-collection.v1"
             elif kind == "palette" and kinds[kind] == {"pacman.palette-table.v1"}:
                 selected_codec = "pacman.palette-table.v1"
-            elif kind == "palette" and kinds[kind] == {"nes.ppu-palette-packets.v1"}:
-                selected_codec = "nes.ppu-palette-packets.v1"
+            elif kind == "palette" and kinds[kind].issubset({
+                "nes.palette-table.v1", "nes.ppu-palette-packets.v1"
+            }):
+                selected_codec = (
+                    "nes.palette-table.v1"
+                    if "nes.palette-table.v1" in kinds[kind]
+                    else "nes.ppu-palette-packets.v1"
+                )
+            elif kind == "animation" and kinds[kind] == {"smb.player-frames.v1"}:
+                tab_id = "player-frames"
+                title = "Player Frames"
+                selected_codec = "smb.player-frames.v1"
+                capabilities = ["edit", "preview", "restore", "undo"]
             elif kinds[kind] != {expected_codec}:
                 raise StudioProjectError(
                     f"resource document {kind} resources require codec {expected_codec!r}"
@@ -1207,7 +1223,9 @@ def create_studio_project(
             "levels": ("graphics", "palettes"),
             "screens": ("graphics", "palettes"),
             "graphics": ("palettes",),
+            "metatiles": ("graphics", "palettes"),
             "animations": ("graphics",),
+            "player-frames": ("graphics", "palettes"),
         }
         for tab in tabs:
             tab["depends_on"] = [

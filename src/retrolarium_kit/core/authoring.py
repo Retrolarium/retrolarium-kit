@@ -7,7 +7,7 @@ describes where a resource lives, a codec turns bytes into a document and a
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import hashlib
 import re
 from types import MappingProxyType
@@ -186,6 +186,21 @@ class PayloadSpec:
 
 
 @dataclass(frozen=True)
+class ResourceOverrideSpec:
+    resource_id: str
+    parameters: Mapping[str, Any] = field(default_factory=dict)
+    payload: str | None = None
+
+    def __post_init__(self) -> None:
+        stable_identifier(self.resource_id, "resource override id")
+        if not isinstance(self.parameters, Mapping):
+            raise AuthoringError("resource override parameters must be a mapping")
+        if self.payload is not None:
+            stable_identifier(self.payload, "resource override payload")
+        object.__setattr__(self, "parameters", MappingProxyType(dict(self.parameters)))
+
+
+@dataclass(frozen=True)
 class RevisionSpec:
     revision_id: str
     name: str
@@ -196,6 +211,7 @@ class RevisionSpec:
     mapper: int | None = None
     capabilities: tuple[str, ...] | None = None
     resources: tuple[ResourceSpec, ...] | None = None
+    resource_overrides: tuple[ResourceOverrideSpec, ...] = ()
     payloads: tuple[PayloadSpec, ...] = ()
 
     def __post_init__(self) -> None:
@@ -228,6 +244,15 @@ class RevisionSpec:
             if len(set(resource_ids)) != len(resource_ids):
                 raise AuthoringError("revision resource ids must be unique")
             object.__setattr__(self, "resources", resources)
+        resource_overrides = tuple(self.resource_overrides)
+        if self.resources is not None and resource_overrides:
+            raise AuthoringError(
+                "revision resources and resource overrides are mutually exclusive"
+            )
+        override_ids = [value.resource_id for value in resource_overrides]
+        if len(set(override_ids)) != len(override_ids):
+            raise AuthoringError("revision resource override ids must be unique")
+        object.__setattr__(self, "resource_overrides", resource_overrides)
         payloads = tuple(self.payloads)
         payload_ids = [value.payload_id for value in payloads]
         if len(set(payload_ids)) != len(payload_ids):
@@ -319,7 +344,38 @@ class GameProfile:
 
     def resources_for(self, revision: RevisionSpec | str) -> tuple[ResourceSpec, ...]:
         selected = self._revision(revision)
-        return self.resources if selected.resources is None else selected.resources
+        if selected.resources is not None:
+            return selected.resources
+        if not selected.resource_overrides:
+            return self.resources
+        overrides = {
+            item.resource_id: item for item in selected.resource_overrides
+        }
+        unknown = set(overrides) - {
+            item.resource_id for item in self.resources
+        }
+        if unknown:
+            raise AuthoringError(
+                f"revision {selected.revision_id} overrides unknown resource "
+                f"{sorted(unknown)[0]!r}"
+            )
+        return tuple(
+            replace(
+                item,
+                parameters={
+                    **item.parameters,
+                    **overrides[item.resource_id].parameters,
+                },
+                payload=(
+                    overrides[item.resource_id].payload
+                    if overrides[item.resource_id].payload is not None
+                    else item.payload
+                ),
+            )
+            if item.resource_id in overrides
+            else item
+            for item in self.resources
+        )
 
     def payload_for(
         self, revision: RevisionSpec | str, payload_id: str
