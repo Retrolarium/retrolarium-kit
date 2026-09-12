@@ -382,8 +382,12 @@ class StudioProjectTests(unittest.TestCase):
                     {"id": "palettes", "kind": "palette", "codec": "nes.ppu-palette-packets.v1"},
                     {"id": "player-palettes", "kind": "palette", "codec": "nes.palette-table.v1"},
                     {"id": "ui-text", "kind": "text", "codec": "nes.fixed-text-fields.v1"},
+                    {"id": "title-screen", "kind": "screen",
+                     "codec": "nes.ppu-screen-packets.v1",
+                     "text_fields": [{"key": "title"}]},
                     {"id": "chr", "kind": "graphics", "codec": "nes.chr-2bpp.v1"},
                     {"id": "player-frames", "kind": "animation", "codec": "smb.player-frames.v1"},
+                    {"id": "music", "kind": "audio", "codec": "smb.apu-music.v1"},
                 ],
             }), encoding="utf-8")
             with patch(
@@ -427,6 +431,19 @@ class StudioProjectTests(unittest.TestCase):
             )
             self.assertEqual("text.fixed", text["kind"])
             self.assertEqual("nes.fixed-text-fields.v1", text["codec"])
+            screens = next(
+                tab for tab in result["workspace"]["tabs"] if tab["id"] == "screens"
+            )
+            self.assertEqual("screen.tilemap", screens["kind"])
+            self.assertEqual("nes.ppu-screen-packets.v1", screens["codec"])
+            self.assertEqual(["graphics", "palettes"], screens["depends_on"])
+            music = next(
+                tab for tab in result["workspace"]["tabs"]
+                if tab["id"] == "music-sounds"
+            )
+            self.assertEqual("audio.sequencer", music["kind"])
+            self.assertEqual("smb.apu-music.v1", music["codec"])
+            self.assertEqual(["edit", "restore", "undo"], music["capabilities"])
 
             resource_value = json.loads(resources.read_text(encoding="utf-8"))
             resource_value["revision"] = "pal"
@@ -441,6 +458,40 @@ class StudioProjectTests(unittest.TestCase):
                 )
             pal_levels = pal_result["workspace"]["tabs"][0]
             self.assertNotIn("playtest", pal_levels["capabilities"])
+
+    def test_create_maps_packet_screen_text_to_text_editor(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "manifest.json"
+            source.write_text(json.dumps(manifest()), encoding="utf-8")
+            resources = root / "resources.json"
+            resources.write_text(json.dumps({
+                "schema": "retrolarium.nes-resource-bundle",
+                "schema_version": 1,
+                "game": "screen-text-probe",
+                "revision": "probe-v1",
+                "source_sha256": SHA256,
+                "resources": [{
+                    "id": "title-screen", "kind": "screen",
+                    "codec": "nes.ppu-screen-packets.v1",
+                    "text_fields": [{"key": "title"}],
+                }],
+            }), encoding="utf-8")
+            with patch(
+                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                return_value=manifest(),
+            ):
+                result = create_studio_project(
+                    source, root / "screen-text.retrolarium",
+                    project_id="screen-text", name="Screen text",
+                    profile="screen-text.v1", resource_document=resources,
+                )
+
+            text = next(
+                tab for tab in result["workspace"]["tabs"] if tab["id"] == "text"
+            )
+            self.assertEqual("text.fixed", text["kind"])
+            self.assertEqual("nes.ppu-screen-packets.v1", text["codec"])
 
 
 if __name__ == "__main__":

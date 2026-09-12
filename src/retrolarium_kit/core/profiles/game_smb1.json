@@ -5,7 +5,7 @@
   "profile_version": 1,
   "name": "Super Mario Bros. (NES)",
   "platform": "nes",
-  "capabilities": ["world", "levels", "graphics", "text"],
+  "capabilities": ["world", "levels", "graphics", "text", "audio"],
   "revisions": [
     {
       "id": "ju",
@@ -28,6 +28,15 @@
         {
           "id": "player-frames",
           "parameters": {"file_offset": 28190}
+        },
+        {
+          "id": "music",
+          "parameters": {
+            "file_offset": 31006,
+            "size": 1724,
+            "cpu_address": 63758,
+            "shared_stream_size": 1351
+          }
         }
       ]
     },
@@ -153,6 +162,52 @@
           "parameters": {"file_offset": 28004}
         },
         {
+          "id": "music",
+          "payload": "prg",
+          "parameters": {
+            "file_offset": 30795,
+            "size": 1915,
+            "cpu_address": 63576,
+            "ground_schedule_count": 42,
+            "headers": [
+              {"name": "vs_star_a", "size": 6},
+              {"name": "vs_star_b", "size": 6},
+              {"name": "vs_star_c", "size": 6},
+              {"name": "vs_star_d", "size": 6},
+              {"name": "time_running_out", "size": 5},
+              {"name": "star_cloud", "size": 6},
+              {"name": "end_of_level", "size": 5},
+              {"name": "unused", "size": 5},
+              {"name": "underground", "size": 5},
+              {"name": "silence", "size": 4},
+              {"name": "castle", "size": 5},
+              {"name": "victory", "size": 5},
+              {"name": "vs_game_over", "size": 5},
+              {"name": "game_over", "size": 5},
+              {"name": "water", "size": 6},
+              {"name": "castle_clear", "size": 5},
+              {"name": "ground_part_1", "size": 6},
+              {"name": "ground_part_2_a", "size": 6},
+              {"name": "ground_part_2_b", "size": 6},
+              {"name": "ground_part_2_c", "size": 6},
+              {"name": "ground_part_3_a", "size": 6},
+              {"name": "ground_part_3_b", "size": 6},
+              {"name": "ground_lead_in", "size": 6},
+              {"name": "ground_part_4_a", "size": 6},
+              {"name": "ground_part_4_b", "size": 6},
+              {"name": "ground_part_4_c", "size": 6},
+              {"name": "death", "size": 6}
+            ],
+            "shared_stream_size": 1495,
+            "note_length_count": 56,
+            "envelopes": [
+              {"name": "castle_clear", "size": 4, "location": "leading"},
+              {"name": "area", "size": 9, "location": "leading"},
+              {"name": "water_event", "size": 40}
+            ]
+          }
+        },
+        {
           "id": "character-graphics",
           "payload": "chr",
           "parameters": {"file_offset": 0}
@@ -236,6 +291,16 @@
           "parameters": {"file_offset": 28171}
         },
         {
+          "id": "music",
+          "payload": "prg",
+          "parameters": {
+            "file_offset": 30989,
+            "size": 1725,
+            "cpu_address": 55565,
+            "shared_stream_size": 1352
+          }
+        },
+        {
           "id": "character-graphics",
           "payload": "chr",
           "parameters": {"file_offset": 0}
@@ -249,7 +314,7 @@
       "sha1": "f30bdd3c556604d7eaa6d0f4864d5566e519b5d4",
       "sha256": "a762d0a90d16c84b5f2b014816b37675cf5115320be7e815effbb64d91b2014d",
       "container": "fds",
-      "capabilities": ["world", "levels", "graphics"],
+      "capabilities": ["world", "levels", "graphics", "screens", "text"],
       "payloads": [
         {
           "id": "prg",
@@ -331,6 +396,7 @@
           "capacity_policy": "fixed",
           "payload": "prg",
           "parameters": {
+            "rendering": "ann",
             "world_resource": "world-normal",
             "stream_names": [
               "castle_1", "castle_2", "castle_3", "castle_4", "castle_5", "castle_6", "castle_7", "castle_8",
@@ -435,6 +501,7 @@
           "capacity_policy": "fixed",
           "payload": "nsmdata4",
           "parameters": {
+            "rendering": "ann",
             "world_resource": "world-extended",
             "stream_names": [
               "castle_1", "castle_2", "castle_3", "castle_4",
@@ -530,6 +597,48 @@
           }
         },
         {
+          "id": "title-screen",
+          "kind": "screen",
+          "codec": "nes.ppu-screen-packets.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "terminator": 0,
+            "width": 32,
+            "height": 30,
+            "base_address": 8192,
+            "attribute_address": 9152,
+            "attribute_bytes": 64,
+            "fill_tile": 36,
+            "fill_attribute": 0,
+            "encoding": {
+              "characters": "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ -!",
+              "codes": [
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+                10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+                20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+                30, 31, 32, 33, 34, 35, 36, 40, 43
+              ],
+              "case_fold": "upper",
+              "padding": 36
+            },
+            "text_fields": [
+              {"key": "copyright", "label": "Copyright", "screen": "title", "address": 8687, "width": 13},
+              {"key": "hero-game", "label": "Hero game", "screen": "title", "address": 8781, "width": 10},
+              {"key": "brother-game", "label": "Brother game", "screen": "title", "address": 8845, "width": 10},
+              {"key": "top-score", "label": "Top score", "screen": "title", "address": 8941, "width": 4}
+            ],
+            "screens": [
+              {
+                "key": "title",
+                "label": "Title screen",
+                "file_offset": 26086,
+                "size": 351
+              }
+            ]
+          }
+        },
+        {
           "id": "character-graphics",
           "kind": "graphics",
           "codec": "nes.chr-2bpp.v1",
@@ -549,7 +658,7 @@
       "sha1": "20e50128742162ee47561db9e82b2836399c880c",
       "sha256": "ff8afb9ae6b705b4e51dbcb193dcebadf4c049800a71003d3a45052648e52eda",
       "container": "fds",
-      "capabilities": ["world", "levels", "graphics"],
+      "capabilities": ["world", "levels", "graphics", "screens", "text"],
       "payloads": [
         {
           "id": "prg",
@@ -631,6 +740,7 @@
           "capacity_policy": "fixed",
           "payload": "prg",
           "parameters": {
+            "rendering": "smb2",
             "world_resource": "world-normal",
             "stream_names": [
               "castle_1", "castle_2", "castle_3", "castle_4", "castle_5", "castle_6", "castle_7", "castle_8", "castle_9", "castle_10",
@@ -742,6 +852,7 @@
           "capacity_policy": "fixed",
           "payload": "sm2data4",
           "parameters": {
+            "rendering": "smb2",
             "world_resource": "world-hard",
             "stream_names": [
               "castle_1", "castle_2", "castle_3", "castle_4",
@@ -837,6 +948,48 @@
           }
         },
         {
+          "id": "title-screen",
+          "kind": "screen",
+          "codec": "nes.ppu-screen-packets.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "terminator": 0,
+            "width": 32,
+            "height": 30,
+            "base_address": 8192,
+            "attribute_address": 9152,
+            "attribute_bytes": 64,
+            "fill_tile": 36,
+            "fill_attribute": 0,
+            "encoding": {
+              "characters": "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ -!",
+              "codes": [
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+                10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+                20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+                30, 31, 32, 33, 34, 35, 36, 40, 43
+              ],
+              "case_fold": "upper",
+              "padding": 36
+            },
+            "text_fields": [
+              {"key": "copyright", "label": "Copyright", "screen": "title", "address": 8688, "width": 13},
+              {"key": "hero-game", "label": "Hero game", "screen": "title", "address": 8781, "width": 10},
+              {"key": "brother-game", "label": "Brother game", "screen": "title", "address": 8845, "width": 10},
+              {"key": "top-score", "label": "Top score", "screen": "title", "address": 8939, "width": 4}
+            ],
+            "screens": [
+              {
+                "key": "title",
+                "label": "Title screen",
+                "file_offset": 26155,
+                "size": 357
+              }
+            ]
+          }
+        },
+        {
           "id": "character-graphics",
           "kind": "graphics",
           "codec": "nes.chr-2bpp.v1",
@@ -888,6 +1041,7 @@
       "codec": "smb.levels.v1",
       "capacity_policy": "fixed",
       "parameters": {
+        "rendering": "smb1",
         "world_resource": "world",
         "area_file_offset": 8639,
         "area_size": 3373,
@@ -996,6 +1150,56 @@
         "size": 226,
         "tile_base": 0,
         "blank_tile": 252
+      }
+    },
+    {
+      "id": "music",
+      "kind": "audio",
+      "codec": "smb.apu-music.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 31005,
+        "size": 1725,
+        "cpu_address": 63757,
+        "selector_names": [
+          "event_death", "event_game_over", "event_victory", "event_castle_clear",
+          "event_game_over_alias", "event_end_of_level", "event_time_running_out", "event_silence",
+          "area_ground", "area_water", "area_underground", "area_castle",
+          "area_star_cloud", "area_ground_lead_in", "area_star_cloud_alias", "area_silence"
+        ],
+        "ground_schedule_count": 33,
+        "headers": [
+          {"name": "time_running_out", "size": 5},
+          {"name": "star_cloud", "size": 6},
+          {"name": "end_of_level", "size": 5},
+          {"name": "unused", "size": 5},
+          {"name": "underground", "size": 5},
+          {"name": "silence", "size": 4},
+          {"name": "castle", "size": 5},
+          {"name": "victory", "size": 5},
+          {"name": "game_over", "size": 5},
+          {"name": "water", "size": 6},
+          {"name": "castle_clear", "size": 5},
+          {"name": "ground_part_1", "size": 6},
+          {"name": "ground_part_2_a", "size": 6},
+          {"name": "ground_part_2_b", "size": 6},
+          {"name": "ground_part_2_c", "size": 6},
+          {"name": "ground_part_3_a", "size": 6},
+          {"name": "ground_part_3_b", "size": 6},
+          {"name": "ground_lead_in", "size": 6},
+          {"name": "ground_part_4_a", "size": 6},
+          {"name": "ground_part_4_b", "size": 6},
+          {"name": "ground_part_4_c", "size": 6},
+          {"name": "death", "size": 6}
+        ],
+        "shared_stream_size": 1352,
+        "note_period_count": 51,
+        "note_length_count": 48,
+        "envelopes": [
+          {"name": "castle_clear", "size": 4},
+          {"name": "area", "size": 8},
+          {"name": "water_event", "size": 40}
+        ]
       }
     },
     {

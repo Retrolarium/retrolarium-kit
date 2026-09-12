@@ -49,6 +49,11 @@ from .nes_text import (
     decode_text_fields,
     encode_text_fields,
 )
+from .nes_screen_packets import (
+    CODEC as PPU_SCREEN_PACKET_CODEC,
+    decode_screen_packets,
+    encode_screen_packets,
+)
 from .smb_world import (
     CODEC as SMB_WORLD_CODEC,
     decode_world as decode_smb_world,
@@ -64,6 +69,12 @@ from .smb_player_frames import (
     ENCODED_SIZE as SMB_PLAYER_FRAME_SIZE,
     decode_player_frames,
     encode_player_frames,
+)
+from .smb_apu import (
+    CODEC as SMB_APU_CODEC,
+    decode_music as decode_smb_music,
+    encode_music as encode_smb_music,
+    parse_layout as parse_smb_apu_layout,
 )
 from .nes_visuals import (
     METATILE_CODEC,
@@ -90,8 +101,10 @@ SUPPORTED_CODECS = (
     SMB_WORLD_CODEC,
     SMB_LEVEL_CODEC,
     SMB_PLAYER_FRAME_CODEC,
+    SMB_APU_CODEC,
     METATILE_CODEC,
     PALETTE_PACKET_CODEC,
+    PPU_SCREEN_PACKET_CODEC,
 )
 
 
@@ -351,6 +364,15 @@ def _level_stream_spans(
             payload_id,
         ))
     return tuple(result)
+
+
+def _level_rendering(resource: ResourceSpec) -> str:
+    value = resource.parameters.get("rendering", "smb1")
+    if value not in {"smb1", "ann", "smb2"}:
+        raise NesResourceError(
+            f"{resource.resource_id}.rendering must be smb1, ann or smb2"
+        )
+    return value
 
 
 def _world_component_span(
@@ -704,6 +726,24 @@ def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
             "codec": resource.codec,
             **decoded,
         }
+    if resource.codec == SMB_APU_CODEC:
+        try:
+            expected = parse_smb_apu_layout(resource.parameters).encoded_size
+            offset, size = _span(resource, expected)
+            payload = image[offset : offset + size]
+            if len(payload) != size:
+                raise NesResourceError(
+                    f"{resource.resource_id} exceeds the source image"
+                )
+            decoded = decode_smb_music(payload, resource.parameters)
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return {
+            "id": resource.resource_id,
+            "kind": resource.kind,
+            "codec": resource.codec,
+            **decoded,
+        }
     if resource.codec == PALETTE_PACKET_CODEC:
         expected = sum(
             _integer(item, f"{resource.resource_id}.packet_capacities[{index}]", minimum=5)
@@ -772,6 +812,17 @@ def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
             "kind": resource.kind,
             "codec": resource.codec,
             **decode_text_fields(image, resource.parameters),
+        }
+    if resource.codec == PPU_SCREEN_PACKET_CODEC:
+        try:
+            decoded = decode_screen_packets(image, resource.parameters)
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return {
+            "id": resource.resource_id,
+            "kind": resource.kind,
+            "codec": resource.codec,
+            **decoded,
         }
     if resource.codec == PACMAN_SOUND_CODEC:
         return {
@@ -850,6 +901,7 @@ def _decode_smb_level_resource(
         "id": resource.resource_id,
         "kind": resource.kind,
         "codec": resource.codec,
+        "rendering": _level_rendering(resource),
         **decoded,
     }
     world_resource_id = resource.parameters.get("world_resource")
@@ -1022,6 +1074,22 @@ def _parse_resource(
             )
         except AuthoringError as exc:
             raise NesResourceError(str(exc)) from exc
+    elif spec.codec == SMB_APU_CODEC:
+        expected_fields = {
+            "id", "kind", "codec", "selectors", "ground_schedule",
+            "headers", "shared_stream_arena", "note_periods", "note_lengths",
+            "envelopes",
+        }
+        try:
+            payload = encode_smb_music(
+                {
+                    key: raw.get(key)
+                    for key in expected_fields - {"id", "kind", "codec"}
+                },
+                spec.parameters,
+            )
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
     elif spec.codec == PALETTE_PACKET_CODEC:
         expected_fields = {
             "id", "kind", "codec", "day_background", "night_background", "packets"
@@ -1092,6 +1160,23 @@ def _parse_resource(
             _EncodedSpan(offset, replacement)
             for offset, replacement in encode_text_fields(raw, spec.parameters)
         )
+    elif spec.codec == PPU_SCREEN_PACKET_CODEC:
+        expected_fields = {"id", "kind", "codec", "screens"}
+        if "encoding" in spec.parameters or "text_fields" in spec.parameters:
+            expected_fields.update(("encoding", "text_fields"))
+        try:
+            encoded_spans = tuple(
+                _EncodedSpan(offset, replacement)
+                for offset, replacement in encode_screen_packets(
+                    {
+                        key: raw.get(key)
+                        for key in expected_fields - {"id", "kind", "codec"}
+                    },
+                    spec.parameters,
+                )
+            )
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
     elif spec.codec == PACMAN_SOUND_CODEC:
         expected_fields = {"id", "kind", "codec", "capacity", "slots"}
         encoded_spans = tuple(
@@ -1152,7 +1237,14 @@ def _parse_resource(
             ),
         )
     elif spec.codec == SMB_LEVEL_CODEC:
-        expected_fields = {"id", "kind", "codec", "area_types", "areas"}
+        expected_fields = {
+            "id", "kind", "codec", "rendering", "area_types", "areas"
+        }
+        rendering = _level_rendering(spec)
+        if raw.get("rendering") != rendering:
+            raise NesResourceError(
+                f"{spec.resource_id}.rendering differs from the profile"
+            )
         world_resource_id = spec.parameters.get("world_resource")
         if world_resource_id is not None:
             expected_fields.add("world_resource")
@@ -1165,7 +1257,7 @@ def _parse_resource(
                 {
                     key: raw.get(key)
                     for key in expected_fields
-                    - {"id", "kind", "codec", "world_resource"}
+                    - {"id", "kind", "codec", "rendering", "world_resource"}
                 },
                 spec.parameters,
             )
@@ -1285,7 +1377,11 @@ def build_resources(
 
 def inspection_details(document: NesResourceBundleDocument) -> dict[str, int]:
     screens = sum(
-        item.get("codec") in (NAMETABLE_CODEC, PACMAN_SCREEN_CODEC)
+        (
+            len(item.get("screens", []))
+            if item.get("codec") == PPU_SCREEN_PACKET_CODEC
+            else item.get("codec") in (NAMETABLE_CODEC, PACMAN_SCREEN_CODEC)
+        )
         for item in document.resources
     )
     palettes = sum(
@@ -1336,6 +1432,11 @@ def inspection_details(document: NesResourceBundleDocument) -> dict[str, int]:
         for item in document.resources
         if item.get("codec") == PACMAN_SCREEN_CODEC
     )
+    text_messages += sum(
+        len(item.get("text_fields", []))
+        for item in document.resources
+        if item.get("codec") == PPU_SCREEN_PACKET_CODEC
+    )
     sound_slots = sum(
         len(item.get("slots", []))
         for item in document.resources
@@ -1353,6 +1454,16 @@ def inspection_details(document: NesResourceBundleDocument) -> dict[str, int]:
         for item in document.resources
         if item.get("codec") == PACMAN_SOUND_CODEC
         for slot in item.get("slots", [])
+    )
+    smb_music_headers = sum(
+        len(item.get("headers", []))
+        for item in document.resources
+        if item.get("codec") == SMB_APU_CODEC
+    )
+    smb_music_arena_bytes = sum(
+        len(item.get("shared_stream_arena", []))
+        for item in document.resources
+        if item.get("codec") == SMB_APU_CODEC
     )
     smb_worlds = sum(
         len(item.get("worlds", []))
@@ -1400,6 +1511,8 @@ def inspection_details(document: NesResourceBundleDocument) -> dict[str, int]:
         "sound_slots": sound_slots,
         "sound_notes": sound_notes,
         "sound_used_bytes": sound_used_bytes,
+        "smb_music_headers": smb_music_headers,
+        "smb_music_arena_bytes": smb_music_arena_bytes,
         "smb_worlds": smb_worlds,
         "smb_routes": smb_routes,
         "smb_physics_tables": smb_physics_tables,

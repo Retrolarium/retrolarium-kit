@@ -262,7 +262,7 @@ class SmbWorldTests(unittest.TestCase):
         )
         self.assertEqual(
             profile.capabilities_for("vs_smb"),
-            ("world", "levels", "graphics", "text"),
+            ("world", "levels", "graphics", "text", "audio"),
         )
         vs_resources = {
             resource.resource_id: resource
@@ -308,13 +308,22 @@ class SmbWorldTests(unittest.TestCase):
         self.assertEqual(
             vs_resources["player-frames"].parameters["file_offset"], 0x6D64
         )
+        self.assertEqual(vs_resources["music"].payload, "prg")
+        self.assertEqual(vs_resources["music"].parameters["file_offset"], 0x784B)
+        self.assertEqual(vs_resources["music"].parameters["cpu_address"], 0xF858)
+        self.assertEqual(len(vs_resources["music"].parameters["headers"]), 27)
+        self.assertEqual(
+            [item.get("location", "trailing")
+             for item in vs_resources["music"].parameters["envelopes"]],
+            ["leading", "leading", "trailing"],
+        )
         self.assertEqual(
             profile.revisions[4].sha256,
             "56ba4c39fd7f9628bffac4c6ee0d5364f86de36d27c904ffc70f0abc97ae0d3a",
         )
         self.assertEqual(
             profile.capabilities_for("fds_smb"),
-            ("world", "levels", "graphics", "text"),
+            ("world", "levels", "graphics", "text", "audio"),
         )
         fds_resources = {
             item.resource_id: item for item in profile.resources_for("fds_smb")
@@ -349,6 +358,9 @@ class SmbWorldTests(unittest.TestCase):
         self.assertEqual(
             fds_resources["player-frames"].parameters["file_offset"], 0x6E0B
         )
+        self.assertEqual(fds_resources["music"].payload, "prg")
+        self.assertEqual(fds_resources["music"].parameters["file_offset"], 0x790D)
+        self.assertEqual(fds_resources["music"].parameters["cpu_address"], 0xD90D)
         self.assertEqual(fds_resources["character-graphics"].payload, "chr")
         self.assertEqual(profile.payload_for("fds_smb", "chr").record_ids, (2,))
         self.assertEqual(profile.payload_for("fds_smb", "prg").record_ids, (3, 4))
@@ -365,7 +377,7 @@ class SmbWorldTests(unittest.TestCase):
         }
         self.assertEqual(
             profile.capabilities_for("ann_fds"),
-            ("world", "levels", "graphics"),
+            ("world", "levels", "graphics", "screens", "text"),
         )
         self.assertEqual(
             list(ann_resources),
@@ -373,7 +385,7 @@ class SmbWorldTests(unittest.TestCase):
                 "authoring-bundle", "world-normal", "levels-normal",
                 "world-extended", "levels-extended", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
-                "character-graphics",
+                "title-screen", "character-graphics",
             ],
         )
         self.assertEqual(
@@ -429,6 +441,30 @@ class SmbWorldTests(unittest.TestCase):
         self.assertEqual(
             ann_resources["player-frames"].parameters["file_offset"], 0x5AF2
         )
+        self.assertEqual(ann_resources["title-screen"].payload, "prg")
+        self.assertEqual(
+            ann_resources["title-screen"].parameters["screens"],
+            [{
+                "key": "title", "label": "Title screen",
+                "file_offset": 0x65E6, "size": 0x15F,
+            }],
+        )
+        self.assertEqual(
+            ann_resources["title-screen"].parameters["fill_tile"], 0x24
+        )
+        self.assertEqual(
+            ann_resources["title-screen"].parameters["text_fields"],
+            [
+                {"key": "copyright", "label": "Copyright", "screen": "title",
+                 "address": 0x21EF, "width": 13},
+                {"key": "hero-game", "label": "Hero game", "screen": "title",
+                 "address": 0x224D, "width": 10},
+                {"key": "brother-game", "label": "Brother game", "screen": "title",
+                 "address": 0x228D, "width": 10},
+                {"key": "top-score", "label": "Top score", "screen": "title",
+                 "address": 0x22ED, "width": 4},
+            ],
+        )
         self.assertEqual(ann_resources["character-graphics"].payload, "chr")
         smb2_resources = {
             item.resource_id: item
@@ -436,7 +472,7 @@ class SmbWorldTests(unittest.TestCase):
         }
         self.assertEqual(
             profile.capabilities_for("smb2_jp_fds"),
-            ("world", "levels", "graphics"),
+            ("world", "levels", "graphics", "screens", "text"),
         )
         self.assertEqual(
             list(smb2_resources),
@@ -444,7 +480,7 @@ class SmbWorldTests(unittest.TestCase):
                 "authoring-bundle", "world-normal", "levels-normal",
                 "world-hard", "levels-hard", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
-                "character-graphics",
+                "title-screen", "character-graphics",
             ],
         )
         self.assertEqual(
@@ -499,6 +535,27 @@ class SmbWorldTests(unittest.TestCase):
         self.assertEqual(
             smb2_resources["player-frames"].parameters["file_offset"], 0x5AE2
         )
+        self.assertEqual(smb2_resources["title-screen"].payload, "prg")
+        self.assertEqual(
+            smb2_resources["title-screen"].parameters["screens"],
+            [{
+                "key": "title", "label": "Title screen",
+                "file_offset": 0x662B, "size": 0x165,
+            }],
+        )
+        self.assertEqual(
+            smb2_resources["title-screen"].parameters["text_fields"],
+            [
+                {"key": "copyright", "label": "Copyright", "screen": "title",
+                 "address": 0x21F0, "width": 13},
+                {"key": "hero-game", "label": "Hero game", "screen": "title",
+                 "address": 0x224D, "width": 10},
+                {"key": "brother-game", "label": "Brother game", "screen": "title",
+                 "address": 0x228D, "width": 10},
+                {"key": "top-score", "label": "Top score", "screen": "title",
+                 "address": 0x22EB, "width": 4},
+            ],
+        )
         self.assertEqual(smb2_resources["character-graphics"].payload, "chr")
         for revision_id in ("ann_fds", "smb2_jp_fds"):
             self.assertEqual(
@@ -517,6 +574,12 @@ class SmbWorldTests(unittest.TestCase):
         self.assertEqual(
             world.parameters["world_lengths"], [5, 5, 4, 5, 4, 4, 5, 4]
         )
+        self.assertEqual(ju_resources["music"].parameters["file_offset"], 0x791D)
+        self.assertEqual(ju_resources["music"].parameters["cpu_address"], 0xF90D)
+        self.assertEqual(ju_resources["music"].parameters["size"], 1725)
+        self.assertEqual(pal_resources["music"].parameters["file_offset"], 0x791E)
+        self.assertEqual(pal_resources["music"].parameters["size"], 1724)
+        self.assertEqual(pc10_resources["music"].parameters, ju_resources["music"].parameters)
 
     def test_profile_catalog_resolves_each_revision_override(self) -> None:
         catalog = profile_catalog()
@@ -524,12 +587,12 @@ class SmbWorldTests(unittest.TestCase):
         details = {item["id"]: item for item in smb["revision_details"]}
         self.assertEqual(
             details["ju"]["capabilities"],
-            ["world", "levels", "graphics", "text"],
+            ["world", "levels", "graphics", "text", "audio"],
         )
         self.assertEqual(details["pc10"]["resources"], smb["resources"])
         self.assertEqual(
             details["ann_fds"]["capabilities"],
-            ["world", "levels", "graphics"],
+            ["world", "levels", "graphics", "screens", "text"],
         )
         self.assertEqual(
             details["ann_fds"]["resources"],
@@ -537,12 +600,12 @@ class SmbWorldTests(unittest.TestCase):
                 "authoring-bundle", "world-normal", "levels-normal",
                 "world-extended", "levels-extended", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
-                "character-graphics",
+                "title-screen", "character-graphics",
             ],
         )
         self.assertEqual(
             details["smb2_jp_fds"]["capabilities"],
-            ["world", "levels", "graphics"],
+            ["world", "levels", "graphics", "screens", "text"],
         )
         self.assertEqual(
             details["smb2_jp_fds"]["resources"],
@@ -550,17 +613,17 @@ class SmbWorldTests(unittest.TestCase):
                 "authoring-bundle", "world-normal", "levels-normal",
                 "world-hard", "levels-hard", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
-                "character-graphics",
+                "title-screen", "character-graphics",
             ],
         )
         self.assertEqual(
             details["fds_smb"]["capabilities"],
-            ["world", "levels", "graphics", "text"],
+            ["world", "levels", "graphics", "text", "audio"],
         )
         self.assertEqual(details["fds_smb"]["resources"], smb["resources"])
         self.assertEqual(
             details["vs_smb"]["capabilities"],
-            ["world", "levels", "graphics", "text"],
+            ["world", "levels", "graphics", "text", "audio"],
         )
         self.assertEqual(details["vs_smb"]["resources"], smb["resources"])
         self.assertEqual(
@@ -570,6 +633,87 @@ class SmbWorldTests(unittest.TestCase):
         self.assertEqual(
             details["smb2_jp_fds"]["payloads"][3]["load_address"], 49844
         )
+
+    def test_revision_matrix_routes_level_banks_and_palette_models(self) -> None:
+        profile = packaged_game_profiles().get("smb1")
+        expected = {
+            "ju": (
+                (("world", None),), (("levels", "world", None),), "nes"
+            ),
+            "pal": (
+                (("world", None),), (("levels", "world", None),), "nes"
+            ),
+            "pc10": (
+                (("world", None),), (("levels", "world", None),), "nes"
+            ),
+            "vs_smb": (
+                (("world", "prg"),), (("levels", "world", "chr"),),
+                "rp2c04_0004",
+            ),
+            "fds_smb": (
+                (("world", "prg"),), (("levels", "world", "prg"),), "nes"
+            ),
+            "ann_fds": (
+                (("world-normal", "prg"), ("world-extended", "prg")),
+                (("levels-normal", "world-normal", "prg"),
+                 ("levels-extended", "world-extended", "nsmdata4")),
+                "nes",
+            ),
+            "smb2_jp_fds": (
+                (("world-normal", "prg"), ("world-hard", "prg")),
+                (("levels-normal", "world-normal", "prg"),
+                 ("levels-hard", "world-hard", "sm2data4")),
+                "nes",
+            ),
+        }
+        for revision in profile.revisions:
+            with self.subTest(revision=revision.revision_id):
+                resources = profile.resources_for(revision)
+                worlds = tuple(
+                    (item.resource_id, item.payload)
+                    for item in resources if item.kind == "world"
+                )
+                levels = tuple(
+                    (item.resource_id, item.parameters.get("world_resource"),
+                     item.payload)
+                    for item in resources if item.kind == "level"
+                )
+                palette_models = {
+                    item.parameters.get("palette_model")
+                    for item in resources if item.kind == "palette"
+                }
+                expected_worlds, expected_levels, palette_model = expected[
+                    revision.revision_id
+                ]
+                self.assertEqual(worlds, expected_worlds)
+                self.assertEqual(levels, expected_levels)
+                self.assertEqual(palette_models, {palette_model})
+                expected_rendering = (
+                    "ann" if revision.revision_id == "ann_fds"
+                    else "smb2" if revision.revision_id == "smb2_jp_fds"
+                    else "smb1"
+                )
+                self.assertEqual(
+                    {
+                        item.parameters.get("rendering")
+                        for item in resources if item.kind == "level"
+                    },
+                    {expected_rendering},
+                )
+
+                capabilities = profile.capabilities_for(revision)
+                has_screens = any(item.kind == "screen" for item in resources)
+                has_text = any(
+                    item.kind == "text"
+                    or (item.kind == "screen" and item.parameters.get("text_fields"))
+                    for item in resources
+                )
+                self.assertEqual("screens" in capabilities, has_screens)
+                self.assertEqual("text" in capabilities, bool(has_text))
+                self.assertEqual(
+                    "audio" in capabilities,
+                    any(item.kind == "audio" for item in resources),
+                )
 
     def test_split_course_bank_spans_match_declared_capacities(self) -> None:
         profile = packaged_game_profiles().get("smb1")
