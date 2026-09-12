@@ -67,6 +67,7 @@ CODECS = frozenset(
         "nes.nametable.v1",
         "nes.palette-table.v1",
         "nes.ppu-palette-packets.v1",
+        "nes.ppu-screen-packets.v1",
         "pacman.maze-rle.v1",
         "pacman.maze-rle@1",
         "pacman.actor-mapping.v1",
@@ -78,6 +79,7 @@ CODECS = frozenset(
         "retrolarium.nes.disassembly@1",
         "retrolarium.snes.disassembly@1",
         "smb.apu@1",
+        "smb.apu-music.v1",
         "smb.area@1",
         "smb.world.v1",
         "smb.levels.v1",
@@ -1138,6 +1140,7 @@ def create_studio_project(
         if not isinstance(resources, list) or not resources:
             raise StudioProjectError("resource document resources must be a non-empty array")
         kinds: dict[str, set[str]] = {}
+        has_packet_screen_text = False
         for index, item in enumerate(resources):
             resource = _mapping(item, f"resource document resources[{index}]")
             kind = _string(resource.get("kind"), f"resource document resources[{index}].kind")
@@ -1145,8 +1148,17 @@ def create_studio_project(
                 resource.get("codec"), f"resource document resources[{index}].codec"
             )
             kinds.setdefault(kind, set()).add(resource_codec)
+            if (
+                kind == "screen"
+                and resource_codec == "nes.ppu-screen-packets.v1"
+                and isinstance(resource.get("text_fields"), list)
+                and bool(resource["text_fields"])
+            ):
+                has_packet_screen_text = True
         if kinds.get("screen") == {"pacman.screen-collection.v1"}:
             kinds["text"] = {"pacman.screen-collection.v1"}
+        elif has_packet_screen_text:
+            kinds.setdefault("text", set()).add("nes.ppu-screen-packets.v1")
         templates = (
             ("world", "world", "World", "world.routing", "content",
              "smb.world.v1", ["edit", "restore", "undo"]),
@@ -1184,9 +1196,28 @@ def create_studio_project(
                     resource_root.get("game"), resource_root.get("revision")
                 ) == ("smb1", "ju"):
                     capabilities.insert(1, "playtest")
+            elif kind == "audio" and kinds[kind] == {"smb.apu-music.v1"}:
+                selected_codec = "smb.apu-music.v1"
+                capabilities = ["edit", "restore", "undo"]
             elif kind in ("screen", "text") \
                     and kinds[kind] == {"pacman.screen-collection.v1"}:
                 selected_codec = "pacman.screen-collection.v1"
+            elif kind == "text" and kinds[kind].issubset({
+                "nes.fixed-text-fields.v1", "nes.ppu-screen-packets.v1"
+            }):
+                selected_codec = (
+                    "nes.fixed-text-fields.v1"
+                    if "nes.fixed-text-fields.v1" in kinds[kind]
+                    else "nes.ppu-screen-packets.v1"
+                )
+            elif kind == "screen" and kinds[kind].issubset({
+                "nes.nametable.v1", "nes.ppu-screen-packets.v1"
+            }):
+                selected_codec = (
+                    "nes.nametable.v1"
+                    if "nes.nametable.v1" in kinds[kind]
+                    else "nes.ppu-screen-packets.v1"
+                )
             elif kind == "palette" and kinds[kind] == {"pacman.palette-table.v1"}:
                 selected_codec = "pacman.palette-table.v1"
             elif kind == "palette" and kinds[kind].issubset({

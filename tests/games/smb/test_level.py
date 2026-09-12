@@ -224,6 +224,7 @@ class SmbLevelTests(unittest.TestCase):
     def test_bundle_edits_both_ranges_transactionally(self) -> None:
         image, profile, revision = fixture()
         document = decode_resources(image, profile, revision)
+        self.assertEqual(document.resources[0]["rendering"], "smb1")
         exact, report = build_resources(image, document, profile, revision)
         self.assertEqual(exact, image)
         self.assertEqual(report["changed_bytes"], 0)
@@ -310,6 +311,10 @@ class SmbLevelTests(unittest.TestCase):
     def test_invalid_kind_capacity_and_identity_are_rejected(self) -> None:
         image, profile, revision = fixture()
         raw = decode_resources(image, profile, revision).as_dict()
+        raw["resources"][0]["rendering"] = "ann"
+        with self.assertRaisesRegex(Exception, "rendering differs"):
+            parse_resource_document(raw, profile, revision)
+        raw = decode_resources(image, profile, revision).as_dict()
         raw["resources"][0]["areas"][0]["enemies"][0]["kind"] = "page"
         with self.assertRaisesRegex(Exception, "kind does not match"):
             parse_resource_document(raw, profile, revision)
@@ -327,6 +332,7 @@ class SmbLevelTests(unittest.TestCase):
             item for item in profile.resources if item.codec == "nes.ppu-palette-packets.v1"
         )
         self.assertEqual(levels.codec, "smb.levels.v1")
+        self.assertEqual(levels.parameters["rendering"], "smb1")
         self.assertEqual(levels.parameters["world_resource"], "world")
         self.assertEqual(palettes.parameters["palette_model"], "nes")
         self.assertEqual(len(levels.parameters["stream_names"]), 34)

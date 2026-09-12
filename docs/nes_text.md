@@ -1,6 +1,6 @@
-# Retrolarium NES fixed text authoring contract
+# Retrolarium NES text authoring contract
 
-Status: implemented and consumed by the Pac-Man Studio profile.
+Status: implemented for fixed text resources and embedded screen text.
 
 ## Codec boundary
 
@@ -21,6 +21,13 @@ source byte must decode through the declared map. The extracted document copies
 the encoding contract and field key/label/width metadata so both Kit and GUI can
 detect incompatible or tampered documents.
 
+`nes.ppu-screen-packets.v1` may carry the same encoding contract plus ordered
+`text_fields`. Each field identifies a screen key, a screen-relative tile
+offset and a width that must fit one visible row. These fields are views over
+the screen's existing `tiles`; the resource never stores a second string value.
+Field tiles must be mapped glyphs, fields cannot overlap, and edits must remain
+representable by the original PPU packet layout.
+
 ## Transactional writer
 
 Each authored string is folded according to the profile, checked against the
@@ -32,11 +39,13 @@ single-range resources and expose a `ranges` array for disjoint resources.
 
 ## Qt consumer
 
-`text.fixed` plus this codec selects `NesTextEditorWidget`. The widget lists
-profile labels, displays stable keys and capacities, normalizes input before it
-enters the document, and supports undo/redo, current-message restore and atomic
-save. Multiple typed editors referencing the same resource document continue
-to share one in-memory model through `StudioEditorFactory`.
+`text.fixed` plus either text-capable codec selects `NesTextEditorWidget`. The
+widget lists profile labels, displays stable keys and capacities, normalizes
+input before it enters the document, and supports undo/redo, current-message
+restore and atomic save. Multiple typed editors referencing the same resource
+document continue to share one in-memory model through `StudioEditorFactory`;
+therefore a Text edit of an embedded field updates the corresponding Screens
+tab without a competing document copy.
 
 ## Verification
 
@@ -46,4 +55,7 @@ unsupported-character rejection. Native tests cover document parsing,
 normalization, widget undo/restore/save and factory selection. The ignored
 Pac-Man Japan v1.0 fixture proves extraction of 14 messages, exact Studio build,
 verification and GUI smoke; a known edit changes only offset `$355`. Japan v1.1
-also passes an exact ten-resource in-memory rebuild.
+also passes an exact ten-resource in-memory rebuild. ANN and Japanese SMB2
+public-source PRG audits prove zero-diff rebuilds of their 351-byte and 357-byte
+title display lists and decode four embedded fields each; the synthetic packet
+test proves that changing those tile-backed glyphs rebuilds the command bytes.

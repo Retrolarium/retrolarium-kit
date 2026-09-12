@@ -95,7 +95,13 @@ codecs used by the SMB profile:
   including address, orientation/repeat flags, NES color values and the
   profile's Day/Night universal background colors;
 - `smb.player-frames.v1` preserves the 16 action offsets, 26 fixed 2-by-4 tile
-  mappings and two swim-kick replacement tiles as one transactional resource.
+  mappings and two swim-kick replacement tiles as one transactional resource;
+- `nes.ppu-screen-packets.v1` preserves named fixed-capacity PPU display lists,
+  including horizontal, vertical and repeated writes, the terminator and any
+  trailing bytes. It projects commands onto editable tile and attribute grids
+  and rejects edits that the original packet layout cannot represent. Optional
+  fixed-width `text_fields` decode and edit mapped cells in that same tile
+  grid, so Screens and Text never hold competing copies of a string;
 
 For the byte-identical SMB1 JU fixture these codecs cover 101 background
 metatiles and eight area palette packets. Together with the existing 512-tile
@@ -115,11 +121,23 @@ addressed fixed-width UI fields through `nes.fixed-text-fields.v1`: the status
 player name and headings, lives-screen world label, time-up and game-over
 messages, warp-zone welcome message and Brother name. Their offsets were checked
 against the public disassembly linker labels and built PRG bytes. ANN and SMB2
-are deliberately excluded from this text resource until their distinct
-Japanese packet layouts receive their own profile definitions.
+do not reuse this text resource because their Japanese layouts differ.
 
-The Qt 5.15 application now supplies generic CHR and palette editors plus
-typed nametable, Pac-Man screen-collection and SMB procedural level views.
-HonkeyPong remains the open-source proof of the Kit/profile/build boundary;
-game-specific layouts are added through profiles and codecs rather than new
-CLI branches.
+ANN and SMB2 now publish their PRG-resident title display lists as Screens
+resources. Both use the shared screen editor and CHR/palette dependencies: ANN
+contains 31 commands in a 351-byte span, while SMB2 contains 31 commands in a
+357-byte span with its original two trailing bytes. Their public-source PRG
+builds round-trip through the codec byte-for-byte. Each resource also exposes
+four embedded Text fields: `1986 NINTENDO`, `HERO GAME`, `BROTHER GAME`, and
+`TOP-`. The addresses are profile-specific—including the differing copyright
+and top-score positions—and were verified against both public-source PRG
+builds. Cartridge, VS and original FDS title screens remain gated on a locally
+available CHR fixture because that engine copies the display list from CHR
+rather than storing it in PRG.
+
+The Qt 5.15 application now supplies generic CHR, palette and text editors plus
+typed nametable, packet-screen, Pac-Man screen-collection and SMB procedural
+level views. Embedded packet-screen text opens in the generic Text tab while
+editing the same resource used by the Screens tab. HonkeyPong remains the
+open-source proof of the Kit/profile/build boundary; game-specific layouts are
+added through profiles and codecs rather than new CLI branches.
