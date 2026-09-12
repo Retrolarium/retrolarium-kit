@@ -15,11 +15,16 @@ lengths and volume envelopes in a single typed document.
 | VS SMB | `prg` payload | `0x784B` | `0xF858` | 1915 | 1495 |
 | FDS SMB | `prg` payload | `0x790D` | `0xD90D` | 1725 | 1352 |
 
-JU, PAL, VS and FDS were decoded and re-encoded byte-identically against the
-local open-source build artifacts. PC10 inherits the JU NROM layout but still
-needs an independent PC10 artifact audit. ANN and SMB2 do not advertise the
-`audio` capability: their FDS-specific music suites require separate resource
-contracts.
+The JU, PAL, VS and FDS resource layouts were decoded and re-encoded
+byte-identically against local open-source build artifacts. The JU and FDS
+artifacts contain populated stream data and exercise the semantic timeline and
+preview renderer. The generated PAL and VS source assets in that checkout are
+entirely zero-filled (1601 and 1745 bytes respectively), so they verify storage
+shape and exact preservation, but not real regional music content. A populated
+PAL/VS image or source asset is still required for that gate. PC10 inherits the
+JU NROM layout but still needs an independent PC10 artifact audit. ANN and SMB2
+advertise `audio` through the separate `fds.synthesis.v1` contract; they do not
+pretend that their FDS-specific ending suite uses this APU stream layout.
 
 VS places 4-byte castle-clear and 9-byte area envelopes before its selectors;
 the 40-byte water/event envelope remains trailing. Other supported revisions
@@ -52,10 +57,42 @@ For every arena byte it shows the physical span, all entry owners and the
 channel-specific meaning. A semantic command form lowers note, length, rest,
 terminator, control, beat and loop edits to canonical channel bytes and rejects
 zero-byte ambiguities before they reach the shared arena. These edits use the
-same undo history as raw-byte edits. The Studio tab therefore advertises only
-`edit`, `restore` and `undo`.
+same undo history as raw-byte edits. The Studio tab advertises `edit`,
+`midi-import`, `restore`, `undo` and `wav-preview`.
 
-Piano-roll editing, channel mixing, deterministic preview, guarded MIDI
-lowering, and the ANN/SMB2 FDS ending wave/volume programs remain later gates.
-Those capabilities must not be advertised until their typed writer and tests
-exist.
+The Python authoring layer and Qt editor can render the currently selected
+logical song to deterministic mono 16-bit PCM or WAV and mute any combination
+of the four channels. Selector context chooses the event/area engine flags,
+the hurry-up length-table adjustment, and the castle-clear, area, water/event,
+or hardware pulse envelope. Profiles also select NTSC or PAL frame and CPU
+timing. The file-oriented operation is available without the GUI:
+
+```text
+rltool audio render-smb-wav game.json --resource music --selector area_water --header water --mute noise --output water.wav
+```
+
+Guarded MIDI import accepts a monophonic, contiguous note sequence for square 2,
+square 1 or triangle. It quantizes pitches against the document's APU period
+table and durations against the selector's accessible eight-entry length table.
+The import is rejected if timing changes, the replacement exceeds the bytes
+currently consumed by that channel, or any changed byte is read by another
+header, channel or length-table context. Preview performs the same checks
+without writing; apply writes a separate JSON document atomically:
+
+```text
+rltool audio preview-smb-midi game.json --midi melody.mid --resource music --selector area_water --target-channel square2
+rltool audio import-smb-midi game.json --midi melody.mid --output edited.json --resource music --selector area_water --target-channel square2
+```
+
+The Qt editor exposes the same preview/apply boundary. Applied bytes enter the
+ordinary document undo stack as one MIDI-import operation and still require an
+explicit save.
+
+The renderer is an authoring preview with deterministic noise and a simplified
+linear mix, not a cycle-accurate NES APU emulator. Final validation remains an
+exact build followed by playtest in the configured emulator.
+
+Piano-roll editing, direct in-editor playback and complete triangle/noise
+register timing remain later gates. ANN/SMB2 FDS ending wave and volume
+programs are covered by
+[`Retrolarium_FDS_Synthesis_Authoring_Contract.md`](Retrolarium_FDS_Synthesis_Authoring_Contract.md).

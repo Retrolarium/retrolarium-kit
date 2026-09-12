@@ -377,7 +377,7 @@ class SmbWorldTests(unittest.TestCase):
         }
         self.assertEqual(
             profile.capabilities_for("ann_fds"),
-            ("world", "levels", "graphics", "screens", "text"),
+            ("world", "levels", "graphics", "screens", "text", "audio"),
         )
         self.assertEqual(
             list(ann_resources),
@@ -385,7 +385,7 @@ class SmbWorldTests(unittest.TestCase):
                 "authoring-bundle", "world-normal", "levels-normal",
                 "world-extended", "levels-extended", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
-                "title-screen", "character-graphics",
+                "title-screen", "fds-synthesis", "character-graphics",
             ],
         )
         self.assertEqual(
@@ -452,6 +452,22 @@ class SmbWorldTests(unittest.TestCase):
         self.assertEqual(
             ann_resources["title-screen"].parameters["fill_tile"], 0x24
         )
+        self.assertEqual(ann_resources["fds-synthesis"].payload, "nsmdata3")
+        self.assertEqual(
+            ann_resources["fds-synthesis"].parameters,
+            {
+                "file_offset": 0xC00,
+                "size": 0xAF,
+                "waveforms": [
+                    {"name": "wave-a", "offset": 0x8F, "count": 32},
+                    {"name": "wave-b", "offset": 0, "count": 32},
+                ],
+                "volume_programs": [
+                    {"name": "wave-a", "offset": 0x24, "count": 6},
+                    {"name": "wave-b", "offset": 0x20, "count": 2},
+                ],
+            },
+        )
         self.assertEqual(
             ann_resources["title-screen"].parameters["text_fields"],
             [
@@ -472,7 +488,7 @@ class SmbWorldTests(unittest.TestCase):
         }
         self.assertEqual(
             profile.capabilities_for("smb2_jp_fds"),
-            ("world", "levels", "graphics", "screens", "text"),
+            ("world", "levels", "graphics", "screens", "text", "audio"),
         )
         self.assertEqual(
             list(smb2_resources),
@@ -480,7 +496,7 @@ class SmbWorldTests(unittest.TestCase):
                 "authoring-bundle", "world-normal", "levels-normal",
                 "world-hard", "levels-hard", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
-                "title-screen", "character-graphics",
+                "title-screen", "fds-synthesis", "character-graphics",
             ],
         )
         self.assertEqual(
@@ -543,6 +559,11 @@ class SmbWorldTests(unittest.TestCase):
                 "file_offset": 0x662B, "size": 0x165,
             }],
         )
+        self.assertEqual(smb2_resources["fds-synthesis"].payload, "sm2data3")
+        self.assertEqual(
+            smb2_resources["fds-synthesis"].parameters,
+            ann_resources["fds-synthesis"].parameters,
+        )
         self.assertEqual(
             smb2_resources["title-screen"].parameters["text_fields"],
             [
@@ -592,7 +613,7 @@ class SmbWorldTests(unittest.TestCase):
         self.assertEqual(details["pc10"]["resources"], smb["resources"])
         self.assertEqual(
             details["ann_fds"]["capabilities"],
-            ["world", "levels", "graphics", "screens", "text"],
+            ["world", "levels", "graphics", "screens", "text", "audio"],
         )
         self.assertEqual(
             details["ann_fds"]["resources"],
@@ -600,12 +621,12 @@ class SmbWorldTests(unittest.TestCase):
                 "authoring-bundle", "world-normal", "levels-normal",
                 "world-extended", "levels-extended", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
-                "title-screen", "character-graphics",
+                "title-screen", "fds-synthesis", "character-graphics",
             ],
         )
         self.assertEqual(
             details["smb2_jp_fds"]["capabilities"],
-            ["world", "levels", "graphics", "screens", "text"],
+            ["world", "levels", "graphics", "screens", "text", "audio"],
         )
         self.assertEqual(
             details["smb2_jp_fds"]["resources"],
@@ -613,7 +634,7 @@ class SmbWorldTests(unittest.TestCase):
                 "authoring-bundle", "world-normal", "levels-normal",
                 "world-hard", "levels-hard", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
-                "title-screen", "character-graphics",
+                "title-screen", "fds-synthesis", "character-graphics",
             ],
         )
         self.assertEqual(
