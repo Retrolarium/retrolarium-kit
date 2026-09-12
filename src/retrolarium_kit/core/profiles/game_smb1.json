@@ -35,6 +35,8 @@
             "file_offset": 31006,
             "size": 1724,
             "cpu_address": 63758,
+            "frame_rate": 50.00698,
+            "cpu_frequency": 1662607.0,
             "shared_stream_size": 1351
           }
         }
@@ -168,6 +170,7 @@
             "file_offset": 30795,
             "size": 1915,
             "cpu_address": 63576,
+            "hardware_envelope_event_mask": 129,
             "ground_schedule_count": 42,
             "headers": [
               {"name": "vs_star_a", "size": 6},
@@ -314,7 +317,7 @@
       "sha1": "f30bdd3c556604d7eaa6d0f4864d5566e519b5d4",
       "sha256": "a762d0a90d16c84b5f2b014816b37675cf5115320be7e815effbb64d91b2014d",
       "container": "fds",
-      "capabilities": ["world", "levels", "graphics", "screens", "text"],
+      "capabilities": ["world", "levels", "graphics", "screens", "text", "audio"],
       "payloads": [
         {
           "id": "prg",
@@ -639,6 +642,25 @@
           }
         },
         {
+          "id": "fds-synthesis",
+          "kind": "audio",
+          "codec": "fds.synthesis.v1",
+          "capacity_policy": "fixed",
+          "payload": "nsmdata3",
+          "parameters": {
+            "file_offset": 3072,
+            "size": 175,
+            "waveforms": [
+              {"name": "wave-a", "offset": 143, "count": 32},
+              {"name": "wave-b", "offset": 0, "count": 32}
+            ],
+            "volume_programs": [
+              {"name": "wave-a", "offset": 36, "count": 6},
+              {"name": "wave-b", "offset": 32, "count": 2}
+            ]
+          }
+        },
+        {
           "id": "character-graphics",
           "kind": "graphics",
           "codec": "nes.chr-2bpp.v1",
@@ -658,7 +680,7 @@
       "sha1": "20e50128742162ee47561db9e82b2836399c880c",
       "sha256": "ff8afb9ae6b705b4e51dbcb193dcebadf4c049800a71003d3a45052648e52eda",
       "container": "fds",
-      "capabilities": ["world", "levels", "graphics", "screens", "text"],
+      "capabilities": ["world", "levels", "graphics", "screens", "text", "audio"],
       "payloads": [
         {
           "id": "prg",
@@ -990,6 +1012,25 @@
           }
         },
         {
+          "id": "fds-synthesis",
+          "kind": "audio",
+          "codec": "fds.synthesis.v1",
+          "capacity_policy": "fixed",
+          "payload": "sm2data3",
+          "parameters": {
+            "file_offset": 3072,
+            "size": 175,
+            "waveforms": [
+              {"name": "wave-a", "offset": 143, "count": 32},
+              {"name": "wave-b", "offset": 0, "count": 32}
+            ],
+            "volume_programs": [
+              {"name": "wave-a", "offset": 36, "count": 6},
+              {"name": "wave-b", "offset": 32, "count": 2}
+            ]
+          }
+        },
+        {
           "id": "character-graphics",
           "kind": "graphics",
           "codec": "nes.chr-2bpp.v1",
@@ -1161,6 +1202,9 @@
         "file_offset": 31005,
         "size": 1725,
         "cpu_address": 63757,
+        "frame_rate": 60.0988,
+        "cpu_frequency": 1789773.0,
+        "hardware_envelope_event_mask": 145,
         "selector_names": [
           "event_death", "event_game_over", "event_victory", "event_castle_clear",
           "event_game_over_alias", "event_end_of_level", "event_time_running_out", "event_silence",

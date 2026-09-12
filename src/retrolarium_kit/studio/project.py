@@ -44,6 +44,7 @@ EDITOR_KINDS = frozenset(
     {
         "animation.mapping",
         "audio.sequencer",
+        "audio.synthesis",
         "castle.rooms",
         "code.analysis",
         "graphics.tile-set",
@@ -61,6 +62,7 @@ CODECS = frozenset(
     {
         "castle.object-stream@1",
         "castle.prefix-rooms@1",
+        "fds.synthesis.v1",
         "nes.chr-2bpp.v1",
         "nes.fixed-text-fields.v1",
         "nes.metatile-2x2.v1",
@@ -1198,6 +1200,14 @@ def create_studio_project(
                     capabilities.insert(1, "playtest")
             elif kind == "audio" and kinds[kind] == {"smb.apu-music.v1"}:
                 selected_codec = "smb.apu-music.v1"
+                capabilities = [
+                    "edit", "midi-import", "restore", "undo", "wav-preview"
+                ]
+            elif kind == "audio" and kinds[kind] == {"fds.synthesis.v1"}:
+                tab_id = "synthesis"
+                title = "FDS Synthesis"
+                editor_kind = "audio.synthesis"
+                selected_codec = "fds.synthesis.v1"
                 capabilities = ["edit", "restore", "undo"]
             elif kind in ("screen", "text") \
                     and kinds[kind] == {"pacman.screen-collection.v1"}:

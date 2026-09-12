@@ -19,6 +19,16 @@ from .pacman_sound import (
     render_stream_wav,
     sound_summary,
 )
+from .smb_apu import (
+    CODEC as SMB_APU_CODEC,
+    NTSC_CPU_FREQUENCY,
+    NTSC_FRAME_RATE,
+    apply_midi_channel_commands,
+    encode_music as encode_smb_music,
+    music_header_timeline,
+    music_selector_context,
+    render_music_header_wav,
+)
 
 
 def _load_document(path: Path) -> dict[str, Any]:
@@ -82,6 +92,39 @@ def _sound_resource(
         raise AuthoringError(f"resource {resource_id!r} does not use {CODEC}")
     encode_sound_bundle(resource, spec.parameters)
     return resource, spec
+
+
+def _smb_music_resource(
+    document: Mapping[str, object],
+    profile: GameProfile,
+    revision: RevisionSpec,
+    resource_id: str,
+) -> tuple[dict[str, object], ResourceSpec]:
+    resources = document.get("resources")
+    if not isinstance(resources, list):
+        raise AuthoringError("audio document resources must be an array")
+    matches = [
+        item for item in resources
+        if isinstance(item, dict) and item.get("id") == resource_id
+    ]
+    specs = [
+        item for item in profile.resources_for(revision)
+        if item.resource_id == resource_id
+    ]
+    if len(matches) != 1 or len(specs) != 1:
+        raise AuthoringError(f"audio resource {resource_id!r} is not uniquely defined")
+    resource = matches[0]
+    spec = specs[0]
+    if resource.get("codec") != SMB_APU_CODEC or spec.codec != SMB_APU_CODEC:
+        raise AuthoringError(
+            f"resource {resource_id!r} does not use {SMB_APU_CODEC}"
+        )
+    music = {
+        key: value for key, value in resource.items()
+        if key not in {"id", "kind", "codec"}
+    }
+    encode_smb_music(music, spec.parameters)
+    return music, spec
 
 
 def _slot(resource: Mapping[str, object], slot: int) -> dict[str, Any]:
@@ -229,4 +272,189 @@ def render_document_wav(
         "output": str(output_path.resolve()),
         "size": len(payload),
         "sha256": hashlib.sha256(payload).hexdigest(),
+    }
+
+
+def render_smb_document_wav(
+    document_path: Path,
+    output_path: Path,
+    *,
+    resource_id: str,
+    header: str,
+    selector: str | None = None,
+    sample_rate: int = 44_100,
+    muted_channels: tuple[str, ...] = (),
+    length_table_adder: int | None = None,
+    profile_path: Path | None = None,
+) -> dict[str, object]:
+    """Render one validated SMB music header to an atomic WAV output."""
+
+    document = _load_document(document_path)
+    profile, revision = _profile(document, profile_path)
+    resource, spec = _smb_music_resource(
+        document, profile, revision, resource_id
+    )
+    selector_context = (
+        music_selector_context(resource, spec.parameters, selector)
+        if selector is not None else None
+    )
+    if selector_context is not None and selector_context["header"] != header:
+        raise AuthoringError(
+            f"SMB music selector {selector!r} does not select header {header!r}"
+        )
+    resolved_length_adder = (
+        int(selector_context["length_table_adder"])
+        if length_table_adder is None and selector_context is not None
+        else 0 if length_table_adder is None else length_table_adder
+    )
+    timeline = music_header_timeline(
+        resource, spec.parameters, header,
+        length_table_adder=resolved_length_adder,
+    )
+    payload = render_music_header_wav(
+        resource,
+        spec.parameters,
+        header,
+        selector_name=selector,
+        sample_rate=sample_rate,
+        muted_channels=muted_channels,
+        length_table_adder=length_table_adder,
+    )
+    _atomic_write(output_path, payload)
+    return {
+        "schema": "retrolarium.audio-preview",
+        "schema_version": 1,
+        "engine": SMB_APU_CODEC,
+        "resource": resource_id,
+        "header": header,
+        "selector": selector,
+        "envelope": (
+            selector_context["envelope"]
+            if selector_context is not None else None
+        ),
+        "length_table_adder": resolved_length_adder,
+        "duration_ticks": timeline["duration"],
+        "muted_channels": list(muted_channels),
+        "sample_rate": sample_rate,
+        "frame_rate": spec.parameters.get("frame_rate", NTSC_FRAME_RATE),
+        "cpu_frequency": spec.parameters.get(
+            "cpu_frequency", NTSC_CPU_FREQUENCY
+        ),
+        "output": str(output_path.resolve()),
+        "size": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    }
+
+
+def _prepare_smb_midi_import(
+    document_path: Path,
+    midi_path: Path,
+    *,
+    resource_id: str,
+    selector: str,
+    target_channel: str,
+    track: int,
+    midi_channel: int,
+    max_pitch_error_cents: float,
+    max_duration_error_frames: float,
+    profile_path: Path | None,
+) -> tuple[dict[str, Any], dict[str, object]]:
+    document = _load_document(document_path)
+    profile, revision = _profile(document, profile_path)
+    music, spec = _smb_music_resource(
+        document, profile, revision, resource_id
+    )
+    try:
+        midi_data = midi_path.read_bytes()
+    except OSError as exc:
+        raise AuthoringError(f"cannot read MIDI file {midi_path}: {exc}") from exc
+    edited_music, report = apply_midi_channel_commands(
+        midi_data,
+        music,
+        spec.parameters,
+        selector,
+        target_channel,
+        track=track,
+        midi_channel=midi_channel,
+        max_pitch_error_cents=max_pitch_error_cents,
+        max_duration_error_frames=max_duration_error_frames,
+    )
+    edited = copy.deepcopy(document)
+    resources = edited["resources"]
+    assert isinstance(resources, list)
+    edited_resource = next(
+        item for item in resources
+        if isinstance(item, dict) and item.get("id") == resource_id
+    )
+    edited_resource["shared_stream_arena"] = edited_music["shared_stream_arena"]
+    _smb_music_resource(edited, profile, revision, resource_id)
+    return edited, {**report, "resource": resource_id}
+
+
+def preview_smb_midi_import(
+    document_path: Path,
+    midi_path: Path,
+    *,
+    resource_id: str,
+    selector: str,
+    target_channel: str,
+    track: int = 0,
+    midi_channel: int = 0,
+    max_pitch_error_cents: float = 50.0,
+    max_duration_error_frames: float = 1.0,
+    profile_path: Path | None = None,
+) -> dict[str, object]:
+    """Validate a guarded SMB MIDI edit without writing the document."""
+
+    _edited, report = _prepare_smb_midi_import(
+        document_path,
+        midi_path,
+        resource_id=resource_id,
+        selector=selector,
+        target_channel=target_channel,
+        track=track,
+        midi_channel=midi_channel,
+        max_pitch_error_cents=max_pitch_error_cents,
+        max_duration_error_frames=max_duration_error_frames,
+        profile_path=profile_path,
+    )
+    return {**report, "operation": "preview"}
+
+
+def import_smb_midi_into_document(
+    document_path: Path,
+    midi_path: Path,
+    output_path: Path,
+    *,
+    resource_id: str,
+    selector: str,
+    target_channel: str,
+    track: int = 0,
+    midi_channel: int = 0,
+    max_pitch_error_cents: float = 50.0,
+    max_duration_error_frames: float = 1.0,
+    profile_path: Path | None = None,
+) -> dict[str, object]:
+    """Apply one guarded SMB MIDI channel edit to an atomic JSON output."""
+
+    edited, report = _prepare_smb_midi_import(
+        document_path,
+        midi_path,
+        resource_id=resource_id,
+        selector=selector,
+        target_channel=target_channel,
+        track=track,
+        midi_channel=midi_channel,
+        max_pitch_error_cents=max_pitch_error_cents,
+        max_duration_error_frames=max_duration_error_frames,
+        profile_path=profile_path,
+    )
+    _atomic_write(
+        output_path,
+        (json.dumps(edited, indent=2, sort_keys=True) + "\n").encode("utf-8"),
+    )
+    return {
+        **report,
+        "operation": "apply",
+        "output": str(output_path.resolve()),
     }

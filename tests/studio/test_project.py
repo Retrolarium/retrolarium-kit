@@ -443,7 +443,10 @@ class StudioProjectTests(unittest.TestCase):
             )
             self.assertEqual("audio.sequencer", music["kind"])
             self.assertEqual("smb.apu-music.v1", music["codec"])
-            self.assertEqual(["edit", "restore", "undo"], music["capabilities"])
+            self.assertEqual(
+                ["edit", "midi-import", "restore", "undo", "wav-preview"],
+                music["capabilities"],
+            )
 
             resource_value = json.loads(resources.read_text(encoding="utf-8"))
             resource_value["revision"] = "pal"
@@ -458,6 +461,41 @@ class StudioProjectTests(unittest.TestCase):
                 )
             pal_levels = pal_result["workspace"]["tabs"][0]
             self.assertNotIn("playtest", pal_levels["capabilities"])
+
+    def test_create_maps_fds_synthesis_to_typed_editor(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "manifest.json"
+            source.write_text(json.dumps(manifest()), encoding="utf-8")
+            resources = root / "resources.json"
+            resources.write_text(json.dumps({
+                "schema": "retrolarium.nes-resource-bundle",
+                "schema_version": 1,
+                "game": "smb1",
+                "revision": "ann_fds",
+                "source_sha256": SHA256,
+                "resources": [{
+                    "id": "fds-synthesis",
+                    "kind": "audio",
+                    "codec": "fds.synthesis.v1",
+                }],
+            }), encoding="utf-8")
+            with patch(
+                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                return_value=manifest(),
+            ):
+                result = create_studio_project(
+                    source, root / "ann.retrolarium", project_id="ann",
+                    name="ANN", profile="smb1.v1", resource_document=resources,
+                )
+            synthesis = result["workspace"]["tabs"][0]
+            self.assertEqual("synthesis", synthesis["id"])
+            self.assertEqual("FDS Synthesis", synthesis["title"])
+            self.assertEqual("audio.synthesis", synthesis["kind"])
+            self.assertEqual("fds.synthesis.v1", synthesis["codec"])
+            self.assertEqual(
+                ["edit", "restore", "undo"], synthesis["capabilities"]
+            )
 
     def test_create_maps_packet_screen_text_to_text_editor(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

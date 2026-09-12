@@ -349,6 +349,9 @@ The Qt World editor provides routing and physics pages with shared undo/redo,
 restore, and atomic save. The zero-edit disassemble/extract/build/verify path is
 byte-identical. See
 [`Retrolarium_SMB_World_Authoring_Contract.md`](docs/Retrolarium_SMB_World_Authoring_Contract.md).
+ANN and SMB2 Japan additionally expose their ending-bank FDS waveforms and
+volume programs through a dedicated `audio.synthesis` Studio tab; see
+[`Retrolarium_FDS_Synthesis_Authoring_Contract.md`](docs/Retrolarium_FDS_Synthesis_Authoring_Contract.md).
 
 ## Other commands
 
