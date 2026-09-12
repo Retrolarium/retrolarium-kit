@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+from dataclasses import replace
 import hashlib
 import json
 from pathlib import Path
@@ -9,9 +10,21 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.authoring import GameProfile, ResourceSpec, RevisionSpec
+from retrolarium_kit.authoring import (
+    AuthoringError,
+    GameProfile,
+    PayloadSpec,
+    ResourceSpec,
+    RevisionSpec,
+)
+from retrolarium_kit.fds import fds_payload
 from retrolarium_kit.game_profiles import packaged_game_profiles
-from retrolarium_kit.nes_resources import build_resources, decode_resources, parse_resource_document
+from retrolarium_kit.nes_resources import (
+    NesResourceError,
+    build_resources,
+    decode_resources,
+    parse_resource_document,
+)
 from retrolarium_kit.smb_level import decode_levels, encode_levels, positioned_area_objects, positioned_enemy_records
 from retrolarium_kit.smb_level_render import object_width, render_level_scene
 
@@ -46,6 +59,131 @@ def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
         ),
     )
     return image, profile, revision
+
+
+def fds_side(payloads: dict[int, bytes]) -> bytes:
+    image = bytearray(65_500)
+    image[0] = 1
+    image[56:58] = bytes((2, len(payloads)))
+    position = 58
+    for number, (identifier, payload) in enumerate(payloads.items()):
+        header = bytearray(16)
+        header[0:3] = bytes((3, number, identifier))
+        header[3:11] = f"STRM{number:04d}".encode("ascii")
+        header[11:13] = (0xC000 + number * 0x100).to_bytes(2, "little")
+        header[13:15] = len(payload).to_bytes(2, "little")
+        image[position:position + 16] = header
+        position += 16
+        image[position] = 4
+        position += 1
+        image[position:position + len(payload)] = payload
+        position += len(payload)
+    return bytes(image)
+
+
+def multi_payload_fds_fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
+    area_1 = bytes((0x6B, 0x92, 0x34, 0x85, 0xFD, 0xAA, 0xBB))
+    area_2 = bytes((0x10, 0x23, 0xDF, 0x01, 0xFD))
+    enemy_1 = bytes((0x31, 0xC5, 0xFF, 0xCC, 0xDD))
+    enemy_2 = bytes((0xFF,))
+    payloads = {
+        32: area_1 + enemy_2,
+        48: area_2 + enemy_1,
+    }
+    source = fds_side(payloads)
+    revision = RevisionSpec(
+        "fds", "SMB multi-payload probe", len(source),
+        hashlib.sha1(source).hexdigest(), hashlib.sha256(source).hexdigest(),
+        "fds",
+        payloads=(
+            PayloadSpec(
+                "nsmdata2", "fds-records", len(payloads[32]),
+                hashlib.sha1(payloads[32]).hexdigest(), record_ids=(32,),
+            ),
+            PayloadSpec(
+                "nsmdata3", "fds-records", len(payloads[48]),
+                hashlib.sha1(payloads[48]).hexdigest(), record_ids=(48,),
+            ),
+        ),
+    )
+    parameters = {
+        "stream_names": ["ground_1", "ground_2"],
+        "area_capacities": [len(area_1), len(area_2)],
+        "enemy_capacities": [len(enemy_1), len(enemy_2)],
+        "area_stream_spans": [
+            {"payload": "nsmdata2", "offset": 0, "size": len(area_1)},
+            {"payload": "nsmdata3", "offset": 0, "size": len(area_2)},
+        ],
+        "enemy_stream_spans": [
+            {
+                "payload": "nsmdata3",
+                "offset": len(area_2),
+                "size": len(enemy_1),
+            },
+            {
+                "payload": "nsmdata2",
+                "offset": len(area_1),
+                "size": len(enemy_2),
+            },
+        ],
+    }
+    profile = GameProfile(
+        "smb-level-fds-probe", 1, "SMB multi-payload probe", "nes",
+        ("levels",), (revision,),
+        (
+            ResourceSpec(
+                "bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"
+            ),
+            ResourceSpec(
+                "levels", "level", "smb.levels.v1", "fixed", parameters
+            ),
+        ),
+    )
+    return source, profile, revision
+
+
+def aliased_fds_fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
+    area = bytes((0x00, 0x00, 0x1D, 0x03, 0xFD))
+    enemy = bytes((0xFF,))
+    payload = area + enemy
+    source = fds_side({32: payload})
+    revision = RevisionSpec(
+        "fds", "SMB aliased stream probe", len(source),
+        hashlib.sha1(source).hexdigest(), hashlib.sha256(source).hexdigest(),
+        "fds",
+        payloads=(
+            PayloadSpec(
+                "nsmdata2", "fds-records", len(payload),
+                hashlib.sha1(payload).hexdigest(), record_ids=(32,),
+            ),
+        ),
+    )
+    parameters = {
+        "stream_names": ["ground_1", "ground_2"],
+        "area_capacities": [len(area), len(area)],
+        "enemy_capacities": [len(enemy), len(enemy)],
+        "area_stream_spans": [
+            {"payload": "nsmdata2", "offset": 0, "size": len(area)},
+            {"payload": "nsmdata2", "offset": 0, "size": len(area)},
+        ],
+        "enemy_stream_spans": [
+            {"payload": "nsmdata2", "offset": len(area), "size": len(enemy)},
+            {"payload": "nsmdata2", "offset": len(area), "size": len(enemy)},
+        ],
+    }
+    profile = GameProfile(
+        "smb-level-alias-probe", 1, "SMB aliased stream probe", "nes",
+        ("levels",), (revision,),
+        (
+            ResourceSpec(
+                "bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"
+            ),
+            ResourceSpec(
+                "levels", "level", "smb.levels.v1", "fixed", parameters
+            ),
+        ),
+    )
+    return source, profile, revision
 
 
 class SmbLevelTests(unittest.TestCase):
@@ -99,6 +237,76 @@ class SmbLevelTests(unittest.TestCase):
         self.assertEqual(edited[49], 0xC4)
         self.assertEqual(report["changed_bytes"], 2)
 
+    def test_bundle_round_trips_streams_across_named_fds_payloads(self) -> None:
+        image, profile, revision = multi_payload_fds_fixture()
+        document = decode_resources(image, profile, revision)
+        self.assertEqual(
+            [area["name"] for area in document.resources[0]["areas"]],
+            ["ground_1", "ground_2"],
+        )
+        exact, report = build_resources(image, document, profile, revision)
+        self.assertEqual(exact, image)
+        self.assertEqual(report["changed_bytes"], 0)
+
+        raw = copy.deepcopy(document.as_dict())
+        levels = raw["resources"][0]
+        levels["areas"][0]["objects"][0]["object_control"] = 6
+        levels["areas"][0]["enemies"][0]["object_or_page"] = 4
+        parsed = parse_resource_document(raw, profile, revision)
+        edited, report = build_resources(image, parsed, profile, revision)
+        self.assertEqual(fds_payload(edited, (32,))[3], 0x86)
+        self.assertEqual(fds_payload(edited, (48,))[6], 0xC4)
+        self.assertEqual(report["changed_bytes"], 2)
+        self.assertEqual(len(report["resources"][0]["ranges"]), 4)
+
+        levels_spec = profile.resources[1]
+        malformed_parameters = copy.deepcopy(dict(levels_spec.parameters))
+        malformed_parameters["area_stream_spans"][0]["size"] = 6
+        malformed_profile = replace(
+            profile,
+            resources=(
+                profile.resources[0],
+                replace(levels_spec, parameters=malformed_parameters),
+            ),
+        )
+        with self.assertRaisesRegex(NesResourceError, "stream capacity 7"):
+            decode_resources(image, malformed_profile, revision)
+
+        unknown_parameters = copy.deepcopy(dict(levels_spec.parameters))
+        unknown_parameters["enemy_stream_spans"][0]["payload"] = "missing"
+        unknown_profile = replace(
+            profile,
+            resources=(
+                profile.resources[0],
+                replace(levels_spec, parameters=unknown_parameters),
+            ),
+        )
+        with self.assertRaisesRegex(NesResourceError, "unknown payload"):
+            decode_resources(image, unknown_profile, revision)
+
+    def test_shared_stream_aliases_require_identical_edits(self) -> None:
+        image, profile, revision = aliased_fds_fixture()
+        document = decode_resources(image, profile, revision)
+        exact, report = build_resources(image, document, profile, revision)
+        self.assertEqual(exact, image)
+        self.assertEqual(report["changed_bytes"], 0)
+
+        divergent = copy.deepcopy(document.as_dict())
+        divergent["resources"][0]["areas"][0]["objects"][0][
+            "object_control"
+        ] = 4
+        parsed = parse_resource_document(divergent, profile, revision)
+        with self.assertRaisesRegex(AuthoringError, "conflicting build changes"):
+            build_resources(image, parsed, profile, revision)
+
+        shared = copy.deepcopy(document.as_dict())
+        for area in shared["resources"][0]["areas"]:
+            area["objects"][0]["object_control"] = 4
+        parsed = parse_resource_document(shared, profile, revision)
+        edited, report = build_resources(image, parsed, profile, revision)
+        self.assertEqual(fds_payload(edited, (32,))[3], 4)
+        self.assertEqual(report["changed_bytes"], 1)
+
     def test_invalid_kind_capacity_and_identity_are_rejected(self) -> None:
         image, profile, revision = fixture()
         raw = decode_resources(image, profile, revision).as_dict()
@@ -115,8 +323,12 @@ class SmbLevelTests(unittest.TestCase):
     def test_packaged_ju_profile_exposes_all_open_source_streams(self) -> None:
         profile = packaged_game_profiles().get("smb1")
         levels = next(item for item in profile.resources if item.kind == "level")
+        palettes = next(
+            item for item in profile.resources if item.codec == "nes.ppu-palette-packets.v1"
+        )
         self.assertEqual(levels.codec, "smb.levels.v1")
         self.assertEqual(levels.parameters["world_resource"], "world")
+        self.assertEqual(palettes.parameters["palette_model"], "nes")
         self.assertEqual(len(levels.parameters["stream_names"]), 34)
         self.assertEqual(sum(levels.parameters["area_capacities"]), 3373)
         self.assertEqual(sum(levels.parameters["enemy_capacities"]), 1087)

@@ -34,6 +34,7 @@ METATILE_PARAMETERS = {
 PALETTE_PARAMETERS = {
     "file_offset": 24,
     "size": 16,
+    "palette_model": "nes",
     "packet_names": ["ground", "night"],
     "packet_capacities": [8, 8],
     "terminator": 0,
@@ -95,6 +96,7 @@ class NesVisualTests(unittest.TestCase):
         raw = document.as_dict()
         self.assertEqual(raw["resources"][0]["records"][1], [5, 6, 7, 8])
         self.assertEqual(raw["resources"][1]["packets"][0]["name"], "ground")
+        self.assertEqual(raw["resources"][1]["palette_model"], "nes")
         exact, report = build_resources(image, document, profile, revision)
         self.assertEqual(exact, image)
         self.assertEqual(report["changed_bytes"], 0)
@@ -118,6 +120,10 @@ class NesVisualTests(unittest.TestCase):
         invalid = copy.deepcopy(raw)
         invalid["resources"][1]["packets"][0]["values"][0] = 0x40
         with self.assertRaisesRegex(Exception, "integer in 0..63"):
+            parse_resource_document(invalid, profile, revision)
+        invalid = copy.deepcopy(raw)
+        invalid["resources"][1]["palette_model"] = "rp2c04_0004"
+        with self.assertRaisesRegex(Exception, "palette_model differs"):
             parse_resource_document(invalid, profile, revision)
 
     def test_packaged_smb_profile_declares_exact_ju_visual_layout(self) -> None:

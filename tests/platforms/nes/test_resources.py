@@ -16,6 +16,7 @@ from retrolarium_kit.authoring import (
     AuthoringError,
     GameProfile,
     PayloadSpec,
+    ResourceOverrideSpec,
     ResourceSpec,
     RevisionSpec,
 )
@@ -25,8 +26,10 @@ from retrolarium_kit.nes_resources import (
     NesResourceError,
     build_resources,
     decode_resources,
+    inspection_details,
     parse_resource_document,
 )
+from retrolarium_kit.smb_player_frames import FRAME_COUNT, TILES_PER_FRAME
 
 
 def fixture_image() -> bytes:
@@ -57,7 +60,12 @@ def fixture_profile(image: bytes) -> tuple[GameProfile, RevisionSpec]:
             "palette",
             "nes.palette-table.v1",
             "fixed",
-            {"file_offset": 16, "size": 4, "entries": 4},
+            {
+                "file_offset": 16,
+                "size": 4,
+                "entries": 4,
+                "palette_model": "rp2c04_0004",
+            },
         ),
         ResourceSpec(
             "screen",
@@ -121,6 +129,18 @@ def write_profile(path: Path, profile: GameProfile) -> None:
             value["capabilities"] = list(item.capabilities)
         if item.resources is not None:
             value["resources"] = [resource_value(resource) for resource in item.resources]
+        if item.resource_overrides:
+            value["resource_overrides"] = [
+                {
+                    "id": override.resource_id,
+                    "parameters": dict(override.parameters),
+                    **(
+                        {"payload": override.payload}
+                        if override.payload is not None else {}
+                    ),
+                }
+                for override in item.resource_overrides
+            ]
         if item.payloads:
             value["payloads"] = [
                 {
@@ -165,6 +185,62 @@ def write_profile(path: Path, profile: GameProfile) -> None:
 
 
 class NesResourceTests(unittest.TestCase):
+    def test_smb_player_frames_flow_through_resource_pipeline(self) -> None:
+        source = bytearray(fixture_image())
+        offsets = bytes(index * TILES_PER_FRAME for index in range(16))
+        frames = bytes(
+            (frame * TILES_PER_FRAME + tile) & 0xFF
+            for frame in range(FRAME_COUNT)
+            for tile in range(TILES_PER_FRAME)
+        )
+        payload = offsets + frames + bytes((0x31, 0x46))
+        player_offset = 0x100
+        source[player_offset:player_offset + len(payload)] = payload
+        image = bytes(source)
+        base_profile, base_revision = fixture_profile(fixture_image())
+        revision = replace(
+            base_revision,
+            sha1=hashlib.sha1(image).hexdigest(),
+            sha256=hashlib.sha256(image).hexdigest(),
+        )
+        player_resource = ResourceSpec(
+            "player-frames", "animation", "smb.player-frames.v1", "fixed",
+            {
+                "file_offset": player_offset,
+                "size": len(payload),
+                "tile_base": 0,
+                "blank_tile": 0xFC,
+            },
+        )
+        profile = replace(
+            base_profile,
+            revisions=(revision,),
+            resources=(*base_profile.resources, player_resource),
+        )
+
+        document = decode_resources(image, profile, revision)
+        self.assertEqual(26, len(document.resources[-1]["frames"]))
+        self.assertEqual(26, inspection_details(document)["actor_frames"])
+        exact, report = build_resources(image, document, profile, revision)
+        self.assertEqual(image, exact)
+        self.assertEqual(0, report["changed_bytes"])
+
+        edited = document.as_dict()
+        edited["resources"][-1]["frames"][4][3] = 0xEA
+        parsed = parse_resource_document(edited, profile, revision)
+        rebuilt, report = build_resources(image, parsed, profile, revision)
+        changed_offset = player_offset + 16 + 4 * 8 + 3
+        self.assertEqual(0xEA, rebuilt[changed_offset])
+        self.assertEqual(1, report["changed_bytes"])
+        rebuilt_revision = replace(
+            revision,
+            sha1=hashlib.sha1(rebuilt).hexdigest(),
+            sha256=hashlib.sha256(rebuilt).hexdigest(),
+        )
+        rebuilt_profile = replace(profile, revisions=(rebuilt_revision,))
+        reopened = decode_resources(rebuilt, rebuilt_profile, rebuilt_revision)
+        self.assertEqual(0xEA, reopened.resources[-1]["frames"][4][3])
+
     def test_packaged_honkeypong_profile_has_open_fixture_identity(self) -> None:
         profile = packaged_game_profiles().get("honkeypong")
         self.assertEqual(profile.revisions[0].sha256, "cce7bf2f71eb9e63de0dba15098679dde06a1da9d7553f2319aa60ea57a1193b")
@@ -187,6 +263,7 @@ class NesResourceTests(unittest.TestCase):
         document = decode_resources(image, profile, revision)
         raw = document.as_dict()
         self.assertEqual(raw["resources"][0]["values"], [0x0F, 1, 0x11, 0x21])
+        self.assertEqual(raw["resources"][0]["palette_model"], "rp2c04_0004")
         self.assertEqual(raw["resources"][1]["tiles"], [[1, 2], [3, 4]])
         self.assertEqual(raw["resources"][2]["tiles"][0][0][0], 1)
 
@@ -222,6 +299,10 @@ class NesResourceTests(unittest.TestCase):
         extra["resources"][0]["undocumented"] = True
         with self.assertRaisesRegex(NesResourceError, "fields differ"):
             parse_resource_document(extra, profile, revision)
+        wrong_model = copy.deepcopy(raw)
+        wrong_model["resources"][0]["palette_model"] = "nes"
+        with self.assertRaisesRegex(NesResourceError, "differs from the profile"):
+            parse_resource_document(wrong_model, profile, revision)
 
     def test_public_operations_route_through_second_adapter(self) -> None:
         image = fixture_image()
@@ -264,7 +345,9 @@ class NesResourceTests(unittest.TestCase):
         revision = replace(
             base_revision,
             capabilities=("revision-palettes",),
-            resources=base_profile.resources,
+            resource_overrides=(ResourceOverrideSpec(
+                "palette", {"file_offset": 16}
+            ),),
         )
         profile = replace(
             base_profile,
@@ -305,6 +388,20 @@ class NesResourceTests(unittest.TestCase):
             replace(
                 revision,
                 resources=(profile.resources[0], profile.resources[0]),
+            )
+        with self.assertRaisesRegex(AuthoringError, "mutually exclusive"):
+            replace(
+                revision,
+                resources=profile.resources,
+                resource_overrides=(ResourceOverrideSpec("palette"),),
+            )
+        with self.assertRaisesRegex(AuthoringError, "overrides unknown resource"):
+            replace(
+                profile,
+                revisions=(replace(
+                    revision,
+                    resource_overrides=(ResourceOverrideSpec("missing"),),
+                ),),
             )
         payload = PayloadSpec(
             "prg", "range", 16, hashlib.sha1(bytes(16)).hexdigest(),

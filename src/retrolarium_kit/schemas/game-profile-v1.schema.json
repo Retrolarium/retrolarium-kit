@@ -65,6 +65,11 @@
           "minItems": 1,
           "items": {"$ref": "#/$defs/resource"}
         },
+        "resource_overrides": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/resourceOverride"}
+        },
         "payloads": {
           "type": "array",
           "uniqueItems": true,
@@ -100,6 +105,16 @@
         "kind": {"$ref": "#/$defs/identifier"},
         "codec": {"$ref": "#/$defs/identifier"},
         "capacity_policy": {"$ref": "#/$defs/identifier"},
+        "parameters": {"type": "object"},
+        "payload": {"$ref": "#/$defs/identifier"}
+      }
+    },
+    "resourceOverride": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
         "parameters": {"type": "object"},
         "payload": {"$ref": "#/$defs/identifier"}
       }

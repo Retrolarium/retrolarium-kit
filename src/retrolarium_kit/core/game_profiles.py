@@ -13,6 +13,7 @@ from .authoring import (
     GameProfile,
     PayloadSpec,
     Registry,
+    ResourceOverrideSpec,
     ResourceSpec,
     RevisionSpec,
 )
@@ -91,6 +92,31 @@ def _payloads(value: object, name: str) -> tuple[PayloadSpec, ...]:
     return tuple(payloads)
 
 
+def _resource_overrides(
+    value: object, name: str
+) -> tuple[ResourceOverrideSpec, ...]:
+    if not isinstance(value, list):
+        raise AuthoringError(f"{name} must be an array")
+    overrides = []
+    for index, raw in enumerate(value):
+        item_name = f"{name}[{index}]"
+        item = _mapping(raw, item_name)
+        overrides.append(
+            ResourceOverrideSpec(
+                resource_id=_string(item.get("id"), f"{item_name}.id"),
+                parameters=_mapping(
+                    item.get("parameters", {}), f"{item_name}.parameters"
+                ),
+                payload=(
+                    _string(item.get("payload"), f"{item_name}.payload")
+                    if "payload" in item
+                    else None
+                ),
+            )
+        )
+    return tuple(overrides)
+
+
 def parse_game_profile(document: object) -> GameProfile:
     value = _mapping(document, "game profile")
     if value.get("schema") != PROFILE_SCHEMA:
@@ -120,6 +146,10 @@ def parse_game_profile(document: object) -> GameProfile:
             if "resources" in item
             else None
         )
+        revision_resource_overrides = _resource_overrides(
+            item.get("resource_overrides", []),
+            f"revisions[{index}].resource_overrides",
+        )
         revision_payloads = _payloads(
             item.get("payloads", []), f"revisions[{index}].payloads"
         )
@@ -138,6 +168,7 @@ def parse_game_profile(document: object) -> GameProfile:
                 mapper=item.get("mapper"),
                 capabilities=revision_capabilities,
                 resources=revision_resources,
+                resource_overrides=revision_resource_overrides,
                 payloads=revision_payloads,
             )
         )

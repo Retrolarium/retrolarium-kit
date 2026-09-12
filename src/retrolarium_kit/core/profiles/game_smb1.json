@@ -5,7 +5,7 @@
   "profile_version": 1,
   "name": "Super Mario Bros. (NES)",
   "platform": "nes",
-  "capabilities": ["world", "levels", "graphics"],
+  "capabilities": ["world", "levels", "graphics", "text"],
   "revisions": [
     {
       "id": "ju",
@@ -23,7 +23,13 @@
       "sha1": "ab30029efec6ccfc5d65dfda7fbc6e6489a80805",
       "sha256": "ec299b990e8bfee8ba46e3f61d63b2e1ae5b8a2e431de84e2e4bbd692dc53586",
       "container": "ines",
-      "mapper": 0
+      "mapper": 0,
+      "resource_overrides": [
+        {
+          "id": "player-frames",
+          "parameters": {"file_offset": 28190}
+        }
+      ]
     },
     {
       "id": "pc10",
@@ -41,7 +47,6 @@
       "sha1": "3546486ba461536545daf9f27c9bcf275fc162da",
       "sha256": "60098a93322a9e07a2b164a02e5517bc22664ca33f6323c2ae23a62941ad393b",
       "container": "ines-vs",
-      "capabilities": ["graphics"],
       "payloads": [
         {
           "id": "prg",
@@ -59,24 +64,98 @@
           "sha1": "19385a81d2abea3ad6ff6b0d220390950ac9d2ee"
         }
       ],
-      "resources": [
+      "resource_overrides": [
         {
-          "id": "authoring-bundle",
-          "kind": "resource-bundle",
-          "codec": "nes.resource-bundle.v1",
-          "capacity_policy": "fixed",
-          "parameters": {}
+          "id": "world",
+          "payload": "prg",
+          "parameters": {
+            "routing_file_offset": 11391,
+            "physics_file_offset": 13009
+          }
+        },
+        {
+          "id": "levels",
+          "payload": "chr",
+          "parameters": {
+            "area_file_offset": 9571,
+            "area_size": 4439,
+            "enemy_file_offset": 8203,
+            "enemy_size": 1368,
+            "stream_names": [
+              "castle_1", "castle_2", "castle_3", "castle_4",
+              "castle_5", "castle_6", "castle_7", "castle_8",
+              "ground_1", "ground_2", "ground_3", "ground_4",
+              "ground_5", "ground_6", "ground_7", "ground_8",
+              "ground_9", "ground_10", "ground_11", "ground_12",
+              "ground_13", "ground_14", "ground_15", "ground_16",
+              "ground_17", "ground_18", "ground_19", "ground_20",
+              "ground_21", "ground_22", "ground_23", "ground_24",
+              "underground_1", "underground_2", "underground_3",
+              "water_1", "water_2", "water_3", "water_4"
+            ],
+            "area_capacities": [
+              203, 133, 107, 163, 143, 137, 111, 131,
+              99, 101, 89, 151, 157, 101, 89, 133,
+              107, 9, 63, 21, 99, 101, 109, 49,
+              145, 131, 117, 121, 43, 133, 85, 133,
+              173, 173, 141, 65, 221, 29, 123
+            ],
+            "enemy_capacities": [
+              61, 27, 35, 53, 21, 58, 29, 47,
+              47, 29, 16, 45, 53, 32, 35, 33,
+              42, 1, 46, 9, 37, 35, 19, 1,
+              58, 43, 52, 32, 9, 49, 25, 21,
+              45, 50, 45, 17, 49, 20, 42
+            ]
+          }
+        },
+        {
+          "id": "background-metatiles",
+          "payload": "prg",
+          "parameters": {"file_offset": 3345}
+        },
+        {
+          "id": "area-palette-packets",
+          "payload": "prg",
+          "parameters": {
+            "file_offset": 3749,
+            "day_background": 26,
+            "night_background": 20,
+            "palette_model": "rp2c04_0004"
+          }
+        },
+        {
+          "id": "player-palettes",
+          "payload": "prg",
+          "parameters": {
+            "file_offset": 1976,
+            "palette_model": "rp2c04_0004"
+          }
+        },
+        {
+          "id": "ui-text",
+          "payload": "prg",
+          "parameters": {
+            "fields": [
+              {"key": "status-player", "label": "Status player name", "file_offset": 2385, "width": 5},
+              {"key": "status-headings", "label": "Status headings", "file_offset": 2393, "width": 11},
+              {"key": "lives-world", "label": "Lives-screen world label", "file_offset": 2434, "width": 9},
+              {"key": "time-up", "label": "Time up", "file_offset": 2463, "width": 7},
+              {"key": "game-over", "label": "Game over", "file_offset": 2482, "width": 9},
+              {"key": "warp-welcome", "label": "Warp-zone welcome", "file_offset": 2495, "width": 21},
+              {"key": "brother-name", "label": "Brother name", "file_offset": 2537, "width": 5}
+            ]
+          }
+        },
+        {
+          "id": "player-frames",
+          "payload": "prg",
+          "parameters": {"file_offset": 28004}
         },
         {
           "id": "character-graphics",
-          "kind": "graphics",
-          "codec": "nes.chr-2bpp.v1",
-          "capacity_policy": "fixed",
           "payload": "chr",
-          "parameters": {
-            "file_offset": 0,
-            "size": 8192
-          }
+          "parameters": {"file_offset": 0}
         }
       ]
     },
@@ -87,7 +166,6 @@
       "sha1": "383ad8e3890a95de9595f0a6087648f51177da13",
       "sha256": "56ba4c39fd7f9628bffac4c6ee0d5364f86de36d27c904ffc70f0abc97ae0d3a",
       "container": "fds",
-      "capabilities": ["graphics"],
       "payloads": [
         {
           "id": "prg",
@@ -105,24 +183,62 @@
           "sha1": "394badaf0b0bdd0ea279a1bca89a9d9ddc00b1b5"
         }
       ],
-      "resources": [
+      "resource_overrides": [
         {
-          "id": "authoring-bundle",
-          "kind": "resource-bundle",
-          "codec": "nes.resource-bundle.v1",
-          "capacity_policy": "fixed",
-          "parameters": {}
+          "id": "world",
+          "payload": "prg",
+          "parameters": {
+            "routing_file_offset": 7364,
+            "physics_file_offset": 13356
+          }
+        },
+        {
+          "id": "levels",
+          "payload": "prg",
+          "parameters": {
+            "area_file_offset": 8631,
+            "enemy_file_offset": 7544
+          }
+        },
+        {
+          "id": "background-metatiles",
+          "payload": "prg",
+          "parameters": {"file_offset": 2838}
+        },
+        {
+          "id": "area-palette-packets",
+          "payload": "prg",
+          "parameters": {"file_offset": 3242}
+        },
+        {
+          "id": "player-palettes",
+          "payload": "prg",
+          "parameters": {"file_offset": 1501}
+        },
+        {
+          "id": "ui-text",
+          "payload": "prg",
+          "parameters": {
+            "fields": [
+              {"key": "status-player", "label": "Status player name", "file_offset": 1883, "width": 5},
+              {"key": "status-headings", "label": "Status headings", "file_offset": 1891, "width": 11},
+              {"key": "lives-world", "label": "Lives-screen world label", "file_offset": 1932, "width": 9},
+              {"key": "time-up", "label": "Time up", "file_offset": 1961, "width": 7},
+              {"key": "game-over", "label": "Game over", "file_offset": 1980, "width": 9},
+              {"key": "warp-welcome", "label": "Warp-zone welcome", "file_offset": 1993, "width": 21},
+              {"key": "brother-name", "label": "Brother name", "file_offset": 2035, "width": 5}
+            ]
+          }
+        },
+        {
+          "id": "player-frames",
+          "payload": "prg",
+          "parameters": {"file_offset": 28171}
         },
         {
           "id": "character-graphics",
-          "kind": "graphics",
-          "codec": "nes.chr-2bpp.v1",
-          "capacity_policy": "fixed",
           "payload": "chr",
-          "parameters": {
-            "file_offset": 0,
-            "size": 8192
-          }
+          "parameters": {"file_offset": 0}
         }
       ]
     },
@@ -133,7 +249,7 @@
       "sha1": "f30bdd3c556604d7eaa6d0f4864d5566e519b5d4",
       "sha256": "a762d0a90d16c84b5f2b014816b37675cf5115320be7e815effbb64d91b2014d",
       "container": "fds",
-      "capabilities": ["graphics"],
+      "capabilities": ["world", "levels", "graphics"],
       "payloads": [
         {
           "id": "prg",
@@ -184,6 +300,236 @@
           "parameters": {}
         },
         {
+          "id": "world-normal",
+          "kind": "world",
+          "codec": "smb.world.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "routing_span": {"payload": "prg", "offset": 25409, "size": 36},
+            "routing_size": 36,
+            "world_lengths": [5, 5, 4, 5, 4, 4, 5, 4],
+            "physics_span": {"payload": "prg", "offset": 8164, "size": 44},
+            "physics_size": 44,
+            "physics_tables": [
+              {"name": "jump_gravity", "length": 7, "signed": false},
+              {"name": "fall_gravity", "length": 7, "signed": false},
+              {"name": "horizontal_friction", "length": 3, "signed": false},
+              {"name": "initial_y_speed", "length": 7, "signed": true},
+              {"name": "initial_y_fraction", "length": 7, "signed": false},
+              {"name": "maximum_left_speed", "length": 3, "signed": true},
+              {"name": "maximum_right_speed", "length": 4, "signed": true},
+              {"name": "climb_y_speed", "length": 3, "signed": true},
+              {"name": "climb_y_fraction", "length": 3, "signed": false}
+            ]
+          }
+        },
+        {
+          "id": "levels-normal",
+          "kind": "level",
+          "codec": "smb.levels.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "world_resource": "world-normal",
+            "stream_names": [
+              "castle_1", "castle_2", "castle_3", "castle_4", "castle_5", "castle_6", "castle_7", "castle_8",
+              "ground_1", "ground_2", "ground_3", "ground_4", "ground_5", "ground_6", "ground_7", "ground_8",
+              "ground_9", "ground_10", "ground_11", "ground_12", "ground_13", "ground_14", "ground_15", "ground_16",
+              "ground_17", "ground_18", "ground_19", "ground_20", "ground_21", "ground_22", "ground_23", "ground_24",
+              "ground_25", "ground_26", "ground_27", "ground_28",
+              "underground_1", "underground_2", "underground_3", "underground_4",
+              "water_1", "water_2", "water_3", "water_4"
+            ],
+            "area_capacities": [
+              87, 129, 111, 107, 139, 211, 117, 141,
+              93, 109, 83, 145, 113, 101, 85, 125, 99, 9, 65, 21, 87, 103, 117, 49,
+              149, 119, 125, 97, 43, 55, 73, 109, 13, 21, 43, 9,
+              161, 165, 141, 89, 65, 123, 25, 201
+            ],
+            "enemy_capacities": [
+              29, 25, 35, 41, 21, 64, 53, 39,
+              33, 29, 16, 39, 49, 30, 25, 7, 47, 1, 36, 6, 36, 35, 9, 1,
+              58, 43, 48, 28, 6, 36, 35, 29, 1, 6, 6, 1,
+              45, 46, 27, 25, 17, 25, 14, 46
+            ],
+            "area_stream_spans": [
+              {"payload": "prg", "offset": 27003, "size": 87}, {"payload": "prg", "offset": 27090, "size": 129},
+              {"payload": "prg", "offset": 27219, "size": 111}, {"payload": "prg", "offset": 27330, "size": 107},
+              {"payload": "nsmdata2", "offset": 1290, "size": 139}, {"payload": "nsmdata2", "offset": 1429, "size": 211},
+              {"payload": "nsmdata2", "offset": 1032, "size": 117}, {"payload": "nsmdata2", "offset": 1149, "size": 141},
+              {"payload": "prg", "offset": 27437, "size": 93}, {"payload": "nsmdata2", "offset": 1640, "size": 109},
+              {"payload": "prg", "offset": 27530, "size": 83}, {"payload": "nsmdata2", "offset": 1749, "size": 145},
+              {"payload": "prg", "offset": 27613, "size": 113}, {"payload": "prg", "offset": 27726, "size": 101},
+              {"payload": "prg", "offset": 27827, "size": 85}, {"payload": "prg", "offset": 27912, "size": 125},
+              {"payload": "prg", "offset": 28037, "size": 99}, {"payload": "prg", "offset": 25200, "size": 9},
+              {"payload": "nsmdata2", "offset": 2076, "size": 65}, {"payload": "prg", "offset": 28136, "size": 21},
+              {"payload": "prg", "offset": 28157, "size": 87}, {"payload": "nsmdata2", "offset": 2162, "size": 103},
+              {"payload": "nsmdata2", "offset": 2265, "size": 117}, {"payload": "prg", "offset": 28244, "size": 49},
+              {"payload": "nsmdata2", "offset": 2382, "size": 149}, {"payload": "nsmdata2", "offset": 2531, "size": 119},
+              {"payload": "nsmdata2", "offset": 2650, "size": 125}, {"payload": "nsmdata2", "offset": 2775, "size": 97},
+              {"payload": "prg", "offset": 28293, "size": 43}, {"payload": "prg", "offset": 28336, "size": 55},
+              {"payload": "nsmdata2", "offset": 1894, "size": 73}, {"payload": "nsmdata2", "offset": 1967, "size": 109},
+              {"payload": "prg", "offset": 25209, "size": 13}, {"payload": "nsmdata2", "offset": 2141, "size": 21},
+              {"payload": "nsmdata2", "offset": 2872, "size": 43}, {"payload": "prg", "offset": 28391, "size": 9},
+              {"payload": "prg", "offset": 28400, "size": 161}, {"payload": "prg", "offset": 28561, "size": 165},
+              {"payload": "prg", "offset": 28726, "size": 141}, {"payload": "nsmdata2", "offset": 2915, "size": 89},
+              {"payload": "nsmdata2", "offset": 3004, "size": 65}, {"payload": "prg", "offset": 28867, "size": 123},
+              {"payload": "nsmdata2", "offset": 3270, "size": 25}, {"payload": "nsmdata2", "offset": 3069, "size": 201}
+            ],
+            "enemy_stream_spans": [
+              {"payload": "prg", "offset": 26437, "size": 29}, {"payload": "prg", "offset": 26466, "size": 25},
+              {"payload": "prg", "offset": 26491, "size": 35}, {"payload": "prg", "offset": 26526, "size": 41},
+              {"payload": "nsmdata2", "offset": 444, "size": 21}, {"payload": "nsmdata2", "offset": 465, "size": 64},
+              {"payload": "nsmdata2", "offset": 352, "size": 53}, {"payload": "nsmdata2", "offset": 405, "size": 39},
+              {"payload": "prg", "offset": 26567, "size": 33}, {"payload": "nsmdata2", "offset": 529, "size": 29},
+              {"payload": "prg", "offset": 26600, "size": 16}, {"payload": "nsmdata2", "offset": 558, "size": 39},
+              {"payload": "prg", "offset": 26616, "size": 49}, {"payload": "prg", "offset": 26665, "size": 30},
+              {"payload": "prg", "offset": 26695, "size": 25}, {"payload": "prg", "offset": 26720, "size": 7},
+              {"payload": "prg", "offset": 26727, "size": 47}, {"payload": "prg", "offset": 25199, "size": 1},
+              {"payload": "nsmdata2", "offset": 661, "size": 36}, {"payload": "prg", "offset": 26774, "size": 6},
+              {"payload": "prg", "offset": 26780, "size": 36}, {"payload": "nsmdata2", "offset": 703, "size": 35},
+              {"payload": "nsmdata2", "offset": 738, "size": 9}, {"payload": "prg", "offset": 26816, "size": 1},
+              {"payload": "nsmdata2", "offset": 747, "size": 58}, {"payload": "nsmdata2", "offset": 805, "size": 43},
+              {"payload": "nsmdata2", "offset": 848, "size": 48}, {"payload": "nsmdata2", "offset": 896, "size": 28},
+              {"payload": "prg", "offset": 26817, "size": 6}, {"payload": "prg", "offset": 26823, "size": 36},
+              {"payload": "nsmdata2", "offset": 597, "size": 35}, {"payload": "nsmdata2", "offset": 632, "size": 29},
+              {"payload": "prg", "offset": 25199, "size": 1}, {"payload": "nsmdata2", "offset": 697, "size": 6},
+              {"payload": "nsmdata2", "offset": 924, "size": 6}, {"payload": "prg", "offset": 26859, "size": 1},
+              {"payload": "prg", "offset": 26860, "size": 45}, {"payload": "prg", "offset": 26905, "size": 46},
+              {"payload": "prg", "offset": 26951, "size": 27}, {"payload": "nsmdata2", "offset": 930, "size": 25},
+              {"payload": "nsmdata2", "offset": 955, "size": 17}, {"payload": "prg", "offset": 26978, "size": 25},
+              {"payload": "nsmdata2", "offset": 1018, "size": 14}, {"payload": "nsmdata2", "offset": 972, "size": 46}
+            ]
+          }
+        },
+        {
+          "id": "world-extended",
+          "kind": "world",
+          "codec": "smb.world.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "routing_span": {"payload": "nsmdata4", "offset": 171, "size": 18},
+            "routing_size": 18,
+            "world_lengths": [5, 5, 4, 4],
+            "physics_span": {"payload": "prg", "offset": 8164, "size": 44},
+            "physics_size": 44,
+            "physics_tables": [
+              {"name": "jump_gravity", "length": 7, "signed": false},
+              {"name": "fall_gravity", "length": 7, "signed": false},
+              {"name": "horizontal_friction", "length": 3, "signed": false},
+              {"name": "initial_y_speed", "length": 7, "signed": true},
+              {"name": "initial_y_fraction", "length": 7, "signed": false},
+              {"name": "maximum_left_speed", "length": 3, "signed": true},
+              {"name": "maximum_right_speed", "length": 4, "signed": true},
+              {"name": "climb_y_speed", "length": 3, "signed": true},
+              {"name": "climb_y_fraction", "length": 3, "signed": false}
+            ]
+          }
+        },
+        {
+          "id": "levels-extended",
+          "kind": "level",
+          "codec": "smb.levels.v1",
+          "capacity_policy": "fixed",
+          "payload": "nsmdata4",
+          "parameters": {
+            "world_resource": "world-extended",
+            "stream_names": [
+              "castle_1", "castle_2", "castle_3", "castle_4",
+              "ground_1", "ground_2", "ground_3", "ground_4", "ground_5", "ground_6", "ground_7",
+              "ground_8", "ground_9", "ground_10", "ground_11", "ground_12", "ground_13", "ground_14",
+              "underground_1", "underground_2", "water_1"
+            ],
+            "area_capacities": [115, 125, 147, 143, 137, 83, 139, 99, 115, 91, 119, 111, 77, 111, 35, 29, 9, 13, 117, 95, 121],
+            "enemy_capacities": [37, 39, 63, 47, 59, 19, 49, 37, 35, 31, 25, 41, 33, 23, 16, 15, 1, 1, 26, 23, 36],
+            "area_stream_spans": [
+              {"payload": "nsmdata4", "offset": 1480, "size": 115}, {"payload": "nsmdata4", "offset": 1595, "size": 125},
+              {"payload": "nsmdata4", "offset": 1720, "size": 147}, {"payload": "nsmdata4", "offset": 1867, "size": 143},
+              {"payload": "nsmdata4", "offset": 2010, "size": 137}, {"payload": "nsmdata4", "offset": 2147, "size": 83},
+              {"payload": "nsmdata4", "offset": 2230, "size": 139}, {"payload": "nsmdata4", "offset": 2369, "size": 99},
+              {"payload": "nsmdata4", "offset": 2468, "size": 115}, {"payload": "nsmdata4", "offset": 2583, "size": 91},
+              {"payload": "nsmdata4", "offset": 2674, "size": 119}, {"payload": "nsmdata4", "offset": 2793, "size": 111},
+              {"payload": "nsmdata4", "offset": 2904, "size": 77}, {"payload": "nsmdata4", "offset": 2981, "size": 111},
+              {"payload": "nsmdata4", "offset": 3092, "size": 35}, {"payload": "nsmdata4", "offset": 3127, "size": 29},
+              {"payload": "prg", "offset": 25200, "size": 9}, {"payload": "prg", "offset": 25209, "size": 13},
+              {"payload": "nsmdata4", "offset": 3156, "size": 117}, {"payload": "nsmdata4", "offset": 3273, "size": 95},
+              {"payload": "nsmdata4", "offset": 3368, "size": 121}
+            ],
+            "enemy_stream_spans": [
+              {"payload": "nsmdata4", "offset": 826, "size": 37}, {"payload": "nsmdata4", "offset": 863, "size": 39},
+              {"payload": "nsmdata4", "offset": 902, "size": 63}, {"payload": "nsmdata4", "offset": 965, "size": 47},
+              {"payload": "nsmdata4", "offset": 1012, "size": 59}, {"payload": "nsmdata4", "offset": 1071, "size": 19},
+              {"payload": "nsmdata4", "offset": 1090, "size": 49}, {"payload": "nsmdata4", "offset": 1139, "size": 37},
+              {"payload": "nsmdata4", "offset": 1176, "size": 35}, {"payload": "nsmdata4", "offset": 1211, "size": 31},
+              {"payload": "nsmdata4", "offset": 1242, "size": 25}, {"payload": "nsmdata4", "offset": 1267, "size": 41},
+              {"payload": "nsmdata4", "offset": 1308, "size": 33}, {"payload": "nsmdata4", "offset": 1341, "size": 23},
+              {"payload": "nsmdata4", "offset": 1364, "size": 16}, {"payload": "nsmdata4", "offset": 1380, "size": 15},
+              {"payload": "prg", "offset": 25199, "size": 1}, {"payload": "prg", "offset": 25199, "size": 1},
+              {"payload": "nsmdata4", "offset": 1395, "size": 26}, {"payload": "nsmdata4", "offset": 1421, "size": 23},
+              {"payload": "nsmdata4", "offset": 1444, "size": 36}
+            ]
+          }
+        },
+        {
+          "id": "background-metatiles",
+          "kind": "metatile",
+          "codec": "nes.metatile-2x2.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "file_offset": 2695,
+            "size": 408,
+            "group_names": ["palette_0", "palette_1", "palette_2", "palette_3"],
+            "group_sizes": [39, 47, 10, 6],
+            "tile_base": 256
+          }
+        },
+        {
+          "id": "area-palette-packets",
+          "kind": "palette",
+          "codec": "nes.ppu-palette-packets.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "file_offset": 3103,
+            "size": 176,
+            "palette_model": "nes",
+            "packet_names": ["water", "ground", "underground", "castle", "day_snow", "night_snow", "mushroom", "boss"],
+            "packet_capacities": [36, 36, 36, 36, 8, 8, 8, 8],
+            "terminator": 0,
+            "day_background": 34,
+            "night_background": 15
+          }
+        },
+        {
+          "id": "player-palettes",
+          "kind": "palette",
+          "codec": "nes.palette-table.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "file_offset": 1470,
+            "size": 8,
+            "entries": 8,
+            "palette_model": "nes"
+          }
+        },
+        {
+          "id": "player-frames",
+          "kind": "animation",
+          "codec": "smb.player-frames.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "file_offset": 23282,
+            "size": 226,
+            "tile_base": 0,
+            "blank_tile": 252
+          }
+        },
+        {
           "id": "character-graphics",
           "kind": "graphics",
           "codec": "nes.chr-2bpp.v1",
@@ -203,7 +549,7 @@
       "sha1": "20e50128742162ee47561db9e82b2836399c880c",
       "sha256": "ff8afb9ae6b705b4e51dbcb193dcebadf4c049800a71003d3a45052648e52eda",
       "container": "fds",
-      "capabilities": ["graphics"],
+      "capabilities": ["world", "levels", "graphics"],
       "payloads": [
         {
           "id": "prg",
@@ -252,6 +598,243 @@
           "codec": "nes.resource-bundle.v1",
           "capacity_policy": "fixed",
           "parameters": {}
+        },
+        {
+          "id": "world-normal",
+          "kind": "world",
+          "codec": "smb.world.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "routing_span": {"payload": "prg", "offset": 25440, "size": 40},
+            "routing_size": 40,
+            "world_lengths": [5, 4, 5, 4, 5, 5, 4, 4, 4],
+            "physics_span": {"payload": "prg", "offset": 8080, "size": 44},
+            "physics_size": 44,
+            "physics_tables": [
+              {"name": "jump_gravity", "length": 7, "signed": false},
+              {"name": "fall_gravity", "length": 7, "signed": false},
+              {"name": "horizontal_friction", "length": 3, "signed": false},
+              {"name": "initial_y_speed", "length": 7, "signed": true},
+              {"name": "initial_y_fraction", "length": 7, "signed": false},
+              {"name": "maximum_left_speed", "length": 3, "signed": true},
+              {"name": "maximum_right_speed", "length": 4, "signed": true},
+              {"name": "climb_y_speed", "length": 3, "signed": true},
+              {"name": "climb_y_fraction", "length": 3, "signed": false}
+            ]
+          }
+        },
+        {
+          "id": "levels-normal",
+          "kind": "level",
+          "codec": "smb.levels.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "world_resource": "world-normal",
+            "stream_names": [
+              "castle_1", "castle_2", "castle_3", "castle_4", "castle_5", "castle_6", "castle_7", "castle_8", "castle_9", "castle_10",
+              "ground_1", "ground_2", "ground_3", "ground_4", "ground_5", "ground_6", "ground_7", "ground_8", "ground_9", "ground_10",
+              "ground_11", "ground_12", "ground_13", "ground_14", "ground_15", "ground_16", "ground_17", "ground_18", "ground_19", "ground_20",
+              "ground_21", "ground_22", "ground_23", "ground_24", "ground_25", "ground_26", "ground_27", "ground_28", "ground_29",
+              "underground_1", "underground_2", "underground_3", "underground_4", "underground_5",
+              "water_1", "water_2", "water_3", "water_4", "water_5", "water_6", "water_7", "water_8"
+            ],
+            "area_capacities": [
+              95, 139, 151, 117, 205, 143, 147, 215, 99, 17,
+              91, 79, 121, 125, 95, 127, 95, 119, 97, 9, 73, 161, 95, 127, 109, 131, 93, 123, 117, 25,
+              39, 107, 101, 261, 15, 73, 139, 19, 55,
+              193, 59, 75, 205, 65, 179, 201, 49, 25, 65, 71, 67, 81
+            ],
+            "enemy_capacities": [
+              31, 39, 19, 53, 57, 39, 63, 64, 10, 6,
+              38, 35, 41, 54, 23, 42, 37, 23, 34, 1, 35, 49, 40, 36, 29, 49, 44, 25, 40, 12,
+              1, 35, 40, 1, 4, 33, 33, 1, 9,
+              38, 10, 26, 33, 26, 38, 48, 16, 14, 21, 33, 5, 17
+            ],
+            "area_stream_spans": [
+              {"payload": "prg", "offset": 27156, "size": 95}, {"payload": "prg", "offset": 27251, "size": 139},
+              {"payload": "prg", "offset": 27390, "size": 151}, {"payload": "prg", "offset": 27541, "size": 117},
+              {"payload": "sm2data2", "offset": 1113, "size": 205}, {"payload": "sm2data2", "offset": 1318, "size": 143},
+              {"payload": "sm2data2", "offset": 1461, "size": 147}, {"payload": "sm2data2", "offset": 1608, "size": 215},
+              {"payload": "sm2data3", "offset": 1275, "size": 99}, {"payload": "sm2data3", "offset": 1374, "size": 17},
+              {"payload": "prg", "offset": 27658, "size": 91}, {"payload": "prg", "offset": 27749, "size": 79},
+              {"payload": "prg", "offset": 27828, "size": 121}, {"payload": "prg", "offset": 27949, "size": 125},
+              {"payload": "prg", "offset": 28074, "size": 95}, {"payload": "prg", "offset": 28169, "size": 127},
+              {"payload": "prg", "offset": 28296, "size": 95}, {"payload": "prg", "offset": 28391, "size": 119},
+              {"payload": "prg", "offset": 28510, "size": 97}, {"payload": "prg", "offset": 25204, "size": 9},
+              {"payload": "prg", "offset": 28607, "size": 73}, {"payload": "sm2data2", "offset": 1823, "size": 161},
+              {"payload": "sm2data2", "offset": 1984, "size": 95}, {"payload": "sm2data2", "offset": 2079, "size": 127},
+              {"payload": "sm2data2", "offset": 2206, "size": 109}, {"payload": "sm2data2", "offset": 2315, "size": 131},
+              {"payload": "sm2data2", "offset": 2446, "size": 93}, {"payload": "sm2data2", "offset": 2539, "size": 123},
+              {"payload": "sm2data2", "offset": 2662, "size": 117}, {"payload": "prg", "offset": 28680, "size": 25},
+              {"payload": "prg", "offset": 25213, "size": 39}, {"payload": "sm2data2", "offset": 2779, "size": 107},
+              {"payload": "sm2data2", "offset": 2886, "size": 101}, {"payload": "sm2data2", "offset": 2986, "size": 261},
+              {"payload": "sm2data3", "offset": 1391, "size": 15}, {"payload": "sm2data3", "offset": 1406, "size": 73},
+              {"payload": "sm2data3", "offset": 1407, "size": 139}, {"payload": "prg", "offset": 25185, "size": 19},
+              {"payload": "sm2data2", "offset": 2987, "size": 55}, {"payload": "prg", "offset": 28705, "size": 193},
+              {"payload": "prg", "offset": 28898, "size": 59}, {"payload": "prg", "offset": 28957, "size": 75},
+              {"payload": "sm2data2", "offset": 3042, "size": 205}, {"payload": "sm2data2", "offset": 3247, "size": 65},
+              {"payload": "prg", "offset": 29032, "size": 179}, {"payload": "sm2data2", "offset": 3312, "size": 201},
+              {"payload": "prg", "offset": 29211, "size": 49}, {"payload": "sm2data2", "offset": 3513, "size": 25},
+              {"payload": "sm2data2", "offset": 3538, "size": 65}, {"payload": "sm2data3", "offset": 1408, "size": 71},
+              {"payload": "sm2data3", "offset": 1479, "size": 67}, {"payload": "sm2data3", "offset": 1546, "size": 81}
+            ],
+            "enemy_stream_spans": [
+              {"payload": "prg", "offset": 26512, "size": 31}, {"payload": "prg", "offset": 26543, "size": 39},
+              {"payload": "prg", "offset": 26582, "size": 19}, {"payload": "prg", "offset": 26601, "size": 53},
+              {"payload": "sm2data2", "offset": 352, "size": 57}, {"payload": "sm2data2", "offset": 409, "size": 39},
+              {"payload": "sm2data2", "offset": 448, "size": 63}, {"payload": "sm2data2", "offset": 511, "size": 64},
+              {"payload": "sm2data3", "offset": 1200, "size": 10}, {"payload": "sm2data3", "offset": 1210, "size": 6},
+              {"payload": "prg", "offset": 26654, "size": 38}, {"payload": "prg", "offset": 26692, "size": 35},
+              {"payload": "prg", "offset": 26727, "size": 41}, {"payload": "prg", "offset": 26768, "size": 54},
+              {"payload": "prg", "offset": 26822, "size": 23}, {"payload": "prg", "offset": 26845, "size": 42},
+              {"payload": "prg", "offset": 26887, "size": 37}, {"payload": "prg", "offset": 26924, "size": 23},
+              {"payload": "prg", "offset": 26947, "size": 34}, {"payload": "prg", "offset": 25184, "size": 1},
+              {"payload": "prg", "offset": 26981, "size": 35}, {"payload": "sm2data2", "offset": 575, "size": 49},
+              {"payload": "sm2data2", "offset": 624, "size": 40}, {"payload": "sm2data2", "offset": 664, "size": 36},
+              {"payload": "sm2data2", "offset": 700, "size": 29}, {"payload": "sm2data2", "offset": 729, "size": 49},
+              {"payload": "sm2data2", "offset": 778, "size": 44}, {"payload": "sm2data2", "offset": 822, "size": 25},
+              {"payload": "sm2data2", "offset": 847, "size": 40}, {"payload": "prg", "offset": 27016, "size": 12},
+              {"payload": "prg", "offset": 25184, "size": 1}, {"payload": "sm2data2", "offset": 887, "size": 35},
+              {"payload": "sm2data2", "offset": 922, "size": 40}, {"payload": "sm2data2", "offset": 961, "size": 1},
+              {"payload": "sm2data3", "offset": 1216, "size": 4}, {"payload": "sm2data3", "offset": 1220, "size": 33},
+              {"payload": "sm2data3", "offset": 1220, "size": 33}, {"payload": "prg", "offset": 25184, "size": 1},
+              {"payload": "sm2data2", "offset": 962, "size": 9}, {"payload": "prg", "offset": 27028, "size": 38},
+              {"payload": "prg", "offset": 27066, "size": 10}, {"payload": "prg", "offset": 27076, "size": 26},
+              {"payload": "sm2data2", "offset": 971, "size": 33}, {"payload": "sm2data2", "offset": 1004, "size": 26},
+              {"payload": "prg", "offset": 27102, "size": 38}, {"payload": "sm2data2", "offset": 1030, "size": 48},
+              {"payload": "prg", "offset": 27140, "size": 16}, {"payload": "sm2data2", "offset": 1078, "size": 14},
+              {"payload": "sm2data2", "offset": 1092, "size": 21}, {"payload": "sm2data3", "offset": 1220, "size": 33},
+              {"payload": "sm2data3", "offset": 1253, "size": 5}, {"payload": "sm2data3", "offset": 1258, "size": 17}
+            ]
+          }
+        },
+        {
+          "id": "world-hard",
+          "kind": "world",
+          "codec": "smb.world.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "routing_span": {"payload": "sm2data4", "offset": 172, "size": 18},
+            "routing_size": 18,
+            "world_lengths": [5, 5, 4, 4],
+            "physics_span": {"payload": "prg", "offset": 8080, "size": 44},
+            "physics_size": 44,
+            "physics_tables": [
+              {"name": "jump_gravity", "length": 7, "signed": false},
+              {"name": "fall_gravity", "length": 7, "signed": false},
+              {"name": "horizontal_friction", "length": 3, "signed": false},
+              {"name": "initial_y_speed", "length": 7, "signed": true},
+              {"name": "initial_y_fraction", "length": 7, "signed": false},
+              {"name": "maximum_left_speed", "length": 3, "signed": true},
+              {"name": "maximum_right_speed", "length": 4, "signed": true},
+              {"name": "climb_y_speed", "length": 3, "signed": true},
+              {"name": "climb_y_fraction", "length": 3, "signed": false}
+            ]
+          }
+        },
+        {
+          "id": "levels-hard",
+          "kind": "level",
+          "codec": "smb.levels.v1",
+          "capacity_policy": "fixed",
+          "payload": "sm2data4",
+          "parameters": {
+            "world_resource": "world-hard",
+            "stream_names": [
+              "castle_1", "castle_2", "castle_3", "castle_4",
+              "ground_1", "ground_2", "ground_3", "ground_4", "ground_5", "ground_6", "ground_7",
+              "ground_8", "ground_9", "ground_10", "ground_11", "ground_12", "ground_13", "ground_14",
+              "underground_1", "underground_2", "water_1"
+            ],
+            "area_capacities": [115, 125, 155, 143, 143, 89, 145, 95, 119, 91, 125, 125, 75, 107, 35, 29, 9, 19, 117, 95, 121],
+            "enemy_capacities": [37, 39, 65, 47, 59, 15, 46, 37, 35, 31, 31, 32, 33, 23, 16, 15, 1, 1, 26, 20, 36],
+            "area_stream_spans": [
+              {"payload": "sm2data4", "offset": 1439, "size": 115}, {"payload": "sm2data4", "offset": 1554, "size": 125},
+              {"payload": "sm2data4", "offset": 1679, "size": 155}, {"payload": "sm2data4", "offset": 1834, "size": 143},
+              {"payload": "sm2data4", "offset": 1977, "size": 143}, {"payload": "sm2data4", "offset": 2120, "size": 89},
+              {"payload": "sm2data4", "offset": 2209, "size": 145}, {"payload": "sm2data4", "offset": 2354, "size": 95},
+              {"payload": "sm2data4", "offset": 2449, "size": 119}, {"payload": "sm2data4", "offset": 2568, "size": 91},
+              {"payload": "sm2data4", "offset": 2659, "size": 125}, {"payload": "sm2data4", "offset": 2784, "size": 125},
+              {"payload": "sm2data4", "offset": 2909, "size": 75}, {"payload": "sm2data4", "offset": 2984, "size": 107},
+              {"payload": "sm2data4", "offset": 3091, "size": 35}, {"payload": "sm2data4", "offset": 3126, "size": 29},
+              {"payload": "prg", "offset": 25204, "size": 9}, {"payload": "prg", "offset": 25185, "size": 19},
+              {"payload": "sm2data4", "offset": 3155, "size": 117}, {"payload": "sm2data4", "offset": 3272, "size": 95},
+              {"payload": "sm2data4", "offset": 3367, "size": 121}
+            ],
+            "enemy_stream_spans": [
+              {"payload": "sm2data4", "offset": 796, "size": 37}, {"payload": "sm2data4", "offset": 833, "size": 39},
+              {"payload": "sm2data4", "offset": 872, "size": 65}, {"payload": "sm2data4", "offset": 937, "size": 47},
+              {"payload": "sm2data4", "offset": 984, "size": 59}, {"payload": "sm2data4", "offset": 1043, "size": 15},
+              {"payload": "sm2data4", "offset": 1058, "size": 46}, {"payload": "sm2data4", "offset": 1104, "size": 37},
+              {"payload": "sm2data4", "offset": 1141, "size": 35}, {"payload": "sm2data4", "offset": 1176, "size": 31},
+              {"payload": "sm2data4", "offset": 1207, "size": 31}, {"payload": "sm2data4", "offset": 1238, "size": 32},
+              {"payload": "sm2data4", "offset": 1270, "size": 33}, {"payload": "sm2data4", "offset": 1303, "size": 23},
+              {"payload": "sm2data4", "offset": 1326, "size": 16}, {"payload": "sm2data4", "offset": 1342, "size": 15},
+              {"payload": "prg", "offset": 25184, "size": 1}, {"payload": "prg", "offset": 25184, "size": 1},
+              {"payload": "sm2data4", "offset": 1357, "size": 26}, {"payload": "sm2data4", "offset": 1383, "size": 20},
+              {"payload": "sm2data4", "offset": 1403, "size": 36}
+            ]
+          }
+        },
+        {
+          "id": "background-metatiles",
+          "kind": "metatile",
+          "codec": "nes.metatile-2x2.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "file_offset": 2541,
+            "size": 416,
+            "group_names": ["palette_0", "palette_1", "palette_2", "palette_3"],
+            "group_sizes": [36, 48, 13, 7],
+            "tile_base": 256
+          }
+        },
+        {
+          "id": "area-palette-packets",
+          "kind": "palette",
+          "codec": "nes.ppu-palette-packets.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "file_offset": 2957,
+            "size": 176,
+            "palette_model": "nes",
+            "packet_names": ["water", "ground", "underground", "castle", "day_snow", "night_snow", "mushroom", "boss"],
+            "packet_capacities": [36, 36, 36, 36, 8, 8, 8, 8],
+            "terminator": 0,
+            "day_background": 34,
+            "night_background": 15
+          }
+        },
+        {
+          "id": "player-palettes",
+          "kind": "palette",
+          "codec": "nes.palette-table.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "file_offset": 1335,
+            "size": 8,
+            "entries": 8,
+            "palette_model": "nes"
+          }
+        },
+        {
+          "id": "player-frames",
+          "kind": "animation",
+          "codec": "smb.player-frames.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "file_offset": 23266,
+            "size": 226,
+            "tile_base": 0,
+            "blank_tile": 252
+          }
         },
         {
           "id": "character-graphics",
@@ -352,6 +935,7 @@
       "parameters": {
         "file_offset": 3252,
         "size": 176,
+        "palette_model": "nes",
         "packet_names": [
           "water", "ground", "underground", "castle",
           "day_snow", "night_snow", "mushroom", "boss"
@@ -360,6 +944,58 @@
         "terminator": 0,
         "day_background": 34,
         "night_background": 15
+      }
+    },
+    {
+      "id": "player-palettes",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 1511,
+        "size": 12,
+        "entries": 12,
+        "palette_model": "nes"
+      }
+    },
+    {
+      "id": "ui-text",
+      "kind": "text",
+      "codec": "nes.fixed-text-fields.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "encoding": {
+          "characters": "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ -!",
+          "codes": [
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+            10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+            20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+            30, 31, 32, 33, 34, 35, 36, 40, 43
+          ],
+          "case_fold": "upper",
+          "padding": 36
+        },
+        "fields": [
+          {"key": "status-player", "label": "Status player name", "file_offset": 1893, "width": 5},
+          {"key": "status-headings", "label": "Status headings", "file_offset": 1901, "width": 11},
+          {"key": "lives-world", "label": "Lives-screen world label", "file_offset": 1942, "width": 9},
+          {"key": "time-up", "label": "Time up", "file_offset": 1971, "width": 7},
+          {"key": "game-over", "label": "Game over", "file_offset": 1990, "width": 9},
+          {"key": "warp-welcome", "label": "Warp-zone welcome", "file_offset": 2003, "width": 21},
+          {"key": "brother-name", "label": "Brother name", "file_offset": 2045, "width": 5}
+        ]
+      }
+    },
+    {
+      "id": "player-frames",
+      "kind": "animation",
+      "codec": "smb.player-frames.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 28183,
+        "size": 226,
+        "tile_base": 0,
+        "blank_tile": 252
       }
     },
     {

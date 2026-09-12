@@ -18,6 +18,7 @@ from .authoring import (
     Provenance,
     ResourceSpec,
     RevisionSpec,
+    stable_identifier,
 )
 from .fds import FdsError, fds_payload, fds_payload_ranges, parse_fds_side
 from .ines import parse_ines, parse_ines_prefix
@@ -58,6 +59,12 @@ from .smb_level import (
     decode_levels as decode_smb_levels,
     encode_levels as encode_smb_levels,
 )
+from .smb_player_frames import (
+    CODEC as SMB_PLAYER_FRAME_CODEC,
+    ENCODED_SIZE as SMB_PLAYER_FRAME_SIZE,
+    decode_player_frames,
+    encode_player_frames,
+)
 from .nes_visuals import (
     METATILE_CODEC,
     PALETTE_PACKET_CODEC,
@@ -82,6 +89,7 @@ SUPPORTED_CODECS = (
     PACMAN_SCREEN_CODEC,
     SMB_WORLD_CODEC,
     SMB_LEVEL_CODEC,
+    SMB_PLAYER_FRAME_CODEC,
     METATILE_CODEC,
     PALETTE_PACKET_CODEC,
 )
@@ -89,6 +97,20 @@ SUPPORTED_CODECS = (
 
 class NesResourceError(AuthoringError):
     """A fixed NES resource profile or document is invalid."""
+
+
+@dataclass(frozen=True)
+class _ResourceSpan:
+    offset: int
+    size: int
+    payload_id: str | None = None
+
+
+@dataclass(frozen=True)
+class _EncodedSpan:
+    offset: int
+    replacement: bytes
+    payload_id: str | None = None
 
 
 def _integer(value: object, name: str, *, minimum: int = 0) -> int:
@@ -227,13 +249,22 @@ def _physical_replacements(
     profile: GameProfile,
     revision: RevisionSpec,
     resource: ResourceSpec,
-    replacements: tuple[tuple[int, bytes], ...],
+    replacements: tuple[_EncodedSpan, ...],
 ) -> tuple[tuple[int, bytes], ...]:
-    payload = _resource_payload(profile, revision, resource)
-    if payload is None:
-        return replacements
     result = []
-    for offset, replacement in replacements:
+    for item in replacements:
+        offset = item.offset
+        replacement = item.replacement
+        if item.payload_id is None:
+            payload = _resource_payload(profile, revision, resource)
+        else:
+            try:
+                payload = profile.payload_for(revision, item.payload_id)
+            except AuthoringError as exc:
+                raise NesResourceError(str(exc)) from exc
+        if payload is None:
+            result.append((offset, replacement))
+            continue
         if offset < 0 or offset + len(replacement) > payload.size:
             raise NesResourceError(
                 f"resource {resource.resource_id} exceeds payload {payload.payload_id}"
@@ -259,6 +290,150 @@ def _physical_replacements(
             raise NesResourceError(
                 f"unsupported payload storage {payload.storage!r}"
             )
+    return tuple(result)
+
+
+def _level_stream_spans(
+    resource: ResourceSpec, stream_kind: str
+) -> tuple[_ResourceSpan, ...]:
+    capacities_value = resource.parameters.get(f"{stream_kind}_capacities")
+    if not isinstance(capacities_value, list) or not capacities_value:
+        raise NesResourceError(
+            f"{resource.resource_id}.{stream_kind}_capacities must be a non-empty array"
+        )
+    capacities = tuple(
+        _integer(
+            value,
+            f"{resource.resource_id}.{stream_kind}_capacities[{index}]",
+            minimum=1,
+        )
+        for index, value in enumerate(capacities_value)
+    )
+    spans_value = resource.parameters.get(f"{stream_kind}_stream_spans")
+    if spans_value is None:
+        offset = _integer(
+            resource.parameters.get(f"{stream_kind}_file_offset"),
+            f"{resource.resource_id}.{stream_kind}_file_offset",
+        )
+        size = _integer(
+            resource.parameters.get(f"{stream_kind}_size"),
+            f"{resource.resource_id}.{stream_kind}_size",
+            minimum=1,
+        )
+        if size != sum(capacities):
+            raise NesResourceError(
+                f"{resource.resource_id}.{stream_kind}_size is {size}, "
+                f"expected {sum(capacities)}"
+            )
+        return (_ResourceSpan(offset, size),)
+    if not isinstance(spans_value, list) or len(spans_value) != len(capacities):
+        raise NesResourceError(
+            f"{resource.resource_id}.{stream_kind}_stream_spans must contain "
+            f"{len(capacities)} entries"
+        )
+    result = []
+    for index, (value, capacity) in enumerate(zip(spans_value, capacities)):
+        context = f"{resource.resource_id}.{stream_kind}_stream_spans[{index}]"
+        if not isinstance(value, dict) or set(value) != {"payload", "offset", "size"}:
+            raise NesResourceError(f"{context} fields differ from contract")
+        try:
+            payload_id = stable_identifier(value.get("payload"), f"{context}.payload")
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        size = _integer(value.get("size"), f"{context}.size", minimum=1)
+        if size != capacity:
+            raise NesResourceError(
+                f"{context}.size is {size}, expected stream capacity {capacity}"
+            )
+        result.append(_ResourceSpan(
+            _integer(value.get("offset"), f"{context}.offset"),
+            size,
+            payload_id,
+        ))
+    return tuple(result)
+
+
+def _world_component_span(
+    resource: ResourceSpec, component: str
+) -> _ResourceSpan:
+    expected_size = _integer(
+        resource.parameters.get(f"{component}_size"),
+        f"{resource.resource_id}.{component}_size",
+        minimum=1,
+    )
+    value = resource.parameters.get(f"{component}_span")
+    if value is None:
+        return _ResourceSpan(
+            _integer(
+                resource.parameters.get(f"{component}_file_offset"),
+                f"{resource.resource_id}.{component}_file_offset",
+            ),
+            expected_size,
+        )
+    context = f"{resource.resource_id}.{component}_span"
+    if not isinstance(value, dict) or set(value) != {"payload", "offset", "size"}:
+        raise NesResourceError(f"{context} fields differ from contract")
+    try:
+        payload_id = stable_identifier(value.get("payload"), f"{context}.payload")
+    except AuthoringError as exc:
+        raise NesResourceError(str(exc)) from exc
+    size = _integer(value.get("size"), f"{context}.size", minimum=1)
+    if size != expected_size:
+        raise NesResourceError(
+            f"{context}.size is {size}, expected {expected_size}"
+        )
+    return _ResourceSpan(
+        _integer(value.get("offset"), f"{context}.offset"),
+        size,
+        payload_id,
+    )
+
+
+def _read_resource_spans(
+    source: bytes,
+    profile: GameProfile,
+    revision: RevisionSpec,
+    resource: ResourceSpec,
+    spans: tuple[_ResourceSpan, ...],
+) -> bytes:
+    cached_payloads: dict[str | None, bytes] = {}
+    output = bytearray()
+    for span in spans:
+        if span.payload_id not in cached_payloads:
+            if span.payload_id is None:
+                cached_payloads[None] = _resource_source(
+                    source, profile, revision, resource
+                )
+            else:
+                try:
+                    payload = profile.payload_for(revision, span.payload_id)
+                except AuthoringError as exc:
+                    raise NesResourceError(str(exc)) from exc
+                cached_payloads[span.payload_id] = _payload_source(source, payload)
+        payload_source = cached_payloads[span.payload_id]
+        chunk = payload_source[span.offset:span.offset + span.size]
+        if len(chunk) != span.size:
+            target = span.payload_id or "source image"
+            raise NesResourceError(
+                f"resource {resource.resource_id} exceeds {target}"
+            )
+        output.extend(chunk)
+    return bytes(output)
+
+
+def _encoded_resource_spans(
+    payload: bytes, spans: tuple[_ResourceSpan, ...]
+) -> tuple[_EncodedSpan, ...]:
+    if len(payload) != sum(span.size for span in spans):
+        raise NesResourceError("encoded stream size differs from its span layout")
+    result = []
+    position = 0
+    for span in spans:
+        end = position + span.size
+        result.append(_EncodedSpan(
+            span.offset, payload[position:end], span.payload_id
+        ))
+        position = end
     return tuple(result)
 
 
@@ -462,6 +637,13 @@ def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
             "codec": resource.codec,
             "values": list(payload),
         }
+        palette_model = resource.parameters.get("palette_model")
+        if palette_model is not None:
+            if palette_model not in ("nes", "rp2c04_0004"):
+                raise NesResourceError(
+                    f"{resource.resource_id}.palette_model is unsupported"
+                )
+            result["palette_model"] = palette_model
         if resource.codec == PACMAN_PALETTE_CODEC:
             result["mirror_pairs"] = resource.parameters.get("mirror_pairs", [])
         return result
@@ -507,6 +689,21 @@ def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
             "codec": resource.codec,
             **decoded,
         }
+    if resource.codec == SMB_PLAYER_FRAME_CODEC:
+        offset, size = _span(resource, SMB_PLAYER_FRAME_SIZE)
+        payload = image[offset : offset + size]
+        if len(payload) != size:
+            raise NesResourceError(f"{resource.resource_id} exceeds the source image")
+        try:
+            decoded = decode_player_frames(payload, resource.parameters)
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return {
+            "id": resource.resource_id,
+            "kind": resource.kind,
+            "codec": resource.codec,
+            **decoded,
+        }
     if resource.codec == PALETTE_PACKET_CODEC:
         expected = sum(
             _integer(item, f"{resource.resource_id}.packet_capacities[{index}]", minimum=5)
@@ -520,12 +717,20 @@ def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
             decoded = decode_palette_packets(payload, resource.parameters)
         except AuthoringError as exc:
             raise NesResourceError(str(exc)) from exc
-        return {
+        result = {
             "id": resource.resource_id,
             "kind": resource.kind,
             "codec": resource.codec,
             **decoded,
         }
+        palette_model = resource.parameters.get("palette_model")
+        if palette_model is not None:
+            if palette_model not in {"nes", "rp2c04_0004"}:
+                raise NesResourceError(
+                    f"{resource.resource_id}.palette_model is unsupported"
+                )
+            result["palette_model"] = palette_model
+        return result
     if resource.codec == PACMAN_MAZE_CODEC:
         width = _integer(
             resource.parameters.get("width"), f"{resource.resource_id}.width", minimum=1
@@ -582,75 +787,90 @@ def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
             "codec": resource.codec,
             **decode_screen_collection(image, resource.parameters),
         }
-    if resource.codec == SMB_WORLD_CODEC:
-        routing_offset = _integer(
-            resource.parameters.get("routing_file_offset"),
-            f"{resource.resource_id}.routing_file_offset",
-        )
-        routing_size = _integer(
-            resource.parameters.get("routing_size"),
-            f"{resource.resource_id}.routing_size",
-            minimum=1,
-        )
-        physics_offset = _integer(
-            resource.parameters.get("physics_file_offset"),
-            f"{resource.resource_id}.physics_file_offset",
-        )
-        physics_size = _integer(
-            resource.parameters.get("physics_size"),
-            f"{resource.resource_id}.physics_size",
-            minimum=1,
-        )
-        routing = image[routing_offset : routing_offset + routing_size]
-        physics = image[physics_offset : physics_offset + physics_size]
-        if len(routing) != routing_size or len(physics) != physics_size:
-            raise NesResourceError(f"{resource.resource_id} exceeds the source image")
-        try:
-            decoded = decode_smb_world(routing, physics, resource.parameters)
-        except AuthoringError as exc:
-            raise NesResourceError(str(exc)) from exc
-        return {
-            "id": resource.resource_id,
-            "kind": resource.kind,
-            "codec": resource.codec,
-            **decoded,
-        }
-    if resource.codec == SMB_LEVEL_CODEC:
-        area_offset = _integer(
-            resource.parameters.get("area_file_offset"),
-            f"{resource.resource_id}.area_file_offset",
-        )
-        area_size = _integer(
-            resource.parameters.get("area_size"),
-            f"{resource.resource_id}.area_size", minimum=1,
-        )
-        enemy_offset = _integer(
-            resource.parameters.get("enemy_file_offset"),
-            f"{resource.resource_id}.enemy_file_offset",
-        )
-        enemy_size = _integer(
-            resource.parameters.get("enemy_size"),
-            f"{resource.resource_id}.enemy_size", minimum=1,
-        )
-        area = image[area_offset : area_offset + area_size]
-        enemy = image[enemy_offset : enemy_offset + enemy_size]
-        if len(area) != area_size or len(enemy) != enemy_size:
-            raise NesResourceError(f"{resource.resource_id} exceeds the source image")
-        try:
-            decoded = decode_smb_levels(area, enemy, resource.parameters)
-        except AuthoringError as exc:
-            raise NesResourceError(str(exc)) from exc
-        result = {
-            "id": resource.resource_id,
-            "kind": resource.kind,
-            "codec": resource.codec,
-            **decoded,
-        }
-        world_resource_id = resource.parameters.get("world_resource")
-        if world_resource_id is not None:
-            result["world_resource"] = world_resource_id
-        return result
     raise NesResourceError(f"unsupported NES resource codec {resource.codec}")
+
+
+def _decode_smb_world_resource(
+    source: bytes,
+    profile: GameProfile,
+    revision: RevisionSpec,
+    resource: ResourceSpec,
+) -> dict[str, object]:
+    routing = _read_resource_spans(
+        source,
+        profile,
+        revision,
+        resource,
+        (_world_component_span(resource, "routing"),),
+    )
+    physics = _read_resource_spans(
+        source,
+        profile,
+        revision,
+        resource,
+        (_world_component_span(resource, "physics"),),
+    )
+    try:
+        decoded = decode_smb_world(routing, physics, resource.parameters)
+    except AuthoringError as exc:
+        raise NesResourceError(str(exc)) from exc
+    return {
+        "id": resource.resource_id,
+        "kind": resource.kind,
+        "codec": resource.codec,
+        **decoded,
+    }
+
+
+def _decode_smb_level_resource(
+    source: bytes,
+    profile: GameProfile,
+    revision: RevisionSpec,
+    resource: ResourceSpec,
+) -> dict[str, object]:
+    area = _read_resource_spans(
+        source,
+        profile,
+        revision,
+        resource,
+        _level_stream_spans(resource, "area"),
+    )
+    enemy = _read_resource_spans(
+        source,
+        profile,
+        revision,
+        resource,
+        _level_stream_spans(resource, "enemy"),
+    )
+    try:
+        decoded = decode_smb_levels(area, enemy, resource.parameters)
+    except AuthoringError as exc:
+        raise NesResourceError(str(exc)) from exc
+    result = {
+        "id": resource.resource_id,
+        "kind": resource.kind,
+        "codec": resource.codec,
+        **decoded,
+    }
+    world_resource_id = resource.parameters.get("world_resource")
+    if world_resource_id is not None:
+        result["world_resource"] = world_resource_id
+    return result
+
+
+def _decode_profile_resource(
+    source: bytes,
+    profile: GameProfile,
+    revision: RevisionSpec,
+    resource: ResourceSpec,
+) -> dict[str, object]:
+    if resource.codec == SMB_LEVEL_CODEC:
+        return _decode_smb_level_resource(source, profile, revision, resource)
+    if resource.codec == SMB_WORLD_CODEC:
+        return _decode_smb_world_resource(source, profile, revision, resource)
+    return _decode_resource(
+        _resource_source(source, profile, revision, resource), resource
+    )
 
 
 def decode_resources(
@@ -666,7 +886,7 @@ def decode_resources(
     ):
         raise NesResourceError("resource profile mapper differs from the source image")
     resources = tuple(
-        _decode_resource(_resource_source(source, profile, revision, item), item)
+        _decode_profile_resource(source, profile, revision, item)
         for item in _resource_specs(profile, revision)
     )
     return NesResourceBundleDocument(
@@ -676,14 +896,14 @@ def decode_resources(
 
 def _parse_resource(
     raw: object, spec: ResourceSpec
-) -> tuple[Mapping[str, object], tuple[tuple[int, bytes], ...]]:
+) -> tuple[Mapping[str, object], tuple[_EncodedSpan, ...]]:
     if not isinstance(raw, dict):
         raise NesResourceError(f"resource {spec.resource_id} must be an object")
     if raw.get("id") != spec.resource_id or raw.get("codec") != spec.codec:
         raise NesResourceError(f"resource {spec.resource_id} identity differs from profile")
     if raw.get("kind") != spec.kind:
         raise NesResourceError(f"resource {spec.resource_id} kind differs from profile")
-    encoded_spans: tuple[tuple[int, bytes], ...] | None = None
+    encoded_spans: tuple[_EncodedSpan, ...] | None = None
     if spec.codec == NAMETABLE_CODEC:
         expected_fields = {
             "id", "kind", "codec", "width", "height", "tiles", "attributes"
@@ -711,6 +931,17 @@ def _parse_resource(
         payload = bytes(cell for row in tiles for cell in row) + attributes
     elif spec.codec in (PALETTE_CODEC, PACMAN_PALETTE_CODEC):
         expected_fields = {"id", "kind", "codec", "values"}
+        palette_model = spec.parameters.get("palette_model")
+        if palette_model is not None:
+            expected_fields.add("palette_model")
+            if palette_model not in ("nes", "rp2c04_0004"):
+                raise NesResourceError(
+                    f"{spec.resource_id}.palette_model is unsupported"
+                )
+            if raw.get("palette_model") != palette_model:
+                raise NesResourceError(
+                    f"{spec.resource_id}.palette_model differs from the profile"
+                )
         if spec.codec == PACMAN_PALETTE_CODEC:
             expected_fields.add("mirror_pairs")
         count = _integer(
@@ -730,7 +961,7 @@ def _parse_resource(
         replicated = _replicated_palette_offsets(spec, count)
         if replicated is not None:
             encoded_spans = tuple(
-                (offset, bytes((payload[entry],)))
+                _EncodedSpan(offset, bytes((payload[entry],)))
                 for entry, offsets in enumerate(replicated)
                 for offset in offsets
             )
@@ -776,13 +1007,39 @@ def _parse_resource(
             )
         except AuthoringError as exc:
             raise NesResourceError(str(exc)) from exc
+    elif spec.codec == SMB_PLAYER_FRAME_CODEC:
+        expected_fields = {
+            "id", "kind", "codec", "frame_offsets", "frame_names",
+            "tile_base", "blank_tile", "frames", "swim_kick_tiles",
+        }
+        try:
+            payload = encode_player_frames(
+                {
+                    key: raw.get(key)
+                    for key in expected_fields - {"id", "kind", "codec"}
+                },
+                spec.parameters,
+            )
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
     elif spec.codec == PALETTE_PACKET_CODEC:
         expected_fields = {
             "id", "kind", "codec", "day_background", "night_background", "packets"
         }
+        palette_model = spec.parameters.get("palette_model")
+        if palette_model is not None:
+            expected_fields.add("palette_model")
+            if raw.get("palette_model") != palette_model:
+                raise NesResourceError(
+                    f"{spec.resource_id}.palette_model differs from the profile"
+                )
         try:
             payload = encode_palette_packets(
-                {key: raw.get(key) for key in expected_fields - {"id", "kind", "codec"}},
+                {
+                    key: raw.get(key)
+                    for key in expected_fields
+                    - {"id", "kind", "codec", "palette_model"}
+                },
                 spec.parameters,
             )
         except AuthoringError as exc:
@@ -831,10 +1088,16 @@ def _parse_resource(
         })
     elif spec.codec == FIXED_TEXT_CODEC:
         expected_fields = {"id", "kind", "codec", "encoding", "messages"}
-        encoded_spans = encode_text_fields(raw, spec.parameters)
+        encoded_spans = tuple(
+            _EncodedSpan(offset, replacement)
+            for offset, replacement in encode_text_fields(raw, spec.parameters)
+        )
     elif spec.codec == PACMAN_SOUND_CODEC:
         expected_fields = {"id", "kind", "codec", "capacity", "slots"}
-        encoded_spans = encode_sound_bundle(raw, spec.parameters)
+        encoded_spans = tuple(
+            _EncodedSpan(offset, replacement)
+            for offset, replacement in encode_sound_bundle(raw, spec.parameters)
+        )
     elif spec.codec == PACMAN_SCREEN_CODEC:
         expected_fields = {
             "id", "kind", "codec", "title_logo", "title_packets",
@@ -842,9 +1105,15 @@ def _parse_resource(
             "intermission_visual", "read_only_code_tables", "encoding",
             "text_fields",
         }
-        encoded_spans = encode_screen_collection(
-            {key: raw.get(key) for key in expected_fields - {"id", "kind", "codec"}},
-            spec.parameters,
+        encoded_spans = tuple(
+            _EncodedSpan(offset, replacement)
+            for offset, replacement in encode_screen_collection(
+                {
+                    key: raw.get(key)
+                    for key in expected_fields - {"id", "kind", "codec"}
+                },
+                spec.parameters,
+            )
         )
     elif spec.codec == SMB_WORLD_CODEC:
         expected_fields = {
@@ -875,19 +1144,11 @@ def _parse_resource(
                 f"{spec.resource_id} encoded sizes differ from the profile"
             )
         encoded_spans = (
-            (
-                _integer(
-                    spec.parameters.get("routing_file_offset"),
-                    f"{spec.resource_id}.routing_file_offset",
-                ),
-                routing,
+            *_encoded_resource_spans(
+                routing, (_world_component_span(spec, "routing"),)
             ),
-            (
-                _integer(
-                    spec.parameters.get("physics_file_offset"),
-                    f"{spec.resource_id}.physics_file_offset",
-                ),
-                physics,
+            *_encoded_resource_spans(
+                physics, (_world_component_span(spec, "physics"),)
             ),
         )
     elif spec.codec == SMB_LEVEL_CODEC:
@@ -910,32 +1171,12 @@ def _parse_resource(
             )
         except AuthoringError as exc:
             raise NesResourceError(str(exc)) from exc
-        area_size = _integer(
-            spec.parameters.get("area_size"),
-            f"{spec.resource_id}.area_size", minimum=1,
-        )
-        enemy_size = _integer(
-            spec.parameters.get("enemy_size"),
-            f"{spec.resource_id}.enemy_size", minimum=1,
-        )
-        if len(area) != area_size or len(enemy) != enemy_size:
-            raise NesResourceError(
-                f"{spec.resource_id} encoded sizes differ from the profile"
-            )
         encoded_spans = (
-            (
-                _integer(
-                    spec.parameters.get("area_file_offset"),
-                    f"{spec.resource_id}.area_file_offset",
-                ),
-                area,
+            *_encoded_resource_spans(
+                area, _level_stream_spans(spec, "area")
             ),
-            (
-                _integer(
-                    spec.parameters.get("enemy_file_offset"),
-                    f"{spec.resource_id}.enemy_file_offset",
-                ),
-                enemy,
+            *_encoded_resource_spans(
+                enemy, _level_stream_spans(spec, "enemy")
             ),
         )
     else:
@@ -946,7 +1187,7 @@ def _parse_resource(
         )
     if encoded_spans is None:
         offset, _size = _span(spec, len(payload))
-        encoded_spans = ((offset, payload),)
+        encoded_spans = (_EncodedSpan(offset, payload),)
     return raw, encoded_spans
 
 
@@ -1079,6 +1320,11 @@ def inspection_details(document: NesResourceBundleDocument) -> dict[str, int]:
         + len(item.get("alternate_tile_quads", []))
         for item in document.resources
         if item.get("codec") == PACMAN_ACTOR_CODEC
+    )
+    actor_frames += sum(
+        len(item.get("frames", []))
+        for item in document.resources
+        if item.get("codec") == SMB_PLAYER_FRAME_CODEC
     )
     text_messages = sum(
         len(item.get("messages", []))
