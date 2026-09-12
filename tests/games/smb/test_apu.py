@@ -548,7 +548,9 @@ class SmbApuTests(unittest.TestCase):
             )
             return dict(resource.parameters)
 
-        for revision_id in ("ju", "pc10", "vs_smb", "fds_smb"):
+        for revision_id in (
+            "ju", "pc10", "vs_smb", "fds_smb", "ann_fds", "smb2_jp_fds"
+        ):
             with self.subTest(revision=revision_id):
                 parameters = music_parameters(revision_id)
                 self.assertEqual(60.0988, parameters["frame_rate"])
@@ -561,6 +563,18 @@ class SmbApuTests(unittest.TestCase):
         self.assertEqual(50.00698, pal["frame_rate"])
         self.assertEqual(1_662_607.0, pal["cpu_frequency"])
         self.assertEqual(0x91, pal["hardware_envelope_event_mask"])
+        ann = music_parameters("ann_fds")
+        smb2 = music_parameters("smb2_jp_fds")
+        self.assertEqual((0x794A, 0xD94A, 0x680, 1296), (
+            ann["file_offset"], ann["cpu_address"],
+            parse_layout(ann).encoded_size, ann["shared_stream_size"],
+        ))
+        self.assertEqual((0x7949, 0xD949, 0x681, 1297), (
+            smb2["file_offset"], smb2["cpu_address"],
+            parse_layout(smb2).encoded_size, smb2["shared_stream_size"],
+        ))
+        self.assertNotIn("victory", [item["name"] for item in ann["headers"]])
+        self.assertNotIn("victory", [item["name"] for item in smb2["headers"]])
 
     def test_selector_context_matches_music_engine_masks(self) -> None:
         parameters = {

@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from retrolarium_kit.game_profiles import packaged_game_profiles
 from retrolarium_kit.studio_project import (
     StudioProjectError,
     create_studio_project,
@@ -388,6 +389,8 @@ class StudioProjectTests(unittest.TestCase):
                     {"id": "chr", "kind": "graphics", "codec": "nes.chr-2bpp.v1"},
                     {"id": "player-frames", "kind": "animation", "codec": "smb.player-frames.v1"},
                     {"id": "music", "kind": "audio", "codec": "smb.apu-music.v1"},
+                    {"id": "swim-stomp-envelope", "kind": "audio",
+                     "codec": "smb.apu-envelope.v1"},
                 ],
             }), encoding="utf-8")
             with patch(
@@ -462,7 +465,7 @@ class StudioProjectTests(unittest.TestCase):
             pal_levels = pal_result["workspace"]["tabs"][0]
             self.assertNotIn("playtest", pal_levels["capabilities"])
 
-    def test_create_maps_fds_synthesis_to_typed_editor(self) -> None:
+    def test_create_maps_complete_fds_music_to_typed_editor(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source = root / "manifest.json"
@@ -474,11 +477,18 @@ class StudioProjectTests(unittest.TestCase):
                 "game": "smb1",
                 "revision": "ann_fds",
                 "source_sha256": SHA256,
-                "resources": [{
-                    "id": "fds-synthesis",
-                    "kind": "audio",
-                    "codec": "fds.synthesis.v1",
-                }],
+                "resources": [
+                    {
+                        "id": "swim-stomp-envelope",
+                        "kind": "audio",
+                        "codec": "smb.apu-envelope.v1",
+                    },
+                    {
+                        "id": "fds-music",
+                        "kind": "audio",
+                        "codec": "fds.music.v1",
+                    },
+                ],
             }), encoding="utf-8")
             with patch(
                 "retrolarium_kit.studio_project.load_disassembly_manifest",
@@ -492,10 +502,114 @@ class StudioProjectTests(unittest.TestCase):
             self.assertEqual("synthesis", synthesis["id"])
             self.assertEqual("FDS Synthesis", synthesis["title"])
             self.assertEqual("audio.synthesis", synthesis["kind"])
-            self.assertEqual("fds.synthesis.v1", synthesis["codec"])
+            self.assertEqual("fds.music.v1", synthesis["codec"])
             self.assertEqual(
                 ["edit", "restore", "undo"], synthesis["capabilities"]
             )
+
+    def test_create_maps_combined_smb_audio_to_two_editors(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "manifest.json"
+            source.write_text(json.dumps(manifest()), encoding="utf-8")
+            resources = root / "resources.json"
+            resources.write_text(json.dumps({
+                "schema": "retrolarium.nes-resource-bundle",
+                "schema_version": 1,
+                "game": "smb1",
+                "revision": "ann_fds",
+                "source_sha256": SHA256,
+                "resources": [
+                    {"id": "music", "kind": "audio",
+                     "codec": "smb.apu-music.v1"},
+                    {"id": "swim-stomp-envelope", "kind": "audio",
+                     "codec": "smb.apu-envelope.v1"},
+                    {"id": "fds-synthesis", "kind": "audio",
+                     "codec": "fds.synthesis.v1"},
+                ],
+            }), encoding="utf-8")
+            with patch(
+                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                return_value=manifest(),
+            ):
+                result = create_studio_project(
+                    source, root / "ann.retrolarium", project_id="ann",
+                    name="ANN", profile="smb1.v1",
+                    resource_document=resources,
+                )
+            by_id = {tab["id"]: tab for tab in result["workspace"]["tabs"]}
+            self.assertEqual("smb.apu-music.v1", by_id["music-sounds"]["codec"])
+            self.assertEqual("audio.sequencer", by_id["music-sounds"]["kind"])
+            self.assertEqual("fds.synthesis.v1", by_id["synthesis"]["codec"])
+            self.assertEqual("audio.synthesis", by_id["synthesis"]["kind"])
+            self.assertEqual(
+                by_id["music-sounds"]["document"],
+                by_id["synthesis"]["document"],
+            )
+
+    def test_smb_revision_matrix_creates_only_supported_editor_tabs(self) -> None:
+        profile = packaged_game_profiles().get("smb1")
+        expected_common = {
+            "world", "levels", "graphics", "metatiles", "palettes",
+            "player-frames", "code",
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "manifest.json"
+            source.write_text(json.dumps(manifest()), encoding="utf-8")
+            for revision in profile.revisions:
+                revision_id = revision.revision_id
+                resources = []
+                for resource in profile.resources_for(revision):
+                    item = {
+                        "id": resource.resource_id,
+                        "kind": resource.kind,
+                        "codec": resource.codec,
+                    }
+                    if (
+                        resource.kind == "screen"
+                        and resource.parameters.get("text_fields")
+                    ):
+                        item["text_fields"] = [{"key": "profile-text"}]
+                    resources.append(item)
+                resource_path = root / f"{revision_id}.json"
+                resource_path.write_text(json.dumps({
+                    "schema": "retrolarium.nes-resource-bundle",
+                    "schema_version": 1,
+                    "game": "smb1",
+                    "revision": revision_id,
+                    "source_sha256": SHA256,
+                    "resources": resources,
+                }), encoding="utf-8")
+                with self.subTest(revision=revision_id), patch(
+                    "retrolarium_kit.studio_project.load_disassembly_manifest",
+                    return_value=manifest(),
+                ):
+                    result = create_studio_project(
+                        source, root / f"{revision_id}.retrolarium",
+                        project_id=revision_id, name=revision.name,
+                        profile="smb1.v1", resource_document=resource_path,
+                    )
+                    tabs = result["workspace"]["tabs"]
+                    by_id = {tab["id"]: tab for tab in tabs}
+                    self.assertTrue(expected_common.issubset(by_id), set(by_id))
+                    if revision_id in {"ann_fds", "smb2_jp_fds"}:
+                        self.assertEqual("fds.music.v1",
+                            by_id["synthesis"]["codec"])
+                        self.assertEqual("audio.synthesis",
+                            by_id["synthesis"]["kind"])
+                        self.assertEqual("smb.apu-music.v1",
+                            by_id["music-sounds"]["codec"])
+                        self.assertEqual("audio.sequencer",
+                            by_id["music-sounds"]["kind"])
+                        self.assertIn("screens", by_id)
+                        self.assertIn("text", by_id)
+                    else:
+                        self.assertEqual("smb.apu-music.v1",
+                            by_id["music-sounds"]["codec"])
+                        self.assertEqual("audio.sequencer",
+                            by_id["music-sounds"]["kind"])
+                        self.assertNotIn("synthesis", by_id)
 
     def test_create_maps_packet_screen_text_to_text_editor(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

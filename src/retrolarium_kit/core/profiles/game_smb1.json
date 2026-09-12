@@ -5,7 +5,7 @@
   "profile_version": 1,
   "name": "Super Mario Bros. (NES)",
   "platform": "nes",
-  "capabilities": ["world", "levels", "graphics", "text", "audio"],
+  "capabilities": ["world", "levels", "graphics", "screens", "text", "audio"],
   "revisions": [
     {
       "id": "ju",
@@ -39,6 +39,10 @@
             "cpu_frequency": 1662607.0,
             "shared_stream_size": 1351
           }
+        },
+        {
+          "id": "swim-stomp-envelope",
+          "parameters": {"file_offset": 29634}
         }
       ]
     },
@@ -144,16 +148,31 @@
           }
         },
         {
+          "id": "game-screen-packets",
+          "payload": "prg",
+          "parameters": {
+            "screens": [
+              {"key": "status", "label": "Status bar", "file_offset": 2382, "size": 39},
+              {"key": "world-lives", "label": "World and lives", "file_offset": 2421, "size": 31},
+              {"key": "time-up", "label": "Time up", "file_offset": 2452, "size": 19},
+              {"key": "game-over", "label": "Game over", "file_offset": 2471, "size": 21}
+            ]
+          }
+        },
+        {
+          "id": "warp-zone-screen",
+          "payload": "prg",
+          "parameters": {
+            "screens": [
+              {"key": "warp-zone", "label": "Warp zone", "file_offset": 2492, "size": 45}
+            ]
+          }
+        },
+        {
           "id": "ui-text",
           "payload": "prg",
           "parameters": {
             "fields": [
-              {"key": "status-player", "label": "Status player name", "file_offset": 2385, "width": 5},
-              {"key": "status-headings", "label": "Status headings", "file_offset": 2393, "width": 11},
-              {"key": "lives-world", "label": "Lives-screen world label", "file_offset": 2434, "width": 9},
-              {"key": "time-up", "label": "Time up", "file_offset": 2463, "width": 7},
-              {"key": "game-over", "label": "Game over", "file_offset": 2482, "width": 9},
-              {"key": "warp-welcome", "label": "Warp-zone welcome", "file_offset": 2495, "width": 21},
               {"key": "brother-name", "label": "Brother name", "file_offset": 2537, "width": 5}
             ]
           }
@@ -209,6 +228,11 @@
               {"name": "water_event", "size": 40}
             ]
           }
+        },
+        {
+          "id": "swim-stomp-envelope",
+          "payload": "prg",
+          "parameters": {"file_offset": 29369}
         },
         {
           "id": "character-graphics",
@@ -274,16 +298,31 @@
           "parameters": {"file_offset": 1501}
         },
         {
+          "id": "game-screen-packets",
+          "payload": "prg",
+          "parameters": {
+            "screens": [
+              {"key": "status", "label": "Status bar", "file_offset": 1880, "size": 39},
+              {"key": "world-lives", "label": "World and lives", "file_offset": 1919, "size": 31},
+              {"key": "time-up", "label": "Time up", "file_offset": 1950, "size": 19},
+              {"key": "game-over", "label": "Game over", "file_offset": 1969, "size": 21}
+            ]
+          }
+        },
+        {
+          "id": "warp-zone-screen",
+          "payload": "prg",
+          "parameters": {
+            "screens": [
+              {"key": "warp-zone", "label": "Warp zone", "file_offset": 1990, "size": 45}
+            ]
+          }
+        },
+        {
           "id": "ui-text",
           "payload": "prg",
           "parameters": {
             "fields": [
-              {"key": "status-player", "label": "Status player name", "file_offset": 1883, "width": 5},
-              {"key": "status-headings", "label": "Status headings", "file_offset": 1891, "width": 11},
-              {"key": "lives-world", "label": "Lives-screen world label", "file_offset": 1932, "width": 9},
-              {"key": "time-up", "label": "Time up", "file_offset": 1961, "width": 7},
-              {"key": "game-over", "label": "Game over", "file_offset": 1980, "width": 9},
-              {"key": "warp-welcome", "label": "Warp-zone welcome", "file_offset": 1993, "width": 21},
               {"key": "brother-name", "label": "Brother name", "file_offset": 2035, "width": 5}
             ]
           }
@@ -302,6 +341,11 @@
             "cpu_address": 55565,
             "shared_stream_size": 1352
           }
+        },
+        {
+          "id": "swim-stomp-envelope",
+          "payload": "prg",
+          "parameters": {"file_offset": 29617}
         },
         {
           "id": "character-graphics",
@@ -600,6 +644,83 @@
           }
         },
         {
+          "id": "game-screen-packets",
+          "kind": "screen",
+          "codec": "nes.ppu-screen-packets.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "terminator": 255,
+            "width": 32,
+            "height": 30,
+            "base_address": 8192,
+            "attribute_address": 9152,
+            "attribute_bytes": 64,
+            "fill_tile": 36,
+            "fill_attribute": 0,
+            "encoding": {
+              "characters": "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ -!",
+              "codes": [
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+                10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+                20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+                30, 31, 32, 33, 34, 35, 36, 40, 43
+              ],
+              "case_fold": "upper",
+              "padding": 36
+            },
+            "text_fields": [
+              {"key": "status-player", "label": "Status player name", "screen": "status", "address": 8259, "width": 5},
+              {"key": "status-headings", "label": "Status headings", "screen": "status", "address": 8274, "width": 11},
+              {"key": "lives-world", "label": "Lives-screen world label", "screen": "world-lives", "address": 8523, "width": 9},
+              {"key": "time-up", "label": "Time up", "screen": "time-up", "address": 8716, "width": 7},
+              {"key": "game-over", "label": "Game over", "screen": "game-over", "address": 8555, "width": 9},
+              {"key": "continue", "label": "Continue", "screen": "game-over", "address": 8683, "width": 8},
+              {"key": "retry", "label": "Retry", "screen": "game-over", "address": 8779, "width": 5}
+            ],
+            "screens": [
+              {"key": "status", "label": "Status bar", "file_offset": 1770, "size": 39},
+              {"key": "world-lives", "label": "World and lives", "file_offset": 1809, "size": 31},
+              {"key": "time-up", "label": "Time up", "file_offset": 1840, "size": 11},
+              {"key": "game-over", "label": "Game over", "file_offset": 1851, "size": 36}
+            ]
+          }
+        },
+        {
+          "id": "warp-zone-screen",
+          "kind": "screen",
+          "codec": "nes.ppu-screen-packets.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "terminator": 0,
+            "width": 32,
+            "height": 30,
+            "base_address": 9216,
+            "attribute_address": 10176,
+            "attribute_bytes": 64,
+            "fill_tile": 36,
+            "fill_attribute": 0,
+            "encoding": {
+              "characters": "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ -!",
+              "codes": [
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+                10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+                20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+                30, 31, 32, 33, 34, 35, 36, 40, 43
+              ],
+              "case_fold": "upper",
+              "padding": 36
+            },
+            "text_fields": [
+              {"key": "warp-welcome", "label": "Warp-zone welcome", "screen": "warp-zone", "address": 9604, "width": 21}
+            ],
+            "screens": [
+              {"key": "warp-zone", "label": "Warp zone", "file_offset": 1887, "size": 45}
+            ]
+          }
+        },
+        {
           "id": "title-screen",
           "kind": "screen",
           "codec": "nes.ppu-screen-packets.v1",
@@ -642,14 +763,95 @@
           }
         },
         {
-          "id": "fds-synthesis",
+          "id": "music",
           "kind": "audio",
-          "codec": "fds.synthesis.v1",
+          "codec": "smb.apu-music.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "file_offset": 31050,
+            "size": 1664,
+            "cpu_address": 55626,
+            "frame_rate": 60.0988,
+            "cpu_frequency": 1789773.0,
+            "hardware_envelope_event_mask": 145,
+            "selector_names": [
+              "event_death", "event_game_over", "event_victory", "event_castle_clear",
+              "event_game_over_alias", "event_end_of_level", "event_time_running_out", "event_silence",
+              "area_ground", "area_water", "area_underground", "area_castle",
+              "area_star_cloud", "area_ground_lead_in", "area_star_cloud_alias", "area_silence"
+            ],
+            "ground_schedule_count": 33,
+            "headers": [
+              {"name": "time_running_out", "size": 5},
+              {"name": "star_cloud", "size": 6},
+              {"name": "end_of_level", "size": 5},
+              {"name": "unused", "size": 5},
+              {"name": "underground", "size": 5},
+              {"name": "silence", "size": 4},
+              {"name": "castle", "size": 5},
+              {"name": "game_over", "size": 5},
+              {"name": "water", "size": 6},
+              {"name": "castle_clear", "size": 5},
+              {"name": "ground_part_1", "size": 6},
+              {"name": "ground_part_2_a", "size": 6},
+              {"name": "ground_part_2_b", "size": 6},
+              {"name": "ground_part_2_c", "size": 6},
+              {"name": "ground_part_3_a", "size": 6},
+              {"name": "ground_part_3_b", "size": 6},
+              {"name": "ground_lead_in", "size": 6},
+              {"name": "ground_part_4_a", "size": 6},
+              {"name": "ground_part_4_b", "size": 6},
+              {"name": "ground_part_4_c", "size": 6},
+              {"name": "death", "size": 6}
+            ],
+            "shared_stream_size": 1296,
+            "note_period_count": 51,
+            "note_length_count": 48,
+            "envelopes": [
+              {"name": "castle_clear", "size": 4},
+              {"name": "area", "size": 8},
+              {"name": "water_event", "size": 40}
+            ]
+          }
+        },
+
+        {
+          "id": "swim-stomp-envelope",
+          "kind": "audio",
+          "codec": "smb.apu-envelope.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "file_offset": 29638,
+            "size": 14
+          }
+        },
+        {
+          "id": "fds-music",
+          "kind": "audio",
+          "codec": "fds.music.v1",
           "capacity_policy": "fixed",
           "payload": "nsmdata3",
           "parameters": {
-            "file_offset": 3072,
-            "size": 175,
+            "file_offset": 2602,
+            "size": 677,
+            "cpu_address": 53242,
+            "sequence_names": [
+              "opening-a", "opening-a-repeat", "opening-b",
+              "opening-a-return", "procession-a", "procession-c",
+              "procession-a-repeat", "procession-c-repeat",
+              "procession-b", "procession-a-finale", "coda"
+            ],
+            "header_names": [
+              "pattern-1", "pattern-2", "pattern-3",
+              "pattern-4", "pattern-5", "pattern-6"
+            ],
+            "stream_offset": 62,
+            "synthesis_offset": 470,
+            "synthesis_size": 175,
+            "note_lengths_offset": 661,
+            "note_length_count": 16,
             "waveforms": [
               {"name": "wave-a", "offset": 143, "count": 32},
               {"name": "wave-b", "offset": 0, "count": 32}
@@ -970,6 +1172,83 @@
           }
         },
         {
+          "id": "game-screen-packets",
+          "kind": "screen",
+          "codec": "nes.ppu-screen-packets.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "terminator": 255,
+            "width": 32,
+            "height": 30,
+            "base_address": 8192,
+            "attribute_address": 9152,
+            "attribute_bytes": 64,
+            "fill_tile": 36,
+            "fill_attribute": 0,
+            "encoding": {
+              "characters": "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ -!",
+              "codes": [
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+                10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+                20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+                30, 31, 32, 33, 34, 35, 36, 40, 43
+              ],
+              "case_fold": "upper",
+              "padding": 36
+            },
+            "text_fields": [
+              {"key": "status-player", "label": "Status player name", "screen": "status", "address": 8259, "width": 5},
+              {"key": "status-headings", "label": "Status headings", "screen": "status", "address": 8274, "width": 11},
+              {"key": "lives-world", "label": "Lives-screen world label", "screen": "world-lives", "address": 8523, "width": 9},
+              {"key": "time-up", "label": "Time up", "screen": "time-up", "address": 8716, "width": 7},
+              {"key": "game-over", "label": "Game over", "screen": "game-over", "address": 8555, "width": 9},
+              {"key": "continue", "label": "Continue", "screen": "game-over", "address": 8683, "width": 8},
+              {"key": "retry", "label": "Retry", "screen": "game-over", "address": 8779, "width": 5}
+            ],
+            "screens": [
+              {"key": "status", "label": "Status bar", "file_offset": 1650, "size": 39},
+              {"key": "world-lives", "label": "World and lives", "file_offset": 1689, "size": 31},
+              {"key": "time-up", "label": "Time up", "file_offset": 1720, "size": 11},
+              {"key": "game-over", "label": "Game over", "file_offset": 1731, "size": 36}
+            ]
+          }
+        },
+        {
+          "id": "warp-zone-screen",
+          "kind": "screen",
+          "codec": "nes.ppu-screen-packets.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "terminator": 0,
+            "width": 32,
+            "height": 30,
+            "base_address": 9216,
+            "attribute_address": 10176,
+            "attribute_bytes": 64,
+            "fill_tile": 36,
+            "fill_attribute": 0,
+            "encoding": {
+              "characters": "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ -!",
+              "codes": [
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+                10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+                20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+                30, 31, 32, 33, 34, 35, 36, 40, 43
+              ],
+              "case_fold": "upper",
+              "padding": 36
+            },
+            "text_fields": [
+              {"key": "warp-welcome", "label": "Warp-zone welcome", "screen": "warp-zone", "address": 9604, "width": 21}
+            ],
+            "screens": [
+              {"key": "warp-zone", "label": "Warp zone", "file_offset": 1767, "size": 37}
+            ]
+          }
+        },
+        {
           "id": "title-screen",
           "kind": "screen",
           "codec": "nes.ppu-screen-packets.v1",
@@ -1012,14 +1291,95 @@
           }
         },
         {
-          "id": "fds-synthesis",
+          "id": "music",
           "kind": "audio",
-          "codec": "fds.synthesis.v1",
+          "codec": "smb.apu-music.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "file_offset": 31049,
+            "size": 1665,
+            "cpu_address": 55625,
+            "frame_rate": 60.0988,
+            "cpu_frequency": 1789773.0,
+            "hardware_envelope_event_mask": 145,
+            "selector_names": [
+              "event_death", "event_game_over", "event_victory", "event_castle_clear",
+              "event_game_over_alias", "event_end_of_level", "event_time_running_out", "event_silence",
+              "area_ground", "area_water", "area_underground", "area_castle",
+              "area_star_cloud", "area_ground_lead_in", "area_star_cloud_alias", "area_silence"
+            ],
+            "ground_schedule_count": 33,
+            "headers": [
+              {"name": "time_running_out", "size": 5},
+              {"name": "star_cloud", "size": 6},
+              {"name": "end_of_level", "size": 5},
+              {"name": "unused", "size": 5},
+              {"name": "underground", "size": 5},
+              {"name": "silence", "size": 4},
+              {"name": "castle", "size": 5},
+              {"name": "game_over", "size": 5},
+              {"name": "water", "size": 6},
+              {"name": "castle_clear", "size": 5},
+              {"name": "ground_part_1", "size": 6},
+              {"name": "ground_part_2_a", "size": 6},
+              {"name": "ground_part_2_b", "size": 6},
+              {"name": "ground_part_2_c", "size": 6},
+              {"name": "ground_part_3_a", "size": 6},
+              {"name": "ground_part_3_b", "size": 6},
+              {"name": "ground_lead_in", "size": 6},
+              {"name": "ground_part_4_a", "size": 6},
+              {"name": "ground_part_4_b", "size": 6},
+              {"name": "ground_part_4_c", "size": 6},
+              {"name": "death", "size": 6}
+            ],
+            "shared_stream_size": 1297,
+            "note_period_count": 51,
+            "note_length_count": 48,
+            "envelopes": [
+              {"name": "castle_clear", "size": 4},
+              {"name": "area", "size": 8},
+              {"name": "water_event", "size": 40}
+            ]
+          }
+        },
+
+        {
+          "id": "swim-stomp-envelope",
+          "kind": "audio",
+          "codec": "smb.apu-envelope.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {
+            "file_offset": 29569,
+            "size": 14
+          }
+        },
+        {
+          "id": "fds-music",
+          "kind": "audio",
+          "codec": "fds.music.v1",
           "capacity_policy": "fixed",
           "payload": "sm2data3",
           "parameters": {
-            "file_offset": 3072,
-            "size": 175,
+            "file_offset": 2602,
+            "size": 677,
+            "cpu_address": 53242,
+            "sequence_names": [
+              "opening-a", "opening-a-repeat", "opening-b",
+              "opening-a-return", "procession-a", "procession-c",
+              "procession-a-repeat", "procession-c-repeat",
+              "procession-b", "procession-a-finale", "coda"
+            ],
+            "header_names": [
+              "pattern-1", "pattern-2", "pattern-3",
+              "pattern-4", "pattern-5", "pattern-6"
+            ],
+            "stream_offset": 62,
+            "synthesis_offset": 470,
+            "synthesis_size": 175,
+            "note_lengths_offset": 661,
+            "note_length_count": 16,
             "waveforms": [
               {"name": "wave-a", "offset": 143, "count": 32},
               {"name": "wave-b", "offset": 0, "count": 32}
@@ -1154,6 +1514,79 @@
       }
     },
     {
+      "id": "game-screen-packets",
+      "kind": "screen",
+      "codec": "nes.ppu-screen-packets.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "terminator": 255,
+        "width": 32,
+        "height": 30,
+        "base_address": 8192,
+        "attribute_address": 9152,
+        "attribute_bytes": 64,
+        "fill_tile": 36,
+        "fill_attribute": 0,
+        "encoding": {
+          "characters": "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ -!",
+          "codes": [
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+            10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+            20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+            30, 31, 32, 33, 34, 35, 36, 40, 43
+          ],
+          "case_fold": "upper",
+          "padding": 36
+        },
+        "text_fields": [
+          {"key": "status-player", "label": "Status player name", "screen": "status", "address": 8259, "width": 5},
+          {"key": "status-headings", "label": "Status headings", "screen": "status", "address": 8274, "width": 11},
+          {"key": "lives-world", "label": "Lives-screen world label", "screen": "world-lives", "address": 8523, "width": 9},
+          {"key": "time-up", "label": "Time up", "screen": "time-up", "address": 8716, "width": 7},
+          {"key": "game-over", "label": "Game over", "screen": "game-over", "address": 8715, "width": 9}
+        ],
+        "screens": [
+          {"key": "status", "label": "Status bar", "file_offset": 1890, "size": 39},
+          {"key": "world-lives", "label": "World and lives", "file_offset": 1929, "size": 31},
+          {"key": "time-up", "label": "Time up", "file_offset": 1960, "size": 19},
+          {"key": "game-over", "label": "Game over", "file_offset": 1979, "size": 21}
+        ]
+      }
+    },
+    {
+      "id": "warp-zone-screen",
+      "kind": "screen",
+      "codec": "nes.ppu-screen-packets.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "terminator": 255,
+        "width": 32,
+        "height": 30,
+        "base_address": 9216,
+        "attribute_address": 10176,
+        "attribute_bytes": 64,
+        "fill_tile": 36,
+        "fill_attribute": 0,
+        "encoding": {
+          "characters": "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ -!",
+          "codes": [
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+            10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+            20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+            30, 31, 32, 33, 34, 35, 36, 40, 43
+          ],
+          "case_fold": "upper",
+          "padding": 36
+        },
+        "text_fields": [
+          {"key": "warp-welcome", "label": "Warp-zone welcome", "screen": "warp-zone", "address": 9604, "width": 21}
+        ],
+        "screens": [
+          {"key": "warp-zone", "label": "Warp zone", "file_offset": 2000, "size": 45}
+        ]
+      }
+    },
+    {
       "id": "ui-text",
       "kind": "text",
       "codec": "nes.fixed-text-fields.v1",
@@ -1171,12 +1604,6 @@
           "padding": 36
         },
         "fields": [
-          {"key": "status-player", "label": "Status player name", "file_offset": 1893, "width": 5},
-          {"key": "status-headings", "label": "Status headings", "file_offset": 1901, "width": 11},
-          {"key": "lives-world", "label": "Lives-screen world label", "file_offset": 1942, "width": 9},
-          {"key": "time-up", "label": "Time up", "file_offset": 1971, "width": 7},
-          {"key": "game-over", "label": "Game over", "file_offset": 1990, "width": 9},
-          {"key": "warp-welcome", "label": "Warp-zone welcome", "file_offset": 2003, "width": 21},
           {"key": "brother-name", "label": "Brother name", "file_offset": 2045, "width": 5}
         ]
       }
@@ -1244,6 +1671,16 @@
           {"name": "area", "size": 8},
           {"name": "water_event", "size": 40}
         ]
+      }
+    },
+    {
+      "id": "swim-stomp-envelope",
+      "kind": "audio",
+      "codec": "smb.apu-envelope.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 29633,
+        "size": 14
       }
     },
     {

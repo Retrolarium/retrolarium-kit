@@ -26,6 +26,11 @@ from .fds_synthesis import (
     decode_synthesis as decode_fds_synthesis,
     encode_synthesis as encode_fds_synthesis,
 )
+from .fds_music import (
+    CODEC as FDS_MUSIC_CODEC,
+    decode_music as decode_fds_music,
+    encode_music as encode_fds_music,
+)
 from .ines import parse_ines, parse_ines_prefix
 from .pacman_maze import (
     CODEC as PACMAN_MAZE_CODEC,
@@ -81,6 +86,11 @@ from .smb_apu import (
     encode_music as encode_smb_music,
     parse_layout as parse_smb_apu_layout,
 )
+from .smb_apu_envelope import (
+    CODEC as SMB_APU_ENVELOPE_CODEC,
+    decode_envelope as decode_smb_apu_envelope,
+    encode_envelope as encode_smb_apu_envelope,
+)
 from .nes_visuals import (
     METATILE_CODEC,
     PALETTE_PACKET_CODEC,
@@ -107,7 +117,9 @@ SUPPORTED_CODECS = (
     SMB_LEVEL_CODEC,
     SMB_PLAYER_FRAME_CODEC,
     SMB_APU_CODEC,
+    SMB_APU_ENVELOPE_CODEC,
     FDS_SYNTHESIS_CODEC,
+    FDS_MUSIC_CODEC,
     METATILE_CODEC,
     PALETTE_PACKET_CODEC,
     PPU_SCREEN_PACKET_CODEC,
@@ -750,6 +762,28 @@ def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
             "codec": resource.codec,
             **decoded,
         }
+    if resource.codec == SMB_APU_ENVELOPE_CODEC:
+        try:
+            size = _integer(
+                resource.parameters.get("size"),
+                f"{resource.resource_id}.size",
+                minimum=1,
+            )
+            offset, _size = _span(resource, size)
+            payload = image[offset:offset + size]
+            if len(payload) != size:
+                raise NesResourceError(
+                    f"{resource.resource_id} exceeds the source image"
+                )
+            decoded = decode_smb_apu_envelope(payload, resource.parameters)
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return {
+            "id": resource.resource_id,
+            "kind": resource.kind,
+            "codec": resource.codec,
+            **decoded,
+        }
     if resource.codec == FDS_SYNTHESIS_CODEC:
         try:
             size = _integer(
@@ -764,6 +798,28 @@ def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
                     f"{resource.resource_id} exceeds the source image"
                 )
             decoded = decode_fds_synthesis(payload, resource.parameters)
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return {
+            "id": resource.resource_id,
+            "kind": resource.kind,
+            "codec": resource.codec,
+            **decoded,
+        }
+    if resource.codec == FDS_MUSIC_CODEC:
+        try:
+            size = _integer(
+                resource.parameters.get("size"),
+                f"{resource.resource_id}.size",
+                minimum=1,
+            )
+            offset, _size = _span(resource, size)
+            payload = image[offset:offset + size]
+            if len(payload) != size:
+                raise NesResourceError(
+                    f"{resource.resource_id} exceeds the source image"
+                )
+            decoded = decode_fds_music(payload, resource.parameters)
         except AuthoringError as exc:
             raise NesResourceError(str(exc)) from exc
         return {
@@ -1118,12 +1174,36 @@ def _parse_resource(
             )
         except AuthoringError as exc:
             raise NesResourceError(str(exc)) from exc
+    elif spec.codec == SMB_APU_ENVELOPE_CODEC:
+        expected_fields = {"id", "kind", "codec", "steps"}
+        try:
+            payload = encode_smb_apu_envelope(
+                {"steps": raw.get("steps")}, spec.parameters
+            )
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
     elif spec.codec == FDS_SYNTHESIS_CODEC:
         expected_fields = {
             "id", "kind", "codec", "arena", "waveforms", "volume_programs"
         }
         try:
             payload = encode_fds_synthesis(
+                {
+                    key: raw.get(key)
+                    for key in expected_fields - {"id", "kind", "codec"}
+                },
+                spec.parameters,
+            )
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+    elif spec.codec == FDS_MUSIC_CODEC:
+        expected_fields = {
+            "id", "kind", "codec", "sequence", "headers", "prefix_padding",
+            "shared_stream_arena", "synthesis", "suffix_padding",
+            "note_lengths",
+        }
+        try:
+            payload = encode_fds_music(
                 {
                     key: raw.get(key)
                     for key in expected_fields - {"id", "kind", "codec"}
