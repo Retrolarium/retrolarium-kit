@@ -243,7 +243,7 @@ class SmbWorldTests(unittest.TestCase):
                     field["file_offset"]
                     for field in resources["ui-text"].parameters["fields"]
                 ],
-                [0x765, 0x76D, 0x796, 0x7B3, 0x7C6, 0x7D3, 0x7FD],
+                [0x7FD],
             )
             self.assertEqual(
                 resources["ui-text"].parameters["encoding"]["padding"], 0x24
@@ -262,7 +262,7 @@ class SmbWorldTests(unittest.TestCase):
         )
         self.assertEqual(
             profile.capabilities_for("vs_smb"),
-            ("world", "levels", "graphics", "text", "audio"),
+            ("world", "levels", "graphics", "screens", "text", "audio"),
         )
         vs_resources = {
             resource.resource_id: resource
@@ -302,7 +302,7 @@ class SmbWorldTests(unittest.TestCase):
                 field["file_offset"]
                 for field in vs_resources["ui-text"].parameters["fields"]
             ],
-            [0x951, 0x959, 0x982, 0x99F, 0x9B2, 0x9BF, 0x9E9],
+            [0x9E9],
         )
         self.assertEqual(vs_resources["player-frames"].payload, "prg")
         self.assertEqual(
@@ -323,7 +323,7 @@ class SmbWorldTests(unittest.TestCase):
         )
         self.assertEqual(
             profile.capabilities_for("fds_smb"),
-            ("world", "levels", "graphics", "text", "audio"),
+            ("world", "levels", "graphics", "screens", "text", "audio"),
         )
         fds_resources = {
             item.resource_id: item for item in profile.resources_for("fds_smb")
@@ -352,7 +352,7 @@ class SmbWorldTests(unittest.TestCase):
                 field["file_offset"]
                 for field in fds_resources["ui-text"].parameters["fields"]
             ],
-            [0x75B, 0x763, 0x78C, 0x7A9, 0x7BC, 0x7C9, 0x7F3],
+            [0x7F3],
         )
         self.assertEqual(fds_resources["player-frames"].payload, "prg")
         self.assertEqual(
@@ -385,7 +385,9 @@ class SmbWorldTests(unittest.TestCase):
                 "authoring-bundle", "world-normal", "levels-normal",
                 "world-extended", "levels-extended", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
-                "title-screen", "fds-synthesis", "character-graphics",
+                "game-screen-packets", "warp-zone-screen", "title-screen",
+                "music", "swim-stomp-envelope", "fds-music",
+                "character-graphics",
             ],
         )
         self.assertEqual(
@@ -452,12 +454,44 @@ class SmbWorldTests(unittest.TestCase):
         self.assertEqual(
             ann_resources["title-screen"].parameters["fill_tile"], 0x24
         )
-        self.assertEqual(ann_resources["fds-synthesis"].payload, "nsmdata3")
+        self.assertEqual(ann_resources["fds-music"].payload, "nsmdata3")
+        self.assertEqual(ann_resources["music"].payload, "prg")
         self.assertEqual(
-            ann_resources["fds-synthesis"].parameters,
+            ann_resources["music"].parameters["file_offset"], 0x794A
+        )
+        self.assertEqual(ann_resources["music"].parameters["size"], 0x680)
+        self.assertEqual(
+            ann_resources["music"].parameters["cpu_address"], 0xD94A
+        )
+        self.assertEqual(
+            ann_resources["music"].parameters["shared_stream_size"], 1296
+        )
+        self.assertEqual(ann_resources["swim-stomp-envelope"].payload, "prg")
+        self.assertEqual(
+            ann_resources["swim-stomp-envelope"].parameters,
+            {"file_offset": 0x73C6, "size": 14},
+        )
+        self.assertEqual(
+            ann_resources["fds-music"].parameters,
             {
-                "file_offset": 0xC00,
-                "size": 0xAF,
+                "file_offset": 0xA2A,
+                "size": 0x2A5,
+                "cpu_address": 0xCFFA,
+                "sequence_names": [
+                    "opening-a", "opening-a-repeat", "opening-b",
+                    "opening-a-return", "procession-a", "procession-c",
+                    "procession-a-repeat", "procession-c-repeat",
+                    "procession-b", "procession-a-finale", "coda",
+                ],
+                "header_names": [
+                    "pattern-1", "pattern-2", "pattern-3",
+                    "pattern-4", "pattern-5", "pattern-6",
+                ],
+                "stream_offset": 62,
+                "synthesis_offset": 470,
+                "synthesis_size": 175,
+                "note_lengths_offset": 661,
+                "note_length_count": 16,
                 "waveforms": [
                     {"name": "wave-a", "offset": 0x8F, "count": 32},
                     {"name": "wave-b", "offset": 0, "count": 32},
@@ -496,7 +530,9 @@ class SmbWorldTests(unittest.TestCase):
                 "authoring-bundle", "world-normal", "levels-normal",
                 "world-hard", "levels-hard", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
-                "title-screen", "fds-synthesis", "character-graphics",
+                "game-screen-packets", "warp-zone-screen", "title-screen",
+                "music", "swim-stomp-envelope", "fds-music",
+                "character-graphics",
             ],
         )
         self.assertEqual(
@@ -559,10 +595,26 @@ class SmbWorldTests(unittest.TestCase):
                 "file_offset": 0x662B, "size": 0x165,
             }],
         )
-        self.assertEqual(smb2_resources["fds-synthesis"].payload, "sm2data3")
+        self.assertEqual(smb2_resources["fds-music"].payload, "sm2data3")
+        self.assertEqual(smb2_resources["music"].payload, "prg")
         self.assertEqual(
-            smb2_resources["fds-synthesis"].parameters,
-            ann_resources["fds-synthesis"].parameters,
+            smb2_resources["music"].parameters["file_offset"], 0x7949
+        )
+        self.assertEqual(smb2_resources["music"].parameters["size"], 0x681)
+        self.assertEqual(
+            smb2_resources["music"].parameters["cpu_address"], 0xD949
+        )
+        self.assertEqual(
+            smb2_resources["music"].parameters["shared_stream_size"], 1297
+        )
+        self.assertEqual(smb2_resources["swim-stomp-envelope"].payload, "prg")
+        self.assertEqual(
+            smb2_resources["swim-stomp-envelope"].parameters,
+            {"file_offset": 0x7381, "size": 14},
+        )
+        self.assertEqual(
+            smb2_resources["fds-music"].parameters,
+            ann_resources["fds-music"].parameters,
         )
         self.assertEqual(
             smb2_resources["title-screen"].parameters["text_fields"],
@@ -601,6 +653,28 @@ class SmbWorldTests(unittest.TestCase):
         self.assertEqual(pal_resources["music"].parameters["file_offset"], 0x791E)
         self.assertEqual(pal_resources["music"].parameters["size"], 1724)
         self.assertEqual(pc10_resources["music"].parameters, ju_resources["music"].parameters)
+        self.assertEqual(
+            ju_resources["swim-stomp-envelope"].parameters,
+            {"file_offset": 0x73C1, "size": 14},
+        )
+        self.assertEqual(
+            pal_resources["swim-stomp-envelope"].parameters["file_offset"],
+            0x73C2,
+        )
+        self.assertEqual(
+            pc10_resources["swim-stomp-envelope"].parameters,
+            ju_resources["swim-stomp-envelope"].parameters,
+        )
+        self.assertEqual(
+            vs_resources["swim-stomp-envelope"].parameters["file_offset"],
+            0x72B9,
+        )
+        self.assertEqual(vs_resources["swim-stomp-envelope"].payload, "prg")
+        self.assertEqual(
+            fds_resources["swim-stomp-envelope"].parameters["file_offset"],
+            0x73B1,
+        )
+        self.assertEqual(fds_resources["swim-stomp-envelope"].payload, "prg")
 
     def test_profile_catalog_resolves_each_revision_override(self) -> None:
         catalog = profile_catalog()
@@ -608,7 +682,7 @@ class SmbWorldTests(unittest.TestCase):
         details = {item["id"]: item for item in smb["revision_details"]}
         self.assertEqual(
             details["ju"]["capabilities"],
-            ["world", "levels", "graphics", "text", "audio"],
+            ["world", "levels", "graphics", "screens", "text", "audio"],
         )
         self.assertEqual(details["pc10"]["resources"], smb["resources"])
         self.assertEqual(
@@ -621,7 +695,9 @@ class SmbWorldTests(unittest.TestCase):
                 "authoring-bundle", "world-normal", "levels-normal",
                 "world-extended", "levels-extended", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
-                "title-screen", "fds-synthesis", "character-graphics",
+                "game-screen-packets", "warp-zone-screen", "title-screen",
+                "music", "swim-stomp-envelope", "fds-music",
+                "character-graphics",
             ],
         )
         self.assertEqual(
@@ -634,17 +710,19 @@ class SmbWorldTests(unittest.TestCase):
                 "authoring-bundle", "world-normal", "levels-normal",
                 "world-hard", "levels-hard", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
-                "title-screen", "fds-synthesis", "character-graphics",
+                "game-screen-packets", "warp-zone-screen", "title-screen",
+                "music", "swim-stomp-envelope", "fds-music",
+                "character-graphics",
             ],
         )
         self.assertEqual(
             details["fds_smb"]["capabilities"],
-            ["world", "levels", "graphics", "text", "audio"],
+            ["world", "levels", "graphics", "screens", "text", "audio"],
         )
         self.assertEqual(details["fds_smb"]["resources"], smb["resources"])
         self.assertEqual(
             details["vs_smb"]["capabilities"],
-            ["world", "levels", "graphics", "text", "audio"],
+            ["world", "levels", "graphics", "screens", "text", "audio"],
         )
         self.assertEqual(details["vs_smb"]["resources"], smb["resources"])
         self.assertEqual(

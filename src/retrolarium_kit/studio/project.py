@@ -63,6 +63,7 @@ CODECS = frozenset(
         "castle.object-stream@1",
         "castle.prefix-rooms@1",
         "fds.synthesis.v1",
+        "fds.music.v1",
         "nes.chr-2bpp.v1",
         "nes.fixed-text-fields.v1",
         "nes.metatile-2x2.v1",
@@ -81,6 +82,7 @@ CODECS = frozenset(
         "retrolarium.nes.disassembly@1",
         "retrolarium.snes.disassembly@1",
         "smb.apu@1",
+        "smb.apu-envelope.v1",
         "smb.apu-music.v1",
         "smb.area@1",
         "smb.world.v1",
@@ -1186,6 +1188,7 @@ def create_studio_project(
             if kind not in kinds:
                 continue
             selected_codec = expected_codec
+            additional_tab = None
             if kind == "level" and kinds[kind] == {"smb.levels.v1"}:
                 tab_id = "levels"
                 title = "Levels"
@@ -1198,16 +1201,45 @@ def create_studio_project(
                     resource_root.get("game"), resource_root.get("revision")
                 ) == ("smb1", "ju"):
                     capabilities.insert(1, "playtest")
-            elif kind == "audio" and kinds[kind] == {"smb.apu-music.v1"}:
+            elif kind == "audio" and "smb.apu-music.v1" in kinds[kind] \
+                    and kinds[kind].issubset({
+                        "smb.apu-music.v1", "smb.apu-envelope.v1",
+                        "fds.synthesis.v1", "fds.music.v1",
+                    }):
                 selected_codec = "smb.apu-music.v1"
                 capabilities = [
                     "edit", "midi-import", "restore", "undo", "wav-preview"
                 ]
-            elif kind == "audio" and kinds[kind] == {"fds.synthesis.v1"}:
+                fds_codec = (
+                    "fds.music.v1"
+                    if "fds.music.v1" in kinds[kind]
+                    else "fds.synthesis.v1"
+                )
+                if fds_codec in kinds[kind]:
+                    additional_tab = {
+                        "id": "synthesis",
+                        "title": "FDS Synthesis",
+                        "kind": "audio.synthesis",
+                        "group": "content",
+                        "document": portable_document,
+                        "codec": fds_codec,
+                        "capabilities": ["edit", "restore", "undo"],
+                    }
+            elif kind == "audio" and (
+                    "fds.synthesis.v1" in kinds[kind]
+                    or "fds.music.v1" in kinds[kind]) \
+                    and kinds[kind].issubset({
+                        "fds.synthesis.v1", "fds.music.v1",
+                        "smb.apu-envelope.v1"
+                    }):
                 tab_id = "synthesis"
                 title = "FDS Synthesis"
                 editor_kind = "audio.synthesis"
-                selected_codec = "fds.synthesis.v1"
+                selected_codec = (
+                    "fds.music.v1"
+                    if "fds.music.v1" in kinds[kind]
+                    else "fds.synthesis.v1"
+                )
                 capabilities = ["edit", "restore", "undo"]
             elif kind in ("screen", "text") \
                     and kinds[kind] == {"pacman.screen-collection.v1"}:
@@ -1258,6 +1290,8 @@ def create_studio_project(
                     "capabilities": capabilities,
                 }
             )
+            if additional_tab is not None:
+                tabs.append(additional_tab)
         available_ids = {str(tab["id"]) for tab in tabs}
         desired_dependencies = {
             "maze": ("graphics",),
