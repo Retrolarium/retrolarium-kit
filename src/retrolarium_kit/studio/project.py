@@ -27,13 +27,13 @@ from .snes import load_snes
 
 
 class StudioProjectError(ValueError):
-    """Raised when a ``.retrolarium`` project violates the public contract."""
+    """Raised when a ``.rlj`` project violates the public contract."""
 
 
 SCHEMA = "retrolarium.project"
 SCHEMA_VERSION = 1
 INSPECTION_SCHEMA = "retrolarium.project-inspection"
-PROJECT_SUFFIX = ".retrolarium"
+PROJECT_SUFFIX = ".rlj"
 
 SOURCE_MODES = frozenset({"binary-profile", "source-project"})
 LAYOUTS = frozenset({"auto", "single-row", "two-row"})
@@ -1170,7 +1170,7 @@ def create_studio_project(
              "pacman.maze-rle.v1", ["paint", "eyedropper", "semantic-overlays", "undo"]),
             ("screen", "screens", "Screens", "screen.tilemap", "content",
              "nes.nametable.v1", ["paint", "preview", "undo"]),
-            ("audio", "music-sounds", "Music & Sounds", "audio.sequencer", "content",
+            ("audio", "music-sounds", "Sound", "audio.sequencer", "content",
              "pacman.sound-streams.v1",
              ["edit", "piano-roll", "midi-import", "wav-preview", "restore", "undo"]),
             ("text", "text", "Text", "text.fixed", "content",

@@ -26,7 +26,7 @@ def inspection(root: Path) -> dict[str, object]:
     return {
         "schema": "retrolarium.project-inspection",
         "schema_version": 1,
-        "project_file": str((root / "fixture.retrolarium").resolve()),
+        "project_file": str((root / "fixture.rlj").resolve()),
         "project_root": str(root.resolve()),
         "project": {
             "id": "fixture",
@@ -72,7 +72,7 @@ class StudioOperationTests(unittest.TestCase):
     def prepare(self, root: Path) -> dict[str, object]:
         (root / "documents").mkdir()
         (root / "disassembly/generated").mkdir(parents=True)
-        (root / "fixture.retrolarium").write_text("fixture\n", encoding="utf-8")
+        (root / "fixture.rlj").write_text("fixture\n", encoding="utf-8")
         (root / "documents/resources.json").write_text(
             json.dumps(
                 {
@@ -102,7 +102,7 @@ class StudioOperationTests(unittest.TestCase):
                 "retrolarium_kit.studio_project.validate_game_document_for_revision",
                 return_value=semantic,
             ) as validate:
-                result = validate_studio_project(root / "fixture.retrolarium")
+                result = validate_studio_project(root / "fixture.rlj")
             self.assertEqual([semantic], result["documents"])
             validate.assert_called_once_with(
                 (root / "documents/resources.json").resolve(),
@@ -149,15 +149,15 @@ class StudioOperationTests(unittest.TestCase):
                 ),
             )
             with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
-                built = build_studio_project(root / "fixture.retrolarium")
-                verified = verify_studio_project(root / "fixture.retrolarium")
+                built = build_studio_project(root / "fixture.rlj")
+                verified = verify_studio_project(root / "fixture.rlj")
                 self.assertEqual("built", built["status"])
                 self.assertEqual("current", verified["status"])
                 (root / "documents/resources.json").write_text(
                     '{"schema":"retrolarium.nes-resource-bundle","changed":true}',
                     encoding="utf-8",
                 )
-                stale = verify_studio_project(root / "fixture.retrolarium")
+                stale = verify_studio_project(root / "fixture.rlj")
             self.assertEqual("mismatch", stale["status"])
             self.assertIn("documents", stale["differences"])
 
@@ -182,7 +182,7 @@ class StudioOperationTests(unittest.TestCase):
                 return_value={"status": "exact"},
             ):
                 with self.assertRaisesRegex(StudioProjectError, "no registered writer"):
-                    build_studio_project(root / "fixture.retrolarium")
+                    build_studio_project(root / "fixture.rlj")
 
     def test_smb_point_playtest_plan_is_fixed_and_validated(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -249,7 +249,7 @@ class StudioOperationTests(unittest.TestCase):
                 return_value=verification,
             ):
                 plan = studio_smb_point_playtest_plan(
-                    root / "fixture.retrolarium",
+                    root / "fixture.rlj",
                     fceux=fceux,
                     course_bank="levels",
                     area="ground_1",
@@ -273,7 +273,7 @@ class StudioOperationTests(unittest.TestCase):
                 self.assertTrue(plan["point"]["route_matches_area"])
                 with self.assertRaisesRegex(StudioProjectError, "column must be"):
                     studio_smb_point_playtest_plan(
-                        root / "fixture.retrolarium",
+                        root / "fixture.rlj",
                         fceux=fceux,
                         course_bank="levels",
                         area="ground_1",

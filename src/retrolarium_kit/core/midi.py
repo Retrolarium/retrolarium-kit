@@ -184,3 +184,50 @@ def tick_seconds(tick: int, division: int, tempos: tuple[tuple[int, int], ...]) 
         previous_tick = change_tick
         tempo = new_tempo
     return elapsed + (tick - previous_tick) * tempo / (division * 1_000_000)
+
+
+def _encode_varlen(value: int) -> bytes:
+    if not 0 <= value <= 0x0FFFFFFF:
+        raise MidiError("MIDI delta time is outside the variable-length range")
+    encoded = bytearray((value & 0x7F,))
+    value >>= 7
+    while value:
+        encoded.insert(0, 0x80 | (value & 0x7F))
+        value >>= 7
+    return bytes(encoded)
+
+
+def encode_midi(
+    notes: tuple[MidiNote, ...], *, division: int = 960, tempo: int = 500_000
+) -> bytes:
+    """Encode one monophonic channel as a format-0 Standard MIDI file."""
+    if not 1 <= division < 0x8000:
+        raise MidiError("MIDI division must be in 1..32767")
+    if not 1 <= tempo <= 0xFFFFFF:
+        raise MidiError("MIDI tempo must be in 1..16777215 microseconds")
+    ordered = tuple(sorted(notes, key=lambda note: (note.start_tick, note.end_tick)))
+    previous_end = 0
+    for note in ordered:
+        if not 0 <= note.note <= 127:
+            raise MidiError("MIDI note is outside 0..127")
+        if note.start_tick < previous_end:
+            raise MidiError("MIDI export requires a monophonic note sequence")
+        if note.end_tick <= note.start_tick:
+            raise MidiError("MIDI notes must have positive duration")
+        previous_end = note.end_tick
+
+    track = bytearray(b"\x00\xff\x51\x03" + tempo.to_bytes(3, "big"))
+    cursor = 0
+    for note in ordered:
+        track.extend(_encode_varlen(note.start_tick - cursor))
+        track.extend((0x90, note.note, 100))
+        track.extend(_encode_varlen(note.end_tick - note.start_tick))
+        track.extend((0x80, note.note, 0))
+        cursor = note.end_tick
+    track.extend(b"\x00\xff\x2f\x00")
+    return (
+        b"MThd" + (6).to_bytes(4, "big")
+        + (0).to_bytes(2, "big") + (1).to_bytes(2, "big")
+        + division.to_bytes(2, "big")
+        + b"MTrk" + len(track).to_bytes(4, "big") + bytes(track)
+    )

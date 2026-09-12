@@ -38,7 +38,7 @@ def write_project(root: Path, tabs: str, *, startup: str = "levels") -> Path:
     (root / "documents/graphics.toml").write_text(
         'schema = "test.graphics"\nschema_version = 1\n', encoding="utf-8"
     )
-    project = root / "fixture.retrolarium"
+    project = root / "fixture.rlj"
     project.write_text(
         f'''schema = "retrolarium.project"
 schema_version = 1
@@ -181,12 +181,20 @@ class StudioProjectTests(unittest.TestCase):
 
     def test_reports_toml_line_and_column(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            project = Path(temporary) / "broken.retrolarium"
+            project = Path(temporary) / "broken.rlj"
             project.write_text('schema = "unterminated', encoding="utf-8")
             with self.assertRaisesRegex(
-                StudioProjectError, r"broken\.retrolarium:\d+:\d+:"
+                StudioProjectError, r"broken\.rlj:\d+:\d+:"
             ):
                 load_studio_project(project)
+
+    def test_rejects_retired_retrolarium_extension(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = write_project(Path(temporary), LEVELS_TAB)
+            retired = project.with_suffix(".retrolarium")
+            project.replace(retired)
+            with self.assertRaisesRegex(StudioProjectError, r"must use the \.rlj"):
+                load_studio_project(retired)
 
     def test_migration_preserves_comments_and_line_endings(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -248,7 +256,7 @@ class StudioProjectTests(unittest.TestCase):
             source = root / "disassembly/manifest.json"
             source.parent.mkdir()
             source.write_text(json.dumps(manifest()), encoding="utf-8")
-            output = root / "fixture.retrolarium"
+            output = root / "fixture.rlj"
             with patch(
                 "retrolarium_kit.studio_project.load_disassembly_manifest",
                 return_value=manifest(),
@@ -294,7 +302,7 @@ class StudioProjectTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            output = root / "fixture.retrolarium"
+            output = root / "fixture.rlj"
             with patch(
                 "retrolarium_kit.studio_project.load_disassembly_manifest",
                 return_value=manifest(),
@@ -346,7 +354,7 @@ class StudioProjectTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            output = root / "fixture.retrolarium"
+            output = root / "fixture.rlj"
             with patch(
                 "retrolarium_kit.studio_project.load_disassembly_manifest",
                 return_value=manifest(),
@@ -398,7 +406,7 @@ class StudioProjectTests(unittest.TestCase):
                 return_value=manifest(),
             ):
                 result = create_studio_project(
-                    source, root / "smb.retrolarium", project_id="smb",
+                    source, root / "smb.rlj", project_id="smb",
                     name="SMB", profile="smb1.v1", resource_document=resources,
                 )
             levels = result["workspace"]["tabs"][0]
@@ -446,6 +454,7 @@ class StudioProjectTests(unittest.TestCase):
             )
             self.assertEqual("audio.sequencer", music["kind"])
             self.assertEqual("smb.apu-music.v1", music["codec"])
+            self.assertEqual("Sound", music["title"])
             self.assertEqual(
                 ["edit", "midi-import", "restore", "undo", "wav-preview"],
                 music["capabilities"],
@@ -459,7 +468,7 @@ class StudioProjectTests(unittest.TestCase):
                 return_value=manifest(),
             ):
                 pal_result = create_studio_project(
-                    source, root / "smb-pal.retrolarium", project_id="smb-pal",
+                    source, root / "smb-pal.rlj", project_id="smb-pal",
                     name="SMB PAL", profile="smb1.v1", resource_document=resources,
                 )
             pal_levels = pal_result["workspace"]["tabs"][0]
@@ -495,7 +504,7 @@ class StudioProjectTests(unittest.TestCase):
                 return_value=manifest(),
             ):
                 result = create_studio_project(
-                    source, root / "ann.retrolarium", project_id="ann",
+                    source, root / "ann.rlj", project_id="ann",
                     name="ANN", profile="smb1.v1", resource_document=resources,
                 )
             synthesis = result["workspace"]["tabs"][0]
@@ -533,7 +542,7 @@ class StudioProjectTests(unittest.TestCase):
                 return_value=manifest(),
             ):
                 result = create_studio_project(
-                    source, root / "ann.retrolarium", project_id="ann",
+                    source, root / "ann.rlj", project_id="ann",
                     name="ANN", profile="smb1.v1",
                     resource_document=resources,
                 )
@@ -586,7 +595,7 @@ class StudioProjectTests(unittest.TestCase):
                     return_value=manifest(),
                 ):
                     result = create_studio_project(
-                        source, root / f"{revision_id}.retrolarium",
+                        source, root / f"{revision_id}.rlj",
                         project_id=revision_id, name=revision.name,
                         profile="smb1.v1", resource_document=resource_path,
                     )
@@ -634,7 +643,7 @@ class StudioProjectTests(unittest.TestCase):
                 return_value=manifest(),
             ):
                 result = create_studio_project(
-                    source, root / "screen-text.retrolarium",
+                    source, root / "screen-text.rlj",
                     project_id="screen-text", name="Screen text",
                     profile="screen-text.v1", resource_document=resources,
                 )
