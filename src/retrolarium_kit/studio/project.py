@@ -94,6 +94,7 @@ CODECS = frozenset(
 CAPABILITIES = frozenset(
     {
         "changed-markers",
+        "build",
         "compose",
         "edit",
         "eyedropper",
@@ -105,6 +106,7 @@ CAPABILITIES = frozenset(
         "playtest",
         "preview",
         "restore",
+        "run",
         "semantic-overlays",
         "undo",
         "wav-preview",
@@ -836,7 +838,7 @@ def _bounded_integer(value: object, name: str, minimum: int, maximum: int) -> in
 def studio_smb_point_playtest_plan(
     path: Path,
     *,
-    fceux: Path,
+    mame: Path,
     course_bank: str,
     area: str,
     world: int,
@@ -847,8 +849,10 @@ def studio_smb_point_playtest_plan(
     infinite_time: bool = True,
     invincible: bool = True,
     wrap_pits: bool = True,
+    sfx_channel: str = "none",
+    sfx_value: int = 0,
 ) -> dict[str, Any]:
-    """Emit the fixed FCEUX/Lua process contract for an SMB JU editor point."""
+    """Emit the fixed MAME/Lua process contract for an SMB JU editor point."""
 
     inspection = load_studio_project(path)
     _require_declared_operation(inspection, "launch")
@@ -872,9 +876,9 @@ def studio_smb_point_playtest_plan(
         raise StudioProjectError(
             "Studio artifact is stale; build it again before point playtest"
         )
-    executable = fceux.resolve()
+    executable = mame.resolve()
     if not executable.is_file():
-        raise StudioProjectError(f"FCEUX executable does not exist: {executable}")
+        raise StudioProjectError(f"MAME executable does not exist: {executable}")
 
     document_path = Path(matching_tabs[0]["document_path"])
     try:
@@ -913,6 +917,15 @@ def studio_smb_point_playtest_plan(
     row = _bounded_integer(row, "row", 1, 12)
     if theme not in {"day", "night"}:
         raise StudioProjectError("theme must be 'day' or 'night'")
+    if sfx_channel not in {"none", "square1", "square2", "noise"}:
+        raise StudioProjectError(
+            "sfx_channel must be 'none', 'square1', 'square2', or 'noise'"
+        )
+    sfx_value = _bounded_integer(sfx_value, "sfx_value", 0, 255)
+    if (sfx_channel == "none") != (sfx_value == 0):
+        raise StudioProjectError(
+            "sfx_channel 'none' requires value 0 and an SFX channel requires a non-zero value"
+        )
     for name, value in (
         ("infinite_time", infinite_time),
         ("invincible", invincible),
@@ -975,7 +988,7 @@ def studio_smb_point_playtest_plan(
         _bounded_integer(selected_route.get("area_type"), "area_type", 0, 3) << 5
     ) | _bounded_integer(selected_route.get("area_index"), "area_index", 0, 31)
     artifact = Path(verification["artifact"]["absolute_path"]).resolve()
-    lua = Path(__file__).with_name("runtime") / "smb1_point_playtest.lua"
+    lua = Path(__file__).with_name("runtime") / "smb1_mame_point_playtest.lua"
     if not lua.is_file():
         raise StudioProjectError(f"packaged SMB point playtest script is missing: {lua}")
     environment = {
@@ -991,23 +1004,22 @@ def studio_smb_point_playtest_plan(
         "SMB1_PLAYTEST_INFINITE_TIME": "1" if infinite_time else "0",
         "SMB1_PLAYTEST_INVINCIBLE": "1" if invincible else "0",
         "SMB1_PLAYTEST_WRAP_PITS": "1" if wrap_pits else "0",
+        "SMB1_PLAYTEST_SFX_CHANNEL": sfx_channel,
+        "SMB1_PLAYTEST_SFX_VALUE": str(sfx_value),
     }
-    return {
-        "schema": "retrolarium.process-spec",
-        "schema_version": 1,
+    plan = launch_image_plan(
+        artifact, platform="nes", mame=executable,
+    )
+    plan.update({
         "operation": "retrolarium.studio.smb-point-playtest",
-        "platform": "nes",
-        "backend": "fceux-lua",
-        "program": str(executable),
-        "arguments": ["-lua", str(lua.resolve()), str(artifact)],
-        "working_directory": str(executable.parent),
+        "backend": "mame-lua",
+        "arguments": [
+            *plan["arguments"],
+            "-autoboot_delay", "0",
+            "-autoboot_script", str(lua.resolve()),
+        ],
         "environment": environment,
         "project_file": inspection["project_file"],
-        "rom": {
-            "path": str(artifact),
-            "size": artifact.stat().st_size,
-            "sha256": sha256_file(artifact),
-        },
         "script": {"path": str(lua.resolve()), "sha256": sha256_file(lua)},
         "point": {
             "course_bank": course_bank,
@@ -1019,8 +1031,10 @@ def studio_smb_point_playtest_plan(
             "column": column,
             "row": row,
             "theme": theme,
+            "sfx": {"channel": sfx_channel, "value": sfx_value},
         },
-    }
+    })
+    return plan
 
 
 def launch_studio_smoke(
@@ -1272,7 +1286,7 @@ def create_studio_project(
                 )
             elif kind == "animation" and kinds[kind] == {"smb.player-frames.v1"}:
                 tab_id = "player-frames"
-                title = "Player Frames"
+                title = "Animations"
                 selected_codec = "smb.player-frames.v1"
                 capabilities = ["edit", "preview", "restore", "undo"]
             elif kinds[kind] != {expected_codec}:
@@ -1311,11 +1325,11 @@ def create_studio_project(
     tabs.append(
         {
             "id": "code",
-            "title": "Code & Analysis",
+            "title": "Source",
             "kind": "code.analysis",
             "group": "tools",
             "codec": codec,
-            "capabilities": ["navigate"],
+            "capabilities": ["navigate", "edit", "build", "run"],
         }
     )
     startup_tab = str(tabs[0]["id"])

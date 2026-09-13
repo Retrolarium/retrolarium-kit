@@ -234,8 +234,8 @@ class StudioOperationTests(unittest.TestCase):
             (root / "documents/resources.json").write_text(
                 json.dumps(document), encoding="utf-8"
             )
-            fceux = root / "fceux64.exe"
-            fceux.write_bytes(b"fixture")
+            mame = root / "mame.exe"
+            mame.write_bytes(b"fixture")
             artifact = root / "disassembly/generated/base.nes"
             verification = {
                 "status": "current",
@@ -250,7 +250,7 @@ class StudioOperationTests(unittest.TestCase):
             ):
                 plan = studio_smb_point_playtest_plan(
                     root / "fixture.rlj",
-                    fceux=fceux,
+                    mame=mame,
                     course_bank="levels",
                     area="ground_1",
                     world=1,
@@ -259,22 +259,33 @@ class StudioOperationTests(unittest.TestCase):
                     row=8,
                     theme="night",
                     invincible=False,
+                    sfx_channel="noise",
+                    sfx_value=0x80,
                 )
-                self.assertEqual("fceux-lua", plan["backend"])
-                self.assertEqual(str(fceux.resolve()), plan["program"])
-                self.assertEqual("-lua", plan["arguments"][0])
+                self.assertEqual("mame-lua", plan["backend"])
+                self.assertEqual(str(mame.resolve()), plan["program"])
+                self.assertEqual("nes", plan["arguments"][0])
+                self.assertEqual("-cart", plan["arguments"][1])
                 self.assertEqual(str(artifact.resolve()), plan["arguments"][2])
-                self.assertTrue(Path(plan["arguments"][1]).is_file())
+                self.assertEqual("-autoboot_delay", plan["arguments"][-4])
+                self.assertEqual("0", plan["arguments"][-3])
+                self.assertEqual("-autoboot_script", plan["arguments"][-2])
+                self.assertTrue(Path(plan["arguments"][-1]).is_file())
                 self.assertEqual("32", plan["environment"]["SMB1_PLAYTEST_AREA"])
                 self.assertEqual("1", plan["environment"]["SMB1_PLAYTEST_PAGE"])
                 self.assertEqual("48", plan["environment"]["SMB1_PLAYTEST_X"])
                 self.assertEqual("144", plan["environment"]["SMB1_PLAYTEST_Y"])
                 self.assertEqual("0", plan["environment"]["SMB1_PLAYTEST_INVINCIBLE"])
+                self.assertEqual("noise", plan["environment"]["SMB1_PLAYTEST_SFX_CHANNEL"])
+                self.assertEqual("128", plan["environment"]["SMB1_PLAYTEST_SFX_VALUE"])
+                self.assertEqual(
+                    {"channel": "noise", "value": 0x80}, plan["point"]["sfx"]
+                )
                 self.assertTrue(plan["point"]["route_matches_area"])
                 with self.assertRaisesRegex(StudioProjectError, "column must be"):
                     studio_smb_point_playtest_plan(
                         root / "fixture.rlj",
-                        fceux=fceux,
+                        mame=mame,
                         course_bank="levels",
                         area="ground_1",
                         world=1,
@@ -282,6 +293,20 @@ class StudioOperationTests(unittest.TestCase):
                         column=512,
                         row=8,
                         theme="day",
+                    )
+                with self.assertRaisesRegex(StudioProjectError, "requires a non-zero"):
+                    studio_smb_point_playtest_plan(
+                        root / "fixture.rlj",
+                        mame=mame,
+                        course_bank="levels",
+                        area="ground_1",
+                        world=1,
+                        course=1,
+                        column=19,
+                        row=8,
+                        theme="day",
+                        sfx_channel="square1",
+                        sfx_value=0,
                     )
 
 

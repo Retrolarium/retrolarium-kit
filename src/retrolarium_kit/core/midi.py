@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Mapping
 
 from .authoring import AuthoringError
 
@@ -24,6 +25,7 @@ class MidiTrack:
     notes: tuple[MidiNote, ...]
     tempos: tuple[tuple[int, int], ...]
     discarded_events: tuple[tuple[str, int], ...]
+    end_tick: int = 0
 
 
 def _varlen(data: bytes, cursor: int) -> tuple[int, int]:
@@ -40,8 +42,8 @@ def _varlen(data: bytes, cursor: int) -> tuple[int, int]:
 
 
 def _track_events(
-    data: bytes, channel: int
-) -> tuple[list[MidiNote], list[tuple[int, int]], dict[str, int]]:
+    data: bytes, channel: int, collect_channel: bool = True,
+) -> tuple[list[MidiNote], list[tuple[int, int]], dict[str, int], int]:
     cursor = 0
     tick = 0
     running_status: int | None = None
@@ -102,6 +104,8 @@ def _track_events(
         cursor += length
         if event_channel != channel:
             continue
+        if not collect_channel:
+            continue
         if event not in (0x80, 0x90):
             feature = {
                 0xA0: "polyphonic_aftertouch",
@@ -127,7 +131,7 @@ def _track_events(
         raise MidiError("MIDI note remains active at end of track")
     if notes:
         discarded["velocity"] = len(notes)
-    return notes, tempos, discarded
+    return notes, tempos, discarded, tick
 
 
 def parse_midi(data: bytes, track_index: int, channel: int) -> MidiTrack:
@@ -149,6 +153,7 @@ def parse_midi(data: bytes, track_index: int, channel: int) -> MidiTrack:
     cursor = 8 + header_size
     selected: list[MidiNote] | None = None
     selected_discarded: dict[str, int] = {}
+    selected_end_tick = 0
     tempos: list[tuple[int, int]] = []
     for index in range(track_count):
         if cursor + 8 > len(data) or data[cursor : cursor + 4] != b"MTrk":
@@ -157,17 +162,54 @@ def parse_midi(data: bytes, track_index: int, channel: int) -> MidiTrack:
         payload = data[cursor + 8 : cursor + 8 + length]
         if len(payload) != length:
             raise MidiError("truncated MIDI track")
-        notes, track_tempos, discarded = _track_events(payload, channel)
+        notes, track_tempos, discarded, end_tick = _track_events(
+            payload, channel, index == track_index
+        )
         tempos.extend(track_tempos)
         if index == track_index:
             selected = notes
             selected_discarded = discarded
+            selected_end_tick = end_tick
         cursor += 8 + length
     if cursor != len(data):
         raise MidiError("MIDI file has trailing data")
     return MidiTrack(
         division, tuple(selected or ()), tuple(sorted(tempos)),
-        tuple(sorted(selected_discarded.items())),
+        tuple(sorted(selected_discarded.items())), selected_end_tick,
+    )
+
+
+def parse_midi_channel(data: bytes, channel: int) -> MidiTrack:
+    """Read one MIDI channel across all format-0 or format-1 tracks."""
+    if len(data) < 14 or data[:4] != b"MThd":
+        raise MidiError("not a Standard MIDI file")
+    track_count = int.from_bytes(data[10:12], "big")
+    combined: list[MidiNote] = []
+    discarded: dict[str, int] = {}
+    reference: MidiTrack | None = None
+    end_tick = 0
+    for track_index in range(track_count):
+        parsed = parse_midi(data, track_index, channel)
+        if reference is None:
+            reference = parsed
+        combined.extend(parsed.notes)
+        end_tick = max(end_tick, parsed.end_tick)
+        for feature, count in parsed.discarded_events:
+            discarded[feature] = discarded.get(feature, 0) + count
+    assert reference is not None
+    ordered = tuple(sorted(
+        combined, key=lambda note: (note.start_tick, note.end_tick, note.note)
+    ))
+    previous_end = 0
+    for note in ordered:
+        if note.start_tick < previous_end:
+            raise MidiError(
+                "MIDI import requires a monophonic channel across all tracks"
+            )
+        previous_end = note.end_tick
+    return MidiTrack(
+        reference.division, ordered, reference.tempos,
+        tuple(sorted(discarded.items())), end_tick,
     )
 
 
@@ -201,30 +243,58 @@ def encode_midi(
     notes: tuple[MidiNote, ...], *, division: int = 960, tempo: int = 500_000
 ) -> bytes:
     """Encode one monophonic channel as a format-0 Standard MIDI file."""
+    return encode_midi_channels(
+        {0: notes}, division=division, tempo=tempo
+    )
+
+
+def encode_midi_channels(
+    channels: Mapping[int, tuple[MidiNote, ...]], *,
+    division: int = 960, tempo: int = 500_000, end_tick: int | None = None,
+) -> bytes:
+    """Encode independent monophonic channels in one format-0 MIDI track."""
     if not 1 <= division < 0x8000:
         raise MidiError("MIDI division must be in 1..32767")
     if not 1 <= tempo <= 0xFFFFFF:
         raise MidiError("MIDI tempo must be in 1..16777215 microseconds")
-    ordered = tuple(sorted(notes, key=lambda note: (note.start_tick, note.end_tick)))
-    previous_end = 0
-    for note in ordered:
-        if not 0 <= note.note <= 127:
-            raise MidiError("MIDI note is outside 0..127")
-        if note.start_tick < previous_end:
-            raise MidiError("MIDI export requires a monophonic note sequence")
-        if note.end_tick <= note.start_tick:
-            raise MidiError("MIDI notes must have positive duration")
-        previous_end = note.end_tick
+    events: list[tuple[int, int, int, int]] = []
+    latest_tick = 0
+    for channel, notes in sorted(channels.items()):
+        if not 0 <= channel < 16:
+            raise MidiError("MIDI channel must be in 0..15")
+        ordered = tuple(sorted(
+            notes, key=lambda note: (note.start_tick, note.end_tick)
+        ))
+        previous_end = 0
+        for note in ordered:
+            if not 0 <= note.note <= 127:
+                raise MidiError("MIDI note is outside 0..127")
+            if note.start_tick < previous_end:
+                raise MidiError(
+                    "MIDI export requires a monophonic note sequence per channel"
+                )
+            if note.end_tick <= note.start_tick:
+                raise MidiError("MIDI notes must have positive duration")
+            events.append((note.start_tick, 1, channel, note.note))
+            events.append((note.end_tick, 0, channel, note.note))
+            previous_end = note.end_tick
+            latest_tick = max(latest_tick, note.end_tick)
+    if end_tick is not None:
+        if end_tick < latest_tick:
+            raise MidiError("MIDI end tick precedes a note")
+        latest_tick = end_tick
 
     track = bytearray(b"\x00\xff\x51\x03" + tempo.to_bytes(3, "big"))
     cursor = 0
-    for note in ordered:
-        track.extend(_encode_varlen(note.start_tick - cursor))
-        track.extend((0x90, note.note, 100))
-        track.extend(_encode_varlen(note.end_tick - note.start_tick))
-        track.extend((0x80, note.note, 0))
-        cursor = note.end_tick
-    track.extend(b"\x00\xff\x2f\x00")
+    for tick, event_kind, channel, note in sorted(events):
+        track.extend(_encode_varlen(tick - cursor))
+        if event_kind == 0:
+            track.extend((0x80 | channel, note, 0))
+        else:
+            track.extend((0x90 | channel, note, 100))
+        cursor = tick
+    track.extend(_encode_varlen(latest_tick - cursor))
+    track.extend(b"\xff\x2f\x00")
     return (
         b"MThd" + (6).to_bytes(4, "big")
         + (0).to_bytes(2, "big") + (1).to_bytes(2, "big")

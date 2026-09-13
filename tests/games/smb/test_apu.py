@@ -12,6 +12,7 @@ import unittest
 
 from retrolarium_kit.audio_operations import (
     export_smb_document_midi,
+    import_smb_midi_into_document,
     preview_smb_midi_import,
     render_smb_document_wav,
 )
@@ -164,6 +165,8 @@ class SmbApuTests(unittest.TestCase):
             midi_path = root / "channel.mid"
             output_path = root / "edited.json"
             exported_midi_path = root / "exported.mid"
+            exported_song_path = root / "exported-song.mid"
+            roundtrip_path = root / "roundtrip.json"
             document_path.write_text(json.dumps(bundle), encoding="utf-8")
             profile_path.write_text(json.dumps(profile), encoding="utf-8")
             midi_path.write_bytes(
@@ -216,6 +219,44 @@ class SmbApuTests(unittest.TestCase):
             parsed_midi = parse_midi(exported_midi_path.read_bytes(), 0, 0)
             self.assertEqual(1, exported["notes"])
             self.assertEqual(70, parsed_midi.notes[0].note)
+            exported_song = export_smb_document_midi(
+                output_path,
+                exported_song_path,
+                resource_id="music",
+                header="song",
+                selector="event",
+                channel="all",
+                profile_path=profile_path,
+            )
+            self.assertEqual(["square2", "triangle"], exported_song["channels"])
+            self.assertEqual(
+                parsed_midi.notes,
+                parse_midi(exported_song_path.read_bytes(), 0, 0).notes,
+            )
+            preview_song = preview_smb_midi_import(
+                output_path,
+                exported_song_path,
+                resource_id="music",
+                selector="event",
+                target_channel="all",
+                profile_path=profile_path,
+            )
+            self.assertEqual(["square2"], preview_song["channels"])
+            self.assertEqual(0, preview_song["changed_bytes"])
+            imported_song = import_smb_midi_into_document(
+                output_path,
+                exported_song_path,
+                roundtrip_path,
+                resource_id="music",
+                selector="event",
+                target_channel="all",
+                profile_path=profile_path,
+            )
+            self.assertEqual("apply", imported_song["operation"])
+            self.assertEqual(
+                json.loads(output_path.read_text(encoding="utf-8")),
+                json.loads(roundtrip_path.read_text(encoding="utf-8")),
+            )
 
     def test_midi_apply_changes_only_exclusive_consumed_prefix(self) -> None:
         parameters, document = midi_lowering_fixture()
@@ -244,6 +285,12 @@ class SmbApuTests(unittest.TestCase):
             apply_midi_channel_commands(
                 midi, document, parameters, "area_ground", "square2"
             )
+        shared_edit, shared_report = apply_midi_channel_commands(
+            midi, document, parameters, "area_ground", "square2",
+            allow_same_channel_sharing=True,
+        )
+        self.assertEqual(0x04, shared_edit["shared_stream_arena"][1])
+        self.assertTrue(shared_report["shared_channel_edit"])
 
         exclusive_parameters = copy.deepcopy(parameters)
         exclusive_document = copy.deepcopy(document)
@@ -335,10 +382,42 @@ class SmbApuTests(unittest.TestCase):
             [{"feature": "velocity", "events": 1}], report["discarded"]
         )
 
+    def test_midi_lowering_encodes_and_compresses_noise_pattern(self) -> None:
+        parameters, document = midi_lowering_fixture()
+        parameters = copy.deepcopy(parameters)
+        document = copy.deepcopy(document)
+        parameters["selector_names"] = ["event"]
+        parameters["headers"] = [{"name": "song", "size": 6}]
+        document["selectors"] = [{"name": "event", "header": "song"}]
+        document["headers"][0]["square1_offset"] = 0
+        document["headers"][0]["noise_offset"] = 4
+        document["note_lengths"] = [5] * 16
+        percussion = midi_file(
+            b"\x00\x99\x2a\x64\x10\x89\x2a\x00"
+            b"\x00\x99\x2a\x64\x10\x89\x2a\x00"
+        )
+        commands, report = lower_midi_channel_commands(
+            percussion, document, parameters, "event", "noise",
+            midi_channel=9, max_duration_error_frames=0.1,
+        )
+        self.assertEqual([0x10, 0x00], commands)
+        self.assertEqual(10, report["output_frames"])
+        self.assertEqual(2, report["source_notes"])
+
+        long_hit = midi_file(
+            b"\x00\x99\x26\x64\x20\x89\x26\x00"
+        )
+        commands, report = lower_midi_channel_commands(
+            long_hit, document, parameters, "event", "noise",
+            midi_channel=9, max_duration_error_frames=0.1,
+        )
+        self.assertEqual([0x20, 0x00], commands)
+        self.assertEqual(10, report["output_frames"])
+
     def test_midi_lowering_rejects_unrepresentable_input(self) -> None:
         parameters, document = midi_lowering_fixture()
         a4 = midi_file(b"\x00\x90\x45\x64\x60\x80\x45\x00")
-        with self.assertRaisesRegex(SmbApuError, "square2, square1 or triangle"):
+        with self.assertRaisesRegex(SmbApuError, "has no noise channel"):
             lower_midi_channel_commands(
                 a4, document, parameters, "area_ground", "noise"
             )
@@ -425,6 +504,16 @@ class SmbApuTests(unittest.TestCase):
             event["kind"] == "loop"
             for event in channels["noise"]["events"]
         ))
+        noise_beats = [
+            event for event in channels["noise"]["events"]
+            if event["kind"] == "beat"
+        ]
+        self.assertEqual([12, 3, 12, 3], [
+            event["period_index"] for event in noise_beats
+        ])
+        self.assertEqual([2, 2, 2, 2], [
+            event["length_counter"] for event in noise_beats
+        ])
 
     def test_header_timeline_rejects_unknown_and_unbounded_streams(self) -> None:
         parameters = layout_parameters()
@@ -477,6 +566,16 @@ class SmbApuTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertNotEqual(first, muted)
         self.assertEqual(round(8 * 8_000 / 60.0988) * 2, len(first))
+        noise_only = render_music_header_pcm(
+            document, parameters, "song", sample_rate=8_000,
+            muted_channels=("square2", "square1", "triangle"),
+        )
+        slower_noise = render_music_header_pcm(
+            document, parameters, "song", sample_rate=8_000,
+            cpu_frequency=1_000_000.0,
+            muted_channels=("square2", "square1", "triangle"),
+        )
+        self.assertNotEqual(noise_only, slower_noise)
         regional_parameters = copy.deepcopy(parameters)
         regional_parameters.update({
             "frame_rate": 50.0,
