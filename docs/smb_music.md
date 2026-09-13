@@ -72,16 +72,26 @@ rltool audio render-smb-wav game.json --resource music --selector area_water --h
 ```
 
 Guarded MIDI import accepts a monophonic, contiguous note sequence for square 2,
-square 1 or triangle. It quantizes pitches against the document's APU period
-table and durations against the selector's accessible eight-entry length table.
-The import is rejected if timing changes, the replacement exceeds the bytes
-currently consumed by that channel, or any changed byte is read by another
-header, channel or length-table context. Preview performs the same checks
-without writing; apply writes a separate JSON document atomically:
+square 1 or triangle. Noise imports map General MIDI percussion to SMB short,
+strong and long beats and preserve gaps as rests. It quantizes pitches against
+the document's APU period table and durations against the selector's accessible
+eight-entry length table. The import is rejected if timing changes or the
+replacement exceeds the bytes currently consumed by that channel. A single
+channel edit also rejects shared bytes. Complete-song import accepts shared
+bytes only when every reader is the same APU channel; its preview reports all
+affected selectors and ground-schedule entries before apply writes a separate
+JSON document atomically.
+
+Complete-song MIDI uses channels 1, 2, 3 and 10 for square 2, square 1,
+triangle and noise respectively. Format-1 tracks are combined by MIDI channel.
+The Qt Sound editor exposes separate Analyze/Import song and Export song
+actions, and applies all changed arena bytes as one undo operation:
 
 ```text
 rltool audio preview-smb-midi game.json --midi melody.mid --resource music --selector area_water --target-channel square2
 rltool audio import-smb-midi game.json --midi melody.mid --output edited.json --resource music --selector area_water --target-channel square2
+rltool audio preview-smb-midi game.json --midi song.mid --resource music --selector area_ground --target-channel all
+rltool audio export-smb-midi game.json --output song.mid --resource music --selector area_ground --header ground_part_1 --channel all
 ```
 
 The Qt editor exposes the same preview/apply boundary. Applied bytes enter the
@@ -92,7 +102,5 @@ The renderer is an authoring preview with deterministic noise and a simplified
 linear mix, not a cycle-accurate NES APU emulator. Final validation remains an
 exact build followed by playtest in the configured emulator.
 
-Piano-roll editing, direct in-editor playback and complete triangle/noise
-register timing remain later gates. ANN/SMB2 FDS ending wave and volume
-programs are covered by
+ANN/SMB2 FDS ending wave and volume programs are covered by
 [`Retrolarium_FDS_Synthesis_Authoring_Contract.md`](Retrolarium_FDS_Synthesis_Authoring_Contract.md).

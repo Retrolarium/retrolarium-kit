@@ -22,12 +22,13 @@ from .pacman_sound import (
     sound_byte_to_midi,
     sound_summary,
 )
-from .midi import MidiNote, encode_midi
+from .midi import MidiNote, encode_midi, encode_midi_channels
 from .smb_apu import (
     CODEC as SMB_APU_CODEC,
     NTSC_CPU_FREQUENCY,
     NTSC_FRAME_RATE,
     apply_midi_channel_commands,
+    apply_midi_song_commands,
     encode_music as encode_smb_music,
     music_header_timeline,
     music_selector_context,
@@ -421,9 +422,9 @@ def export_smb_document_midi(
     length_table_adder: int | None = None,
     profile_path: Path | None = None,
 ) -> dict[str, object]:
-    """Export one tonal SMB music channel as a format-0 MIDI file."""
-    if channel not in {"square2", "square1", "triangle"}:
-        raise AuthoringError("SMB MIDI export requires a tonal channel")
+    """Export one SMB channel or the complete four-channel song as MIDI."""
+    if channel not in {"all", "square2", "square1", "triangle", "noise"}:
+        raise AuthoringError("unknown SMB MIDI export channel")
     document = _load_document(document_path)
     profile, revision = _profile(document, profile_path)
     resource, spec = _smb_music_resource(
@@ -446,34 +447,64 @@ def export_smb_document_midi(
         resource, spec.parameters, header,
         length_table_adder=resolved_adder,
     )
-    raw_channel = next(
-        (item for item in timeline["channels"] if item["channel"] == channel),
-        None,
-    )
-    if raw_channel is None:
-        raise AuthoringError(f"SMB header {header!r} has no {channel} channel")
     frame_rate = float(spec.parameters.get("frame_rate", NTSC_FRAME_RATE))
     cpu_frequency = float(spec.parameters.get(
         "cpu_frequency", NTSC_CPU_FREQUENCY
     ))
-    divider = 32.0 if channel == "triangle" else 16.0
-    notes: list[MidiNote] = []
-    for event in raw_channel["events"]:
-        if event.get("kind") != "note":
-            continue
-        period = int(event["period"])
-        if period < 8 or (period & 0xFF) == 0:
-            continue
-        frequency = cpu_frequency / (divider * ((period & 0x7FF) + 1))
-        pitch = max(0, min(127, round(
-            69.0 + 12.0 * math.log2(frequency / 440.0)
-        )))
-        start_frame = int(event["tick"])
-        end_frame = start_frame + int(event["duration"])
-        start = _midi_tick(start_frame, frame_rate)
-        end = _midi_tick(end_frame, frame_rate)
-        notes.append(MidiNote(pitch, start, max(start + 1, end)))
-    payload = encode_midi(tuple(notes), division=MIDI_DIVISION, tempo=MIDI_TEMPO)
+    channel_numbers = {"square2": 0, "square1": 1, "triangle": 2, "noise": 9}
+    selected = (
+        tuple(channel_numbers) if channel == "all" else (channel,)
+    )
+    exported: dict[int, tuple[MidiNote, ...]] = {}
+    exported_names: list[str] = []
+    for channel_name in selected:
+        raw_channel = next(
+            (item for item in timeline["channels"]
+             if item["channel"] == channel_name),
+            None,
+        )
+        if raw_channel is None:
+            if channel == "all":
+                continue
+            raise AuthoringError(
+                f"SMB header {header!r} has no {channel_name} channel"
+            )
+        notes: list[MidiNote] = []
+        if channel_name == "noise":
+            percussion = {"short": 42, "strong": 38, "long": 49}
+            for event in raw_channel["events"]:
+                pitch = percussion.get(str(event.get("beat")))
+                if event.get("kind") != "beat" or pitch is None:
+                    continue
+                start_frame = int(event["tick"])
+                end_frame = start_frame + int(event["duration"])
+                start = _midi_tick(start_frame, frame_rate)
+                end = _midi_tick(end_frame, frame_rate)
+                notes.append(MidiNote(pitch, start, max(start + 1, end)))
+        else:
+            divider = 32.0 if channel_name == "triangle" else 16.0
+            for event in raw_channel["events"]:
+                if event.get("kind") != "note":
+                    continue
+                period = int(event["period"])
+                if period < 8 or (period & 0xFF) == 0:
+                    continue
+                frequency = cpu_frequency / (divider * ((period & 0x7FF) + 1))
+                pitch = max(0, min(127, round(
+                    69.0 + 12.0 * math.log2(frequency / 440.0)
+                )))
+                start_frame = int(event["tick"])
+                end_frame = start_frame + int(event["duration"])
+                start = _midi_tick(start_frame, frame_rate)
+                end = _midi_tick(end_frame, frame_rate)
+                notes.append(MidiNote(pitch, start, max(start + 1, end)))
+        exported[channel_numbers[channel_name]] = tuple(notes)
+        exported_names.append(channel_name)
+    end_tick = _midi_tick(int(timeline["duration"]), frame_rate)
+    payload = encode_midi_channels(
+        exported, division=MIDI_DIVISION, tempo=MIDI_TEMPO,
+        end_tick=end_tick,
+    )
     _atomic_write(output_path, payload)
     return {
         "schema": "retrolarium.midi-export",
@@ -483,7 +514,8 @@ def export_smb_document_midi(
         "header": header,
         "selector": selector,
         "channel": channel,
-        "notes": len(notes),
+        "channels": exported_names,
+        "notes": sum(len(notes) for notes in exported.values()),
         "duration_ticks": timeline["duration"],
         "output": str(output_path.resolve()),
         "size": len(payload),
@@ -513,17 +545,28 @@ def _prepare_smb_midi_import(
         midi_data = midi_path.read_bytes()
     except OSError as exc:
         raise AuthoringError(f"cannot read MIDI file {midi_path}: {exc}") from exc
-    edited_music, report = apply_midi_channel_commands(
-        midi_data,
-        music,
-        spec.parameters,
-        selector,
-        target_channel,
-        track=track,
-        midi_channel=midi_channel,
-        max_pitch_error_cents=max_pitch_error_cents,
-        max_duration_error_frames=max_duration_error_frames,
-    )
+    if target_channel == "all":
+        edited_music, report = apply_midi_song_commands(
+            midi_data,
+            music,
+            spec.parameters,
+            selector,
+            track=track,
+            max_pitch_error_cents=max_pitch_error_cents,
+            max_duration_error_frames=max_duration_error_frames,
+        )
+    else:
+        edited_music, report = apply_midi_channel_commands(
+            midi_data,
+            music,
+            spec.parameters,
+            selector,
+            target_channel,
+            track=track,
+            midi_channel=midi_channel,
+            max_pitch_error_cents=max_pitch_error_cents,
+            max_duration_error_frames=max_duration_error_frames,
+        )
     edited = copy.deepcopy(document)
     resources = edited["resources"]
     assert isinstance(resources, list)
@@ -543,7 +586,7 @@ def preview_smb_midi_import(
     resource_id: str,
     selector: str,
     target_channel: str,
-    track: int = 0,
+    track: int = -1,
     midi_channel: int = 0,
     max_pitch_error_cents: float = 50.0,
     max_duration_error_frames: float = 1.0,
@@ -574,7 +617,7 @@ def import_smb_midi_into_document(
     resource_id: str,
     selector: str,
     target_channel: str,
-    track: int = 0,
+    track: int = -1,
     midi_channel: int = 0,
     max_pitch_error_cents: float = 50.0,
     max_duration_error_frames: float = 1.0,

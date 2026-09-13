@@ -11,7 +11,7 @@ from typing import Mapping
 import wave
 
 from .authoring import AuthoringError
-from .midi import MidiError, parse_midi, tick_seconds
+from .midi import MidiError, parse_midi, parse_midi_channel, tick_seconds
 
 
 CODEC = "smb.apu-music.v1"
@@ -24,6 +24,21 @@ PULSE_DUTY_SEQUENCES = (
     (0, 1, 1, 1, 1, 0, 0, 0),
     (1, 0, 0, 1, 1, 1, 1, 1),
 )
+NOISE_PERIODS = (
+    4, 8, 16, 32, 64, 96, 128, 160,
+    202, 254, 380, 508, 762, 1016, 2034, 4068,
+)
+LENGTH_COUNTER_TABLE = (
+    10, 254, 20, 2, 40, 4, 80, 6,
+    160, 8, 60, 10, 14, 12, 26, 14,
+    12, 16, 24, 18, 48, 20, 96, 22,
+    192, 24, 72, 26, 16, 28, 32, 30,
+)
+NOISE_REGISTER_SETTINGS = {
+    "short": (0x03, 0x18),
+    "strong": (0x0C, 0x18),
+    "long": (0x03, 0x58),
+}
 
 
 class SmbApuError(AuthoringError):
@@ -786,8 +801,8 @@ def lower_midi_channel_commands(
     max_duration_error_frames: float = 1.0,
 ) -> tuple[list[int], dict[str, object]]:
     """Lower guarded monophonic MIDI notes to canonical SMB channel bytes."""
-    if target_channel not in {"square2", "square1", "triangle"}:
-        raise SmbApuError("SMB MIDI target must be square2, square1 or triangle")
+    if target_channel not in CHANNELS:
+        raise SmbApuError("unknown SMB MIDI target channel")
     pitch_limit = _nonnegative_number(
         max_pitch_error_cents, "max_pitch_error_cents"
     )
@@ -795,7 +810,10 @@ def lower_midi_channel_commands(
         max_duration_error_frames, "max_duration_error_frames"
     )
     try:
-        parsed = parse_midi(data, track, midi_channel)
+        parsed = (
+            parse_midi_channel(data, midi_channel)
+            if track < 0 else parse_midi(data, track, midi_channel)
+        )
     except MidiError as exc:
         raise SmbApuError(str(exc)) from exc
     if not parsed.notes:
@@ -817,6 +835,10 @@ def lower_midi_channel_commands(
         raise SmbApuError(
             f"SMB music header {context['header']!r} has no square1 channel"
         )
+    if target_channel == "noise" and header.get("noise_offset") is None:
+        raise SmbApuError(
+            f"SMB music header {context['header']!r} has no noise channel"
+        )
     length_base = _integer(
         header.get("length_table_offset"), "length_table_offset",
         maximum=len(lengths) - 1,
@@ -828,6 +850,121 @@ def lower_midi_channel_commands(
     ]
     if not duration_choices:
         raise SmbApuError("SMB MIDI target has no accessible note lengths")
+
+    frame_rate = _positive_number(
+        parameters.get("frame_rate", NTSC_FRAME_RATE), "frame_rate"
+    )
+    if target_channel == "noise":
+        commands: list[int] = []
+        duration_errors: list[float] = []
+        output_frames = 0
+
+        def append_noise_segment(
+            start_tick: int, end_tick: int, beat: str, note_index: int
+        ) -> None:
+            nonlocal output_frames
+            seconds = (
+                tick_seconds(end_tick, parsed.division, parsed.tempos)
+                - tick_seconds(start_tick, parsed.division, parsed.tempos)
+            )
+            exact_frames = seconds * frame_rate
+            choices = []
+            for duration, length_index in duration_choices:
+                try:
+                    command = encode_channel_command(
+                        "noise", "beat", length_index=length_index, beat=beat
+                    )
+                except SmbApuError:
+                    continue
+                choices.append((duration, length_index, command))
+            if not choices:
+                raise SmbApuError(f"SMB noise has no encoding for {beat}")
+            maximum_total = max(1, math.ceil(
+                exact_frames + duration_limit + max(
+                    duration for duration, _index, _command in choices
+                )
+            ))
+            paths: dict[int, list[int]] = {0: []}
+            for total in range(1, maximum_total + 1):
+                candidates = [
+                    paths[total - duration] + [command]
+                    for duration, _length_index, command in choices
+                    if total >= duration and total - duration in paths
+                ]
+                if candidates:
+                    paths[total] = min(candidates, key=len)
+            duration, encoded = min(
+                ((total, encoded) for total, encoded in paths.items() if total > 0),
+                key=lambda item: (abs(item[0] - exact_frames), len(item[1])),
+            )
+            duration_error = abs(duration - exact_frames)
+            if duration_error > duration_limit:
+                raise SmbApuError(
+                    f"MIDI noise event {note_index} duration differs from the "
+                    f"nearest SMB length by {duration_error:.3f} frames"
+                )
+            commands.extend(encoded)
+            output_frames += duration
+            duration_errors.append(duration_error)
+
+        previous_end = 0
+        percussion = {
+            35: "strong", 36: "strong", 38: "strong", 40: "strong",
+            42: "short", 44: "short", 46: "short",
+            49: "long", 51: "long", 52: "long", 55: "long", 57: "long",
+        }
+        for note_index, note in enumerate(parsed.notes):
+            if note.start_tick < previous_end:
+                raise SmbApuError("SMB noise MIDI events must not overlap")
+            if note.start_tick > previous_end:
+                append_noise_segment(
+                    previous_end, note.start_tick, "rest", note_index
+                )
+            append_noise_segment(
+                note.start_tick, note.end_tick,
+                percussion.get(note.note, "short"), note_index,
+            )
+            previous_end = note.end_tick
+        if parsed.end_tick > previous_end:
+            append_noise_segment(
+                previous_end, parsed.end_tick, "rest", len(parsed.notes)
+            )
+
+        uncompressed = list(commands)
+        for size in range(1, len(uncompressed)):
+            if len(uncompressed) % size == 0 and all(
+                command == uncompressed[index % size]
+                for index, command in enumerate(uncompressed)
+            ):
+                commands = uncompressed[:size] + [
+                    encode_channel_command("noise", "loop")
+                ]
+                break
+        source_seconds = tick_seconds(
+            parsed.end_tick, parsed.division, parsed.tempos
+        )
+        return commands, {
+            "schema": "retrolarium.smb-midi-lowering",
+            "schema_version": 1,
+            "engine": CODEC,
+            "selector": selector_name,
+            "header": context["header"],
+            "target_channel": target_channel,
+            "track": track,
+            "midi_channel": midi_channel,
+            "source_notes": len(parsed.notes),
+            "encoded_bytes": len(commands),
+            "output_frames": output_frames,
+            "source_seconds": round(source_seconds, 6),
+            "maximum_pitch_error_cents": 0.0,
+            "maximum_duration_error_frames": round(
+                max(duration_errors, default=0.0), 3
+            ),
+            "discarded": [
+                {"feature": feature, "events": count}
+                for feature, count in parsed.discarded_events
+            ],
+        }
 
     divider = 32.0 if target_channel == "triangle" else 16.0
     cpu_frequency = _positive_number(
@@ -844,9 +981,6 @@ def lower_midi_channel_commands(
     if not pitch_choices:
         raise SmbApuError("SMB MIDI target has no playable note periods")
 
-    frame_rate = _positive_number(
-        parameters.get("frame_rate", NTSC_FRAME_RATE), "frame_rate"
-    )
     commands: list[int] = []
     current_length: int | None = None
     previous_end = 0
@@ -933,6 +1067,8 @@ def apply_midi_channel_commands(
     parameters: Mapping[str, object],
     selector_name: str,
     target_channel: str,
+    *,
+    allow_same_channel_sharing: bool = False,
     **options: object,
 ) -> tuple[dict[str, object], dict[str, object]]:
     """Apply MIDI only when existing timing and physical byte ownership are safe."""
@@ -991,8 +1127,13 @@ def apply_midi_channel_commands(
                 reader.get("length_table_adder"),
             ) != target_identity
         ]
-        if foreign:
-            reader = foreign[0]
+        disallowed = [
+            reader for reader in foreign
+            if not allow_same_channel_sharing
+            or reader.get("channel") != target_channel
+        ]
+        if disallowed:
+            reader = disallowed[0]
             raise SmbApuError(
                 f"SMB MIDI byte {offset} is shared with "
                 f"{reader['header']}/{reader['channel']} "
@@ -1013,6 +1154,10 @@ def apply_midi_channel_commands(
         for owner in target_reader["logical_owners"]:
             if owner not in logical_owners:
                 logical_owners.append(str(owner))
+        for reader in foreign:
+            for owner in reader["logical_owners"]:
+                if owner not in logical_owners:
+                    logical_owners.append(str(owner))
 
     edited = copy.deepcopy(dict(value))
     arena = edited["shared_stream_arena"]
@@ -1031,6 +1176,90 @@ def apply_midi_channel_commands(
         "changed_bytes": len(changed_offsets),
         "changed_offsets": changed_offsets,
         "affected_logical_owners": logical_owners,
+        "shared_channel_edit": bool(allow_same_channel_sharing and any(
+            len(readers.get(offset, [])) > 1 for offset in replacement_offsets
+        )),
+    }
+
+
+def apply_midi_song_commands(
+    data: bytes,
+    value: object,
+    parameters: Mapping[str, object],
+    selector_name: str,
+    *,
+    track: int = -1,
+    max_pitch_error_cents: float = 50.0,
+    max_duration_error_frames: float = 1.0,
+) -> tuple[dict[str, object], dict[str, object]]:
+    """Apply the conventional four NES voices from one Standard MIDI file."""
+    encode_music(value, parameters)
+    context = music_selector_context(value, parameters, selector_name)
+    timeline = music_header_timeline(
+        value, parameters, str(context["header"]),
+        length_table_adder=int(context["length_table_adder"]),
+    )
+    available = {
+        str(channel["channel"])
+        for channel in timeline["channels"]
+        if isinstance(channel, Mapping)
+    }
+    mappings = (
+        ("square2", 0), ("square1", 1), ("triangle", 2), ("noise", 9)
+    )
+    edited = copy.deepcopy(dict(value))
+    reports: list[dict[str, object]] = []
+    for target_channel, midi_channel in mappings:
+        try:
+            parsed = (
+                parse_midi_channel(data, midi_channel)
+                if track < 0 else parse_midi(data, track, midi_channel)
+            )
+        except MidiError as exc:
+            raise SmbApuError(str(exc)) from exc
+        if not parsed.notes:
+            continue
+        if target_channel not in available:
+            raise SmbApuError(
+                f"MIDI channel {midi_channel + 1} targets unavailable SMB "
+                f"channel {target_channel}"
+            )
+        edited, report = apply_midi_channel_commands(
+            data, edited, parameters, selector_name, target_channel,
+            allow_same_channel_sharing=True,
+            track=track, midi_channel=midi_channel,
+            max_pitch_error_cents=max_pitch_error_cents,
+            max_duration_error_frames=max_duration_error_frames,
+        )
+        reports.append(report)
+    if not reports:
+        raise SmbApuError(
+            "SMB song MIDI contains no notes on channels 1, 2, 3 or 10"
+        )
+    assert isinstance(value, Mapping)
+    before_arena = value["shared_stream_arena"]
+    after_arena = edited["shared_stream_arena"]
+    assert isinstance(before_arena, list)
+    assert isinstance(after_arena, list)
+    changed_offsets = [
+        index for index, (before, after) in enumerate(
+            zip(before_arena, after_arena)
+        ) if before != after
+    ]
+    return edited, {
+        "schema": "retrolarium.smb-midi-song-lowering",
+        "schema_version": 1,
+        "engine": CODEC,
+        "selector": selector_name,
+        "header": context["header"],
+        "target_channel": "all",
+        "track": track,
+        "source_notes": sum(int(report["source_notes"]) for report in reports),
+        "encoded_bytes": sum(int(report["encoded_bytes"]) for report in reports),
+        "changed_bytes": len(changed_offsets),
+        "changed_offsets": changed_offsets,
+        "channels": [report["target_channel"] for report in reports],
+        "channel_reports": reports,
     }
 
 
@@ -1212,11 +1441,20 @@ def music_header_timeline(
                 beats_since_loop = 0
                 continue
             beat_duration = duration(int(command["length_index"]))
+            beat = str(command["beat"])
+            period_register, length_register = NOISE_REGISTER_SETTINGS.get(
+                beat, (0, 0)
+            )
             noise_events.append({
                 "kind": "beat", "byte_offset": noise_cursor,
                 "tick": noise_tick, "duration": beat_duration,
-                "beat": command["beat"],
+                "beat": beat,
                 "length_index": command["length_index"],
+                "period_index": period_register & 0x0F,
+                "length_counter": (
+                    LENGTH_COUNTER_TABLE[length_register >> 3]
+                    if length_register else 0
+                ),
             })
             noise_tick += beat_duration
             noise_cursor += 1
@@ -1327,6 +1565,7 @@ def render_music_header_pcm(
         events = raw_channel["events"]
         assert isinstance(events, list)
         lfsr = 1
+        noise_phase = 0.0
         for event in events:
             assert isinstance(event, Mapping)
             kind = event["kind"]
@@ -1340,13 +1579,28 @@ def render_music_header_pcm(
             if kind == "rest":
                 continue
             if kind == "beat":
-                amplitudes = {"rest": 0.0, "short": 0.12,
-                              "strong": 0.23, "long": 0.17}
-                amplitude = amplitudes[str(event["beat"])]
+                beat = str(event["beat"])
+                period_index = _integer(
+                    event.get("period_index"), "noise period index",
+                    maximum=len(NOISE_PERIODS) - 1,
+                )
+                length_counter = _integer(
+                    event.get("length_counter"), "noise length counter",
+                    maximum=0xFF,
+                )
+                shift_rate = resolved_cpu_frequency / NOISE_PERIODS[period_index]
+                gate_samples = round(
+                    length_counter * rate / (resolved_frame_rate * 2.0)
+                )
+                gate_end = min(end, start + gate_samples)
                 for sample in range(start, end):
-                    feedback = (lfsr ^ (lfsr >> 1)) & 1
-                    lfsr = (lfsr >> 1) | (feedback << 14)
-                    mix[sample] += amplitude if lfsr & 1 else -amplitude
+                    noise_phase += shift_rate / rate
+                    while noise_phase >= 1.0:
+                        feedback = (lfsr ^ (lfsr >> 1)) & 1
+                        lfsr = (lfsr >> 1) | (feedback << 14)
+                        noise_phase -= 1.0
+                    if beat != "rest" and sample < gate_end:
+                        mix[sample] += 0.20 if lfsr & 1 == 0 else -0.20
                 continue
 
             period = int(event["period"])
