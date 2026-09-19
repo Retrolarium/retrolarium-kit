@@ -411,27 +411,20 @@ def render_smb_document_wav(
     }
 
 
-def export_smb_document_midi(
-    document_path: Path,
-    output_path: Path,
-    *,
-    resource_id: str,
+def encode_smb_music_midi(
+    resource: dict[str, Any],
+    parameters: Mapping[str, object],
     header: str,
     channel: str,
+    *,
     selector: str | None = None,
     length_table_adder: int | None = None,
-    profile_path: Path | None = None,
-) -> dict[str, object]:
-    """Export one SMB channel or the complete four-channel song as MIDI."""
+) -> tuple[bytes, list[str], int, int]:
+    """The resource-level conversion used by both CLI export and parity tests."""
     if channel not in {"all", "square2", "square1", "triangle", "noise"}:
         raise AuthoringError("unknown SMB MIDI export channel")
-    document = _load_document(document_path)
-    profile, revision = _profile(document, profile_path)
-    resource, spec = _smb_music_resource(
-        document, profile, revision, resource_id
-    )
     selector_context = (
-        music_selector_context(resource, spec.parameters, selector)
+        music_selector_context(resource, parameters, selector)
         if selector is not None else None
     )
     if selector_context is not None and selector_context["header"] != header:
@@ -444,11 +437,11 @@ def export_smb_document_midi(
         else 0 if length_table_adder is None else length_table_adder
     )
     timeline = music_header_timeline(
-        resource, spec.parameters, header,
+        resource, parameters, header,
         length_table_adder=resolved_adder,
     )
-    frame_rate = float(spec.parameters.get("frame_rate", NTSC_FRAME_RATE))
-    cpu_frequency = float(spec.parameters.get(
+    frame_rate = float(parameters.get("frame_rate", NTSC_FRAME_RATE))
+    cpu_frequency = float(parameters.get(
         "cpu_frequency", NTSC_CPU_FREQUENCY
     ))
     channel_numbers = {"square2": 0, "square1": 1, "triangle": 2, "noise": 9}
@@ -505,6 +498,36 @@ def export_smb_document_midi(
         exported, division=MIDI_DIVISION, tempo=MIDI_TEMPO,
         end_tick=end_tick,
     )
+    return (
+        payload, exported_names,
+        sum(len(notes) for notes in exported.values()),
+        int(timeline["duration"]),
+    )
+
+
+def export_smb_document_midi(
+    document_path: Path,
+    output_path: Path,
+    *,
+    resource_id: str,
+    header: str,
+    channel: str,
+    selector: str | None = None,
+    length_table_adder: int | None = None,
+    profile_path: Path | None = None,
+) -> dict[str, object]:
+    """Export one SMB channel or the complete four-channel song as MIDI."""
+    if channel not in {"all", "square2", "square1", "triangle", "noise"}:
+        raise AuthoringError("unknown SMB MIDI export channel")
+    document = _load_document(document_path)
+    profile, revision = _profile(document, profile_path)
+    resource, spec = _smb_music_resource(
+        document, profile, revision, resource_id
+    )
+    payload, exported_names, note_count, duration_ticks = encode_smb_music_midi(
+        resource, spec.parameters, header, channel,
+        selector=selector, length_table_adder=length_table_adder,
+    )
     _atomic_write(output_path, payload)
     return {
         "schema": "retrolarium.midi-export",
@@ -515,8 +538,8 @@ def export_smb_document_midi(
         "selector": selector,
         "channel": channel,
         "channels": exported_names,
-        "notes": sum(len(notes) for notes in exported.values()),
-        "duration_ticks": timeline["duration"],
+        "notes": note_count,
+        "duration_ticks": duration_ticks,
         "output": str(output_path.resolve()),
         "size": len(payload),
         "sha256": hashlib.sha256(payload).hexdigest(),
