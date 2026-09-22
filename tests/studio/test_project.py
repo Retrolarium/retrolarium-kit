@@ -327,6 +327,118 @@ class StudioProjectTests(unittest.TestCase):
             )
             self.assertEqual("world", result["workspace"]["startup_tab"])
 
+    def test_create_materializes_castle_rooms_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "disassembly/manifest.json"
+            source.parent.mkdir()
+            source.write_text(json.dumps(manifest()), encoding="utf-8")
+            resources = root / "documents/castle-levels.json"
+            resources.parent.mkdir()
+            resources.write_text(json.dumps({
+                "schema": "retrolarium.castle-levels",
+                "schema_version": 1,
+                "game": "castle-excellent",
+                "revision": "castlequest-usa",
+                "source_sha256": SHA256,
+                "width": 20,
+                "height": 20,
+                "rooms": [{
+                    "number": 1,
+                    "cells": [[0] * 20 for _ in range(20)],
+                    "objects": [],
+                }],
+            }), encoding="utf-8")
+            output = root / "castle.rlj"
+            with patch(
+                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                return_value=manifest(),
+            ):
+                result = create_studio_project(
+                    source,
+                    output,
+                    project_id="castle-castlequest-usa",
+                    name="Castlequest (USA)",
+                    profile="castle-excellent.v1",
+                    source_mode="binary-profile",
+                    resource_document=resources,
+                )
+
+            tabs = result["workspace"]["tabs"]
+            self.assertEqual(["rooms", "code"], [tab["id"] for tab in tabs])
+            self.assertEqual("rooms", result["workspace"]["startup_tab"])
+            self.assertEqual("castle.rooms", tabs[0]["kind"])
+            self.assertEqual("castle.prefix-rooms@1", tabs[0]["codec"])
+            self.assertEqual(
+                ["edit", "preview", "restore", "undo"],
+                tabs[0]["capabilities"],
+            )
+            self.assertEqual("documents/castle-levels.json", tabs[0]["document"])
+
+    def test_create_composes_castle_rooms_and_graphics_documents(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "disassembly/manifest.json"
+            source.parent.mkdir()
+            source.write_text(json.dumps(manifest()), encoding="utf-8")
+            documents = root / "documents"
+            documents.mkdir()
+            levels = documents / "levels.json"
+            levels.write_text(json.dumps({
+                "schema": "retrolarium.castle-levels",
+                "schema_version": 1,
+                "source_sha256": SHA256,
+                "rooms": [{"cells": [[0]], "objects": []}],
+            }), encoding="utf-8")
+            graphics = documents / "graphics.json"
+            graphics.write_text(json.dumps({
+                "schema": "retrolarium.nes-resource-bundle",
+                "schema_version": 1,
+                "source_sha256": SHA256,
+                "resources": [
+                    {"id": "chr-0", "kind": "graphics", "codec": "nes.chr-2bpp.v1"},
+                    {"id": "chr-1", "kind": "graphics", "codec": "nes.chr-2bpp.v1"},
+                    {"id": "room-palettes", "kind": "palette", "codec": "nes.palette-table.v1"},
+                    {"id": "room-cell-visuals", "kind": "metatile", "codec": "castle.room-cell-visuals.v1"},
+                    {"id": "metasprite-descriptors", "kind": "animation", "codec": "castle.metasprite-descriptors.v1"},
+                    {"id": "sub-command-text", "kind": "text", "codec": "castle.sub-command-text.v1"},
+                    {"id": "sfx-parameters", "kind": "audio-parameter", "codec": "castle.sfx-parameters.v1"},
+                    {"id": "music", "kind": "audio", "codec": "castle.mml-music.v1"},
+                ],
+            }), encoding="utf-8")
+            with patch(
+                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                return_value=manifest(),
+            ):
+                result = create_studio_project(
+                    source,
+                    root / "castle.rlj",
+                    project_id="castle",
+                    name="Castle",
+                    profile="castle-excellent.v1",
+                    resource_documents=(levels, graphics),
+                )
+            tabs = result["workspace"]["tabs"]
+            self.assertEqual(
+                ["rooms", "music-sounds", "sfx-parameters", "screens-text", "graphics",
+                 "room-cells", "palettes", "animations", "code"],
+                [tab["id"] for tab in tabs],
+            )
+            self.assertEqual(
+                ["room-cells", "graphics", "palettes"], tabs[0]["depends_on"])
+            self.assertEqual("castle.mml-music", tabs[1]["kind"])
+            self.assertEqual("castle.mml-music.v1", tabs[1]["codec"])
+            self.assertEqual("data.fixed-byte-records", tabs[2]["kind"])
+            self.assertEqual("castle.sfx-parameters.v1", tabs[2]["codec"])
+            self.assertEqual("data.fixed-byte-records", tabs[3]["kind"])
+            self.assertEqual("castle.sub-command-text.v1", tabs[3]["codec"])
+            self.assertEqual(["palettes"], tabs[4]["depends_on"])
+            self.assertEqual("documents/graphics.json", tabs[4]["document"])
+            self.assertEqual("castle.room-cells", tabs[5]["kind"])
+            self.assertEqual(["graphics", "palettes"], tabs[5]["depends_on"])
+            self.assertEqual("castle.metasprites", tabs[7]["kind"])
+            self.assertEqual(["graphics", "palettes"], tabs[7]["depends_on"])
+
     def test_create_selects_profile_palette_codec(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -21,7 +22,14 @@ from retrolarium_kit.authoring import (
     RevisionSpec,
 )
 from retrolarium_kit.game_profiles import packaged_game_profiles
-from retrolarium_kit.games import build_game, extract_game, inspect_game, validate_game
+import retrolarium_kit.games as games_module
+from retrolarium_kit.games import (
+    build_game,
+    build_game_documents,
+    extract_game,
+    inspect_game,
+    validate_game,
+)
 from retrolarium_kit.nes_resources import (
     NesResourceError,
     build_resources,
@@ -185,6 +193,249 @@ def write_profile(path: Path, profile: GameProfile) -> None:
 
 
 class NesResourceTests(unittest.TestCase):
+    def test_castle_fixed_text_and_sfx_records_round_trip(self) -> None:
+        source = bytearray(fixture_image())
+        source[0x200:0x20A] = bytes(range(10))
+        source[0x220:0x228] = bytes(range(0x20, 0x28))
+        image = bytes(source)
+        base, old_revision = fixture_profile(fixture_image())
+        revision = replace(
+            old_revision,
+            sha1=hashlib.sha1(image).hexdigest(),
+            sha256=hashlib.sha256(image).hexdigest(),
+        )
+        text = ResourceSpec(
+            "sub-command-text", "text", "castle.sub-command-text.v1", "fixed", {
+                "file_offset": 0x200,
+                "size": 10,
+                "record_names": ["title", "load"],
+                "record_sizes": [6, 4],
+            },
+        )
+        sfx = ResourceSpec(
+            "sfx-parameters", "audio-parameter",
+            "castle.sfx-parameters.v1", "fixed", {
+                "file_offset": 0x220,
+                "size": 8,
+                "record_names": ["triangle", "noise"],
+                "record_sizes": [4, 4],
+            },
+        )
+        marker = replace(base.resources[0], parameters={
+            "resource_ids": ["sub-command-text", "sfx-parameters"]
+        })
+        profile = replace(
+            base, revisions=(revision,), resources=(marker, text, sfx)
+        )
+
+        document = decode_resources(image, profile, revision)
+        raw = document.as_dict()
+        self.assertEqual(raw["resources"][0]["records"], [
+            {"id": "title", "values": [0, 1, 2, 3, 4, 5]},
+            {"id": "load", "values": [6, 7, 8, 9]},
+        ])
+        self.assertEqual(raw["resources"][1]["records"][1], {
+            "id": "noise", "values": [0x24, 0x25, 0x26, 0x27],
+        })
+        self.assertEqual(inspection_details(document)["fixed_byte_records"], 4)
+        self.assertEqual(inspection_details(document)["fixed_byte_values"], 18)
+        exact, report = build_resources(image, document, profile, revision)
+        self.assertEqual(exact, image)
+        self.assertEqual(report["changed_bytes"], 0)
+
+        raw["resources"][0]["records"][1]["values"][2] = 0xAA
+        raw["resources"][1]["records"][0]["values"][3] = 0xBB
+        parsed = parse_resource_document(raw, profile, revision)
+        rebuilt, report = build_resources(image, parsed, profile, revision)
+        self.assertEqual(rebuilt[0x208], 0xAA)
+        self.assertEqual(rebuilt[0x223], 0xBB)
+        self.assertEqual(report["changed_bytes"], 2)
+
+        invalid = document.as_dict()
+        invalid["resources"][0]["records"][0]["values"].pop()
+        with self.assertRaisesRegex(NesResourceError, "must contain 6 bytes"):
+            parse_resource_document(invalid, profile, revision)
+
+    def test_castle_metasprites_round_trip_tile_and_oam_attributes(self) -> None:
+        source = bytearray(fixture_image())
+        source[0x180:0x188] = bytes((0x10, 0x00, 0x12, 0x40,
+                                             0x14, 0x81, 0x16, 0xC3))
+        image = bytes(source)
+        base, old_revision = fixture_profile(fixture_image())
+        revision = replace(
+            old_revision,
+            sha1=hashlib.sha1(image).hexdigest(),
+            sha256=hashlib.sha256(image).hexdigest(),
+        )
+        metasprites = ResourceSpec(
+            "metasprite-descriptors", "animation",
+            "castle.metasprite-descriptors.v1", "fixed", {
+                "file_offset": 0x180,
+                "size": 8,
+                "descriptor_count": 4,
+            },
+        )
+        marker = replace(base.resources[0], parameters={
+            "resource_ids": ["metasprite-descriptors"]
+        })
+        profile = replace(
+            base, revisions=(revision,), resources=(marker, metasprites)
+        )
+
+        document = decode_resources(image, profile, revision)
+        self.assertEqual(document.resources[0]["descriptors"], [
+            {"index": 0, "tile": 0x10, "attributes": 0x00},
+            {"index": 1, "tile": 0x12, "attributes": 0x40},
+            {"index": 2, "tile": 0x14, "attributes": 0x81},
+            {"index": 3, "tile": 0x16, "attributes": 0xC3},
+        ])
+        self.assertEqual(
+            inspection_details(document)["metasprite_descriptors"], 4
+        )
+        exact, report = build_resources(image, document, profile, revision)
+        self.assertEqual(exact, image)
+        self.assertEqual(report["changed_bytes"], 0)
+
+        edited = document.as_dict()
+        edited["resources"][0]["descriptors"][2].update({
+            "tile": 0x2A, "attributes": 0xC2,
+        })
+        parsed = parse_resource_document(edited, profile, revision)
+        rebuilt, report = build_resources(image, parsed, profile, revision)
+        self.assertEqual(rebuilt[0x184:0x186], bytes((0x2A, 0xC2)))
+        self.assertEqual(report["changed_bytes"], 2)
+
+    def test_castle_room_cells_round_trip_and_edit_three_rom_tables(self) -> None:
+        source = bytearray(fixture_image())
+        source[0x100:0x104] = bytes((1, 2, 3, 4))
+        source[0x110:0x114] = bytes((5, 6, 7, 8))
+        source[0x120:0x124] = bytes((0x00, 0x55, 0xAA, 0xFF))
+        image = bytes(source)
+        base, old_revision = fixture_profile(fixture_image())
+        revision = replace(
+            old_revision,
+            sha1=hashlib.sha1(image).hexdigest(),
+            sha256=hashlib.sha256(image).hexdigest(),
+        )
+        room_cells = ResourceSpec(
+            "room-cell-visuals", "metatile", "castle.room-cell-visuals.v1",
+            "fixed", {
+                "cell_count": 4,
+                "left_file_offset": 0x100,
+                "right_file_offset": 0x110,
+                "attributes_file_offset": 0x120,
+            },
+        )
+        marker = replace(base.resources[0], parameters={
+            "resource_ids": ["room-cell-visuals"]
+        })
+        profile = replace(
+            base, revisions=(revision,), resources=(marker, room_cells)
+        )
+
+        document = decode_resources(image, profile, revision)
+        self.assertEqual(document.resources[0]["records"], [
+            {"index": 0, "left_tile": 1, "right_tile": 5, "palette": 0},
+            {"index": 1, "left_tile": 2, "right_tile": 6, "palette": 1},
+            {"index": 2, "left_tile": 3, "right_tile": 7, "palette": 2},
+            {"index": 3, "left_tile": 4, "right_tile": 8, "palette": 3},
+        ])
+        self.assertEqual(inspection_details(document)["room_cells"], 4)
+        exact, report = build_resources(image, document, profile, revision)
+        self.assertEqual(exact, image)
+        self.assertEqual(report["changed_bytes"], 0)
+
+        edited = document.as_dict()
+        edited["resources"][0]["records"][2].update({
+            "left_tile": 0x2A, "right_tile": 0x3B, "palette": 1,
+        })
+        parsed = parse_resource_document(edited, profile, revision)
+        rebuilt, report = build_resources(image, parsed, profile, revision)
+        self.assertEqual(rebuilt[0x102], 0x2A)
+        self.assertEqual(rebuilt[0x112], 0x3B)
+        self.assertEqual(rebuilt[0x122], 0x55)
+        self.assertEqual(report["changed_bytes"], 3)
+
+        invalid = bytearray(image)
+        invalid[0x121] = 0x01
+        invalid_revision = replace(
+            revision,
+            sha1=hashlib.sha1(invalid).hexdigest(),
+            sha256=hashlib.sha256(invalid).hexdigest(),
+        )
+        invalid_profile = replace(profile, revisions=(invalid_revision,))
+        with self.assertRaisesRegex(NesResourceError, "not replicated"):
+            decode_resources(bytes(invalid), invalid_profile, invalid_revision)
+
+    def test_scoped_bundle_coexists_with_another_authoring_adapter(self) -> None:
+        image = fixture_image()
+        base, revision = fixture_profile(image)
+        marker = replace(
+            base.resources[0], parameters={"resource_ids": ["graphics"]}
+        )
+        profile = replace(
+            base,
+            resources=(
+                ResourceSpec(
+                    "rooms", "room-collection", "castle.prefix-rooms.v1", "fixed"
+                ),
+                marker,
+                *base.resources[1:],
+            ),
+        )
+        document = decode_resources(image, profile, revision)
+        self.assertEqual(["graphics"], [item["id"] for item in document.resources])
+
+    def test_composed_build_merges_disjoint_edits_and_rejects_conflicts(self) -> None:
+        image = fixture_image()
+        profile, revision = fixture_profile(image)
+
+        class Adapter:
+            def __init__(self, resource_id: str, offset: int, value: int) -> None:
+                self.resource_id = resource_id
+                self.offset = offset
+                self.value = value
+
+            @staticmethod
+            def parse(value, _profile, _revision):
+                return value
+
+            def build(self, payload, _document, _profile, _revision):
+                rebuilt = bytearray(payload)
+                rebuilt[self.offset] = self.value
+                return bytes(rebuilt), {"changed_bytes": 1}
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.nes"
+            first = root / "first.json"
+            second = root / "second.json"
+            output = root / "edited.nes"
+            source.write_bytes(image)
+            first.write_text('{"schema":"first"}', encoding="utf-8")
+            second.write_text('{"schema":"second"}', encoding="utf-8")
+            adapters = {
+                "first": Adapter("first", 16, 7),
+                "second": Adapter("second", 17, 8),
+            }
+            with patch.object(
+                games_module, "_read_image", return_value=(image, profile, revision)
+            ), patch.object(
+                games_module,
+                "_adapter_for_document",
+                side_effect=lambda value, _profile, _revision: adapters[value["schema"]],
+            ):
+                result = build_game_documents(source, [first, second], output)
+                self.assertEqual(2, result["changed_bytes"])
+                self.assertEqual(7, output.read_bytes()[16])
+                self.assertEqual(8, output.read_bytes()[17])
+
+                adapters["second"] = Adapter("second", 16, 9)
+                output.unlink()
+                with self.assertRaisesRegex(AuthoringError, "conflict.*0x10"):
+                    build_game_documents(source, [first, second], output)
+                self.assertFalse(output.exists())
+
     def test_smb_player_frames_flow_through_resource_pipeline(self) -> None:
         source = bytearray(fixture_image())
         offsets = bytes(index * TILES_PER_FRAME for index in range(16))

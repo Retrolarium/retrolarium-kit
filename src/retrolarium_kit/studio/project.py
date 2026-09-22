@@ -9,10 +9,14 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
 import tempfile
 import tomllib
-from typing import Any
+from typing import Any, Sequence
 
 from .contracts import ContractError, load_disassembly_manifest
-from .games import build_game, validate_game_document_for_revision
+from .games import (
+    build_game,
+    build_game_documents,
+    validate_game_document_for_revision,
+)
 from .ines import load_ines
 from .megadrive import load_megadrive
 from .project import (
@@ -46,6 +50,10 @@ EDITOR_KINDS = frozenset(
         "audio.sequencer",
         "audio.synthesis",
         "castle.rooms",
+        "castle.room-cells",
+        "castle.metasprites",
+        "castle.mml-music",
+        "data.fixed-byte-records",
         "code.analysis",
         "graphics.tile-set",
         "level.procedural",
@@ -65,6 +73,10 @@ CODECS = frozenset(
         "fds.synthesis.v1",
         "fds.music.v1",
         "nes.chr-2bpp.v1",
+        "castle.room-cell-visuals.v1",
+        "castle.metasprite-descriptors.v1",
+        "castle.sub-command-text.v1",
+        "castle.sfx-parameters.v1",
         "nes.fixed-text-fields.v1",
         "nes.metatile-2x2.v1",
         "nes.nametable.v1",
@@ -78,6 +90,7 @@ CODECS = frozenset(
         "pacman.screen-collection.v1",
         "pacman.sound-streams.v1",
         "pacman.sound@1",
+        "castle.mml-music.v1",
         "retrolarium.megadrive.disassembly@1",
         "retrolarium.nes.disassembly@1",
         "retrolarium.snes.disassembly@1",
@@ -671,14 +684,11 @@ def build_studio_project(
             "Studio build has no registered writer for "
             + ", ".join(str(document) for document in unhandled)
         )
-    if len(authoring_documents) > 1:
-        raise StudioProjectError(
-            "Studio build currently requires one composed authoring document"
-        )
-
     authoring: dict[str, object] | None = None
-    if authoring_documents:
+    if len(authoring_documents) == 1:
         authoring = build_game(base_artifact, authoring_documents[0], output)
+    elif authoring_documents:
+        authoring = build_game_documents(base_artifact, authoring_documents, output)
     else:
         output.parent.mkdir(parents=True, exist_ok=True)
         descriptor, temporary_name = tempfile.mkstemp(
@@ -1092,6 +1102,7 @@ def create_studio_project(
     profile: str,
     source_mode: str = "source-project",
     resource_document: Path | None = None,
+    resource_documents: Sequence[Path] | None = None,
 ) -> dict[str, Any]:
     """Create a minimal Code & Analysis workspace next to a disassembly."""
 
@@ -1129,7 +1140,18 @@ def create_studio_project(
 
     codec = f"{schema}@1"
     tabs: list[dict[str, object]] = []
-    if resource_document is not None:
+    if resource_document is not None and resource_documents is not None:
+        raise StudioProjectError(
+            "resource_document and resource_documents are mutually exclusive"
+        )
+    selected_documents = (
+        tuple(resource_documents)
+        if resource_documents is not None
+        else (() if resource_document is None else (resource_document,))
+    )
+    if resource_documents is not None and not selected_documents:
+        raise StudioProjectError("resource_documents must not be empty")
+    for resource_document in selected_documents:
         try:
             document_relative = resource_document.resolve().relative_to(
                 project_root.resolve()
@@ -1146,17 +1168,32 @@ def create_studio_project(
         except (OSError, UnicodeError, json.JSONDecodeError) as exc:
             raise StudioProjectError(f"cannot read resource document: {exc}") from exc
         resource_root = _mapping(resource_value, "resource document")
+        document_schema = resource_root.get("schema")
         if (
-            resource_root.get("schema") != "retrolarium.nes-resource-bundle"
+            document_schema not in _AUTHORING_SCHEMAS
             or resource_root.get("schema_version") != 1
             or resource_root.get("source_sha256") != digest
         ):
             raise StudioProjectError(
                 "resource document schema or source identity does not match the disassembly"
             )
-        resources = resource_root.get("resources")
-        if not isinstance(resources, list) or not resources:
-            raise StudioProjectError("resource document resources must be a non-empty array")
+        if document_schema == "retrolarium.castle-levels":
+            rooms = resource_root.get("rooms")
+            if not isinstance(rooms, list) or not rooms:
+                raise StudioProjectError(
+                    "Castle resource document rooms must be a non-empty array"
+                )
+            resources = [{
+                "id": "rooms",
+                "kind": "castle",
+                "codec": "castle.prefix-rooms@1",
+            }]
+        else:
+            resources = resource_root.get("resources")
+            if not isinstance(resources, list) or not resources:
+                raise StudioProjectError(
+                    "resource document resources must be a non-empty array"
+                )
         kinds: dict[str, set[str]] = {}
         has_packet_screen_text = False
         for index, item in enumerate(resources):
@@ -1178,6 +1215,8 @@ def create_studio_project(
         elif has_packet_screen_text:
             kinds.setdefault("text", set()).add("nes.ppu-screen-packets.v1")
         templates = (
+            ("castle", "rooms", "Rooms & Objects", "castle.rooms", "content",
+             "castle.prefix-rooms@1", ["edit", "preview", "restore", "undo"]),
             ("world", "world", "World", "world.routing", "content",
              "smb.world.v1", ["edit", "restore", "undo"]),
             ("level", "maze", "Maze", "level.tile-grid", "content",
@@ -1187,6 +1226,9 @@ def create_studio_project(
             ("audio", "music-sounds", "Sound", "audio.sequencer", "content",
              "pacman.sound-streams.v1",
              ["edit", "piano-roll", "midi-import", "wav-preview", "restore", "undo"]),
+            ("audio-parameter", "sfx-parameters", "SFX Parameters",
+             "data.fixed-byte-records", "content", "castle.sfx-parameters.v1",
+             ["edit", "restore", "undo"]),
             ("text", "text", "Text", "text.fixed", "content",
              "nes.fixed-text-fields.v1", ["edit", "restore", "undo"]),
             ("graphics", "graphics", "Graphics", "graphics.tile-set", "assets",
@@ -1239,6 +1281,13 @@ def create_studio_project(
                         "codec": fds_codec,
                         "capabilities": ["edit", "restore", "undo"],
                     }
+            elif kind == "audio" and kinds[kind] == {"castle.mml-music.v1"}:
+                title = "Music & Sounds"
+                editor_kind = "castle.mml-music"
+                selected_codec = "castle.mml-music.v1"
+                capabilities = [
+                    "edit", "piano-roll", "wav-preview", "restore", "undo"
+                ]
             elif kind == "audio" and (
                     "fds.synthesis.v1" in kinds[kind]
                     or "fds.music.v1" in kinds[kind]) \
@@ -1266,6 +1315,13 @@ def create_studio_project(
                     if "nes.fixed-text-fields.v1" in kinds[kind]
                     else "nes.ppu-screen-packets.v1"
                 )
+            elif kind == "text" and kinds[kind] == {
+                    "castle.sub-command-text.v1"}:
+                tab_id = "screens-text"
+                title = "Screens & Text"
+                editor_kind = "data.fixed-byte-records"
+                selected_codec = "castle.sub-command-text.v1"
+                capabilities = ["edit", "restore", "undo"]
             elif kind == "screen" and kinds[kind].issubset({
                 "nes.nametable.v1", "nes.ppu-screen-packets.v1"
             }):
@@ -1289,6 +1345,19 @@ def create_studio_project(
                 title = "Animations"
                 selected_codec = "smb.player-frames.v1"
                 capabilities = ["edit", "preview", "restore", "undo"]
+            elif kind == "animation" and kinds[kind] == {
+                    "castle.metasprite-descriptors.v1"}:
+                title = "Animations & Mappings"
+                editor_kind = "castle.metasprites"
+                selected_codec = "castle.metasprite-descriptors.v1"
+                capabilities = ["edit", "preview", "restore", "undo"]
+            elif kind == "metatile" and kinds[kind] == {
+                    "castle.room-cell-visuals.v1"}:
+                tab_id = "room-cells"
+                title = "Room Cells"
+                editor_kind = "castle.room-cells"
+                selected_codec = "castle.room-cell-visuals.v1"
+                capabilities = ["edit", "preview", "restore", "undo"]
             elif kinds[kind] != {expected_codec}:
                 raise StudioProjectError(
                     f"resource document {kind} resources require codec {expected_codec!r}"
@@ -1308,20 +1377,31 @@ def create_studio_project(
                 tabs.append(additional_tab)
         available_ids = {str(tab["id"]) for tab in tabs}
         desired_dependencies = {
+            "rooms": ("room-cells", "graphics", "palettes"),
             "maze": ("graphics",),
             "levels": ("graphics", "palettes"),
             "screens": ("graphics", "palettes"),
             "graphics": ("palettes",),
             "metatiles": ("graphics", "palettes"),
+            "room-cells": ("graphics", "palettes"),
             "animations": ("graphics",),
             "player-frames": ("graphics", "palettes"),
         }
         for tab in tabs:
+            requested_dependencies = desired_dependencies.get(str(tab["id"]), ())
+            if (tab["id"] == "animations" and tab["codec"] \
+                    == "castle.metasprite-descriptors.v1"):
+                requested_dependencies = ("graphics", "palettes")
             tab["depends_on"] = [
                 dependency
-                for dependency in desired_dependencies.get(str(tab["id"]), ())
+                for dependency in requested_dependencies
                 if dependency in available_ids
             ]
+    tab_ids = [str(tab["id"]) for tab in tabs]
+    if len(set(tab_ids)) != len(tab_ids):
+        raise StudioProjectError(
+            "resource documents produce duplicate Studio tab ids"
+        )
     tabs.append(
         {
             "id": "code",

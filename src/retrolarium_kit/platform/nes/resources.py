@@ -20,6 +20,11 @@ from .authoring import (
     RevisionSpec,
     stable_identifier,
 )
+from .castle_mml import (
+    CODEC as CASTLE_MML_MUSIC_CODEC,
+    decode_music as decode_castle_mml_music,
+    encode_music as encode_castle_mml_music,
+)
 from .fds import FdsError, fds_payload, fds_payload_ranges, parse_fds_side
 from .fds_synthesis import (
     CODEC as FDS_SYNTHESIS_CODEC,
@@ -108,6 +113,13 @@ NAMETABLE_CODEC = "nes.nametable.v1"
 PALETTE_CODEC = "nes.palette-table.v1"
 PACMAN_PALETTE_CODEC = "pacman.palette-table.v1"
 CHR_CODEC = "nes.chr-2bpp.v1"
+CASTLE_ROOM_CELL_CODEC = "castle.room-cell-visuals.v1"
+CASTLE_METASPRITE_CODEC = "castle.metasprite-descriptors.v1"
+CASTLE_SUB_COMMAND_TEXT_CODEC = "castle.sub-command-text.v1"
+CASTLE_SFX_PARAMETERS_CODEC = "castle.sfx-parameters.v1"
+CASTLE_FIXED_RECORD_CODECS = (
+    CASTLE_SUB_COMMAND_TEXT_CODEC, CASTLE_SFX_PARAMETERS_CODEC
+)
 SUPPORTED_CODECS = (
     NAMETABLE_CODEC, PALETTE_CODEC, PACMAN_PALETTE_CODEC, CHR_CODEC, PACMAN_MAZE_CODEC,
     PACMAN_ACTOR_CODEC, FIXED_TEXT_CODEC,
@@ -121,7 +133,8 @@ SUPPORTED_CODECS = (
     FDS_SYNTHESIS_CODEC,
     FDS_MUSIC_CODEC,
     METATILE_CODEC,
-    PALETTE_PACKET_CODEC,
+    PALETTE_PACKET_CODEC, CASTLE_ROOM_CELL_CODEC, CASTLE_METASPRITE_CODEC,
+    *CASTLE_FIXED_RECORD_CODECS, CASTLE_MML_MUSIC_CODEC,
     PPU_SCREEN_PACKET_CODEC,
 )
 
@@ -162,13 +175,46 @@ def _resource_specs(
 ) -> tuple[ResourceSpec, ...]:
     profile_resources = profile.resources_for(revision)
     markers = [item for item in profile_resources if item.codec == ADAPTER_CODEC]
-    resources = [item for item in profile_resources if item.codec in SUPPORTED_CODECS]
+    if len(markers) != 1:
+        raise NesResourceError(
+            "NES resource profile needs exactly one bundle marker"
+        )
+    marker = markers[0]
+    selected_ids = marker.parameters.get("resource_ids")
+    if selected_ids is None:
+        resources = [
+            item for item in profile_resources if item.codec in SUPPORTED_CODECS
+        ]
+    else:
+        if (
+            not isinstance(selected_ids, list)
+            or not selected_ids
+            or any(not isinstance(item, str) or not item for item in selected_ids)
+            or len(set(selected_ids)) != len(selected_ids)
+        ):
+            raise NesResourceError(
+                "NES resource bundle resource_ids must be a non-empty array "
+                "of unique resource ids"
+            )
+        declared_by_id = {item.resource_id: item for item in profile_resources}
+        missing = [item for item in selected_ids if item not in declared_by_id]
+        invalid = [
+            item for item in selected_ids
+            if item in declared_by_id
+            and declared_by_id[item].codec not in SUPPORTED_CODECS
+        ]
+        if missing or invalid:
+            raise NesResourceError(
+                "NES resource bundle resource_ids must name supported resources; "
+                f"missing={missing}, unsupported={invalid}"
+            )
+        resources = [declared_by_id[item] for item in selected_ids]
     unsupported = [
         item.resource_id
         for item in profile_resources
         if item.codec not in (*SUPPORTED_CODECS, ADAPTER_CODEC)
     ]
-    if len(markers) != 1 or not resources or unsupported:
+    if not resources or (selected_ids is None and unsupported):
         raise NesResourceError(
             "NES resource profile needs one bundle marker, at least one supported "
             f"resource and no unsupported codecs; unsupported={unsupported}"
@@ -708,6 +754,115 @@ def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
             "codec": resource.codec,
             "tiles": [[list(row) for row in tile] for tile in decode_chr_2bpp(payload)],
         }
+    if resource.codec == CASTLE_ROOM_CELL_CODEC:
+        count = _integer(
+            resource.parameters.get("cell_count"),
+            f"{resource.resource_id}.cell_count",
+            minimum=1,
+        )
+        spans = []
+        for component in ("left", "right", "attributes"):
+            offset = _integer(
+                resource.parameters.get(f"{component}_file_offset"),
+                f"{resource.resource_id}.{component}_file_offset",
+            )
+            payload = image[offset:offset + count]
+            if len(payload) != count:
+                raise NesResourceError(
+                    f"{resource.resource_id}.{component} exceeds the source image"
+                )
+            spans.append(payload)
+        left, right, attributes = spans
+        for index, value in enumerate(attributes):
+            if value not in (0x00, 0x55, 0xAA, 0xFF):
+                raise NesResourceError(
+                    f"{resource.resource_id}.records[{index}].palette is not replicated"
+                )
+        return {
+            "id": resource.resource_id,
+            "kind": resource.kind,
+            "codec": resource.codec,
+            "records": [
+                {
+                    "index": index,
+                    "left_tile": left[index],
+                    "right_tile": right[index],
+                    "palette": attributes[index] & 3,
+                }
+                for index in range(count)
+            ],
+        }
+    if resource.codec == CASTLE_METASPRITE_CODEC:
+        count = _integer(
+            resource.parameters.get("descriptor_count"),
+            f"{resource.resource_id}.descriptor_count",
+            minimum=1,
+        )
+        offset, size = _span(resource, count * 2)
+        payload = image[offset:offset + size]
+        if len(payload) != size:
+            raise NesResourceError(
+                f"{resource.resource_id} exceeds the source image"
+            )
+        return {
+            "id": resource.resource_id,
+            "kind": resource.kind,
+            "codec": resource.codec,
+            "descriptors": [
+                {
+                    "index": index,
+                    "tile": payload[index * 2],
+                    "attributes": payload[index * 2 + 1],
+                }
+                for index in range(count)
+            ],
+        }
+    if resource.codec in CASTLE_FIXED_RECORD_CODECS:
+        names = resource.parameters.get("record_names")
+        sizes = resource.parameters.get("record_sizes")
+        if (not isinstance(names, list) or not names
+                or any(not isinstance(name, str) or not name for name in names)
+                or len(set(names)) != len(names)):
+            raise NesResourceError(
+                f"{resource.resource_id}.record_names must contain unique names"
+            )
+        if not isinstance(sizes, list) or len(sizes) != len(names):
+            raise NesResourceError(
+                f"{resource.resource_id}.record_sizes must match record_names"
+            )
+        parsed_sizes = [
+            _integer(size, f"{resource.resource_id}.record_sizes[{index}]", minimum=1)
+            for index, size in enumerate(sizes)
+        ]
+        offset, size = _span(resource, sum(parsed_sizes))
+        payload = image[offset:offset + size]
+        if len(payload) != size:
+            raise NesResourceError(f"{resource.resource_id} exceeds the source image")
+        records = []
+        cursor = 0
+        for name, record_size in zip(names, parsed_sizes):
+            records.append({
+                "id": name,
+                "values": list(payload[cursor:cursor + record_size]),
+            })
+            cursor += record_size
+        return {
+            "id": resource.resource_id,
+            "kind": resource.kind,
+            "codec": resource.codec,
+            "records": records,
+        }
+    if resource.codec == CASTLE_MML_MUSIC_CODEC:
+        try:
+            decoded = decode_castle_mml_music(image, resource.parameters)
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return {
+            "id": resource.resource_id,
+            "kind": resource.kind,
+            "codec": resource.codec,
+            **decoded,
+        }
     if resource.codec == METATILE_CODEC:
         offset, size = _span(
             resource,
@@ -1132,6 +1287,133 @@ def _parse_resource(
         if not isinstance(values, list):
             raise NesResourceError(f"{spec.resource_id}.tiles must be an array")
         payload = encode_chr_2bpp(values, size // 16)
+    elif spec.codec == CASTLE_ROOM_CELL_CODEC:
+        expected_fields = {"id", "kind", "codec", "records"}
+        count = _integer(
+            spec.parameters.get("cell_count"),
+            f"{spec.resource_id}.cell_count",
+            minimum=1,
+        )
+        records = raw.get("records")
+        if not isinstance(records, list) or len(records) != count:
+            raise NesResourceError(
+                f"{spec.resource_id}.records must contain {count} entries"
+            )
+        left = bytearray()
+        right = bytearray()
+        attributes = bytearray()
+        for index, record in enumerate(records):
+            context = f"{spec.resource_id}.records[{index}]"
+            if not isinstance(record, dict) or set(record) != {
+                "index", "left_tile", "right_tile", "palette"
+            }:
+                raise NesResourceError(f"{context} fields differ from contract")
+            if record.get("index") != index:
+                raise NesResourceError(f"{context}.index must be {index}")
+            left.append(_byte(record.get("left_tile"), f"{context}.left_tile"))
+            right.append(_byte(record.get("right_tile"), f"{context}.right_tile"))
+            palette = _byte(
+                record.get("palette"), f"{context}.palette", maximum=3
+            )
+            attributes.append(palette * 0x55)
+        encoded_spans = tuple(
+            _EncodedSpan(
+                _integer(
+                    spec.parameters.get(f"{component}_file_offset"),
+                    f"{spec.resource_id}.{component}_file_offset",
+                ),
+                bytes(values),
+            )
+            for component, values in (
+                ("left", left), ("right", right), ("attributes", attributes)
+            )
+        )
+    elif spec.codec == CASTLE_METASPRITE_CODEC:
+        expected_fields = {"id", "kind", "codec", "descriptors"}
+        count = _integer(
+            spec.parameters.get("descriptor_count"),
+            f"{spec.resource_id}.descriptor_count",
+            minimum=1,
+        )
+        descriptors = raw.get("descriptors")
+        if not isinstance(descriptors, list) or len(descriptors) != count:
+            raise NesResourceError(
+                f"{spec.resource_id}.descriptors must contain {count} entries"
+            )
+        encoded = bytearray()
+        for index, descriptor in enumerate(descriptors):
+            context = f"{spec.resource_id}.descriptors[{index}]"
+            if not isinstance(descriptor, dict) or set(descriptor) != {
+                "index", "tile", "attributes"
+            }:
+                raise NesResourceError(f"{context} fields differ from contract")
+            if descriptor.get("index") != index:
+                raise NesResourceError(f"{context}.index must be {index}")
+            encoded.append(_byte(descriptor.get("tile"), f"{context}.tile"))
+            encoded.append(_byte(
+                descriptor.get("attributes"), f"{context}.attributes"
+            ))
+        payload = bytes(encoded)
+    elif spec.codec in CASTLE_FIXED_RECORD_CODECS:
+        expected_fields = {"id", "kind", "codec", "records"}
+        names = spec.parameters.get("record_names")
+        sizes = spec.parameters.get("record_sizes")
+        if (not isinstance(names, list) or not names
+                or any(not isinstance(name, str) or not name for name in names)
+                or len(set(names)) != len(names)):
+            raise NesResourceError(
+                f"{spec.resource_id}.record_names must contain unique names"
+            )
+        if not isinstance(sizes, list) or len(sizes) != len(names):
+            raise NesResourceError(
+                f"{spec.resource_id}.record_sizes must match record_names"
+            )
+        parsed_sizes = [
+            _integer(size, f"{spec.resource_id}.record_sizes[{index}]", minimum=1)
+            for index, size in enumerate(sizes)
+        ]
+        records = raw.get("records")
+        if not isinstance(records, list) or len(records) != len(names):
+            raise NesResourceError(
+                f"{spec.resource_id}.records must contain {len(names)} entries"
+            )
+        encoded = bytearray()
+        for index, (record, name, record_size) in enumerate(
+                zip(records, names, parsed_sizes)):
+            context = f"{spec.resource_id}.records[{index}]"
+            if not isinstance(record, dict) or set(record) != {"id", "values"}:
+                raise NesResourceError(f"{context} fields differ from contract")
+            if record.get("id") != name:
+                raise NesResourceError(f"{context}.id must be {name!r}")
+            values = record.get("values")
+            if not isinstance(values, list) or len(values) != record_size:
+                raise NesResourceError(
+                    f"{context}.values must contain {record_size} bytes"
+                )
+            encoded.extend(
+                _byte(value, f"{context}.values[{value_index}]")
+                for value_index, value in enumerate(values)
+            )
+        payload = bytes(encoded)
+    elif spec.codec == CASTLE_MML_MUSIC_CODEC:
+        expected_fields = {
+            "id", "kind", "codec", "capacity_bytes", "used_bytes",
+            "mml_cpu_address", "playback_prefix_cpu_address", "channel_names",
+            "playback_prefix", "track_sets", "streams",
+        }
+        try:
+            encoded_spans = tuple(
+                _EncodedSpan(offset, replacement)
+                for offset, replacement in encode_castle_mml_music(
+                    {
+                        key: raw.get(key)
+                        for key in expected_fields - {"id", "kind", "codec"}
+                    },
+                    spec.parameters,
+                )
+            )
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
     elif spec.codec == METATILE_CODEC:
         expected_fields = {
             "id", "kind", "codec", "group_names", "group_sizes", "tile_base", "records"
@@ -1527,6 +1809,27 @@ def inspection_details(document: NesResourceBundleDocument) -> dict[str, int]:
         for item in document.resources
         if item.get("codec") == METATILE_CODEC
     )
+    room_cells = sum(
+        len(item.get("records", []))
+        for item in document.resources
+        if item.get("codec") == CASTLE_ROOM_CELL_CODEC
+    )
+    metasprite_descriptors = sum(
+        len(item.get("descriptors", []))
+        for item in document.resources
+        if item.get("codec") == CASTLE_METASPRITE_CODEC
+    )
+    fixed_byte_records = sum(
+        len(item.get("records", []))
+        for item in document.resources
+        if item.get("codec") in CASTLE_FIXED_RECORD_CODECS
+    )
+    fixed_byte_values = sum(
+        len(record.get("values", []))
+        for item in document.resources
+        if item.get("codec") in CASTLE_FIXED_RECORD_CODECS
+        for record in item.get("records", [])
+    )
     chr_tiles = sum(
         len(item.get("tiles", []))
         for item in document.resources
@@ -1587,6 +1890,21 @@ def inspection_details(document: NesResourceBundleDocument) -> dict[str, int]:
         for item in document.resources
         if item.get("codec") == SMB_APU_CODEC
     )
+    castle_music_tracks = sum(
+        len(item.get("track_sets", []))
+        for item in document.resources
+        if item.get("codec") == CASTLE_MML_MUSIC_CODEC
+    )
+    castle_mml_streams = sum(
+        len(item.get("streams", []))
+        for item in document.resources
+        if item.get("codec") == CASTLE_MML_MUSIC_CODEC
+    )
+    castle_mml_used_bytes = sum(
+        int(item.get("used_bytes", 0))
+        for item in document.resources
+        if item.get("codec") == CASTLE_MML_MUSIC_CODEC
+    )
     smb_worlds = sum(
         len(item.get("worlds", []))
         for item in document.resources
@@ -1626,6 +1944,10 @@ def inspection_details(document: NesResourceBundleDocument) -> dict[str, int]:
         "palette_bytes": palettes,
         "palette_packets": palette_packets,
         "metatiles": metatiles,
+        "room_cells": room_cells,
+        "metasprite_descriptors": metasprite_descriptors,
+        "fixed_byte_records": fixed_byte_records,
+        "fixed_byte_values": fixed_byte_values,
         "chr_tiles": chr_tiles,
         "mazes": mazes,
         "actor_frames": actor_frames,
@@ -1635,6 +1957,9 @@ def inspection_details(document: NesResourceBundleDocument) -> dict[str, int]:
         "sound_used_bytes": sound_used_bytes,
         "smb_music_headers": smb_music_headers,
         "smb_music_arena_bytes": smb_music_arena_bytes,
+        "castle_music_tracks": castle_music_tracks,
+        "castle_mml_streams": castle_mml_streams,
+        "castle_mml_used_bytes": castle_mml_used_bytes,
         "smb_worlds": smb_worlds,
         "smb_routes": smb_routes,
         "smb_physics_tables": smb_physics_tables,

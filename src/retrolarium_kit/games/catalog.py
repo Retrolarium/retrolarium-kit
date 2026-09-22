@@ -7,11 +7,12 @@ import os
 from pathlib import Path
 import re
 import tempfile
-from typing import Any
+from typing import Any, Sequence
 
 from .authoring import AuthoringError, GameProfile, Registry, RevisionSpec
 from .castle import (
     CastleLevelDocument,
+    LEVEL_DOCUMENT_SCHEMA,
     build_levels,
     decode_levels,
     parse_level_document,
@@ -24,6 +25,7 @@ from .game_profiles import (
 from .ines import load_ines
 from .nes_resources import (
     ADAPTER_CODEC as NES_RESOURCE_ADAPTER_CODEC,
+    DOCUMENT_SCHEMA as NES_RESOURCE_DOCUMENT_SCHEMA,
     NesResourceBundleDocument,
     build_resources,
     decode_resources,
@@ -70,6 +72,7 @@ class _CastleAuthoringAdapter:
         }
 
     resource_id = "levels"
+    document_schema = LEVEL_DOCUMENT_SCHEMA
 
 
 class _NesResourceAuthoringAdapter:
@@ -97,6 +100,7 @@ class _NesResourceAuthoringAdapter:
         return nes_resource_details(document)
 
     resource_id = "resource-bundle"
+    document_schema = NES_RESOURCE_DOCUMENT_SCHEMA
 
 
 def authoring_adapters() -> Registry[object]:
@@ -106,19 +110,55 @@ def authoring_adapters() -> Registry[object]:
     return registry
 
 
-def _adapter(profile: GameProfile, revision: RevisionSpec) -> Any:
+def _adapters(profile: GameProfile, revision: RevisionSpec) -> tuple[Any, ...]:
     registry = authoring_adapters()
     identifiers = set(registry.identifiers())
-    matches = [
-        resource.codec
+    matches = tuple(
+        registry.get(resource.codec)
         for resource in profile.resources_for(revision)
         if resource.codec in identifiers
-    ]
-    if len(matches) != 1:
+    )
+    if not matches:
         raise AuthoringError(
-            f"game profile {profile.game_id} must select exactly one authoring adapter"
+            f"game profile {profile.game_id} must select an authoring adapter"
         )
-    return registry.get(matches[0])
+    if len({adapter.resource_id for adapter in matches}) != len(matches):
+        raise AuthoringError(
+            f"game profile {profile.game_id} selects duplicate authoring adapters"
+        )
+    return matches
+
+
+def _adapter(
+    profile: GameProfile, revision: RevisionSpec, resource: str | None = None
+) -> Any:
+    matches = _adapters(profile, revision)
+    if resource is None:
+        return matches[0]
+    selected = [adapter for adapter in matches if adapter.resource_id == resource]
+    if len(selected) != 1:
+        available = ", ".join(adapter.resource_id for adapter in matches)
+        raise AuthoringError(
+            f"game profile {profile.game_id} has no authoring resource {resource!r}; "
+            f"available: {available}"
+        )
+    return selected[0]
+
+
+def _adapter_for_document(
+    value: dict[str, Any], profile: GameProfile, revision: RevisionSpec
+) -> Any:
+    schema = value.get("schema")
+    selected = [
+        adapter for adapter in _adapters(profile, revision)
+        if adapter.document_schema == schema
+    ]
+    if len(selected) != 1:
+        raise AuthoringError(
+            f"authoring document schema {schema!r} is not registered for "
+            f"{profile.game_id}"
+        )
+    return selected[0]
 
 
 def resolve_profile_revision(
@@ -160,8 +200,9 @@ def validate_game_document_for_revision(
     """Validate an authoring document without requiring a commercial ROM path."""
 
     profile, revision = resolve_profile_revision(profile_reference, source_sha256)
-    adapter = _adapter(profile, revision)
-    document = adapter.parse(_load_json(document_path), profile, revision)
+    value = _load_json(document_path)
+    adapter = _adapter_for_document(value, profile, revision)
+    document = adapter.parse(value, profile, revision)
     return {
         "schema": "retrolarium.game-document-validation",
         "schema_version": 1,
@@ -296,10 +337,14 @@ def inspect_game(path: Path, *, custom_profile: Path | None = None) -> dict[str,
 
 
 def extract_game(
-    path: Path, output: Path, *, custom_profile: Path | None = None
+    path: Path,
+    output: Path,
+    *,
+    custom_profile: Path | None = None,
+    resource: str | None = None,
 ) -> dict[str, object]:
     payload, profile, revision = _read_image(path, custom_profile)
-    adapter = _adapter(profile, revision)
+    adapter = _adapter(profile, revision, resource)
     document = adapter.decode(payload, profile, revision)
     details = adapter.details(document)
     _atomic_write_json(output, document.as_dict())
@@ -319,8 +364,9 @@ def validate_game(
     path: Path, document_path: Path, *, custom_profile: Path | None = None
 ) -> dict[str, object]:
     payload, profile, revision = _read_image(path, custom_profile)
-    adapter = _adapter(profile, revision)
-    document = adapter.parse(_load_json(document_path), profile, revision)
+    value = _load_json(document_path)
+    adapter = _adapter_for_document(value, profile, revision)
+    document = adapter.parse(value, profile, revision)
     _output, report = adapter.build(payload, document, profile, revision)
     return {
         "schema": "retrolarium.game-validation-result",
@@ -344,14 +390,81 @@ def build_game(
     if path.resolve() == output.resolve():
         raise AuthoringError("game build output must not overwrite the source image")
     payload, profile, revision = _read_image(path, custom_profile)
-    adapter = _adapter(profile, revision)
-    document = adapter.parse(_load_json(document_path), profile, revision)
+    value = _load_json(document_path)
+    adapter = _adapter_for_document(value, profile, revision)
+    document = adapter.parse(value, profile, revision)
     rebuilt, report = adapter.build(payload, document, profile, revision)
     _atomic_write(output, rebuilt)
     result = {
         **report,
         "output": str(output.resolve()),
         "document": str(document_path.resolve()),
+    }
+    if report_path is not None:
+        _atomic_write_json(report_path, result)
+        result["report"] = str(report_path.resolve())
+    return result
+
+
+def build_game_documents(
+    path: Path,
+    document_paths: Sequence[Path],
+    output: Path,
+    *,
+    custom_profile: Path | None = None,
+    report_path: Path | None = None,
+) -> dict[str, object]:
+    """Build several typed documents against one source and merge their edits."""
+
+    if path.resolve() == output.resolve():
+        raise AuthoringError("game build output must not overwrite the source image")
+    if not document_paths:
+        raise AuthoringError("composed game build needs at least one document")
+    payload, profile, revision = _read_image(path, custom_profile)
+    merged = bytearray(payload)
+    owners: dict[int, tuple[Path, int]] = {}
+    builds: list[dict[str, object]] = []
+    schemas: set[str] = set()
+    for document_path in document_paths:
+        value = _load_json(document_path)
+        schema = value.get("schema")
+        if not isinstance(schema, str) or schema in schemas:
+            raise AuthoringError(
+                f"composed game build requires unique document schemas; got {schema!r}"
+            )
+        schemas.add(schema)
+        adapter = _adapter_for_document(value, profile, revision)
+        document = adapter.parse(value, profile, revision)
+        rebuilt, report = adapter.build(payload, document, profile, revision)
+        if len(rebuilt) != len(payload):
+            raise AuthoringError(
+                f"authoring document {document_path} changed the game image size"
+            )
+        for offset, (before, after) in enumerate(zip(payload, rebuilt)):
+            if before == after:
+                continue
+            previous = owners.get(offset)
+            if previous is not None and previous[1] != after:
+                raise AuthoringError(
+                    "authoring documents conflict at file offset "
+                    f"0x{offset:X}: {previous[0]} and {document_path}"
+                )
+            owners[offset] = (document_path, after)
+            merged[offset] = after
+        builds.append({
+            "document": str(document_path.resolve()),
+            "resource": adapter.resource_id,
+            "build": report,
+        })
+    _atomic_write(output, bytes(merged))
+    result: dict[str, object] = {
+        "schema": "retrolarium.composed-game-build",
+        "schema_version": 1,
+        "game": profile.game_id,
+        "revision": revision.revision_id,
+        "changed_bytes": len(owners),
+        "builds": builds,
+        "output": str(output.resolve()),
     }
     if report_path is not None:
         _atomic_write_json(report_path, result)
