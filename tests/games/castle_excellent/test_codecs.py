@@ -29,6 +29,7 @@ from retrolarium_kit.castle import (
 from retrolarium_kit.game_profiles import packaged_game_profiles
 from retrolarium_kit.games import (
     build_game,
+    build_game_documents,
     extract_game,
     game_launch_plan,
     inspect_game,
@@ -68,6 +69,16 @@ def synthetic_image() -> bytes:
     put_cpu(prg, 0x8240, bytes((1, 0, 2, 0)))
     put_cpu(prg, 0x8250, bytes((0, 1, 1, 2, 2)))
     put_cpu(prg, 0x8260, bytes((0, 1, 1, 1, 1)))
+    put_cpu(prg, 0x8300, bytes(range(32)))
+    put_cpu(prg, 0x8400, bytes(range(100)))
+    put_cpu(prg, 0x8500, bytes(range(1, 101)))
+    put_cpu(prg, 0x8600, bytes([0x55]) * 100)
+    put_cpu(prg, 0x8700, bytes(16))
+    put_cpu(prg, 0x8710, bytes((0x03, 0x0C, 0x30, 0xC0)))
+    put_cpu(prg, 0x8720, bytes([0x81]) * 61)
+    descriptors = bytearray(406)
+    descriptors[0:4] = bytes((1, 2, 3, 2))
+    put_cpu(prg, 0x8800, bytes(descriptors))
     chr_data = bytearray(b"\xff" * 0x8000)
     chr_data[2 * 0x2000:2 * 0x2000 + 2] = bytes((0x59, 0x0F))
     chr_data[3 * 0x2000:3 * 0x2000 + 2] = bytes((0x0F, 0x0F))
@@ -133,6 +144,35 @@ def synthetic_profile(image: bytes) -> tuple[GameProfile, RevisionSpec]:
             "persistent_cell_values": [0x20],
         },
     )
+    rendering = ResourceSpec(
+        "room-rendering",
+        "rendering-data",
+        "castle.room-rendering.v1",
+        "fixed",
+        {
+            "chr_bank": 0,
+            "chr_size": 8192,
+            "room_palette_cpu": 0x8300,
+            "room_palette_size": 32,
+            "left_tiles_cpu": 0x8400,
+            "right_tiles_cpu": 0x8500,
+            "cell_attributes_cpu": 0x8600,
+            "cell_count": 100,
+            "initial_attributes_cpu": 0x8700,
+            "initial_attributes_size": 16,
+            "attribute_masks_cpu": 0x8710,
+            "attribute_masks_size": 4,
+            "attribute_preserving_cells": [9, 83],
+            "runtime_object_types_cpu": 0x8720,
+            "runtime_object_type_count": 61,
+            "metasprite_descriptors_cpu": 0x8800,
+            "metasprite_descriptors_size": 406,
+            "object_previews": [
+                {"runtime_type": 0x81, "descriptor_cpu": 0x8800,
+                 "x_offsets": [0, 8]},
+            ],
+        },
+    )
     profile = GameProfile(
         "castle-probe",
         1,
@@ -140,7 +180,7 @@ def synthetic_profile(image: bytes) -> tuple[GameProfile, RevisionSpec]:
         "nes",
         ("rooms", "objects", "fixed-arena-write"),
         (revision,),
-        (rooms, objects, mutable),
+        (rooms, objects, mutable, rendering),
     )
     return profile, revision
 
@@ -194,6 +234,68 @@ class CastleCodecTests(unittest.TestCase):
             ["castle-excellent-japan-hsp-05", "castlequest-usa"],
         )
         self.assertEqual(profile.resource("rooms").codec, "castle.prefix-rooms.v1")
+        self.assertEqual(
+            profile.resource("graphics-bundle").parameters["resource_ids"],
+            ["chr-bank-0", "chr-bank-1", "screen-palettes", "room-palettes",
+             "room-cell-visuals", "metasprite-descriptors", "sub-command-text",
+             "sfx-parameters", "music"],
+        )
+        self.assertEqual(
+            [profile.resource(f"chr-bank-{bank}").parameters["file_offset"]
+             for bank in range(2)],
+            [32784, 40976],
+        )
+        self.assertEqual(
+            [profile.resource(identifier).parameters["file_offset"] for identifier in (
+                "screen-palettes", "room-palettes"
+            )],
+            [17677, 17741],
+        )
+        room_cells = profile.resource("room-cell-visuals")
+        self.assertEqual(room_cells.codec, "castle.room-cell-visuals.v1")
+        self.assertEqual(room_cells.parameters, {
+            "cell_count": 100,
+            "left_file_offset": 32576,
+            "right_file_offset": 32676,
+            "attributes_file_offset": 27106,
+        })
+        metasprites = profile.resource("metasprite-descriptors")
+        self.assertEqual(
+            metasprites.codec, "castle.metasprite-descriptors.v1")
+        self.assertEqual(metasprites.parameters, {
+            "file_offset": 13510,
+            "size": 406,
+            "descriptor_count": 203,
+        })
+        text = profile.resource("sub-command-text")
+        self.assertEqual(text.codec, "castle.sub-command-text.v1")
+        self.assertEqual(text.parameters, {
+            "file_offset": 31623,
+            "size": 53,
+            "record_names": ["title", "load", "save", "reset", "back",
+                             "game", "loading", "saving"],
+            "record_sizes": [12, 5, 5, 6, 5, 5, 8, 7],
+        })
+        sfx = profile.resource("sfx-parameters")
+        self.assertEqual(sfx.codec, "castle.sfx-parameters.v1")
+        self.assertEqual(sfx.parameters, {
+            "file_offset": 17465,
+            "size": 20,
+            "record_names": ["triangle_type_2_period_low",
+                             "inventory_period_low", "noise_type_4_volume",
+                             "noise_type_4_period", "noise_type_4_length"],
+            "record_sizes": [4, 4, 4, 4, 4],
+        })
+        music = profile.resource("music")
+        self.assertEqual(music.codec, "castle.mml-music.v1")
+        self.assertEqual(music.parameters["track_table_file_offset"], 14550)
+        self.assertEqual(music.parameters["track_count"], 8)
+        self.assertEqual(music.parameters["playback_prefix_file_offset"], 15142)
+        self.assertEqual(music.parameters["playback_prefix_size"], 209)
+        self.assertEqual(music.parameters["mml_file_offset"], 15351)
+        self.assertEqual(music.parameters["mml_cpu_address"], 0xBBE7)
+        self.assertEqual(music.parameters["mml_capacity"], 1574)
+        self.assertEqual(music.parameters["stream_count"], 21)
 
     def test_open_probe_matches_independent_oracle_and_round_trips(self) -> None:
         image = synthetic_image()
@@ -204,6 +306,13 @@ class CastleCodecTests(unittest.TestCase):
         self.assertEqual(actual["width"], oracle["width"])
         self.assertEqual(actual["height"], oracle["height"])
         self.assertEqual(actual["rooms"], oracle["rooms"])
+        self.assertEqual(actual["rendering"]["codec"], "castle.room-rendering.v1")
+        self.assertEqual(len(actual["rendering"]["chr_2bpp"]), 8192)
+        self.assertEqual(actual["rendering"]["left_tiles"][7], 7)
+        self.assertEqual(actual["rendering"]["runtime_object_types"][0], 0x81)
+        self.assertEqual(actual["rendering"]["object_previews"][0], {
+            "runtime_type": 0x81, "descriptor_offset": 0, "x_offsets": [0, 8],
+        })
         rebuilt, report = build_levels(image, document, profile, revision)
         self.assertEqual(rebuilt, image)
         self.assertEqual(
@@ -309,6 +418,96 @@ class CastleCodecTests(unittest.TestCase):
                 validate_game(
                     image_path, document_path, custom_profile=profile_path
                 )
+
+    def test_castle_rooms_and_two_chr_banks_build_as_one_transaction(self) -> None:
+        image = synthetic_image()
+        base, revision = synthetic_profile(image)
+        profile = replace(
+            base,
+            capabilities=(*base.capabilities, "graphics"),
+            resources=(
+                *base.resources,
+                ResourceSpec(
+                    "graphics-bundle",
+                    "resource-bundle",
+                    "nes.resource-bundle.v1",
+                    "fixed",
+                    {"resource_ids": [
+                        "chr-bank-0", "chr-bank-1", "room-palettes"
+                    ]},
+                ),
+                ResourceSpec(
+                    "chr-bank-0", "graphics", "nes.chr-2bpp.v1", "fixed",
+                    {"file_offset": 32784, "size": 8192},
+                ),
+                ResourceSpec(
+                    "chr-bank-1", "graphics", "nes.chr-2bpp.v1", "fixed",
+                    {"file_offset": 40976, "size": 8192},
+                ),
+                ResourceSpec(
+                    "room-palettes", "palette", "nes.palette-table.v1", "fixed",
+                    {
+                        "file_offset": 784,
+                        "size": 32,
+                        "entries": 32,
+                        "palette_model": "nes",
+                    },
+                ),
+            ),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rom = root / "castle.nes"
+            profile_path = root / "profile.json"
+            levels_path = root / "levels.json"
+            graphics_path = root / "graphics.json"
+            output = root / "edited.nes"
+            rom.write_bytes(image)
+            write_profile(profile_path, profile)
+            extract_game(
+                rom, levels_path, custom_profile=profile_path, resource="levels"
+            )
+            extract_game(
+                rom,
+                graphics_path,
+                custom_profile=profile_path,
+                resource="resource-bundle",
+            )
+            graphics = json.loads(graphics_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                ["chr-bank-0", "chr-bank-1", "room-palettes"],
+                [item["id"] for item in graphics["resources"]],
+            )
+            exact = build_game_documents(
+                rom,
+                [levels_path, graphics_path],
+                output,
+                custom_profile=profile_path,
+            )
+            self.assertEqual(0, exact["changed_bytes"])
+            self.assertEqual(image, output.read_bytes())
+            levels = json.loads(levels_path.read_text(encoding="utf-8"))
+            levels["rooms"][1]["cells"][0][0] = 0x20
+            levels_path.write_text(json.dumps(levels), encoding="utf-8")
+            graphics["resources"][0]["tiles"][0][0][0] = 0
+            graphics["resources"][2]["values"][1] = 0x2A
+            graphics_path.write_text(json.dumps(graphics), encoding="utf-8")
+
+            result = build_game_documents(
+                rom,
+                [levels_path, graphics_path],
+                output,
+                custom_profile=profile_path,
+            )
+            rebuilt = output.read_bytes()
+            self.assertEqual("retrolarium.composed-game-build", result["schema"])
+            self.assertGreater(result["changed_bytes"], 1)
+            self.assertNotEqual(image[32784], rebuilt[32784])
+            self.assertEqual(0x2A, rebuilt[785])
+            bank2 = 32784 + 2 * 8192
+            self.assertNotEqual(
+                image[bank2:bank2 + 8192], rebuilt[bank2:bank2 + 8192]
+            )
 
     def test_invalid_codebook_and_unknown_cell_are_rejected(self) -> None:
         with self.assertRaisesRegex(CastleError, "prefix-free"):

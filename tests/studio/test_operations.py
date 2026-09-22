@@ -184,6 +184,59 @@ class StudioOperationTests(unittest.TestCase):
                 with self.assertRaisesRegex(StudioProjectError, "no registered writer"):
                     build_studio_project(root / "fixture.rlj")
 
+    def test_build_composes_multiple_registered_documents(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            state = self.prepare(root)
+            rooms = root / "documents/rooms.json"
+            rooms.write_text(
+                '{"schema":"retrolarium.castle-levels"}', encoding="utf-8"
+            )
+            state["workspace"]["tabs"].insert(0, {
+                "id": "rooms",
+                "title": "Rooms",
+                "kind": "castle.rooms",
+                "group": "content",
+                "document": "documents/rooms.json",
+                "document_path": str(rooms.resolve()),
+                "codec": "castle.prefix-rooms@1",
+                "capabilities": ["edit"],
+                "depends_on": [],
+                "enabled": True,
+            })
+
+            def composed(source: Path, documents: list[Path], output: Path):
+                output.parent.mkdir(parents=True, exist_ok=True)
+                output.write_bytes(source.read_bytes())
+                return {
+                    "schema": "retrolarium.composed-game-build",
+                    "documents": len(documents),
+                }
+
+            with patch(
+                "retrolarium_kit.studio_project.load_studio_project",
+                return_value=state,
+            ), patch(
+                "retrolarium_kit.studio_project.validate_game_document_for_revision",
+                return_value={"status": "valid"},
+            ), patch(
+                "retrolarium_kit.studio_project.build_project",
+                return_value={"artifact": {"path": "generated/base.nes"}},
+            ), patch(
+                "retrolarium_kit.studio_project.verify_project",
+                return_value={"status": "exact"},
+            ), patch(
+                "retrolarium_kit.studio_project.build_game_documents",
+                side_effect=composed,
+            ) as build_documents:
+                result = build_studio_project(root / "fixture.rlj")
+            self.assertEqual("retrolarium.composed-game-build", result["authoring"]["schema"])
+            build_documents.assert_called_once_with(
+                (root / "disassembly/generated/base.nes").resolve(),
+                [rooms.resolve(), (root / "documents/resources.json").resolve()],
+                (root / "build/fixture-edited.nes").resolve(),
+            )
+
     def test_smb_point_playtest_plan_is_fixed_and_validated(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

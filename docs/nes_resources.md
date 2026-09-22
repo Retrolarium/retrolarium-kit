@@ -87,10 +87,14 @@ MAME NES run with exit code zero and a hashed screenshot. Generated documents,
 ROMs, logs and screenshots remain ignored.
 
 The fixed-resource adapter also supports structured visual and animation
-codecs used by the SMB profile:
+codecs used by the SMB and Castle profiles:
 
 - `nes.metatile-2x2.v1` stores named groups of fixed four-tile records and a
   CHR tile base. Record order is preserved exactly for lossless rebuilding;
+- `castle.room-cell-visuals.v1` stores the 100 horizontal left/right tile
+  pairs and their two-bit palette choices. The palette value is written back
+  to Castle's replicated attribute bytes (`00`, `55`, `AA`, `FF`), while the
+  room renderer preserves the engine's attribute-retaining cell semantics;
 - `nes.ppu-palette-packets.v1` stores named fixed-capacity PPU command packets,
   including address, orientation/repeat flags, NES color values and the
   profile's Day/Night universal background colors;
