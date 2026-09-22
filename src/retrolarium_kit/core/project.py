@@ -111,6 +111,8 @@ def _run_build_process(
 def _docker_build(
     operation: dict[str, Any], project_directory: Path, selected_container: str
 ) -> dict[str, str]:
+    if operation.get("z80_prebuild"):
+        raise ProjectError("container build cannot assemble declared Z80 sources")
     command = [
         "docker",
         "run",
@@ -197,6 +199,43 @@ def _asl_build(
     )
     if not source.is_file():
         raise ProjectError("AS recipe input is missing")
+    z80_prebuild = operation.get("z80_prebuild", [])
+    if not isinstance(z80_prebuild, list):
+        raise ProjectError("Z80 prebuild must be an array")
+    for index, item in enumerate(z80_prebuild):
+        if not isinstance(item, dict):
+            raise ProjectError(f"Z80 prebuild {index} must be an object")
+        z80_source, z80_source_relative = _project_relative_path(
+            project_directory, item.get("source"), "Z80 source"
+        )
+        z80_object, z80_object_relative = _project_relative_path(
+            project_directory, item.get("object"), "Z80 object"
+        )
+        z80_output, z80_output_relative = _project_relative_path(
+            project_directory, item.get("output"), "Z80 output"
+        )
+        if not z80_source.is_file() or z80_source.suffix.lower() != ".asm":
+            raise ProjectError(f"Z80 prebuild source is missing or is not .asm: {z80_source}")
+        z80_object.parent.mkdir(parents=True, exist_ok=True)
+        z80_output.parent.mkdir(parents=True, exist_ok=True)
+        z80_listing = z80_object.with_suffix(".lst")
+        z80_listing_relative = z80_listing.relative_to(project_directory).as_posix()
+        z80_object.unlink(missing_ok=True)
+        z80_output.unlink(missing_ok=True)
+        z80_listing.unlink(missing_ok=True)
+        _run_build_process(
+            [str(suite.command("asl")), "-xx", "-n", "-q", "-A", "-L", "-U",
+             "-olist", z80_listing_relative,
+             "-i", ".", "-o", z80_object_relative, z80_source_relative],
+            project_directory=project_directory,
+            environment=suite.process_environment(),
+        )
+        _run_build_process(
+            [str(suite.command("p2bin")), z80_object_relative,
+             z80_output_relative, "-p=FF"],
+            project_directory=project_directory,
+            environment=suite.process_environment(),
+        )
     if '"' in source_relative or "\n" in source_relative or "\r" in source_relative:
         raise ProjectError("AS source path cannot be represented in an include")
     object_file.parent.mkdir(parents=True, exist_ok=True)
