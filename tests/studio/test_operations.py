@@ -9,6 +9,7 @@ from unittest.mock import patch
 from retrolarium_kit.studio_project import (
     StudioProjectError,
     build_studio_project,
+    studio_castle_point_playtest_plan,
     studio_smb_point_playtest_plan,
     validate_studio_project,
     verify_studio_project,
@@ -361,6 +362,69 @@ class StudioOperationTests(unittest.TestCase):
                         sfx_channel="square1",
                         sfx_value=0,
                     )
+
+    def test_castle_point_playtest_prepares_isolated_room_preview(self) -> None:
+        for revision in ("castle-excellent-japan-hsp-05", "castlequest-usa"):
+            with self.subTest(revision=revision), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                state = self.prepare(root)
+                state["project"]["profile"] = "castle-excellent.v1"
+                tab = state["workspace"]["tabs"][0]
+                tab["codec"] = "castle.prefix-rooms@1"
+                tab["capabilities"] = ["edit", "playtest"]
+                (root / "documents/resources.json").write_text(json.dumps({
+                    "schema": "retrolarium.castle-levels",
+                    "schema_version": 1,
+                    "game": "castle-excellent",
+                    "revision": revision,
+                    "rooms": [{} for _ in range(100)],
+                }), encoding="utf-8")
+                source = bytearray(65552)
+                source[:16] = b"NES\x1a" + bytes([2, 4, 0x30]) + bytes(9)
+                source[0x22c1:0x22c5] = b"\xa9\x47\x85\x37"
+                artifact = root / "disassembly/generated/base.nes"
+                artifact.write_bytes(source)
+                mame = root / "mame.exe"
+                mame.write_bytes(b"fixture")
+                verification = {
+                    "status": "current",
+                    "artifact": {"absolute_path": str(artifact)},
+                }
+                with patch(
+                    "retrolarium_kit.studio_project.load_studio_project",
+                    return_value=state,
+                ), patch(
+                    "retrolarium_kit.studio_project.verify_studio_project",
+                    return_value=verification,
+                ):
+                    plan = studio_castle_point_playtest_plan(
+                        root / "fixture.rlj", mame=mame, room=42, x=312, y=156,
+                    )
+                    preview = Path(plan["arguments"][2])
+                    expected = bytearray(source)
+                    expected[0x22c2] = 42
+                    self.assertEqual(bytes(expected), preview.read_bytes())
+                    self.assertEqual(bytes(source), artifact.read_bytes())
+                    self.assertEqual("42", plan["environment"]["CASTLE_PLAYTEST_ROOM"])
+                    self.assertEqual("312", plan["environment"]["CASTLE_PLAYTEST_X"])
+                    self.assertEqual("156", plan["environment"]["CASTLE_PLAYTEST_Y"])
+                    self.assertEqual("retrolarium.studio.castle-point-playtest",
+                                     plan["operation"])
+                    self.assertTrue(Path(plan["arguments"][-1]).is_file())
+                    with self.assertRaisesRegex(StudioProjectError, "room must be"):
+                        studio_castle_point_playtest_plan(
+                            root / "fixture.rlj", mame=mame, room=101, x=0, y=0,
+                        )
+                    with self.assertRaisesRegex(StudioProjectError, "x must be"):
+                        studio_castle_point_playtest_plan(
+                            root / "fixture.rlj", mame=mame, room=1, x=320, y=0,
+                        )
+                    source[0x22c3] = 0
+                    artifact.write_bytes(source)
+                    with self.assertRaisesRegex(StudioProjectError, "guarded"):
+                        studio_castle_point_playtest_plan(
+                            root / "fixture.rlj", mame=mame, room=1, x=0, y=0,
+                        )
 
 
 if __name__ == "__main__":

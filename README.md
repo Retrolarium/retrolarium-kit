@@ -62,6 +62,10 @@ It recognizes the exact supported revision, creates a full disassembly and
 typed resource bundle in a temporary sibling directory, writes the configured
 Studio project, and by default builds and verifies its first artifact. The
 requested output directory appears only after the whole workflow succeeds.
+For a previously edited Castle levels JSON, pass
+`--legacy-castle-levels path\to\old-levels.json` to `studio preset`; the Kit
+validates it against the selected ROM and copies it into the new multi-document
+Studio before building. The original JSON and ROM are never changed.
 Use `--no-build` only for diagnostics; the GUI always requests the complete
 verified workflow.
 

@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://retrolarium.local/schemas/solomon-rooms-v2.schema.json",
+  "title": "Retrolarium Solomon's Key room document v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "schema_version", "game", "revision", "source_sha256", "width", "height", "rooms"],
+  "properties": {
+    "schema": {"const": "retrolarium.solomon-rooms"},
+    "schema_version": {"const": 2},
+    "game": {"const": "solomons-key"},
+    "revision": {"enum": ["usa", "europe"]},
+    "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "width": {"const": 16},
+    "height": {"const": 12},
+    "rooms": {
+      "type": "array", "minItems": 53, "maxItems": 53,
+      "items": {"$ref": "#/$defs/room"}
+    }
+  },
+  "$defs": {
+    "byte": {"type": "integer", "minimum": 0, "maximum": 255},
+    "position": {
+      "type": "object", "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": {"type": "integer", "minimum": 0, "maximum": 15},
+        "y": {"type": "integer", "minimum": -1, "maximum": 14}
+      }
+    },
+    "plane": {
+      "type": "array", "minItems": 12, "maxItems": 12,
+      "items": {
+        "type": "array", "minItems": 16, "maxItems": 16,
+        "items": {"type": "integer", "enum": [0, 1]}
+      }
+    },
+    "enemy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "position"],
+      "properties": {
+        "type": {"type": "integer", "minimum": 24, "maximum": 131},
+        "position": {"$ref": "#/$defs/position"}
+      }
+    },
+    "enemy_stream": {
+      "type": "object", "additionalProperties": false,
+      "required": ["spawn_lifetime", "enemies"],
+      "properties": {
+        "spawn_lifetime": {"$ref": "#/$defs/byte"},
+        "enemies": {"type": "array", "maxItems": 17,
+                    "items": {"$ref": "#/$defs/enemy"}}
+      }
+    },
+    "metadata": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mirror_2_schedule", "mirror_1_schedule", "mirror_2_enemy_set",
+                   "mirror_1_enemy_set", "status_rate_raw", "door", "key",
+                   "player_start", "mirror_1", "mirror_2"],
+      "properties": {
+        "mirror_2_schedule": {"type": "integer", "minimum": 0, "maximum": 15},
+        "mirror_1_schedule": {"type": "integer", "minimum": 0, "maximum": 15},
+        "mirror_2_enemy_set": {"type": "integer", "minimum": 0, "maximum": 16},
+        "mirror_1_enemy_set": {"type": "integer", "minimum": 0, "maximum": 16},
+        "status_rate_raw": {"$ref": "#/$defs/byte"},
+        "door": {"$ref": "#/$defs/position"},
+        "key": {"$ref": "#/$defs/position"},
+        "player_start": {"$ref": "#/$defs/position"},
+        "mirror_1": {"$ref": "#/$defs/position"},
+        "mirror_2": {"$ref": "#/$defs/position"}
+      }
+    },
+    "end_command": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "opcode"],
+      "properties": {
+        "kind": {"const": "end"},
+        "opcode": {"anyOf": [{"const": 0},
+                             {"type": "integer", "minimum": 224, "maximum": 239}]}
+      }
+    },
+    "constellation_command": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "opcode", "position"],
+      "properties": {
+        "kind": {"const": "constellation"},
+        "opcode": {"type": "integer", "minimum": 240, "maximum": 251},
+        "position": {"$ref": "#/$defs/position"}
+      }
+    },
+    "repeat_command": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "opcode", "type", "positions"],
+      "properties": {
+        "kind": {"const": "repeat"},
+        "opcode": {"type": "integer", "minimum": 192, "maximum": 223},
+        "type": {"$ref": "#/$defs/byte"},
+        "positions": {"type": "array", "minItems": 1, "maxItems": 32,
+                      "items": {"$ref": "#/$defs/position"}}
+      }
+    },
+    "item_command": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "type", "position"],
+      "properties": {
+        "kind": {"const": "item"},
+        "type": {"anyOf": [
+          {"type": "integer", "minimum": 1, "maximum": 191},
+          {"type": "integer", "minimum": 252, "maximum": 255}
+        ]},
+        "position": {"$ref": "#/$defs/position"}
+      }
+    },
+    "item_stream": {
+      "type": "object", "additionalProperties": false,
+      "required": ["metadata", "commands"],
+      "properties": {
+        "metadata": {"$ref": "#/$defs/metadata"},
+        "commands": {"type": "array", "minItems": 1,
+                     "items": {"oneOf": [
+                       {"$ref": "#/$defs/end_command"},
+                       {"$ref": "#/$defs/constellation_command"},
+                       {"$ref": "#/$defs/repeat_command"},
+                       {"$ref": "#/$defs/item_command"}
+                     ]}}
+      }
+    },
+    "room": {
+      "type": "object", "additionalProperties": false,
+      "required": ["number", "brown", "white", "enemy_stream", "item_stream"],
+      "properties": {
+        "number": {"type": "integer", "minimum": 1, "maximum": 53},
+        "brown": {"$ref": "#/$defs/plane"},
+        "white": {"$ref": "#/$defs/plane"},
+        "enemy_stream": {"$ref": "#/$defs/enemy_stream"},
+        "item_stream": {"$ref": "#/$defs/item_stream"}
+      }
+    }
+  }
+}
