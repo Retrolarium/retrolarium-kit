@@ -10,6 +10,7 @@ from retrolarium_kit.studio_project import (
     StudioProjectError,
     build_studio_project,
     studio_castle_point_playtest_plan,
+    studio_solomon_point_playtest_plan,
     studio_smb_point_playtest_plan,
     validate_studio_project,
     verify_studio_project,
@@ -424,6 +425,67 @@ class StudioOperationTests(unittest.TestCase):
                     with self.assertRaisesRegex(StudioProjectError, "guarded"):
                         studio_castle_point_playtest_plan(
                             root / "fixture.rlj", mame=mame, room=1, x=0, y=0,
+                        )
+
+    def test_solomon_point_playtest_uses_profile_hooks_without_rom_patch(self) -> None:
+        for revision, hook, machine in (
+            ("usa", 0x9021, "nes"), ("europe", 0x9030, "nespal")
+        ):
+            with self.subTest(revision=revision), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                state = self.prepare(root)
+                state["project"]["profile"] = "solomons-key.v1"
+                tab = state["workspace"]["tabs"][0]
+                tab["codec"] = "solomon.rooms@3"
+                tab["capabilities"] = ["edit", "playtest"]
+                (root / "documents/resources.json").write_text(json.dumps({
+                    "schema": "retrolarium.solomon-rooms",
+                    "schema_version": 3,
+                    "game": "solomons-key",
+                    "revision": revision,
+                    "rooms": [{} for _ in range(53)],
+                }), encoding="utf-8")
+                source = bytearray(65552)
+                source[:16] = b"NES\x1a" + bytes([2, 4, 0x30]) + bytes(9)
+                source[16 + hook - 0x8000:22 + hook - 0x8000] = (
+                    b"\xa9\xfd\x25\x7c\x85\x7c"
+                )
+                artifact = root / "disassembly/generated/base.nes"
+                artifact.write_bytes(source)
+                mame = root / "mame.exe"
+                mame.write_bytes(b"fixture")
+                verification = {
+                    "status": "current",
+                    "artifact": {"absolute_path": str(artifact)},
+                }
+                with patch(
+                    "retrolarium_kit.studio_project.load_studio_project",
+                    return_value=state,
+                ), patch(
+                    "retrolarium_kit.studio_project.verify_studio_project",
+                    return_value=verification,
+                ):
+                    plan = studio_solomon_point_playtest_plan(
+                        root / "fixture.rlj", mame=mame, room=29,
+                    )
+                    self.assertEqual(machine, plan["arguments"][0])
+                    self.assertEqual(str(artifact.resolve()), plan["arguments"][2])
+                    self.assertEqual("29", plan["environment"]["SOLOMON_PLAYTEST_ROOM"])
+                    self.assertEqual(
+                        str(hook), plan["environment"]["SOLOMON_PLAYTEST_ROOM_LOAD"]
+                    )
+                    self.assertEqual(bytes(source), artifact.read_bytes())
+                    self.assertEqual("retrolarium.studio.solomon-point-playtest",
+                                     plan["operation"])
+                    with self.assertRaisesRegex(StudioProjectError, "room must be"):
+                        studio_solomon_point_playtest_plan(
+                            root / "fixture.rlj", mame=mame, room=53,
+                        )
+                    source[16 + hook - 0x8000] = 0
+                    artifact.write_bytes(source)
+                    with self.assertRaisesRegex(StudioProjectError, "guarded"):
+                        studio_solomon_point_playtest_plan(
+                            root / "fixture.rlj", mame=mame, room=0,
                         )
 
 

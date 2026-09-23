@@ -5,7 +5,7 @@
   "id": "solomons-key",
   "name": "Solomon's Key",
   "platform": "nes",
-  "capabilities": ["rooms", "objects", "graphics", "exact-round-trip"],
+  "capabilities": ["rooms", "objects", "graphics", "audio", "presentation", "playtest", "exact-round-trip"],
   "revisions": [
     {
       "id": "usa",
@@ -14,7 +14,14 @@
       "sha1": "18102689fd35c7d531a5e6241b06b748accab2f6",
       "sha256": "3d9f3bee199a3fbc04bab38e1d9d5cdeae1c6691dcca463a13c25e42f77bb03d",
       "container": "ines",
-      "mapper": 3
+      "mapper": 3,
+      "playtest": {
+        "room_load_address": 36897,
+        "gameplay_address": 40960,
+        "current_room_address": 1064,
+        "start_frame": 300,
+        "ready_frames": 1000
+      }
     },
     {
       "id": "europe",
@@ -24,6 +31,13 @@
       "sha256": "e8dc7ad587133869eaf6101018be676e9c14c3b97b988d2e96f7e398b5c33acb",
       "container": "ines",
       "mapper": 3,
+      "playtest": {
+        "room_load_address": 36912,
+        "gameplay_address": 40960,
+        "current_room_address": 1064,
+        "start_frame": 300,
+        "ready_frames": 1000
+      },
       "resource_overrides": [
         {"id": "room-blocks", "parameters": {"prg_offset": 24492}},
         {"id": "enemy-streams", "parameters": {
@@ -59,6 +73,22 @@
         }},
         {"id": "sprite-frames", "parameters": {
           "animation_pointers_prg": 20584
+        }},
+        {"id": "audio", "parameters": {
+          "period_cpu": 62184,
+          "duration_cpu": 62208,
+          "envelope_pointer_cpu": 62274,
+          "envelope_data_cpu": 62290,
+          "effect_pointer_cpu": 62500,
+          "effect_data_cpu": 62552,
+          "stream_cpu": 62778,
+          "stream_end_cpu": 65502
+        }},
+        {"id": "presentation", "parameters": {
+          "record_cpu": 52463,
+          "logo_cpu": 52618,
+          "demo_duration_cpu": 52865,
+          "demo_input_cpu": 52899
         }}
       ]
     }
@@ -207,6 +237,34 @@
       "parameters": {
         "room_group_colors_prg": 4386,
         "room_map_patterns_prg": 20480
+      }
+    },
+    {
+      "id": "presentation",
+      "kind": "presentation",
+      "codec": "solomon.presentation.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "record_cpu": 52575,
+        "logo_cpu": 52730,
+        "demo_duration_cpu": 52977,
+        "demo_input_cpu": 53011
+      }
+    },
+    {
+      "id": "audio",
+      "kind": "audio",
+      "codec": "solomon.audio.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "period_cpu": 62312,
+        "duration_cpu": 62336,
+        "envelope_pointer_cpu": 62362,
+        "envelope_data_cpu": 62378,
+        "effect_pointer_cpu": 62588,
+        "effect_data_cpu": 62640,
+        "stream_cpu": 62866,
+        "stream_end_cpu": 65529
       }
     },
     {

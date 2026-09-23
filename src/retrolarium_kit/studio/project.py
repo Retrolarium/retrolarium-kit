@@ -17,6 +17,7 @@ from .games import (
     build_game_documents,
     validate_game_document_for_revision,
 )
+from .game_profiles import packaged_game_profiles
 from .ines import load_ines
 from .megadrive import load_megadrive
 from .project import (
@@ -66,6 +67,9 @@ EDITOR_KINDS = frozenset(
         "solomon.special",
         "solomon.room-art",
         "solomon.sprite-frames",
+        "solomon.audio",
+        "solomon.screens",
+        "solomon.presentation",
         "text.fixed",
         "world.routing",
     }
@@ -111,6 +115,9 @@ CODECS = frozenset(
         "solomon.special@3",
         "solomon.room-art@1",
         "solomon.sprite-frames@1",
+        "solomon.audio@1",
+        "solomon.screens@1",
+        "solomon.presentation@1",
     }
 )
 
@@ -145,7 +152,8 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _AUTHORING_SCHEMAS = frozenset(
     {"retrolarium.castle-levels", "retrolarium.nes-resource-bundle",
      "retrolarium.solomon-rooms", "retrolarium.solomon-room-art",
-     "retrolarium.solomon-sprite-frames"}
+     "retrolarium.solomon-sprite-frames", "retrolarium.solomon-audio",
+     "retrolarium.solomon-presentation"}
 )
 
 
@@ -1166,6 +1174,98 @@ def studio_castle_point_playtest_plan(
     return plan
 
 
+def studio_solomon_point_playtest_plan(
+    path: Path, *, mame: Path, room: int,
+) -> dict[str, Any]:
+    """Enter a selected Solomon room in MAME without patching the content ROM."""
+
+    inspection = load_studio_project(path)
+    _require_declared_operation(inspection, "launch")
+    if inspection["project"]["platform"] != "nes" \
+            or inspection["project"]["profile"] != "solomons-key.v1":
+        raise StudioProjectError(
+            "Solomon point playtest requires the solomons-key.v1 NES profile"
+        )
+    matching_tabs = [
+        tab for tab in inspection["workspace"]["tabs"]
+        if tab["enabled"] and tab["codec"] == "solomon.rooms@3"
+        and "playtest" in tab["capabilities"]
+    ]
+    if len(matching_tabs) != 1:
+        raise StudioProjectError(
+            "Studio project must expose one enabled playtest-capable Solomon Rooms tab"
+        )
+    document_path = Path(matching_tabs[0]["document_path"])
+    try:
+        document = _mapping(
+            json.loads(document_path.read_text(encoding="utf-8")),
+            "Solomon rooms document",
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise StudioProjectError(f"cannot read Solomon rooms document: {exc}") from exc
+    revision_id = document.get("revision")
+    if document.get("schema") != "retrolarium.solomon-rooms" \
+            or document.get("schema_version") != 3 \
+            or document.get("game") != "solomons-key" \
+            or revision_id not in {"usa", "europe"} \
+            or not isinstance(document.get("rooms"), list) \
+            or len(document["rooms"]) != 53:
+        raise StudioProjectError("Solomon rooms document has an unsupported identity")
+    room = _bounded_integer(room, "room", 0, 52)
+    profile = packaged_game_profiles().get("solomons-key")
+    revision = next(
+        item for item in profile.revisions if item.revision_id == revision_id
+    )
+    hooks = revision.playtest
+    if hooks is None:
+        raise StudioProjectError(
+            f"Solomon revision {revision_id} has no point-playtest contract"
+        )
+    executable = mame.resolve()
+    if not executable.is_file():
+        raise StudioProjectError(f"MAME executable does not exist: {executable}")
+    verification = verify_studio_project(path)
+    if verification["status"] != "current":
+        raise StudioProjectError(
+            "Studio artifact is stale; build it again before point playtest"
+        )
+    artifact = Path(verification["artifact"]["absolute_path"]).resolve()
+    source = artifact.read_bytes()
+    hook_offset = 16 + hooks["room_load_address"] - 0x8000
+    if len(source) != revision.size or source[:4] != b"NES\x1a" \
+            or source[hook_offset:hook_offset + 6] != b"\xa9\xfd\x25\x7c\x85\x7c":
+        raise StudioProjectError(
+            "Solomon build does not match the guarded room-loader layout"
+        )
+    lua = Path(__file__).with_name("runtime") / "solomon_mame_point_playtest.lua"
+    if not lua.is_file():
+        raise StudioProjectError(f"packaged Solomon point-playtest script is missing: {lua}")
+    plan = launch_image_plan(
+        artifact, platform="nes", mame=executable,
+        machine="nespal" if revision_id == "europe" else "nes",
+    )
+    plan.update({
+        "operation": "retrolarium.studio.solomon-point-playtest",
+        "backend": "mame-lua",
+        "arguments": [
+            *plan["arguments"], "-autoboot_delay", "0",
+            "-autoboot_script", str(lua.resolve()),
+        ],
+        "environment": {
+            "SOLOMON_PLAYTEST_ROOM": str(room),
+            "SOLOMON_PLAYTEST_ROOM_LOAD": str(hooks["room_load_address"]),
+            "SOLOMON_PLAYTEST_GAMEPLAY": str(hooks["gameplay_address"]),
+            "SOLOMON_PLAYTEST_CURRENT_ROOM": str(hooks["current_room_address"]),
+            "SOLOMON_PLAYTEST_START_FRAME": str(hooks["start_frame"]),
+            "SOLOMON_PLAYTEST_READY_FRAMES": str(hooks["ready_frames"]),
+        },
+        "project_file": inspection["project_file"],
+        "script": {"path": str(lua.resolve()), "sha256": sha256_file(lua)},
+        "point": {"room": room, "revision": revision_id},
+    })
+    return plan
+
+
 def launch_studio_smoke(
     path: Path,
     *,
@@ -1352,6 +1452,44 @@ def create_studio_project(
                 "id": "sprite-frames", "kind": "solomon-sprites",
                 "codec": "solomon.sprite-frames@1",
             }]
+        elif document_schema == "retrolarium.solomon-audio":
+            if (
+                profile != "solomons-key.v1"
+                or resource_root.get("game") != "solomons-key"
+                or resource_root.get("revision") not in {"usa", "europe"}
+                or not isinstance(resource_root.get("effects"), list)
+                or len(resource_root["effects"]) != 26
+                or not isinstance(resource_root.get("envelopes"), list)
+                or len(resource_root["envelopes"]) != 8
+            ):
+                raise StudioProjectError(
+                    "Solomon audio requires the USA/Europe solomons-key.v1 profile"
+                )
+            resources = [{
+                "id": "audio", "kind": "solomon-audio",
+                "codec": "solomon.audio@1",
+            }]
+        elif document_schema == "retrolarium.solomon-presentation":
+            if (
+                profile != "solomons-key.v1"
+                or resource_root.get("game") != "solomons-key"
+                or resource_root.get("revision") not in {"usa", "europe"}
+                or not isinstance(resource_root.get("streams"), list)
+                or len(resource_root["streams"]) != 2
+                or not isinstance(resource_root.get("demo_steps"), list)
+                or len(resource_root["demo_steps"]) != 34
+            ):
+                raise StudioProjectError(
+                    "Solomon presentation requires USA/Europe title streams "
+                    "and 34 demo input steps"
+                )
+            resources = [{
+                "id": "screens", "kind": "solomon-title",
+                "codec": "solomon.screens@1",
+            }, {
+                "id": "demo", "kind": "solomon-demo",
+                "codec": "solomon.presentation@1",
+            }]
         else:
             resources = resource_root.get("resources")
             if not isinstance(resources, list) or not resources:
@@ -1393,6 +1531,15 @@ def create_studio_project(
             ("solomon-sprites", "sprite-frames", "Sprite Frames",
              "solomon.sprite-frames", "assets", "solomon.sprite-frames@1",
              ["edit", "preview", "restore", "undo"]),
+            ("solomon-audio", "audio", "Music & Sounds", "solomon.audio",
+             "content", "solomon.audio@1",
+             ["edit", "piano-roll", "preview", "wav-preview", "restore", "undo"]),
+            ("solomon-title", "screens", "Screens", "solomon.screens",
+             "content", "solomon.screens@1",
+             ["edit", "preview", "restore", "undo"]),
+            ("solomon-demo", "demo", "Presentation", "solomon.presentation",
+             "content", "solomon.presentation@1",
+             ["edit", "preview", "restore", "undo"]),
             ("castle", "rooms", "Rooms & Objects", "castle.rooms", "content",
              "castle.prefix-rooms@1", ["edit", "preview", "restore", "undo"]),
             ("world", "world", "World", "world.routing", "content",
@@ -1428,6 +1575,10 @@ def create_studio_project(
                     and resource_root.get("revision") in {
                         "castle-excellent-japan-hsp-05", "castlequest-usa"
                     }:
+                capabilities = ["edit", "preview", "playtest", "restore", "undo"]
+            elif kind == "solomon" and profile == "solomons-key.v1" \
+                    and resource_root.get("game") == "solomons-key" \
+                    and resource_root.get("revision") in {"usa", "europe"}:
                 capabilities = ["edit", "preview", "playtest", "restore", "undo"]
             elif kind == "level" and kinds[kind] == {"smb.levels.v1"}:
                 tab_id = "levels"
