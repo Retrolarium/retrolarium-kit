@@ -213,6 +213,7 @@ class RevisionSpec:
     resources: tuple[ResourceSpec, ...] | None = None
     resource_overrides: tuple[ResourceOverrideSpec, ...] = ()
     payloads: tuple[PayloadSpec, ...] = ()
+    playtest: Mapping[str, int] | None = None
 
     def __post_init__(self) -> None:
         stable_identifier(self.revision_id, "revision id")
@@ -258,6 +259,25 @@ class RevisionSpec:
         if len(set(payload_ids)) != len(payload_ids):
             raise AuthoringError("revision payload ids must be unique")
         object.__setattr__(self, "payloads", payloads)
+        if self.playtest is not None:
+            expected = {
+                "room_load_address": (0x8000, 0xffff),
+                "gameplay_address": (0x8000, 0xffff),
+                "current_room_address": (0, 0x07ff),
+                "start_frame": (1, 3598),
+                "ready_frames": (3, 3600),
+            }
+            if not isinstance(self.playtest, Mapping) \
+                    or set(self.playtest) != set(expected):
+                raise AuthoringError("revision playtest contract has invalid keys")
+            for name, (minimum, maximum) in expected.items():
+                value = self.playtest[name]
+                if type(value) is not int or not minimum <= value <= maximum:
+                    raise AuthoringError(f"revision playtest {name} is out of range")
+            if self.playtest["ready_frames"] <= self.playtest["start_frame"] + 2:
+                raise AuthoringError("revision playtest ready_frames is too early")
+            object.__setattr__(self, "playtest",
+                               MappingProxyType(dict(self.playtest)))
 
 
 @dataclass(frozen=True)

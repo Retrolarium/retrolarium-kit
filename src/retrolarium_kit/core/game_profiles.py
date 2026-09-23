@@ -170,6 +170,10 @@ def parse_game_profile(document: object) -> GameProfile:
                 resources=revision_resources,
                 resource_overrides=revision_resource_overrides,
                 payloads=revision_payloads,
+                playtest=(
+                    _mapping(item["playtest"], f"revisions[{index}].playtest")
+                    if "playtest" in item else None
+                ),
             )
         )
 

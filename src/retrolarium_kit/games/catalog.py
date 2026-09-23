@@ -57,6 +57,22 @@ from .solomon_sprite_frames import (
     decode_sprite_frames,
     parse_sprite_frame_document,
 )
+from .solomon_audio import (
+    CODEC as SOLOMON_AUDIO_CODEC,
+    SCHEMA as SOLOMON_AUDIO_SCHEMA,
+    SolomonAudioDocument,
+    build_audio as build_solomon_audio,
+    decode_audio as decode_solomon_audio,
+    parse_audio_document as parse_solomon_audio_document,
+)
+from .solomon_presentation import (
+    CODEC as SOLOMON_PRESENTATION_CODEC,
+    SCHEMA as SOLOMON_PRESENTATION_SCHEMA,
+    SolomonPresentationDocument,
+    build_presentation as build_solomon_presentation,
+    decode_presentation as decode_solomon_presentation,
+    parse_presentation_document as parse_solomon_presentation_document,
+)
 
 
 def _profiles(custom_profile: Path | None) -> tuple[GameProfile, ...]:
@@ -215,6 +231,70 @@ class _SolomonSpriteFrameAuthoringAdapter:
     document_schema = SOLOMON_SPRITE_FRAME_SCHEMA
 
 
+class _SolomonAudioAuthoringAdapter:
+    def decode(
+        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
+    ) -> SolomonAudioDocument:
+        return decode_solomon_audio(payload, profile, revision)
+
+    def parse(
+        self, document: object, profile: GameProfile, revision: RevisionSpec
+    ) -> SolomonAudioDocument:
+        return parse_solomon_audio_document(document, profile, revision)
+
+    def build(
+        self, payload: bytes, document: SolomonAudioDocument,
+        profile: GameProfile, revision: RevisionSpec,
+    ) -> tuple[bytes, dict[str, object]]:
+        return build_solomon_audio(payload, document, profile, revision)
+
+    @staticmethod
+    def details(document: SolomonAudioDocument) -> dict[str, int]:
+        return {
+            "effects": len(document.effects),
+            "envelopes": len(document.envelopes),
+            "streams": sum("entry" in item for item in document.commands),
+            "commands": len(document.commands),
+        }
+
+    resource_id = "audio"
+    document_schema = SOLOMON_AUDIO_SCHEMA
+
+
+class _SolomonPresentationAuthoringAdapter:
+    def decode(
+        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
+    ) -> SolomonPresentationDocument:
+        return decode_solomon_presentation(payload, profile, revision)
+
+    def parse(
+        self, document: object, profile: GameProfile, revision: RevisionSpec
+    ) -> SolomonPresentationDocument:
+        return parse_solomon_presentation_document(document, profile, revision)
+
+    def build(
+        self, payload: bytes, document: SolomonPresentationDocument,
+        profile: GameProfile, revision: RevisionSpec,
+    ) -> tuple[bytes, dict[str, object]]:
+        return build_solomon_presentation(payload, document, profile, revision)
+
+    @staticmethod
+    def details(document: SolomonPresentationDocument) -> dict[str, int]:
+        return {
+            "title_streams": len(document.streams),
+            "literal_tiles": sum(
+                len(token["tiles"])
+                for stream in document.streams
+                for token in stream["tokens"]
+                if token["kind"] == "literal"
+            ),
+            "demo_steps": len(document.demo_steps),
+        }
+
+    resource_id = "presentation"
+    document_schema = SOLOMON_PRESENTATION_SCHEMA
+
+
 def authoring_adapters() -> Registry[object]:
     registry: Registry[object] = Registry("authoring adapter")
     registry.register("castle.prefix-rooms.v1", _CastleAuthoringAdapter())
@@ -222,6 +302,10 @@ def authoring_adapters() -> Registry[object]:
     registry.register(SOLOMON_BLOCK_CODEC, _SolomonRoomAuthoringAdapter())
     registry.register(SOLOMON_ROOM_ART_CODEC, _SolomonRoomArtAuthoringAdapter())
     registry.register(SOLOMON_SPRITE_FRAME_CODEC, _SolomonSpriteFrameAuthoringAdapter())
+    registry.register(SOLOMON_AUDIO_CODEC, _SolomonAudioAuthoringAdapter())
+    registry.register(
+        SOLOMON_PRESENTATION_CODEC, _SolomonPresentationAuthoringAdapter()
+    )
     return registry
 
 
