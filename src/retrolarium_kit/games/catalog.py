@@ -33,6 +33,14 @@ from .nes_resources import (
     parse_resource_document,
 )
 from .project import launch_image_plan, launch_image_smoke
+from .solomon import (
+    BLOCK_CODEC as SOLOMON_BLOCK_CODEC,
+    DOCUMENT_SCHEMA as SOLOMON_ROOM_DOCUMENT_SCHEMA,
+    SolomonRoomDocument,
+    build_rooms as build_solomon_rooms,
+    decode_rooms as decode_solomon_rooms,
+    parse_room_document as parse_solomon_room_document,
+)
 
 
 def _profiles(custom_profile: Path | None) -> tuple[GameProfile, ...]:
@@ -103,10 +111,43 @@ class _NesResourceAuthoringAdapter:
     document_schema = NES_RESOURCE_DOCUMENT_SCHEMA
 
 
+class _SolomonRoomAuthoringAdapter:
+    def decode(
+        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
+    ) -> SolomonRoomDocument:
+        return decode_solomon_rooms(payload, profile, revision)
+
+    def parse(
+        self, document: object, profile: GameProfile, revision: RevisionSpec
+    ) -> SolomonRoomDocument:
+        return parse_solomon_room_document(document, profile, revision)
+
+    def build(
+        self,
+        payload: bytes,
+        document: SolomonRoomDocument,
+        profile: GameProfile,
+        revision: RevisionSpec,
+    ) -> tuple[bytes, dict[str, object]]:
+        return build_solomon_rooms(payload, document, profile, revision)
+
+    @staticmethod
+    def details(document: SolomonRoomDocument) -> dict[str, int]:
+        return {
+            "rooms": len(document.rooms),
+            "width": document.width,
+            "height": document.height,
+        }
+
+    resource_id = "levels"
+    document_schema = SOLOMON_ROOM_DOCUMENT_SCHEMA
+
+
 def authoring_adapters() -> Registry[object]:
     registry: Registry[object] = Registry("authoring adapter")
     registry.register("castle.prefix-rooms.v1", _CastleAuthoringAdapter())
     registry.register(NES_RESOURCE_ADAPTER_CODEC, _NesResourceAuthoringAdapter())
+    registry.register(SOLOMON_BLOCK_CODEC, _SolomonRoomAuthoringAdapter())
     return registry
 
 

@@ -1047,6 +1047,113 @@ def studio_smb_point_playtest_plan(
     return plan
 
 
+def studio_castle_point_playtest_plan(
+    path: Path, *, mame: Path, room: int, x: int, y: int,
+) -> dict[str, Any]:
+    """Prepare an isolated Castle ROM that boots through its normal room loader."""
+
+    inspection = load_studio_project(path)
+    _require_declared_operation(inspection, "launch")
+    if inspection["project"]["platform"] != "nes" \
+            or inspection["project"]["profile"] != "castle-excellent.v1":
+        raise StudioProjectError(
+            "Castle point playtest requires the castle-excellent.v1 NES profile"
+        )
+    matching_tabs = [
+        tab for tab in inspection["workspace"]["tabs"]
+        if tab["enabled"] and tab["codec"] == "castle.prefix-rooms@1"
+        and "playtest" in tab["capabilities"]
+    ]
+    if len(matching_tabs) != 1:
+        raise StudioProjectError(
+            "Studio project must expose one enabled playtest-capable Castle Rooms tab"
+        )
+    verification = verify_studio_project(path)
+    if verification["status"] != "current":
+        raise StudioProjectError(
+            "Studio artifact is stale; build it again before point playtest"
+        )
+    executable = mame.resolve()
+    if not executable.is_file():
+        raise StudioProjectError(f"MAME executable does not exist: {executable}")
+
+    document_path = Path(matching_tabs[0]["document_path"])
+    try:
+        document = _mapping(
+            json.loads(document_path.read_text(encoding="utf-8")),
+            "Castle rooms document",
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise StudioProjectError(f"cannot read Castle rooms document: {exc}") from exc
+    if document.get("schema") != "retrolarium.castle-levels" \
+            or document.get("schema_version") != 1 \
+            or document.get("game") != "castle-excellent" \
+            or document.get("revision") not in {
+                "castle-excellent-japan-hsp-05", "castlequest-usa"
+            }:
+        raise StudioProjectError("Castle rooms document has an unsupported identity")
+    rooms = document.get("rooms")
+    if not isinstance(rooms, list) or len(rooms) != 100:
+        raise StudioProjectError("Castle point playtest requires exactly 100 rooms")
+    room = _bounded_integer(room, "room", 1, 100)
+    x = _bounded_integer(x, "x", 0, 319)
+    y = _bounded_integer(y, "y", 0, 159)
+
+    artifact = Path(verification["artifact"]["absolute_path"]).resolve()
+    source = artifact.read_bytes()
+    # iNES header + PRG offset $22B1: LDA #$47; STA $37. Both supported
+    # revisions share this sequence. Only the immediate operand is changed.
+    if len(source) != 65552 or source[:4] != b"NES\x1a" \
+            or source[0x22c1] != 0xa9 or source[0x22c3:0x22c5] != b"\x85\x37":
+        raise StudioProjectError(
+            "Castle build does not match the guarded initial-room layout"
+        )
+    preview = bytearray(source)
+    preview[0x22c2] = room
+    project_root = Path(inspection["project_root"]).resolve()
+    preview_directory = project_root / "build" / "point-playtest"
+    preview_directory.mkdir(parents=True, exist_ok=True)
+    preview_path = preview_directory / (
+        f"castle-{sha256_file(artifact)[:16]}-room-{room:03d}.nes"
+    )
+    if not preview_path.is_file() or preview_path.read_bytes() != preview:
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=".castle-point-", suffix=".tmp", dir=preview_directory
+        )
+        temporary = Path(temporary_name)
+        try:
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(preview)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, preview_path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    lua = Path(__file__).with_name("runtime") / "castle_mame_point_playtest.lua"
+    if not lua.is_file():
+        raise StudioProjectError(f"packaged Castle point playtest script is missing: {lua}")
+    plan = launch_image_plan(preview_path, platform="nes", mame=executable)
+    plan.update({
+        "operation": "retrolarium.studio.castle-point-playtest",
+        "backend": "mame-lua",
+        "arguments": [
+            *plan["arguments"], "-autoboot_delay", "0",
+            "-autoboot_script", str(lua.resolve()),
+        ],
+        "environment": {
+            "CASTLE_PLAYTEST_ROOM": str(room),
+            "CASTLE_PLAYTEST_X": str(x),
+            "CASTLE_PLAYTEST_Y": str(y),
+        },
+        "project_file": inspection["project_file"],
+        "script": {"path": str(lua.resolve()), "sha256": sha256_file(lua)},
+        "point": {"room": room, "x": x, "y": y},
+        "base_rom": {"path": str(artifact), "sha256": sha256_file(artifact)},
+    })
+    return plan
+
+
 def launch_studio_smoke(
     path: Path,
     *,
@@ -1245,7 +1352,13 @@ def create_studio_project(
                 continue
             selected_codec = expected_codec
             additional_tab = None
-            if kind == "level" and kinds[kind] == {"smb.levels.v1"}:
+            if kind == "castle" and profile == "castle-excellent.v1" \
+                    and resource_root.get("game") == "castle-excellent" \
+                    and resource_root.get("revision") in {
+                        "castle-excellent-japan-hsp-05", "castlequest-usa"
+                    }:
+                capabilities = ["edit", "preview", "playtest", "restore", "undo"]
+            elif kind == "level" and kinds[kind] == {"smb.levels.v1"}:
                 tab_id = "levels"
                 title = "Levels"
                 editor_kind = "level.procedural"

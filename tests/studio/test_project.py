@@ -370,7 +370,7 @@ class StudioProjectTests(unittest.TestCase):
             self.assertEqual("castle.rooms", tabs[0]["kind"])
             self.assertEqual("castle.prefix-rooms@1", tabs[0]["codec"])
             self.assertEqual(
-                ["edit", "preview", "restore", "undo"],
+                ["edit", "preview", "playtest", "restore", "undo"],
                 tabs[0]["capabilities"],
             )
             self.assertEqual("documents/castle-levels.json", tabs[0]["document"])

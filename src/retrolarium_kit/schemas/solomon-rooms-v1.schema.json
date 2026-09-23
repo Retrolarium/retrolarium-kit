@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://retrolarium.local/schemas/solomon-rooms-v1.schema.json",
+  "title": "Retrolarium Solomon's Key room blocks v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "schema_version", "game", "revision", "source_sha256", "width", "height", "rooms"],
+  "properties": {
+    "schema": {"const": "retrolarium.solomon-rooms"},
+    "schema_version": {"const": 1},
+    "game": {"const": "solomons-key"},
+    "revision": {"enum": ["usa", "europe"]},
+    "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "width": {"const": 16},
+    "height": {"const": 12},
+    "rooms": {
+      "type": "array",
+      "minItems": 53,
+      "maxItems": 53,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["number", "brown", "white"],
+        "properties": {
+          "number": {"type": "integer", "minimum": 1, "maximum": 53},
+          "brown": {"$ref": "#/$defs/plane"},
+          "white": {"$ref": "#/$defs/plane"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "plane": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "items": {
+        "type": "array",
+        "minItems": 16,
+        "maxItems": 16,
+        "items": {"type": "integer", "enum": [0, 1]}
+      }
+    }
+  }
+}
