@@ -55,6 +55,9 @@ EDITOR_KINDS = frozenset(
         "castle.metasprites",
         "castle.mml-music",
         "data.fixed-byte-records",
+        "doraemon.levels",
+        "doraemon.world2-metatiles",
+        "doraemon.world2-screens",
         "code.analysis",
         "graphics.tile-set",
         "level.procedural",
@@ -79,6 +82,9 @@ EDITOR_KINDS = frozenset(
 CODECS = frozenset(
     {
         "castle.object-stream@1",
+        "doraemon.hierarchy.v1",
+        "doraemon.world2-metatiles.v1",
+        "doraemon.world2-screens.v1",
         "castle.prefix-rooms@1",
         "fds.synthesis.v1",
         "fds.music.v1",
@@ -1584,6 +1590,9 @@ def create_studio_project(
              "smb.world.v1", ["edit", "restore", "undo"]),
             ("level", "maze", "Maze", "level.tile-grid", "content",
              "pacman.maze-rle.v1", ["paint", "eyedropper", "semantic-overlays", "undo"]),
+            ("screen-stream", "world2-screens", "World 2 Screens",
+             "doraemon.world2-screens", "content", "doraemon.world2-screens.v1",
+             ["paint", "eyedropper", "preview", "restore", "undo"]),
             ("screen", "screens", "Screens", "screen.tilemap", "content",
              "nes.nametable.v1", ["paint", "preview", "undo"]),
             ("audio", "music-sounds", "Sound", "audio.sequencer", "content",
@@ -1630,6 +1639,21 @@ def create_studio_project(
                     resource_root.get("game"), resource_root.get("revision")
                 ) == ("smb1", "ju"):
                     capabilities.insert(1, "playtest")
+            elif kind == "level" and kinds[kind] == {"doraemon.hierarchy.v1"}:
+                if (profile != "doraemon.v1"
+                        or resource_root.get("game") != "doraemon"
+                        or resource_root.get("revision") not in {"original", "rev_a"}
+                        or {item.get("world") for item in resources
+                            if isinstance(item, dict) and item.get("kind") == "level"}
+                        != {"world1", "world3"}):
+                    raise StudioProjectError(
+                        "Doraemon levels require both World 1 and World 3 hierarchies"
+                    )
+                tab_id = "levels"
+                title = "Levels"
+                editor_kind = "doraemon.levels"
+                selected_codec = "doraemon.hierarchy.v1"
+                capabilities = ["paint", "eyedropper", "preview", "restore", "undo"]
             elif kind == "audio" and "smb.apu-music.v1" in kinds[kind] \
                     and kinds[kind].issubset({
                         "smb.apu-music.v1", "smb.apu-envelope.v1",
@@ -1731,6 +1755,17 @@ def create_studio_project(
                 editor_kind = "castle.room-cells"
                 selected_codec = "castle.room-cell-visuals.v1"
                 capabilities = ["edit", "preview", "restore", "undo"]
+            elif kind == "metatile" and kinds[kind] == {
+                    "doraemon.world2-metatiles.v1"}:
+                if profile != "doraemon.v1" or resource_root.get("game") != "doraemon":
+                    raise StudioProjectError(
+                        "World 2 metatiles require the Doraemon profile"
+                    )
+                tab_id = "world2-metatiles"
+                title = "World 2 Metatiles"
+                editor_kind = "doraemon.world2-metatiles"
+                selected_codec = "doraemon.world2-metatiles.v1"
+                capabilities = ["edit", "preview", "restore", "undo"]
             elif kinds[kind] != {expected_codec}:
                 raise StudioProjectError(
                     f"resource document {kind} resources require codec {expected_codec!r}"
@@ -1756,6 +1791,8 @@ def create_studio_project(
             "screens": ("graphics", "palettes"),
             "graphics": ("palettes",),
             "metatiles": ("graphics", "palettes"),
+            "world2-metatiles": ("graphics", "palettes"),
+            "world2-screens": ("world2-metatiles", "graphics", "palettes"),
             "room-cells": ("graphics", "palettes"),
             "animations": ("graphics",),
             "player-frames": ("graphics", "palettes"),
