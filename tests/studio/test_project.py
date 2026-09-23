@@ -470,6 +470,56 @@ class StudioProjectTests(unittest.TestCase):
             self.assertEqual("documents/graphics.json", tabs[5]["document"])
             self.assertEqual("documents/graphics.json", tabs[6]["document"])
 
+            animations = root / "documents/animations.json"
+            animations.write_text(json.dumps({
+                "schema": "retrolarium.solomon-animations",
+                "schema_version": 1,
+                "game": "solomons-key",
+                "revision": "europe",
+                "source_sha256": SHA256,
+                "enemy_configuration": [8] * 27,
+                "group_pointers": [0] * 33,
+                "descriptors": [{} for _ in range(340)],
+                "selectors": [{} for _ in range(4)],
+                "frames": [{} for _ in range(275)],
+            }), encoding="utf-8")
+            with patch(
+                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                return_value=manifest(),
+            ):
+                modern = create_studio_project(
+                    source, root / "solomon-modern.rlj",
+                    project_id="solomons-key-europe",
+                    name="Solomon's Key (Europe)",
+                    profile="solomons-key.v1",
+                    source_mode="binary-profile",
+                    resource_documents=(rooms, art, animations, graphics),
+                )
+                with self.assertRaisesRegex(
+                    StudioProjectError, "cannot own the same ROM bytes"
+                ):
+                    create_studio_project(
+                        source, root / "solomon-conflict.rlj",
+                        project_id="solomons-key-europe",
+                        name="Solomon's Key (Europe)",
+                        profile="solomons-key.v1",
+                        source_mode="binary-profile",
+                        resource_documents=(rooms, art, sprites, animations, graphics),
+                    )
+            modern_tabs = modern["workspace"]["tabs"]
+            self.assertEqual(
+                ["rooms", "mirrors", "special", "room-art", "animations",
+                 "graphics", "palettes", "code"],
+                [tab["id"] for tab in modern_tabs],
+            )
+            self.assertEqual(
+                ["room-art", "animations", "graphics", "palettes"],
+                modern_tabs[0]["depends_on"],
+            )
+            self.assertEqual(
+                "solomon.animations", modern_tabs[4]["kind"]
+            )
+
     def test_create_composes_castle_rooms_and_graphics_documents(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
