@@ -74,6 +74,10 @@
         {"id": "sprite-frames", "parameters": {
           "animation_pointers_prg": 20584
         }},
+        {"id": "animations", "parameters": {
+          "pointer_table_prg": 20584,
+          "enemy_configuration_prg": 9294
+        }},
         {"id": "audio", "parameters": {
           "period_cpu": 62184,
           "duration_cpu": 62208,
@@ -274,6 +278,16 @@
       "capacity_policy": "fixed",
       "parameters": {
         "animation_pointers_prg": 20712,
+        "enemy_configuration_prg": 9294
+      }
+    },
+    {
+      "id": "animations",
+      "kind": "animations",
+      "codec": "solomon.animations.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "pointer_table_prg": 20712,
         "enemy_configuration_prg": 9294
       }
     }

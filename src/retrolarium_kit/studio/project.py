@@ -67,6 +67,7 @@ EDITOR_KINDS = frozenset(
         "solomon.special",
         "solomon.room-art",
         "solomon.sprite-frames",
+        "solomon.animations",
         "solomon.audio",
         "solomon.screens",
         "solomon.presentation",
@@ -115,6 +116,7 @@ CODECS = frozenset(
         "solomon.special@3",
         "solomon.room-art@1",
         "solomon.sprite-frames@1",
+        "solomon.animations@1",
         "solomon.audio@1",
         "solomon.screens@1",
         "solomon.presentation@1",
@@ -152,7 +154,8 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _AUTHORING_SCHEMAS = frozenset(
     {"retrolarium.castle-levels", "retrolarium.nes-resource-bundle",
      "retrolarium.solomon-rooms", "retrolarium.solomon-room-art",
-     "retrolarium.solomon-sprite-frames", "retrolarium.solomon-audio",
+     "retrolarium.solomon-sprite-frames", "retrolarium.solomon-animations",
+     "retrolarium.solomon-audio",
      "retrolarium.solomon-presentation"}
 )
 
@@ -1370,6 +1373,7 @@ def create_studio_project(
     )
     if resource_documents is not None and not selected_documents:
         raise StudioProjectError("resource_documents must not be empty")
+    selected_schemas: set[str] = set()
     for resource_document in selected_documents:
         try:
             document_relative = resource_document.resolve().relative_to(
@@ -1388,6 +1392,18 @@ def create_studio_project(
             raise StudioProjectError(f"cannot read resource document: {exc}") from exc
         resource_root = _mapping(resource_value, "resource document")
         document_schema = resource_root.get("schema")
+        if document_schema in {
+            "retrolarium.solomon-sprite-frames",
+            "retrolarium.solomon-animations",
+        } and selected_schemas.intersection({
+            "retrolarium.solomon-sprite-frames",
+            "retrolarium.solomon-animations",
+        }):
+            raise StudioProjectError(
+                "Solomon sprite frames and animations cannot own the same ROM bytes"
+            )
+        if isinstance(document_schema, str):
+            selected_schemas.add(document_schema)
         expected_version = 3 if document_schema == "retrolarium.solomon-rooms" else 1
         if (document_schema not in _AUTHORING_SCHEMAS
                 or resource_root.get("schema_version") != expected_version
@@ -1451,6 +1467,25 @@ def create_studio_project(
             resources = [{
                 "id": "sprite-frames", "kind": "solomon-sprites",
                 "codec": "solomon.sprite-frames@1",
+            }]
+        elif document_schema == "retrolarium.solomon-animations":
+            if profile != "solomons-key.v1" \
+                    or resource_root.get("game") != "solomons-key" \
+                    or resource_root.get("revision") not in {"usa", "europe"} \
+                    or not isinstance(resource_root.get("group_pointers"), list) \
+                    or len(resource_root["group_pointers"]) != 33 \
+                    or not isinstance(resource_root.get("descriptors"), list) \
+                    or len(resource_root["descriptors"]) != 340 \
+                    or not isinstance(resource_root.get("selectors"), list) \
+                    or len(resource_root["selectors"]) != 4 \
+                    or not isinstance(resource_root.get("frames"), list) \
+                    or len(resource_root["frames"]) != 275:
+                raise StudioProjectError(
+                    "Solomon animations require the full USA/Europe object tables"
+                )
+            resources = [{
+                "id": "animations", "kind": "solomon-animations",
+                "codec": "solomon.animations@1",
             }]
         elif document_schema == "retrolarium.solomon-audio":
             if (
@@ -1530,6 +1565,9 @@ def create_studio_project(
              ["edit", "preview", "restore", "undo"]),
             ("solomon-sprites", "sprite-frames", "Sprite Frames",
              "solomon.sprite-frames", "assets", "solomon.sprite-frames@1",
+             ["edit", "preview", "restore", "undo"]),
+            ("solomon-animations", "animations", "Animations & Mappings",
+             "solomon.animations", "assets", "solomon.animations@1",
              ["edit", "preview", "restore", "undo"]),
             ("solomon-audio", "audio", "Music & Sounds", "solomon.audio",
              "content", "solomon.audio@1",
@@ -1726,11 +1764,14 @@ def create_studio_project(
             requested_dependencies = desired_dependencies.get(str(tab["id"]), ())
             if tab["id"] == "rooms" and tab["codec"] == "solomon.rooms@3":
                 requested_dependencies = (
-                    "room-art", "sprite-frames", "graphics", "palettes"
+                    "room-art", "sprite-frames", "animations", "graphics", "palettes"
                 )
             elif tab["id"] == "room-art":
                 requested_dependencies = ("graphics", "palettes")
             elif tab["id"] == "sprite-frames":
+                requested_dependencies = ("graphics", "palettes")
+            elif tab["id"] == "animations" \
+                    and tab["codec"] == "solomon.animations@1":
                 requested_dependencies = ("graphics", "palettes")
             if (tab["id"] == "animations" and tab["codec"] \
                     == "castle.metasprite-descriptors.v1"):

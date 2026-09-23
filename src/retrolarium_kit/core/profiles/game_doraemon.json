@@ -1,0 +1,68 @@
+{
+  "schema": "retrolarium.game-profile",
+  "schema_version": 1,
+  "profile_version": 1,
+  "id": "doraemon",
+  "name": "Doraemon (Famicom)",
+  "platform": "nes",
+  "capabilities": ["graphics", "exact-round-trip"],
+  "revisions": [
+    {
+      "id": "original",
+      "name": "Doraemon (Japan, original revision)",
+      "size": 163856,
+      "sha1": "d47ebb0be5697820691065faedff277607ac10fd",
+      "sha256": "6ed579c9c98a1f2db52fd3d2488a491953073e8ace1e3c1dc5884669cecca274",
+      "container": "ines",
+      "mapper": 66
+    },
+    {
+      "id": "rev_a",
+      "name": "Doraemon (Japan, Revision A)",
+      "size": 163856,
+      "sha1": "20c5e40ab706a637d0572b1549eeff9a0048a065",
+      "sha256": "c070fa0e07a4b8be107ecc2f514e4c64f5bbb2a15754b6c6214e7259a1b30920",
+      "container": "ines",
+      "mapper": 66
+    }
+  ],
+  "resources": [
+    {
+      "id": "graphics-bundle",
+      "kind": "resource-bundle",
+      "codec": "nes.resource-bundle.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "resource_ids": ["chr-bank-0", "chr-bank-1", "chr-bank-2", "chr-bank-3"]
+      }
+    },
+    {
+      "id": "chr-bank-0",
+      "kind": "graphics",
+      "codec": "nes.chr-2bpp.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 131088, "size": 8192}
+    },
+    {
+      "id": "chr-bank-1",
+      "kind": "graphics",
+      "codec": "nes.chr-2bpp.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 139280, "size": 8192}
+    },
+    {
+      "id": "chr-bank-2",
+      "kind": "graphics",
+      "codec": "nes.chr-2bpp.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 147472, "size": 8192}
+    },
+    {
+      "id": "chr-bank-3",
+      "kind": "graphics",
+      "codec": "nes.chr-2bpp.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 155664, "size": 8192}
+    }
+  ]
+}

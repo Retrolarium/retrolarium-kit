@@ -57,6 +57,14 @@ from .solomon_sprite_frames import (
     decode_sprite_frames,
     parse_sprite_frame_document,
 )
+from .solomon_animations import (
+    CODEC as SOLOMON_ANIMATION_CODEC,
+    SCHEMA as SOLOMON_ANIMATION_SCHEMA,
+    SolomonAnimationDocument,
+    build_animations,
+    decode_animations,
+    parse_animation_document,
+)
 from .solomon_audio import (
     CODEC as SOLOMON_AUDIO_CODEC,
     SCHEMA as SOLOMON_AUDIO_SCHEMA,
@@ -231,6 +239,36 @@ class _SolomonSpriteFrameAuthoringAdapter:
     document_schema = SOLOMON_SPRITE_FRAME_SCHEMA
 
 
+class _SolomonAnimationAuthoringAdapter:
+    def decode(
+        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
+    ) -> SolomonAnimationDocument:
+        return decode_animations(payload, profile, revision)
+
+    def parse(
+        self, document: object, profile: GameProfile, revision: RevisionSpec
+    ) -> SolomonAnimationDocument:
+        return parse_animation_document(document, profile, revision)
+
+    def build(
+        self, payload: bytes, document: SolomonAnimationDocument,
+        profile: GameProfile, revision: RevisionSpec,
+    ) -> tuple[bytes, dict[str, object]]:
+        return build_animations(payload, document, profile, revision)
+
+    @staticmethod
+    def details(document: SolomonAnimationDocument) -> dict[str, int]:
+        return {
+            "object_types": len(document.group_pointers),
+            "descriptors": len(document.descriptors),
+            "variant_selectors": len(document.selectors),
+            "frames": len(document.frames),
+        }
+
+    resource_id = "animations"
+    document_schema = SOLOMON_ANIMATION_SCHEMA
+
+
 class _SolomonAudioAuthoringAdapter:
     def decode(
         self, payload: bytes, profile: GameProfile, revision: RevisionSpec
@@ -302,6 +340,7 @@ def authoring_adapters() -> Registry[object]:
     registry.register(SOLOMON_BLOCK_CODEC, _SolomonRoomAuthoringAdapter())
     registry.register(SOLOMON_ROOM_ART_CODEC, _SolomonRoomArtAuthoringAdapter())
     registry.register(SOLOMON_SPRITE_FRAME_CODEC, _SolomonSpriteFrameAuthoringAdapter())
+    registry.register(SOLOMON_ANIMATION_CODEC, _SolomonAnimationAuthoringAdapter())
     registry.register(SOLOMON_AUDIO_CODEC, _SolomonAudioAuthoringAdapter())
     registry.register(
         SOLOMON_PRESENTATION_CODEC, _SolomonPresentationAuthoringAdapter()
