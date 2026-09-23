@@ -61,6 +61,11 @@ EDITOR_KINDS = frozenset(
         "metatile.composer",
         "palette.set",
         "screen.tilemap",
+        "solomon.rooms",
+        "solomon.mirrors",
+        "solomon.special",
+        "solomon.room-art",
+        "solomon.sprite-frames",
         "text.fixed",
         "world.routing",
     }
@@ -101,6 +106,11 @@ CODECS = frozenset(
         "smb.world.v1",
         "smb.levels.v1",
         "smb.player-frames.v1",
+        "solomon.rooms@3",
+        "solomon.mirrors@3",
+        "solomon.special@3",
+        "solomon.room-art@1",
+        "solomon.sprite-frames@1",
     }
 )
 
@@ -133,7 +143,9 @@ OPERATIONS = frozenset(
 _IDENTIFIER = re.compile(r"^[a-z][a-z0-9_.-]*$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _AUTHORING_SCHEMAS = frozenset(
-    {"retrolarium.castle-levels", "retrolarium.nes-resource-bundle"}
+    {"retrolarium.castle-levels", "retrolarium.nes-resource-bundle",
+     "retrolarium.solomon-rooms", "retrolarium.solomon-room-art",
+     "retrolarium.solomon-sprite-frames"}
 )
 
 
@@ -1276,11 +1288,10 @@ def create_studio_project(
             raise StudioProjectError(f"cannot read resource document: {exc}") from exc
         resource_root = _mapping(resource_value, "resource document")
         document_schema = resource_root.get("schema")
-        if (
-            document_schema not in _AUTHORING_SCHEMAS
-            or resource_root.get("schema_version") != 1
-            or resource_root.get("source_sha256") != digest
-        ):
+        expected_version = 3 if document_schema == "retrolarium.solomon-rooms" else 1
+        if (document_schema not in _AUTHORING_SCHEMAS
+                or resource_root.get("schema_version") != expected_version
+                or resource_root.get("source_sha256") != digest):
             raise StudioProjectError(
                 "resource document schema or source identity does not match the disassembly"
             )
@@ -1294,6 +1305,52 @@ def create_studio_project(
                 "id": "rooms",
                 "kind": "castle",
                 "codec": "castle.prefix-rooms@1",
+            }]
+        elif document_schema == "retrolarium.solomon-rooms":
+            if profile != "solomons-key.v1" \
+                    or resource_root.get("game") != "solomons-key" \
+                    or resource_root.get("revision") not in {"usa", "europe"} \
+                    or not isinstance(resource_root.get("rooms"), list) \
+                    or len(resource_root["rooms"]) != 53:
+                raise StudioProjectError(
+                    "Solomon rooms require the USA/Europe solomons-key.v1 profile"
+                )
+            resources = [{
+                "id": "rooms", "kind": "solomon", "codec": "solomon.rooms@3",
+            }, {
+                "id": "mirrors", "kind": "solomon-mirrors",
+                "codec": "solomon.mirrors@3",
+            }, {
+                "id": "special", "kind": "solomon-special",
+                "codec": "solomon.special@3",
+            }]
+        elif document_schema == "retrolarium.solomon-room-art":
+            if profile != "solomons-key.v1" \
+                    or resource_root.get("game") != "solomons-key" \
+                    or resource_root.get("revision") not in {"usa", "europe"} \
+                    or not isinstance(resource_root.get("room_group_colors"), list) \
+                    or len(resource_root["room_group_colors"]) != 14 \
+                    or not isinstance(resource_root.get("room_map_patterns"), list) \
+                    or len(resource_root["room_map_patterns"]) != 58:
+                raise StudioProjectError(
+                    "Solomon room art requires 14 colors and 58 RoomMap records"
+                )
+            resources = [{
+                "id": "room-art", "kind": "solomon-art",
+                "codec": "solomon.room-art@1",
+            }]
+        elif document_schema == "retrolarium.solomon-sprite-frames":
+            if profile != "solomons-key.v1" \
+                    or resource_root.get("game") != "solomons-key" \
+                    or resource_root.get("revision") not in {"usa", "europe"} \
+                    or not isinstance(resource_root.get("frames"), list) \
+                    or len(resource_root["frames"]) != 28:
+                raise StudioProjectError(
+                    "Solomon sprite frames require 28 shared USA/Europe records"
+                )
+            resources = [{
+                "id": "sprite-frames", "kind": "solomon-sprites",
+                "codec": "solomon.sprite-frames@1",
             }]
         else:
             resources = resource_root.get("resources")
@@ -1322,6 +1379,20 @@ def create_studio_project(
         elif has_packet_screen_text:
             kinds.setdefault("text", set()).add("nes.ppu-screen-packets.v1")
         templates = (
+            ("solomon", "rooms", "Rooms & Objects", "solomon.rooms", "content",
+             "solomon.rooms@3", ["edit", "preview", "restore", "undo"]),
+            ("solomon-mirrors", "mirrors", "Spawn Mirrors", "solomon.mirrors",
+             "content", "solomon.mirrors@3",
+             ["edit", "restore", "undo"]),
+            ("solomon-special", "special", "Special Rooms", "solomon.special",
+             "content", "solomon.special@3",
+             ["edit", "preview", "restore", "undo"]),
+            ("solomon-art", "room-art", "Room Art", "solomon.room-art",
+             "assets", "solomon.room-art@1",
+             ["edit", "preview", "restore", "undo"]),
+            ("solomon-sprites", "sprite-frames", "Sprite Frames",
+             "solomon.sprite-frames", "assets", "solomon.sprite-frames@1",
+             ["edit", "preview", "restore", "undo"]),
             ("castle", "rooms", "Rooms & Objects", "castle.rooms", "content",
              "castle.prefix-rooms@1", ["edit", "preview", "restore", "undo"]),
             ("world", "world", "World", "world.routing", "content",
@@ -1502,6 +1573,14 @@ def create_studio_project(
         }
         for tab in tabs:
             requested_dependencies = desired_dependencies.get(str(tab["id"]), ())
+            if tab["id"] == "rooms" and tab["codec"] == "solomon.rooms@3":
+                requested_dependencies = (
+                    "room-art", "sprite-frames", "graphics", "palettes"
+                )
+            elif tab["id"] == "room-art":
+                requested_dependencies = ("graphics", "palettes")
+            elif tab["id"] == "sprite-frames":
+                requested_dependencies = ("graphics", "palettes")
             if (tab["id"] == "animations" and tab["codec"] \
                     == "castle.metasprite-descriptors.v1"):
                 requested_dependencies = ("graphics", "palettes")

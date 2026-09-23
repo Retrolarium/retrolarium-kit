@@ -41,6 +41,22 @@ from .solomon import (
     decode_rooms as decode_solomon_rooms,
     parse_room_document as parse_solomon_room_document,
 )
+from .solomon_room_art import (
+    CODEC as SOLOMON_ROOM_ART_CODEC,
+    SCHEMA as SOLOMON_ROOM_ART_SCHEMA,
+    SolomonRoomArtDocument,
+    build_room_art,
+    decode_room_art,
+    parse_room_art_document,
+)
+from .solomon_sprite_frames import (
+    CODEC as SOLOMON_SPRITE_FRAME_CODEC,
+    SCHEMA as SOLOMON_SPRITE_FRAME_SCHEMA,
+    SolomonSpriteFrameDocument,
+    build_sprite_frames,
+    decode_sprite_frames,
+    parse_sprite_frame_document,
+)
 
 
 def _profiles(custom_profile: Path | None) -> tuple[GameProfile, ...]:
@@ -143,11 +159,69 @@ class _SolomonRoomAuthoringAdapter:
     document_schema = SOLOMON_ROOM_DOCUMENT_SCHEMA
 
 
+class _SolomonRoomArtAuthoringAdapter:
+    def decode(
+        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
+    ) -> SolomonRoomArtDocument:
+        return decode_room_art(payload, profile, revision)
+
+    def parse(
+        self, document: object, profile: GameProfile, revision: RevisionSpec
+    ) -> SolomonRoomArtDocument:
+        return parse_room_art_document(document, profile, revision)
+
+    def build(
+        self, payload: bytes, document: SolomonRoomArtDocument,
+        profile: GameProfile, revision: RevisionSpec,
+    ) -> tuple[bytes, dict[str, object]]:
+        return build_room_art(payload, document, profile, revision)
+
+    @staticmethod
+    def details(document: SolomonRoomArtDocument) -> dict[str, int]:
+        return {
+            "room_group_colors": len(document.group_colors),
+            "room_map_patterns": len(document.patterns),
+        }
+
+    resource_id = "room-art"
+    document_schema = SOLOMON_ROOM_ART_SCHEMA
+
+
+class _SolomonSpriteFrameAuthoringAdapter:
+    def decode(
+        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
+    ) -> SolomonSpriteFrameDocument:
+        return decode_sprite_frames(payload, profile, revision)
+
+    def parse(
+        self, document: object, profile: GameProfile, revision: RevisionSpec
+    ) -> SolomonSpriteFrameDocument:
+        return parse_sprite_frame_document(document, profile, revision)
+
+    def build(
+        self, payload: bytes, document: SolomonSpriteFrameDocument,
+        profile: GameProfile, revision: RevisionSpec,
+    ) -> tuple[bytes, dict[str, object]]:
+        return build_sprite_frames(payload, document, profile, revision)
+
+    @staticmethod
+    def details(document: SolomonSpriteFrameDocument) -> dict[str, int]:
+        return {
+            "sprite_frames": len(document.frames),
+            "enemy_types": sum(len(frame.enemy_types) for frame in document.frames),
+        }
+
+    resource_id = "sprite-frames"
+    document_schema = SOLOMON_SPRITE_FRAME_SCHEMA
+
+
 def authoring_adapters() -> Registry[object]:
     registry: Registry[object] = Registry("authoring adapter")
     registry.register("castle.prefix-rooms.v1", _CastleAuthoringAdapter())
     registry.register(NES_RESOURCE_ADAPTER_CODEC, _NesResourceAuthoringAdapter())
     registry.register(SOLOMON_BLOCK_CODEC, _SolomonRoomAuthoringAdapter())
+    registry.register(SOLOMON_ROOM_ART_CODEC, _SolomonRoomArtAuthoringAdapter())
+    registry.register(SOLOMON_SPRITE_FRAME_CODEC, _SolomonSpriteFrameAuthoringAdapter())
     return registry
 
 
