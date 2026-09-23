@@ -1,22 +1,27 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://retrolarium.local/schemas/solomon-rooms-v2.schema.json",
-  "title": "Retrolarium Solomon's Key room document v2",
+  "$id": "https://retrolarium.local/schemas/solomon-rooms-v3.schema.json",
+  "title": "Retrolarium Solomon's Key room document v3",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "schema_version", "game", "revision", "source_sha256", "width", "height", "rooms"],
+  "required": ["schema", "schema_version", "game", "revision", "source_sha256",
+               "width", "height", "rooms", "mirror_schedules", "mirror_enemy_sets",
+               "special_rooms"],
   "properties": {
     "schema": {"const": "retrolarium.solomon-rooms"},
-    "schema_version": {"const": 2},
+    "schema_version": {"const": 3},
     "game": {"const": "solomons-key"},
     "revision": {"enum": ["usa", "europe"]},
     "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "width": {"const": 16},
     "height": {"const": 12},
-    "rooms": {
-      "type": "array", "minItems": 53, "maxItems": 53,
-      "items": {"$ref": "#/$defs/room"}
-    }
+    "rooms": {"type": "array", "minItems": 53, "maxItems": 53,
+              "items": {"$ref": "#/$defs/room"}},
+    "mirror_schedules": {"type": "array", "minItems": 16, "maxItems": 16,
+                         "items": {"$ref": "#/$defs/mirror_schedule"}},
+    "mirror_enemy_sets": {"type": "array", "minItems": 17, "maxItems": 17,
+                          "items": {"$ref": "#/$defs/mirror_enemy_set"}},
+    "special_rooms": {"$ref": "#/$defs/special_rooms"}
   },
   "$defs": {
     "byte": {"type": "integer", "minimum": 0, "maximum": 255},
@@ -30,10 +35,8 @@
     },
     "plane": {
       "type": "array", "minItems": 12, "maxItems": 12,
-      "items": {
-        "type": "array", "minItems": 16, "maxItems": 16,
-        "items": {"type": "integer", "enum": [0, 1]}
-      }
+      "items": {"type": "array", "minItems": 16, "maxItems": 16,
+                "items": {"type": "integer", "enum": [0, 1]}}
     },
     "enemy": {
       "type": "object", "additionalProperties": false,
@@ -134,6 +137,62 @@
         "white": {"$ref": "#/$defs/plane"},
         "enemy_stream": {"$ref": "#/$defs/enemy_stream"},
         "item_stream": {"$ref": "#/$defs/item_stream"}
+      }
+    },
+    "four_bytes": {"type": "array", "minItems": 4, "maxItems": 4,
+                   "items": {"$ref": "#/$defs/byte"}},
+    "mirror_schedule": {
+      "type": "object", "additionalProperties": false,
+      "required": ["initial_phase", "loop_phase"],
+      "properties": {
+        "initial_phase": {"$ref": "#/$defs/four_bytes"},
+        "loop_phase": {"$ref": "#/$defs/four_bytes"}
+      }
+    },
+    "mirror_enemy_set": {
+      "type": "object", "additionalProperties": false,
+      "required": ["enemy_types", "loop_offset"],
+      "properties": {
+        "enemy_types": {"type": "array", "minItems": 1,
+                        "items": {"type": "integer", "minimum": 24,
+                                  "maximum": 131}},
+        "loop_offset": {"type": "integer", "minimum": 0}
+      }
+    },
+    "seal": {
+      "type": "object", "additionalProperties": false,
+      "required": ["room", "position"],
+      "properties": {
+        "room": {"enum": [9, 13, 17, 19, 21, 29, 46, 47]},
+        "position": {"$ref": "#/$defs/position"}
+      }
+    },
+    "special_rooms": {
+      "type": "object", "additionalProperties": false,
+      "required": ["random_bonus_room", "solomon_seals",
+                   "princess_room_hidden_cells", "room_20_bat_symbols",
+                   "room_30_blue_opals"],
+      "properties": {
+        "random_bonus_room": {
+          "type": "object", "additionalProperties": false,
+          "required": ["positions", "item_types"],
+          "properties": {
+            "positions": {"type": "array", "minItems": 32, "maxItems": 32,
+                          "items": {"$ref": "#/$defs/position"}},
+            "item_types": {"type": "array", "minItems": 16, "maxItems": 16,
+                           "items": {"type": "integer", "minimum": 1,
+                                     "maximum": 191}}
+          }
+        },
+        "solomon_seals": {"type": "array", "minItems": 8, "maxItems": 8,
+                          "items": {"$ref": "#/$defs/seal"}},
+        "princess_room_hidden_cells": {"type": "array", "minItems": 12,
+                                       "maxItems": 12,
+                                       "items": {"$ref": "#/$defs/position"}},
+        "room_20_bat_symbols": {"type": "array", "maxItems": 192,
+                                "items": {"$ref": "#/$defs/position"}},
+        "room_30_blue_opals": {"type": "array", "maxItems": 192,
+                               "items": {"$ref": "#/$defs/position"}}
       }
     }
   }

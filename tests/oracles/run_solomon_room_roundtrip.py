@@ -60,7 +60,27 @@ def check_streams(room: dict, enemy: dict, item: dict, revision: str,
             f"{revision}: room {index + 1} item stream disagrees with oracle")
 
 
-def check(rom: Path, revision: str, oracle: object) -> None:
+def check_shared(document: dict, prg: bytes, layout: object,
+                 oracle: object, revision: str) -> None:
+    schedules = oracle.decode_mirror_schedules(prg, layout)
+    enemy_sets = oracle.decode_mirror_enemy_sets(prg, layout)
+    require(document["mirror_schedules"] == [
+                {"initial_phase": item["initial_phase"],
+                 "loop_phase": item["loop_phase"]}
+                for item in schedules],
+            f"{revision}: Spawn Mirror schedules disagree with oracle")
+    require(document["mirror_enemy_sets"] == [
+                {"enemy_types": item["enemy_types"],
+                 "loop_offset": item["loop_offset"]}
+                for item in enemy_sets],
+            f"{revision}: Spawn Mirror enemy sets disagree with oracle")
+    require(document["special_rooms"]
+            == without_raw(oracle.decode_special_room_data(prg, layout)),
+            f"{revision}: special-room tables disagree with oracle")
+
+
+def check(rom: Path, revision: str, oracle: object,
+          graphics_oracle: object, graphics_profile: dict) -> None:
     original = rom.read_bytes()
     inspection = inspect_game(rom)
     require(inspection["game"] == "solomons-key"
@@ -73,7 +93,7 @@ def check(rom: Path, revision: str, oracle: object) -> None:
         extract_game(rom, document_path)
         document = json.loads(document_path.read_text(encoding="utf-8"))
         require(document["schema"] == "retrolarium.solomon-rooms"
-                and document["schema_version"] == 2
+                and document["schema_version"] == 3
                 and len(document["rooms"]) == 53,
                 f"{revision}: extracted document differs")
         layout = oracle.ROOM_DATA_LAYOUTS[revision]
@@ -87,12 +107,39 @@ def check(rom: Path, revision: str, oracle: object) -> None:
                           oracle.decode_enemies(prg, index, layout),
                           oracle.decode_items(prg, index, layout),
                           revision, index)
+        check_shared(document, prg, layout, oracle, revision)
+        art_path = temporary / "room-art.json"
+        extract_game(rom, art_path, resource="room-art")
+        art = json.loads(art_path.read_text(encoding="utf-8"))
+        require(art["room_map_patterns"]
+                == oracle.decode_room_tile_patterns(prg, layout),
+                f"{revision}: RoomMap records disagree with source oracle")
+        reference_graphics = graphics_oracle.export_document(
+            original, graphics_profile
+        )
+        require(art["room_group_colors"]
+                == reference_graphics["palette_data"]["room_group_colors"],
+                f"{revision}: room-group colors disagree with source oracle")
+        art_exact_path = temporary / "art-exact.nes"
+        require(build_game(rom, art_path, art_exact_path)["changed_bytes"] == 0
+                and art_exact_path.read_bytes() == original,
+                f"{revision}: room-art zero-edit build is not exact")
         validate_game(rom, document_path)
         exact_path = temporary / "exact.nes"
         exact = build_game(rom, document_path, exact_path)
         require(exact["changed_bytes"] == 0 and exact_path.read_bytes() == original,
                 f"{revision}: zero-edit build is not exact")
-        legacy = deepcopy(document)
+        streams_only = deepcopy(document)
+        streams_only["schema_version"] = 2
+        del streams_only["mirror_schedules"]
+        del streams_only["mirror_enemy_sets"]
+        del streams_only["special_rooms"]
+        document_path.write_text(json.dumps(streams_only), encoding="utf-8")
+        streams_path = temporary / "streams-v2.nes"
+        require(build_game(rom, document_path, streams_path)["changed_bytes"] == 0
+                and streams_path.read_bytes() == original,
+                f"{revision}: version-2 room document lost compatibility")
+        legacy = deepcopy(streams_only)
         legacy["schema_version"] = 1
         for room in legacy["rooms"]:
             del room["enemy_stream"]
@@ -155,6 +202,49 @@ def check(rom: Path, revision: str, oracle: object) -> None:
                 and repacked["item_streams"]["free_bytes"] == 0,
                 f"{revision}: repacker lost occupied arena bytes")
 
+        # Repack the fully occupied mirror-set arena, and edit one fixed
+        # schedule byte plus one byte in a disjoint special-room table.
+        mirror_sets = document["mirror_enemy_sets"]
+        mirror_sets[0]["enemy_types"].append(
+            mirror_sets[3]["enemy_types"].pop())
+        document["mirror_schedules"][0]["initial_phase"][0] ^= 1
+        old_bonus_type = document["special_rooms"]["random_bonus_room"]["item_types"][0]
+        document["special_rooms"]["random_bonus_room"]["item_types"][0] = (
+            1 if old_bonus_type != 1 else 2)
+        document_path.write_text(json.dumps(document), encoding="utf-8")
+        shared_path = temporary / "shared-repacked.nes"
+        shared_report = build_game(rom, document_path, shared_path)
+        shared_image = shared_path.read_bytes()
+        shared_prg = shared_image[16:16 + 0x8000]
+        shared_owned = (*owned,
+                        range(16 + layout.mirror_schedule_table,
+                              16 + layout.enemy_pointer_table),
+                        range(16 + layout.special_room_item_positions,
+                              16 + layout.special_room_item_positions + 32),
+                        range(16 + layout.special_room_item_types,
+                              16 + layout.special_room_item_types + 16),
+                        range(16 + layout.solomon_seal_positions,
+                              16 + layout.solomon_seal_positions + 8),
+                        range(16 + layout.princess_room_hidden_cells,
+                              16 + layout.princess_room_hidden_cells + 12),
+                        range(16 + layout.room_20_special_bitplane,
+                              16 + layout.room_20_special_bitplane + 24),
+                        range(16 + layout.room_30_special_bitplane,
+                              16 + layout.room_30_special_bitplane + 24))
+        require(all(any(offset in span for span in shared_owned)
+                    for offset, (before, after) in enumerate(zip(original, shared_image))
+                    if before != after)
+                and shared_image[16 + layout.mirror_schedule_data]
+                != original[16 + layout.mirror_schedule_data]
+                and shared_image[16 + layout.special_room_item_types]
+                != original[16 + layout.special_room_item_types],
+                f"{revision}: shared edit changed bytes outside owned ranges")
+        check_shared(document, shared_prg, layout, oracle, revision)
+        require(shared_report["mirror_enemy_sets"]["free_bytes"] == 0
+                and shared_report["mirror_schedules"]["free_bytes"] == 0
+                and shared_report["special_rooms"]["encoded_bytes"] == 116,
+                f"{revision}: shared data capacity report differs")
+
         # One extra enemy cannot fit unless another room releases two bytes.
         second["enemy_stream"]["enemies"].append(
             second["enemy_stream"]["enemies"][0].copy())
@@ -166,8 +256,19 @@ def check(rom: Path, revision: str, oracle: object) -> None:
                     f"{revision}: overflow failed for the wrong reason: {exc}")
         else:
             raise AssertionError(f"{revision}: enemy arena overflow was accepted")
-    print(f"Solomon {revision}: 53 oracle rooms, exact build, localized edits, "
-          "stream repack and overflow rejection passed")
+        second["enemy_stream"]["enemies"].pop()
+        mirror_sets[0]["enemy_types"].append(mirror_sets[0]["enemy_types"][0])
+        document_path.write_text(json.dumps(document), encoding="utf-8")
+        try:
+            validate_game(rom, document_path)
+        except AuthoringError as exc:
+            require("mirror-enemy-sets" in str(exc) and "arena capacity" in str(exc),
+                    f"{revision}: mirror overflow failed for the wrong reason: {exc}")
+        else:
+            raise AssertionError(f"{revision}: mirror-set arena overflow was accepted")
+    print(f"Solomon {revision}: 53 oracle rooms, 58 RoomMap patterns, "
+          "14 group colors, exact v1/v2/v3 and room-art builds, "
+          "room/mirror repacks, special tables and capacity rejection passed")
 
 
 def main() -> None:
@@ -179,8 +280,15 @@ def main() -> None:
     args = parser.parse_args()
     sys.path.insert(0, str(args.source_project.resolve(strict=True)))
     from scripts.authoring import room_data as oracle
-    check(args.usa.resolve(strict=True), "usa", oracle)
-    check(args.europe.resolve(strict=True), "europe", oracle)
+    from scripts.authoring import graphics_editor as graphics_oracle
+    from scripts.build.revision_profiles import get_profile, load_profiles
+    profiles = load_profiles(
+        args.source_project.resolve(strict=True) / "config" / "revision_profiles.json"
+    )
+    check(args.usa.resolve(strict=True), "usa", oracle,
+          graphics_oracle, get_profile(profiles, "usa"))
+    check(args.europe.resolve(strict=True), "europe", oracle,
+          graphics_oracle, get_profile(profiles, "europe"))
 
 
 if __name__ == "__main__":

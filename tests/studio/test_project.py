@@ -375,6 +375,101 @@ class StudioProjectTests(unittest.TestCase):
             )
             self.assertEqual("documents/castle-levels.json", tabs[0]["document"])
 
+    def test_create_materializes_solomon_rooms_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "disassembly/manifest.json"
+            source.parent.mkdir()
+            source.write_text(json.dumps(manifest()), encoding="utf-8")
+            rooms = root / "documents/levels.json"
+            rooms.parent.mkdir()
+            rooms.write_text(json.dumps({
+                "schema": "retrolarium.solomon-rooms",
+                "schema_version": 3,
+                "game": "solomons-key",
+                "revision": "europe",
+                "source_sha256": SHA256,
+                "width": 16,
+                "height": 12,
+                "rooms": [{} for _ in range(53)],
+            }), encoding="utf-8")
+            graphics = root / "documents/graphics.json"
+            graphics.write_text(json.dumps({
+                "schema": "retrolarium.nes-resource-bundle",
+                "schema_version": 1,
+                "game": "solomons-key",
+                "revision": "europe",
+                "source_sha256": SHA256,
+                "resources": [
+                    {"id": "chr-bank-0", "kind": "graphics",
+                     "codec": "nes.chr-2bpp.v1"},
+                    {"id": "room-palettes", "kind": "palette",
+                     "codec": "nes.palette-table.v1"},
+                ],
+            }), encoding="utf-8")
+            art = root / "documents/room-art.json"
+            art.write_text(json.dumps({
+                "schema": "retrolarium.solomon-room-art",
+                "schema_version": 1,
+                "game": "solomons-key",
+                "revision": "europe",
+                "source_sha256": SHA256,
+                "room_group_colors": [0] * 14,
+                "room_map_patterns": [{} for _ in range(58)],
+            }), encoding="utf-8")
+            sprites = root / "documents/sprite-frames.json"
+            sprites.write_text(json.dumps({
+                "schema": "retrolarium.solomon-sprite-frames",
+                "schema_version": 1,
+                "game": "solomons-key",
+                "revision": "europe",
+                "source_sha256": SHA256,
+                "frames": [{} for _ in range(28)],
+            }), encoding="utf-8")
+            with patch(
+                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                return_value=manifest(),
+            ):
+                result = create_studio_project(
+                    source, root / "solomon.rlj",
+                    project_id="solomons-key-europe",
+                    name="Solomon's Key (Europe)",
+                    profile="solomons-key.v1",
+                    source_mode="binary-profile",
+                    resource_documents=(rooms, art, sprites, graphics),
+                )
+            tabs = result["workspace"]["tabs"]
+            self.assertEqual(
+                ["rooms", "mirrors", "special", "room-art", "sprite-frames",
+                 "graphics", "palettes", "code"],
+                [tab["id"] for tab in tabs],
+            )
+            self.assertEqual("solomon.rooms", tabs[0]["kind"])
+            self.assertEqual("solomon.rooms@3", tabs[0]["codec"])
+            self.assertEqual("documents/levels.json", tabs[0]["document"])
+            self.assertEqual("solomon.mirrors", tabs[1]["kind"])
+            self.assertEqual("solomon.mirrors@3", tabs[1]["codec"])
+            self.assertEqual("documents/levels.json", tabs[1]["document"])
+            self.assertEqual("solomon.special", tabs[2]["kind"])
+            self.assertEqual("solomon.special@3", tabs[2]["codec"])
+            self.assertEqual("documents/levels.json", tabs[2]["document"])
+            self.assertEqual(
+                ["room-art", "sprite-frames", "graphics", "palettes"],
+                tabs[0]["depends_on"],
+            )
+            self.assertEqual("solomon.room-art", tabs[3]["kind"])
+            self.assertEqual("documents/room-art.json", tabs[3]["document"])
+            self.assertEqual(
+                ["graphics", "palettes"], tabs[3]["depends_on"]
+            )
+            self.assertEqual("solomon.sprite-frames", tabs[4]["kind"])
+            self.assertEqual("documents/sprite-frames.json", tabs[4]["document"])
+            self.assertEqual(
+                ["graphics", "palettes"], tabs[4]["depends_on"]
+            )
+            self.assertEqual("documents/graphics.json", tabs[5]["document"])
+            self.assertEqual("documents/graphics.json", tabs[6]["document"])
+
     def test_create_composes_castle_rooms_and_graphics_documents(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

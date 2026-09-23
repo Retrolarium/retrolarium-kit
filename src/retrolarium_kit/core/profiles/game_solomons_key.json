@@ -5,7 +5,7 @@
   "id": "solomons-key",
   "name": "Solomon's Key",
   "platform": "nes",
-  "capabilities": ["rooms", "objects", "exact-round-trip"],
+  "capabilities": ["rooms", "objects", "graphics", "exact-round-trip"],
   "revisions": [
     {
       "id": "usa",
@@ -35,6 +35,30 @@
           "pointer_table_prg": 27036,
           "arena_start_prg": 27142,
           "arena_end_prg": 28484
+        }},
+        {"id": "mirror-schedules", "parameters": {
+          "pointer_table_prg": 23424,
+          "arena_start_prg": 23490,
+          "arena_end_prg": 23618
+        }},
+        {"id": "mirror-enemy-sets", "parameters": {
+          "pointer_table_prg": 23456,
+          "arena_start_prg": 23618,
+          "arena_end_prg": 23660
+        }},
+        {"id": "special-rooms", "parameters": {
+          "bonus_positions_prg": 6602,
+          "bonus_types_prg": 6634
+        }},
+        {"id": "room-palettes", "parameters": {
+          "file_offset": 3810
+        }},
+        {"id": "room-art", "parameters": {
+          "room_group_colors_prg": 4401,
+          "room_map_patterns_prg": 20352
+        }},
+        {"id": "sprite-frames", "parameters": {
+          "animation_pointers_prg": 20584
         }}
       ]
     }
@@ -73,6 +97,126 @@
         "pointer_table_prg": 27164,
         "arena_start_prg": 27270,
         "arena_end_prg": 28612
+      }
+    },
+    {
+      "id": "mirror-schedules",
+      "kind": "object-layer",
+      "codec": "solomon.mirror-schedules.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "pointer_table_prg": 23552,
+        "arena_start_prg": 23618,
+        "arena_end_prg": 23746
+      }
+    },
+    {
+      "id": "mirror-enemy-sets",
+      "kind": "object-layer",
+      "codec": "solomon.mirror-enemy-sets.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "pointer_table_prg": 23584,
+        "arena_start_prg": 23746,
+        "arena_end_prg": 23788
+      }
+    },
+    {
+      "id": "special-rooms",
+      "kind": "special-room-data",
+      "codec": "solomon.special-rooms.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "bonus_positions_prg": 6594,
+        "bonus_types_prg": 6626,
+        "seal_positions_prg": 16326,
+        "princess_positions_prg": 16342,
+        "room20_plane_prg": 16354,
+        "room30_plane_prg": 16378
+      }
+    },
+    {
+      "id": "graphics-bundle",
+      "kind": "resource-bundle",
+      "codec": "nes.resource-bundle.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "resource_ids": [
+          "chr-bank-0", "chr-bank-1", "chr-bank-2", "chr-bank-3",
+          "room-palettes", "ending-fade"
+        ]
+      }
+    },
+    {
+      "id": "chr-bank-0",
+      "kind": "graphics",
+      "codec": "nes.chr-2bpp.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 32784, "size": 8192}
+    },
+    {
+      "id": "chr-bank-1",
+      "kind": "graphics",
+      "codec": "nes.chr-2bpp.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 40976, "size": 8192}
+    },
+    {
+      "id": "chr-bank-2",
+      "kind": "graphics",
+      "codec": "nes.chr-2bpp.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 49168, "size": 8192}
+    },
+    {
+      "id": "chr-bank-3",
+      "kind": "graphics",
+      "codec": "nes.chr-2bpp.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 57360, "size": 8192}
+    },
+    {
+      "id": "room-palettes",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 3795,
+        "size": 32,
+        "entries": 32,
+        "palette_model": "nes"
+      }
+    },
+    {
+      "id": "ending-fade",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "file_offset": 15780,
+        "size": 3,
+        "entries": 3,
+        "palette_model": "nes"
+      }
+    },
+    {
+      "id": "room-art",
+      "kind": "room-art",
+      "codec": "solomon.room-art.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "room_group_colors_prg": 4386,
+        "room_map_patterns_prg": 20480
+      }
+    },
+    {
+      "id": "sprite-frames",
+      "kind": "sprite-frames",
+      "codec": "solomon.sprite-frames.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "animation_pointers_prg": 20712,
+        "enemy_configuration_prg": 9294
       }
     }
   ]
