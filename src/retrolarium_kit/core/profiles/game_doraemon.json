@@ -5,7 +5,7 @@
   "id": "doraemon",
   "name": "Doraemon (Famicom)",
   "platform": "nes",
-  "capabilities": ["graphics", "exact-round-trip"],
+  "capabilities": ["levels", "graphics", "exact-round-trip"],
   "revisions": [
     {
       "id": "original",
@@ -33,8 +33,38 @@
       "codec": "nes.resource-bundle.v1",
       "capacity_policy": "fixed",
       "parameters": {
-        "resource_ids": ["chr-bank-0", "chr-bank-1", "chr-bank-2", "chr-bank-3"]
+        "resource_ids": [
+          "world1-hierarchy", "world3-hierarchy",
+          "world3-room-palette-selectors",
+          "chr-bank-0", "chr-bank-1", "chr-bank-2", "chr-bank-3",
+          "world1-palette-00", "world1-palette-01", "world1-palette-02", "world1-palette-03", "world1-palette-04", "world1-palette-05", "world1-palette-06", "world1-palette-07", "world1-palette-08", "world1-palette-09", "world1-palette-10", "world1-palette-11",
+          "world3-palette-00", "world3-palette-01", "world3-palette-02", "world3-palette-03", "world3-palette-04", "world3-palette-05", "world3-palette-06", "world3-palette-07", "world3-palette-08", "world3-palette-09", "world3-palette-10",
+          "world2-metatiles",
+          "world2-palette-00", "world2-palette-01", "world2-palette-02", "world2-palette-03", "world2-palette-04", "world2-palette-05", "world2-palette-06", "world2-palette-07", "world2-palette-08",
+          "world2-screens", "world2-stage", "world2-branches", "world2-chapters"
+        ]
       }
+    },
+    {
+      "id": "world1-hierarchy",
+      "kind": "level",
+      "codec": "doraemon.hierarchy.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"world": "world1", "file_offset": 10751, "size": 8000}
+    },
+    {
+      "id": "world3-hierarchy",
+      "kind": "level",
+      "codec": "doraemon.hierarchy.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"world": "world3", "file_offset": 89602, "size": 6400}
+    },
+    {
+      "id": "world3-room-palette-selectors",
+      "kind": "palette-selection",
+      "codec": "doraemon.room-palette-selectors.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 77282, "size": 64}
     },
     {
       "id": "chr-bank-0",
@@ -63,6 +93,241 @@
       "codec": "nes.chr-2bpp.v1",
       "capacity_policy": "fixed",
       "parameters": {"file_offset": 155664, "size": 8192}
+    },
+    {
+      "id": "world1-palette-00",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 22453, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world1-palette-01",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 22485, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world1-palette-02",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 22517, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world1-palette-03",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 22549, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world1-palette-04",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 22581, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world1-palette-05",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 22613, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world1-palette-06",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 22645, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world1-palette-07",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 22677, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world1-palette-08",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 22709, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world1-palette-09",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 22741, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world1-palette-10",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 22773, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world1-palette-11",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 22805, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world3-palette-00",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 81086, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world3-palette-01",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 81118, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world3-palette-02",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 81150, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world3-palette-03",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 81182, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world3-palette-04",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 81214, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world3-palette-05",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 81246, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world3-palette-06",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 81278, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world3-palette-07",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 81310, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world3-palette-08",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 81342, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world3-palette-09",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 81374, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world3-palette-10",
+      "kind": "palette",
+      "codec": "nes.palette-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 81406, "size": 32, "entries": 32}
+    },
+    {
+      "id": "world2-metatiles",
+      "kind": "metatile",
+      "codec": "doraemon.world2-metatiles.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"file_offset": 47583, "size": 1040,
+        "collision_file_offset": 48852, "collision_size": 26}
+    },
+    {
+      "id": "world2-palette-00", "kind": "palette",
+      "codec": "nes.palette-table.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 34737, "size": 16, "entries": 16}
+    },
+    {
+      "id": "world2-palette-01", "kind": "palette",
+      "codec": "nes.palette-table.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 34753, "size": 16, "entries": 16}
+    },
+    {
+      "id": "world2-palette-02", "kind": "palette",
+      "codec": "nes.palette-table.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 34769, "size": 16, "entries": 16}
+    },
+    {
+      "id": "world2-palette-03", "kind": "palette",
+      "codec": "nes.palette-table.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 34785, "size": 16, "entries": 16}
+    },
+    {
+      "id": "world2-palette-04", "kind": "palette",
+      "codec": "nes.palette-table.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 34801, "size": 16, "entries": 16}
+    },
+    {
+      "id": "world2-palette-05", "kind": "palette",
+      "codec": "nes.palette-table.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 34817, "size": 16, "entries": 16}
+    },
+    {
+      "id": "world2-palette-06", "kind": "palette",
+      "codec": "nes.palette-table.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 34833, "size": 16, "entries": 16}
+    },
+    {
+      "id": "world2-palette-07", "kind": "palette",
+      "codec": "nes.palette-table.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 34849, "size": 16, "entries": 16}
+    },
+    {
+      "id": "world2-palette-08", "kind": "palette",
+      "codec": "nes.palette-table.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 34865, "size": 16, "entries": 16}
+    },
+    {
+      "id": "world2-screens", "kind": "screen-stream",
+      "codec": "doraemon.world2-screens.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 48878, "size": 16669}
+    },
+    {
+      "id": "world2-stage", "kind": "stage-sequence",
+      "codec": "doraemon.world2-stage.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 32239, "size": 229,
+        "start_file_offset": 19272, "start_size": 3}
+    },
+    {
+      "id": "world2-branches", "kind": "stage-branches",
+      "codec": "doraemon.world2-branches.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 26399, "size": 68}
+    },
+    {
+      "id": "world2-chapters", "kind": "chapter-palettes",
+      "codec": "doraemon.world2-chapters.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 19382, "size": 6}
     }
   ]
 }

@@ -37,6 +37,49 @@ from .fds_music import (
     encode_music as encode_fds_music,
 )
 from .ines import parse_ines, parse_ines_prefix
+from .doraemon_hierarchy import (
+    CODEC as DORAEMON_HIERARCHY_CODEC,
+    decode_hierarchy as decode_doraemon_hierarchy,
+    encode_hierarchy as encode_doraemon_hierarchy,
+    payload_size as doraemon_hierarchy_size,
+)
+from .doraemon_palettes import (
+    ROOM_SELECTOR_CODEC as DORAEMON_ROOM_SELECTOR_CODEC,
+    decode_room_selectors as decode_doraemon_room_selectors,
+    encode_room_selectors as encode_doraemon_room_selectors,
+)
+from .doraemon_world2_metatiles import (
+    CODEC as DORAEMON_WORLD2_METATILE_CODEC,
+    COLLISION_SIZE as DORAEMON_WORLD2_COLLISION_SIZE,
+    VISUAL_SIZE as DORAEMON_WORLD2_VISUAL_SIZE,
+    decode_metatiles as decode_doraemon_world2_metatiles,
+    encode_metatiles as encode_doraemon_world2_metatiles,
+)
+from .doraemon_world2_streams import (
+    CODEC as DORAEMON_WORLD2_SCREEN_CODEC,
+    PAYLOAD_SIZE as DORAEMON_WORLD2_SCREEN_SIZE,
+    decode_screens as decode_doraemon_world2_screens,
+    encode_screens as encode_doraemon_world2_screens,
+)
+from .doraemon_world2_stage import (
+    CODEC as DORAEMON_WORLD2_STAGE_CODEC,
+    SEQUENCE_SIZE as DORAEMON_WORLD2_STAGE_SEQUENCE_SIZE,
+    START_SIZE as DORAEMON_WORLD2_STAGE_START_SIZE,
+    decode_stage as decode_doraemon_world2_stage,
+    encode_stage as encode_doraemon_world2_stage,
+)
+from .doraemon_world2_branches import (
+    CODEC as DORAEMON_WORLD2_BRANCH_CODEC,
+    PAYLOAD_SIZE as DORAEMON_WORLD2_BRANCH_SIZE,
+    decode_branches as decode_doraemon_world2_branches,
+    encode_branches as encode_doraemon_world2_branches,
+)
+from .doraemon_world2_chapters import (
+    CODEC as DORAEMON_WORLD2_CHAPTER_CODEC,
+    PAYLOAD_SIZE as DORAEMON_WORLD2_CHAPTER_SIZE,
+    decode_chapters as decode_doraemon_world2_chapters,
+    encode_chapters as encode_doraemon_world2_chapters,
+)
 from .pacman_maze import (
     CODEC as PACMAN_MAZE_CODEC,
     decode_maze_rle,
@@ -135,7 +178,11 @@ SUPPORTED_CODECS = (
     METATILE_CODEC,
     PALETTE_PACKET_CODEC, CASTLE_ROOM_CELL_CODEC, CASTLE_METASPRITE_CODEC,
     *CASTLE_FIXED_RECORD_CODECS, CASTLE_MML_MUSIC_CODEC,
-    PPU_SCREEN_PACKET_CODEC,
+    PPU_SCREEN_PACKET_CODEC, DORAEMON_HIERARCHY_CODEC,
+    DORAEMON_ROOM_SELECTOR_CODEC, DORAEMON_WORLD2_METATILE_CODEC,
+    DORAEMON_WORLD2_SCREEN_CODEC, DORAEMON_WORLD2_STAGE_CODEC,
+    DORAEMON_WORLD2_BRANCH_CODEC,
+    DORAEMON_WORLD2_CHAPTER_CODEC,
 )
 
 
@@ -660,6 +707,91 @@ class NesResourceBundleDocument:
 
 
 def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
+    if resource.codec == DORAEMON_WORLD2_CHAPTER_CODEC:
+        offset, size = _span(resource, DORAEMON_WORLD2_CHAPTER_SIZE)
+        try:
+            decoded = decode_doraemon_world2_chapters(image[offset:offset + size])
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return {"id": resource.resource_id, "kind": resource.kind,
+                "codec": resource.codec, **decoded}
+    if resource.codec == DORAEMON_WORLD2_BRANCH_CODEC:
+        offset, size = _span(resource, DORAEMON_WORLD2_BRANCH_SIZE)
+        try:
+            decoded = decode_doraemon_world2_branches(image[offset:offset + size])
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return {"id": resource.resource_id, "kind": resource.kind,
+                "codec": resource.codec, **decoded}
+    if resource.codec == DORAEMON_WORLD2_STAGE_CODEC:
+        offset, size = _span(resource, DORAEMON_WORLD2_STAGE_SEQUENCE_SIZE)
+        start_offset = _integer(resource.parameters.get("start_file_offset"),
+                                f"{resource.resource_id}.start_file_offset")
+        start_size = _integer(resource.parameters.get("start_size"),
+                              f"{resource.resource_id}.start_size", minimum=1)
+        if start_size != DORAEMON_WORLD2_STAGE_START_SIZE:
+            raise NesResourceError("World 2 stage needs three chapter starts")
+        try:
+            decoded = decode_doraemon_world2_stage(
+                image[offset:offset + size],
+                image[start_offset:start_offset + start_size],
+            )
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return {"id": resource.resource_id, "kind": resource.kind,
+                "codec": resource.codec, **decoded}
+    if resource.codec == DORAEMON_WORLD2_SCREEN_CODEC:
+        offset, size = _span(resource, DORAEMON_WORLD2_SCREEN_SIZE)
+        try:
+            decoded = decode_doraemon_world2_screens(image[offset:offset + size])
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return {"id": resource.resource_id, "kind": resource.kind,
+                "codec": resource.codec, **decoded}
+    if resource.codec == DORAEMON_WORLD2_METATILE_CODEC:
+        offset, size = _span(resource, DORAEMON_WORLD2_VISUAL_SIZE)
+        collision_offset = _integer(resource.parameters.get("collision_file_offset"),
+                                    f"{resource.resource_id}.collision_file_offset")
+        collision_size = _integer(resource.parameters.get("collision_size"),
+                                  f"{resource.resource_id}.collision_size", minimum=1)
+        if collision_size != DORAEMON_WORLD2_COLLISION_SIZE:
+            raise NesResourceError("World 2 collision table needs 26 bytes")
+        try:
+            decoded = decode_doraemon_world2_metatiles(
+                image[offset:offset + size],
+                image[collision_offset:collision_offset + collision_size],
+            )
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return {"id": resource.resource_id, "kind": resource.kind,
+                "codec": resource.codec, **decoded}
+    if resource.codec == DORAEMON_ROOM_SELECTOR_CODEC:
+        offset, size = _span(resource, 64)
+        try:
+            selectors = decode_doraemon_room_selectors(image[offset:offset + size])
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return {
+            "id": resource.resource_id,
+            "kind": resource.kind,
+            "codec": resource.codec,
+            "selectors": selectors,
+        }
+    if resource.codec == DORAEMON_HIERARCHY_CODEC:
+        world = resource.parameters.get("world")
+        try:
+            size = doraemon_hierarchy_size(world)
+            offset, _ = _span(resource, size)
+            payload = image[offset : offset + size]
+            decoded = decode_doraemon_hierarchy(payload, world)
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return {
+            "id": resource.resource_id,
+            "kind": resource.kind,
+            "codec": resource.codec,
+            **decoded,
+        }
     if resource.codec == NAMETABLE_CODEC:
         width = _integer(
             resource.parameters.get("width"), f"{resource.resource_id}.width", minimum=1
@@ -1195,7 +1327,95 @@ def _parse_resource(
     if raw.get("kind") != spec.kind:
         raise NesResourceError(f"resource {spec.resource_id} kind differs from profile")
     encoded_spans: tuple[_EncodedSpan, ...] | None = None
-    if spec.codec == NAMETABLE_CODEC:
+    if spec.codec == DORAEMON_WORLD2_CHAPTER_CODEC:
+        expected_fields = {"id", "kind", "codec",
+                           "background_palette_ids", "sprite_offsets"}
+        _span(spec, DORAEMON_WORLD2_CHAPTER_SIZE)
+        try:
+            payload = encode_doraemon_world2_chapters({
+                "background_palette_ids": raw.get("background_palette_ids"),
+                "sprite_offsets": raw.get("sprite_offsets"),
+            })
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+    elif spec.codec == DORAEMON_WORLD2_BRANCH_CODEC:
+        expected_fields = {"id", "kind", "codec", "branches"}
+        _span(spec, DORAEMON_WORLD2_BRANCH_SIZE)
+        try:
+            payload = encode_doraemon_world2_branches(
+                {"branches": raw.get("branches")}
+            )
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+    elif spec.codec == DORAEMON_WORLD2_STAGE_CODEC:
+        expected_fields = {"id", "kind", "codec", "start_offsets", "tokens"}
+        offset, _ = _span(spec, DORAEMON_WORLD2_STAGE_SEQUENCE_SIZE)
+        start_offset = _integer(spec.parameters.get("start_file_offset"),
+                                f"{spec.resource_id}.start_file_offset")
+        start_size = _integer(spec.parameters.get("start_size"),
+                              f"{spec.resource_id}.start_size", minimum=1)
+        if start_size != DORAEMON_WORLD2_STAGE_START_SIZE:
+            raise NesResourceError("World 2 stage needs three chapter starts")
+        try:
+            sequence, starts = encode_doraemon_world2_stage({
+                "start_offsets": raw.get("start_offsets"), "tokens": raw.get("tokens")
+            })
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        encoded_spans = (_EncodedSpan(offset, sequence),
+                         _EncodedSpan(start_offset, starts))
+    elif spec.codec == DORAEMON_WORLD2_SCREEN_CODEC:
+        expected_fields = {"id", "kind", "codec", "raw_hex", "screens"}
+        _span(spec, DORAEMON_WORLD2_SCREEN_SIZE)
+        try:
+            payload = encode_doraemon_world2_screens(
+                {"raw_hex": raw.get("raw_hex"), "screens": raw.get("screens")}
+            )
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+    elif spec.codec == DORAEMON_WORLD2_METATILE_CODEC:
+        expected_fields = {"id", "kind", "codec", "palettes", "tiles", "solid"}
+        offset, _ = _span(spec, DORAEMON_WORLD2_VISUAL_SIZE)
+        collision_offset = _integer(spec.parameters.get("collision_file_offset"),
+                                    f"{spec.resource_id}.collision_file_offset")
+        collision_size = _integer(spec.parameters.get("collision_size"),
+                                  f"{spec.resource_id}.collision_size", minimum=1)
+        if collision_size != DORAEMON_WORLD2_COLLISION_SIZE:
+            raise NesResourceError("World 2 collision table needs 26 bytes")
+        try:
+            visual, collision = encode_doraemon_world2_metatiles(
+                {key: raw.get(key) for key in ("palettes", "tiles", "solid")}
+            )
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        encoded_spans = (
+            _EncodedSpan(offset, visual),
+            _EncodedSpan(collision_offset, collision),
+        )
+    elif spec.codec == DORAEMON_ROOM_SELECTOR_CODEC:
+        expected_fields = {"id", "kind", "codec", "selectors"}
+        _span(spec, 64)
+        try:
+            payload = encode_doraemon_room_selectors(raw.get("selectors"))
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+    elif spec.codec == DORAEMON_HIERARCHY_CODEC:
+        expected_fields = {
+            "id", "kind", "codec", "world", "attributes",
+            "small_blocks", "big_blocks", "maps"
+        }
+        world = spec.parameters.get("world")
+        try:
+            size = doraemon_hierarchy_size(world)
+            _span(spec, size)
+            payload = encode_doraemon_hierarchy(
+                {key: raw.get(key) for key in expected_fields - {
+                    "id", "kind", "codec"
+                }}, world
+            )
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+    elif spec.codec == NAMETABLE_CODEC:
         expected_fields = {
             "id", "kind", "codec", "width", "height", "tiles", "attributes"
         }
