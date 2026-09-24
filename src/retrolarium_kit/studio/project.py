@@ -737,6 +737,7 @@ def build_studio_project(
     *,
     container: str | None = None,
     toolchain_cache: Path | None = None,
+    flicky_level_writer: Path | None = None,
 ) -> dict[str, Any]:
     """Build the exact source project, then transactionally apply typed resources."""
 
@@ -744,7 +745,9 @@ def build_studio_project(
     _require_declared_operation(inspection, "build")
     _validate_editor_documents(inspection)
     if inspection["project"]["source_mode"] == "flicky-content":
-        return _build_flicky_studio_project(inspection)
+        return _build_flicky_studio_project(inspection, flicky_level_writer)
+    if flicky_level_writer is not None:
+        raise StudioProjectError("--flicky-level-writer requires a Flicky project")
     manifest_path = Path(inspection["source"]["disassembly_path"])
     base_build = build_project(
         manifest_path, container=container, toolchain_cache=toolchain_cache
@@ -826,10 +829,12 @@ def build_studio_project(
     return report
 
 
-def _build_flicky_studio_project(inspection: Mapping[str, Any]) -> dict[str, Any]:
+def _build_flicky_studio_project(
+    inspection: Mapping[str, Any], native_writer: Path | None = None,
+) -> dict[str, Any]:
     root = Path(inspection["project_root"])
     try:
-        built = build_flicky_source_snapshot(root)
+        built = build_flicky_source_snapshot(root, native_writer=native_writer)
     except FlickyContentError as exc:
         raise StudioProjectError(str(exc)) from exc
     output = Path(built["artifact"])
@@ -902,6 +907,8 @@ def verify_studio_project(path: Path) -> dict[str, Any]:
     if inspection["project"]["source_mode"] == "flicky-content":
         if artifact.stat().st_size != 131072:
             differences.append("artifact-size")
+        elif load_megadrive(artifact).checksum_status != "valid":
+            differences.append("artifact-checksum")
         try:
             validate_flicky_source_snapshot(root)
         except FlickyContentError:

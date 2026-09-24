@@ -7,6 +7,13 @@ if round == nil or round ~= math.floor(round) or round < 1 or round > 48 then
 end
 local result_path = os.getenv("FLICKY_PLAYTEST_RESULT")
 local exit_after_ready = os.getenv("FLICKY_PLAYTEST_EXIT") == "1"
+local snapshot_path = os.getenv("FLICKY_PLAYTEST_SNAPSHOT")
+if snapshot_path == "" then snapshot_path = nil end
+local snapshot_delay = tonumber(os.getenv("FLICKY_PLAYTEST_SNAPSHOT_DELAY") or "60")
+if snapshot_delay == nil or snapshot_delay ~= math.floor(snapshot_delay)
+        or snapshot_delay < 0 or snapshot_delay > 60 then
+    error("FLICKY_PLAYTEST_SNAPSHOT_DELAY must be an integer in 0..60")
+end
 local round_word = (math.floor(round / 10) * 16 + round % 10) * 256 + round
 
 local cpu = manager.machine.devices[":maincpu"]
@@ -29,6 +36,8 @@ local function write_byte(address, value) memory:write_u8(address, value) end
 local frame = 0
 local selected = false
 local reported = false
+local ready_frame = nil
+local snapshot_done = false
 local function report(status)
     if reported then return end
     reported = true
@@ -64,6 +73,18 @@ local function on_frame()
         end
     elseif mode == 0x24 and read_word(ram.round_number) == round_word then
         report("ready")
+        if ready_frame == nil then ready_frame = frame end
+        if exit_after_ready and snapshot_path == nil then manager.machine:exit() end
+    end
+    if ready_frame ~= nil and snapshot_path ~= nil and not snapshot_done
+            and frame >= ready_frame + snapshot_delay then
+        local screen = manager.machine.screens:at(1)
+        if screen == nil then error("MAME Mega Drive screen is unavailable") end
+        local failure = screen:snapshot(snapshot_path)
+        if failure ~= nil then
+            error("Flicky screenshot failed: " .. tostring(failure))
+        end
+        snapshot_done = true
         if exit_after_ready then manager.machine:exit() end
     end
     if frame >= 1200 and not reported then
