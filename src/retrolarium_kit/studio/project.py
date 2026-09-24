@@ -7,6 +7,9 @@ import json
 import os
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
+import runpy
+import subprocess
+import sys
 import tempfile
 import tomllib
 from typing import Any, Sequence
@@ -18,6 +21,13 @@ from .games import (
     validate_game_document_for_revision,
 )
 from .game_profiles import packaged_game_profiles
+from .flicky_content import (
+    CANONICAL_SHA256 as FLICKY_SHA256,
+    WORKSPACE_FILES as FLICKY_WORKSPACE_FILES,
+    build_flicky_source_snapshot,
+    validate_flicky_source_snapshot,
+    FlickyContentError,
+)
 from .ines import load_ines
 from .megadrive import load_megadrive
 from .project import (
@@ -40,7 +50,7 @@ SCHEMA_VERSION = 1
 INSPECTION_SCHEMA = "retrolarium.project-inspection"
 PROJECT_SUFFIX = ".rlj"
 
-SOURCE_MODES = frozenset({"binary-profile", "source-project"})
+SOURCE_MODES = frozenset({"binary-profile", "source-project", "flicky-content"})
 LAYOUTS = frozenset({"auto", "single-row", "two-row"})
 GROUPS = frozenset({"content", "assets", "tools"})
 PLATFORMS = frozenset({"nes", "snes", "megadrive"})
@@ -58,6 +68,9 @@ EDITOR_KINDS = frozenset(
         "doraemon.levels",
         "doraemon.world2-metatiles",
         "doraemon.world2-screens",
+        "doraemon.world2-routes",
+        "flicky.levels", "flicky.graphics", "flicky.semantics",
+        "flicky.animations", "flicky.sound",
         "code.analysis",
         "graphics.tile-set",
         "level.procedural",
@@ -85,9 +98,12 @@ CODECS = frozenset(
         "doraemon.hierarchy.v1",
         "doraemon.world2-metatiles.v1",
         "doraemon.world2-screens.v1",
+        "doraemon.world2-stage.v1",
         "castle.prefix-rooms@1",
         "fds.synthesis.v1",
         "fds.music.v1",
+        "flicky.levels.v1", "flicky.graphics.v1", "flicky.semantics.v1",
+        "flicky.animations.v1", "flicky.sound.v1",
         "nes.chr-2bpp.v1",
         "castle.room-cell-visuals.v1",
         "castle.metasprite-descriptors.v1",
@@ -430,32 +446,49 @@ def load_studio_project(path: Path) -> dict[str, Any]:
     }
 
     source_table = _mapping(source["source"], "source")
-    _check_keys(
-        source_table,
-        "source",
-        {"disassembly", "sha256"},
-        {"disassembly", "sha256"},
-    )
-    disassembly, disassembly_path = _project_path(
-        root, source_table["disassembly"], "source.disassembly"
+    flicky_content = normalized_metadata["source_mode"] == "flicky-content"
+    source_key = "manifest" if flicky_content else "disassembly"
+    _check_keys(source_table, "source", {source_key, "sha256"},
+                {source_key, "sha256"})
+    source_relative, source_path = _project_path(
+        root, source_table[source_key], f"source.{source_key}"
     )
     source_sha256 = _string(source_table["sha256"], "source.sha256")
     if _SHA256.fullmatch(source_sha256) is None:
         raise _error("source.sha256", "must be 64 lowercase hexadecimal characters")
-    try:
-        manifest = load_disassembly_manifest(disassembly_path)
-    except ContractError as exc:
-        raise _error("source.disassembly", str(exc)) from exc
-    manifest_schema = _string(manifest.get("schema"), "source manifest schema")
-    expected_schema = f"retrolarium.{normalized_metadata['platform']}.disassembly"
-    if manifest_schema != expected_schema:
-        raise _error(
-            "source.disassembly",
-            f"platform requires {expected_schema!r}, got {manifest_schema!r}",
-        )
-    manifest_input = _mapping(manifest.get("input"), "source manifest input")
-    if manifest_input.get("sha256") != source_sha256:
-        raise _error("source.sha256", "does not match the disassembly manifest input")
+    if flicky_content:
+        if normalized_metadata["platform"] != "megadrive" \
+                or normalized_metadata["profile"] != "flicky-ue.v1":
+            raise _error("project", "Flicky content requires megadrive/flicky-ue.v1")
+        if source_relative != "flicky-source/config/authoring/content_studios.json":
+            raise _error("source.manifest", "must name the imported Flicky content manifest")
+        if source_sha256 != FLICKY_SHA256:
+            raise _error("source.sha256", "does not match canonical Flicky (UE)")
+        try:
+            manifest = json.loads(source_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise _error("source.manifest", f"cannot read content manifest: {exc}") from exc
+        if not isinstance(manifest, Mapping) or manifest.get("schema_version") != 1 \
+                or manifest.get("profile") != "canonical" \
+                or manifest.get("image_size") != 131072 \
+                or manifest.get("image_sha1") != "83d8bbf0a9b38c42a0bf492d105cc3abe9644a96":
+            raise _error("source.manifest", "is not the canonical Flicky content manifest")
+        manifest_schema = "flicky.content-studios"
+    else:
+        try:
+            manifest = load_disassembly_manifest(source_path)
+        except ContractError as exc:
+            raise _error("source.disassembly", str(exc)) from exc
+        manifest_schema = _string(manifest.get("schema"), "source manifest schema")
+        expected_schema = f"retrolarium.{normalized_metadata['platform']}.disassembly"
+        if manifest_schema != expected_schema:
+            raise _error(
+                "source.disassembly",
+                f"platform requires {expected_schema!r}, got {manifest_schema!r}",
+            )
+        manifest_input = _mapping(manifest.get("input"), "source manifest input")
+        if manifest_input.get("sha256") != source_sha256:
+            raise _error("source.sha256", "does not match the disassembly manifest input")
 
     workspace = _mapping(source["workspace"], "workspace")
     _check_keys(
@@ -527,6 +560,23 @@ def load_studio_project(path: Path) -> dict[str, Any]:
         )
 
     _validate_dependency_graph(tabs)
+    if flicky_content:
+        expected_tabs = {
+            "flicky.levels": "level_layouts",
+            "flicky.graphics": "graphics_assets",
+            "flicky.semantics": "graphics_semantics",
+            "flicky.animations": "graphics_sequences",
+            "flicky.sound": "z80_sound_banks",
+        }
+        if len(tabs) != len(expected_tabs) or {tab["kind"] for tab in tabs} != set(expected_tabs):
+            raise _error("workspace.tabs", "Flicky requires its five content documents")
+        for tab in tabs:
+            expected_document = "flicky-source/" + FLICKY_WORKSPACE_FILES[
+                expected_tabs[tab["kind"]]
+            ]
+            if tab["document"] != expected_document \
+                    or tab["codec"] != tab["kind"] + ".v1" or not tab["enabled"]:
+                raise _error("workspace.tabs", "Flicky tab must use its enabled source workspace document and codec")
     enabled_ids = [tab["id"] for tab in tabs if tab["enabled"]]
     if not enabled_ids:
         raise _error("workspace.tabs", "must contain at least one enabled tab")
@@ -559,8 +609,8 @@ def load_studio_project(path: Path) -> dict[str, Any]:
         "project_root": str(root),
         "project": normalized_metadata,
         "source": {
-            "disassembly": disassembly,
-            "disassembly_path": str(disassembly_path),
+            source_key: source_relative,
+            source_key + "_path": str(source_path),
             "sha256": source_sha256,
             "schema": manifest_schema,
         },
@@ -603,6 +653,18 @@ def _require_declared_operation(
 def _validate_editor_documents(
     inspection: Mapping[str, Any]
 ) -> list[dict[str, object]]:
+    if inspection["project"]["source_mode"] == "flicky-content":
+        try:
+            hashes = validate_flicky_source_snapshot(Path(inspection["project_root"]))
+        except FlickyContentError as exc:
+            raise StudioProjectError(str(exc)) from exc
+        root = Path(inspection["project_root"])
+        by_path = {"flicky-source/" + relative: digest
+                   for key, relative in FLICKY_WORKSPACE_FILES.items()
+                   for digest in [hashes[key]]}
+        return [{"status": "valid", "document": str(document),
+                 "sha256": by_path[document.relative_to(root).as_posix()]}
+                for document in _unique_editor_documents(inspection)]
     documents = []
     for document_path in _unique_editor_documents(inspection):
         schema = _document_schema(document_path)
@@ -681,6 +743,8 @@ def build_studio_project(
     inspection = load_studio_project(path)
     _require_declared_operation(inspection, "build")
     _validate_editor_documents(inspection)
+    if inspection["project"]["source_mode"] == "flicky-content":
+        return _build_flicky_studio_project(inspection)
     manifest_path = Path(inspection["source"]["disassembly_path"])
     base_build = build_project(
         manifest_path, container=container, toolchain_cache=toolchain_cache
@@ -762,6 +826,36 @@ def build_studio_project(
     return report
 
 
+def _build_flicky_studio_project(inspection: Mapping[str, Any]) -> dict[str, Any]:
+    root = Path(inspection["project_root"])
+    try:
+        built = build_flicky_source_snapshot(root)
+    except FlickyContentError as exc:
+        raise StudioProjectError(str(exc)) from exc
+    output = Path(built["artifact"])
+    editor_documents = _unique_editor_documents(inspection)
+    report = {
+        "schema": "retrolarium.studio-build-result",
+        "schema_version": 1,
+        "status": "built",
+        "project": {"path": Path(inspection["project_file"]).name,
+                    "sha256": sha256_file(Path(inspection["project_file"]))},
+        "source_sha256": FLICKY_SHA256,
+        "base": {"mode": "flicky-content", "sha256": FLICKY_SHA256},
+        "documents": [
+            {"path": document.relative_to(root).as_posix(),
+             "sha256": sha256_file(document)}
+            for document in editor_documents
+        ],
+        "artifact": {"path": output.relative_to(root).as_posix(),
+                     "size": output.stat().st_size,
+                     "sha256": sha256_file(output)},
+        "authoring": {"mode": "flicky-content", "documents": built["documents"]},
+    }
+    write_document(root / "build" / "studio-build-result.json", report)
+    return report
+
+
 def verify_studio_project(path: Path) -> dict[str, Any]:
     """Prove that the edited artifact matches the current project and documents."""
 
@@ -805,11 +899,19 @@ def verify_studio_project(path: Path) -> dict[str, Any]:
     if artifact_record.get("size") != artifact.stat().st_size \
             or artifact_record.get("sha256") != sha256_file(artifact):
         differences.append("artifact")
-    manifest = load_disassembly_manifest(
-        Path(inspection["source"]["disassembly_path"]), verify_rebuilt=False
-    )
-    if artifact.stat().st_size != manifest["input"]["size"]:
-        differences.append("artifact-size")
+    if inspection["project"]["source_mode"] == "flicky-content":
+        if artifact.stat().st_size != 131072:
+            differences.append("artifact-size")
+        try:
+            validate_flicky_source_snapshot(root)
+        except FlickyContentError:
+            differences.append("source-snapshot")
+    else:
+        manifest = load_disassembly_manifest(
+            Path(inspection["source"]["disassembly_path"]), verify_rebuilt=False
+        )
+        if artifact.stat().st_size != manifest["input"]["size"]:
+            differences.append("artifact-size")
     _validate_container(artifact, inspection["project"]["platform"])
 
     result = {
@@ -851,6 +953,177 @@ def studio_launch_plan(
     plan["operation"] = "retrolarium.studio.launch"
     plan["project_file"] = inspection["project_file"]
     return plan
+
+
+def studio_flicky_round_playtest_plan(
+    path: Path, *, mame: Path, round: int,
+) -> dict[str, Any]:
+    """Run one authored Flicky round through the game's regular mode loader."""
+
+    inspection = load_studio_project(path)
+    _require_declared_operation(inspection, "launch")
+    project = inspection["project"]
+    if project["source_mode"] != "flicky-content" \
+            or project["platform"] != "megadrive" \
+            or project["profile"] != "flicky-ue.v1":
+        raise StudioProjectError(
+            "Flicky round playtest requires the canonical flicky-ue.v1 source profile"
+        )
+    matching_tabs = [
+        tab for tab in inspection["workspace"]["tabs"]
+        if tab["enabled"] and tab["codec"] == "flicky.levels.v1"
+        and "playtest" in tab["capabilities"]
+    ]
+    if len(matching_tabs) != 1:
+        raise StudioProjectError(
+            "Studio project must expose one enabled playtest-capable Flicky Levels tab"
+        )
+    round = _bounded_integer(round, "round", 1, 48)
+    verification = verify_studio_project(path)
+    if verification["status"] != "current":
+        raise StudioProjectError(
+            "Studio artifact is stale; build it again before round playtest"
+        )
+    lua = Path(__file__).with_name("runtime") / "flicky_mame_round_playtest.lua"
+    if not lua.is_file():
+        raise StudioProjectError(f"packaged Flicky round playtest script is missing: {lua}")
+    artifact = Path(verification["artifact"]["absolute_path"])
+    plan = launch_image_plan(
+        artifact, platform="megadrive", mame=mame, machine="genesis",
+    )
+    plan.update({
+        "operation": "retrolarium.studio.flicky-round-playtest",
+        "backend": "mame-lua",
+        "arguments": [
+            *plan["arguments"], "-autoboot_delay", "0",
+            "-autoboot_script", str(lua.resolve()),
+        ],
+        "environment": {"FLICKY_PLAYTEST_ROUND": str(round)},
+        "project_file": inspection["project_file"],
+        "script": {"path": str(lua.resolve()), "sha256": sha256_file(lua)},
+        "point": {"round": round},
+    })
+    return plan
+
+
+def studio_flicky_sound_preview(
+    path: Path, *, header: str, seconds: int = 30,
+    enabled_channels: tuple[int, ...] | None = None,
+) -> dict[str, Any]:
+    """Render current Flicky Sound authoring data through the pinned source oracle."""
+
+    inspection = load_studio_project(path)
+    project = inspection["project"]
+    if project["source_mode"] != "flicky-content" \
+            or project["platform"] != "megadrive" \
+            or project["profile"] != "flicky-ue.v1":
+        raise StudioProjectError(
+            "Flicky sound preview requires the canonical flicky-ue.v1 source profile"
+        )
+    matching_tabs = [
+        tab for tab in inspection["workspace"]["tabs"]
+        if tab["enabled"] and tab["codec"] == "flicky.sound.v1"
+        and "preview" in tab["capabilities"]
+    ]
+    if len(matching_tabs) != 1:
+        raise StudioProjectError(
+            "Studio project must expose one enabled preview-capable Flicky Sound tab"
+        )
+    seconds = _bounded_integer(seconds, "seconds", 1, 30)
+    root = Path(inspection["project_root"]).resolve()
+    try:
+        validate_flicky_source_snapshot(root)
+    except FlickyContentError as exc:
+        raise StudioProjectError(str(exc)) from exc
+    source = root / "flicky-source"
+    document = Path(matching_tabs[0]["document_path"]).resolve()
+    expected_document = source / FLICKY_WORKSPACE_FILES["z80_sound_banks"]
+    if document != expected_document.resolve():
+        raise StudioProjectError("Flicky Sound tab does not own the source workspace")
+    model_path = source / "scripts/authoring/sound_studio_model.py"
+    try:
+        sound_model = runpy.run_path(str(model_path))
+        inventory = sound_model["export_document"](document)
+    except (OSError, ValueError, KeyError) as exc:
+        raise StudioProjectError(f"cannot read Flicky Sound inventory: {exc}") from exc
+    headers = {item["id"]: item for item in inventory["headers"]}
+    if header not in headers:
+        raise StudioProjectError(f"unknown Flicky Sound header: {header!r}")
+    track_count = len(headers[header]["tracks"])
+    if enabled_channels is not None:
+        if not isinstance(enabled_channels, tuple) or not enabled_channels \
+                or any(not isinstance(index, int) or isinstance(index, bool)
+                       or not 0 <= index < track_count
+                       for index in enabled_channels) \
+                or len(set(enabled_channels)) != len(enabled_channels):
+            raise StudioProjectError(
+                f"enabled channels must be unique indexes in 0..{track_count - 1}"
+            )
+        enabled_channels = tuple(sorted(enabled_channels))
+    renderer = source / "bin/windows_i386/ymfm_renderer.exe"
+    if not renderer.is_file():
+        raise StudioProjectError(
+            "pinned Flicky YMFM renderer is unavailable in the source snapshot"
+        )
+    output_dir = root / "build/sound-preview"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    channel_key = "all" if enabled_channels is None else "-".join(
+        str(index) for index in enabled_channels)
+    stem = f"{header}-{sha256_file(document)[:12]}-s{seconds}-c{channel_key}"
+    vgm = output_dir / f"{stem}.vgm"
+    wav = output_dir / f"{stem}.wav"
+    with tempfile.TemporaryDirectory(prefix=".flicky-sound-", dir=output_dir) as name:
+        temporary = Path(name)
+        command = [
+            sys.executable, "scripts/run.py", "authoring.sound_preview", header,
+            "--workspace", str(document),
+            "--vgm", str(temporary / "preview.vgm"),
+            "--wav", str(temporary / "preview.wav"),
+            "--renderer", str(renderer),
+            "--seconds", str(seconds),
+        ]
+        if enabled_channels is not None:
+            command.extend(("--channels", ",".join(map(str, enabled_channels))))
+        try:
+            result = subprocess.run(
+                command, cwd=source, capture_output=True, text=True, timeout=180,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise StudioProjectError(f"Flicky Sound preview failed: {exc}") from exc
+        if result.returncode:
+            raise StudioProjectError(
+                "Flicky Sound preview failed: " + (result.stderr or result.stdout)[-4000:]
+            )
+        temporary_vgm = temporary / "preview.vgm"
+        temporary_wav = temporary / "preview.wav"
+        try:
+            if temporary_vgm.read_bytes()[:4] != b"Vgm " \
+                    or temporary_wav.read_bytes()[:4] != b"RIFF":
+                raise StudioProjectError(
+                    "Flicky Sound preview produced invalid audio files"
+                )
+            os.replace(temporary_vgm, vgm)
+            os.replace(temporary_wav, wav)
+        except OSError as exc:
+            raise StudioProjectError(
+                f"Flicky Sound preview cannot publish audio: {exc}"
+            ) from exc
+    return {
+        "schema": "retrolarium.flicky-sound-preview",
+        "schema_version": 1,
+        "status": "rendered",
+        "project_file": inspection["project_file"],
+        "header": header,
+        "seconds": seconds,
+        "enabled_channels": list(range(track_count)) if enabled_channels is None
+            else list(enabled_channels),
+        "document_sha256": sha256_file(document),
+        "renderer_sha256": sha256_file(renderer),
+        "vgm": {"path": str(vgm), "size": vgm.stat().st_size,
+                "sha256": sha256_file(vgm)},
+        "wav": {"path": str(wav), "size": wav.stat().st_size,
+                "sha256": sha256_file(wav)},
+    }
 
 
 def _smb_area_pointer(name: str) -> int:
@@ -1321,6 +1594,131 @@ def _atomic_write(path: Path, payload: str) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def create_flicky_studio_project(project_root: Path) -> dict[str, Any]:
+    """Declare all five documents of an already imported Flicky snapshot."""
+
+    root = project_root.resolve()
+    project = root / "flicky-ue.rlj"
+    if project.exists():
+        raise StudioProjectError(f"Flicky Studio project already exists: {project}")
+    try:
+        validate_flicky_source_snapshot(root)
+    except FlickyContentError as exc:
+        raise StudioProjectError(str(exc)) from exc
+    definitions = (
+        ("levels", "Levels", "flicky.levels", "content", "level_layouts"),
+        ("graphics", "Graphics", "flicky.graphics", "assets", "graphics_assets"),
+        ("semantics", "Palettes & Text", "flicky.semantics", "assets", "graphics_semantics"),
+        ("animations", "Animations", "flicky.animations", "assets", "graphics_sequences"),
+        ("sound", "Music & Sound", "flicky.sound", "content", "z80_sound_banks"),
+    )
+    lines = [
+        'schema = "retrolarium.project"',
+        "schema_version = 1", "", "[project]",
+        'id = "flicky-ue"', 'name = "Flicky (UE)"',
+        'platform = "megadrive"', 'profile = "flicky-ue.v1"',
+        'source_mode = "flicky-content"', "", "[source]",
+        'manifest = "flicky-source/config/authoring/content_studios.json"',
+        f'sha256 = "{FLICKY_SHA256}"', "", "[workspace]",
+        'layout = "two-row"', 'startup_tab = "levels"',
+    ]
+    for identifier, title, kind, group, artifact in definitions:
+        lines.extend((
+            "", "[[workspace.tabs]]", f'id = "{identifier}"',
+            f'title = "{title}"', f'kind = "{kind}"', f'group = "{group}"',
+            f'codec = "{kind}.v1"',
+            f'document = "flicky-source/{FLICKY_WORKSPACE_FILES[artifact]}"',
+            ('capabilities = ["paint", "edit", "preview", "playtest", "navigate", "undo", "restore"]'
+             if identifier == "levels" else
+             'capabilities = ["paint", "navigate", "undo", "restore"]'
+             if identifier == "graphics" else
+             'capabilities = ["edit", "preview", "navigate", "undo", "restore"]'
+             if identifier == "sound" else
+             'capabilities = ["edit", "navigate", "undo", "restore"]'
+             if identifier in {"semantics", "animations"} else 'capabilities = []'),
+        ))
+        if identifier == "levels":
+            lines.append('depends_on = ["graphics", "semantics", "animations"]')
+    lines.extend(("", "[operations]", 'validate = "project.validate"',
+                  'build = "project.build"', 'verify = "project.verify"',
+                  'launch = "project.launch"', ""))
+    _atomic_write(project, "\n".join(lines))
+    return load_studio_project(project)
+
+
+def upgrade_flicky_studio_project(
+    path: Path, *, output: Path | None = None,
+) -> dict[str, Any]:
+    """Add current Flicky capabilities to an older imported .rlj in place."""
+
+    source_path = path.resolve()
+    destination = (output or source_path).resolve()
+    if source_path.suffix.lower() != PROJECT_SUFFIX \
+            or destination.suffix.lower() != PROJECT_SUFFIX \
+            or destination.parent != source_path.parent:
+        raise StudioProjectError(
+            "Flicky upgrade output must be a .rlj beside the source project"
+        )
+    inspection = load_studio_project(source_path)
+    project = inspection["project"]
+    if project["source_mode"] != "flicky-content" \
+            or project["platform"] != "megadrive" \
+            or project["profile"] != "flicky-ue.v1":
+        raise StudioProjectError("Flicky upgrade requires canonical flicky-ue.v1")
+    payload = source_path.read_bytes().decode("utf-8")
+    parsed = tomllib.loads(payload)
+    raw_tabs = parsed["workspace"]["tabs"]
+    markers = list(re.finditer(
+        r"(?m)^\[\[workspace\.tabs\]\][ \t]*(?:#.*)?\r?$", payload
+    ))
+    if len(markers) != len(raw_tabs):
+        raise StudioProjectError("cannot identify Flicky tab blocks without rewriting TOML")
+    updates: list[tuple[int, int, str]] = []
+    requirements = {"flicky.levels.v1": "playtest",
+                    "flicky.sound.v1": "preview"}
+    for index, tab in enumerate(raw_tabs):
+        capability = requirements.get(tab.get("codec"))
+        if capability is None or capability in tab.get("capabilities", []):
+            continue
+        start = markers[index].end()
+        end = markers[index + 1].start() if index + 1 < len(markers) \
+            else len(payload)
+        block = payload[start:end]
+        line = re.search(
+            r"(?m)^(?P<prefix>[ \t]*capabilities[ \t]*=[ \t]*)"
+            r"\[(?P<items>[^\]\r\n]*)\](?P<suffix>[^\r\n]*)(?P<cr>\r?)$", block,
+        )
+        if line is None or not isinstance(tab.get("capabilities"), list):
+            raise StudioProjectError(
+                f"cannot safely upgrade capabilities for {tab.get('codec')}"
+            )
+        values = [*tab["capabilities"], capability]
+        replacement = (line.group("prefix") + "["
+                       + ", ".join(json.dumps(value) for value in values)
+                       + "]" + line.group("suffix") + line.group("cr"))
+        updates.append((start + line.start(), start + line.end(), replacement))
+    upgraded = payload
+    for start, end, replacement in reversed(updates):
+        upgraded = upgraded[:start] + replacement + upgraded[end:]
+    if destination == source_path and not updates:
+        return {"status": "current", "project_file": str(destination),
+                "inspection": inspection}
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=".flicky-upgrade-", suffix=".rlj", dir=destination.parent
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as stream:
+            stream.write(upgraded)
+        load_studio_project(temporary)
+        os.replace(temporary, destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return {"status": "upgraded" if updates else "current",
+            "project_file": str(destination),
+            "inspection": load_studio_project(destination)}
+
+
 def create_studio_project(
     manifest_path: Path,
     output_path: Path,
@@ -1365,6 +1763,10 @@ def create_studio_project(
     _string(name, "project.name")
     _identifier(profile, "project.profile")
     _choice(source_mode, "project.source_mode", SOURCE_MODES)
+    if source_mode == "flicky-content":
+        raise StudioProjectError(
+            "Flicky content projects must be created with create_flicky_studio_project"
+        )
 
     codec = f"{schema}@1"
     tabs: list[dict[str, object]] = []
@@ -1593,6 +1995,9 @@ def create_studio_project(
             ("screen-stream", "world2-screens", "World 2 Screens",
              "doraemon.world2-screens", "content", "doraemon.world2-screens.v1",
              ["paint", "eyedropper", "preview", "restore", "undo"]),
+            ("stage-sequence", "world2-routes", "World 2 Routes",
+             "doraemon.world2-routes", "content", "doraemon.world2-stage.v1",
+             ["paint", "eyedropper", "preview", "restore", "undo"]),
             ("screen", "screens", "Screens", "screen.tilemap", "content",
              "nes.nametable.v1", ["paint", "preview", "undo"]),
             ("audio", "music-sounds", "Sound", "audio.sequencer", "content",
@@ -1793,6 +2198,8 @@ def create_studio_project(
             "metatiles": ("graphics", "palettes"),
             "world2-metatiles": ("graphics", "palettes"),
             "world2-screens": ("world2-metatiles", "graphics", "palettes"),
+            "world2-routes": (
+                "world2-screens", "world2-metatiles", "graphics", "palettes"),
             "room-cells": ("graphics", "palettes"),
             "animations": ("graphics",),
             "player-frames": ("graphics", "palettes"),
