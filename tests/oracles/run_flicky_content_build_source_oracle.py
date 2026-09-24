@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -21,6 +22,7 @@ from retrolarium_kit.flicky_content import (
     WORKSPACE_FILES,
     import_flicky_source,
 )
+from retrolarium_kit.megadrive import cartridge_checksum
 from retrolarium_kit.studio_project import (
     build_studio_project,
     create_flicky_studio_project,
@@ -42,6 +44,21 @@ def mapping_bytes(mapping: dict) -> bytes:
         output.extend(attributes.to_bytes(2, "big"))
         output.extend((piece["x"] & 0xFF, piece["flipped_x"] & 0xFF))
     return bytes(output)
+
+
+def assert_rom_delta(original: bytes, edited: bytes,
+                     expected_payload_offsets: list[int], label: str) -> None:
+    """Allow only the intended payload edit and its required header checksum."""
+    assert len(original) == len(edited)
+    checksum = cartridge_checksum(edited).to_bytes(2, "big")
+    assert edited[0x18E:0x190] == checksum, f"{label} ROM has stale checksum"
+    header_offsets = [0x18E + index for index in range(2)
+                      if original[0x18E + index] != checksum[index]]
+    differences = [index for index, pair in enumerate(zip(original, edited))
+                   if pair[0] != pair[1]]
+    assert differences == sorted(header_offsets + expected_payload_offsets), (
+        f"{label} changed unexpected ROM offsets: {differences[:16]}"
+    )
 
 
 def timer_animation_address(rom: bytes, delay: int) -> tuple[int, list[int]]:
@@ -76,6 +93,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-root", type=Path, required=True)
     parser.add_argument("--rom", type=Path, required=True)
+    parser.add_argument("--native-writer", type=Path, required=True)
     parser.add_argument("--native-level-editor", type=Path,
                         help="exercise the Qt editor's save path before ROM build")
     parser.add_argument("--native-graphics-editor", type=Path,
@@ -87,6 +105,7 @@ def main() -> int:
     parser.add_argument("--native-sound-editor", type=Path,
                         help="exercise Qt note/FM voice/tempo edits and ROM readback")
     args = parser.parse_args()
+    os.environ["RETROLARIUM_FLICKY_LEVEL_WRITER"] = str(args.native_writer.resolve())
 
     scratch = Path(__file__).resolve().parents[2] / "build"
     scratch.mkdir(exist_ok=True)
@@ -125,7 +144,19 @@ def main() -> int:
         original_bytes = args.rom.read_bytes()
         changed = [index for index, pair in enumerate(zip(edited_bytes, original_bytes))
                    if pair[0] != pair[1]]
-        assert changed and min(changed) >= 0x400, "edit touched no level data"
+        changed_payload = [index for index in changed if index >= 0x200]
+        assert changed_payload and min(changed_payload) >= 0x400, \
+            "edit touched no level data"
+        assert all(index >= 0x400 or index in (0x18E, 0x18F)
+                   for index in changed), "collision edit touched unrelated ROM bytes"
+        edited_artifact = project / edited["artifact"]["path"]
+        damaged = bytearray(edited_bytes)
+        damaged[0x18E] ^= 1
+        edited_artifact.write_bytes(damaged)
+        assert "artifact-checksum" in verify_studio_project(
+            project_file)["differences"], "Verify accepted a stale Mega Drive checksum"
+        edited_artifact.write_bytes(edited_bytes)
+        assert verify_studio_project(project_file)["status"] == "current"
 
         level_path.write_bytes(original)
         restored = build_studio_project(project_file)
@@ -171,10 +202,8 @@ def main() -> int:
             object_build = build_studio_project(project_file)
             assert verify_studio_project(project_file)["status"] == "current"
             object_rom = (project / object_build["artifact"]["path"]).read_bytes()
-            object_differences = [index for index, pair in enumerate(
-                zip(object_rom, original_bytes)) if pair[0] != pair[1]]
-            assert object_differences == [address], \
-                f"{field} placement changed unexpected ROM offsets: {object_differences[:16]}"
+            assert_rom_delta(original_bytes, object_rom, [address],
+                             f"{field} placement")
             assert object_rom[address] == changed_x, \
                 f"{field} placement did not read back from ROM"
             level_path.write_bytes(original)
@@ -210,10 +239,8 @@ def main() -> int:
         assert graphics_rom[font_address] ^ original_bytes[font_address] == 0x80, \
             "edited font pixel did not read back as the high bit of its ROM byte"
         assert (graphics_rom[font_address] >> 7) & 1 == edited_pixel
-        graphics_differences = [index for index, pair in enumerate(
-            zip(graphics_rom, original_bytes)) if pair[0] != pair[1]]
-        assert graphics_differences == [font_address], \
-            f"1bpp pixel edit changed unrelated ROM offsets: {graphics_differences[:16]}"
+        assert_rom_delta(original_bytes, graphics_rom, [font_address],
+                         "1bpp pixel edit")
         graphics_path.write_bytes(graphics_original)
         graphics_restored = build_studio_project(project_file)
         assert graphics_restored["artifact"]["sha256"] == CANONICAL_SHA256, \
@@ -247,10 +274,7 @@ def main() -> int:
         text_rom = (project / text_build["artifact"]["path"]).read_bytes()
         assert text_rom[text_address:text_address + len(old_text_bytes)] == new_text.encode("ascii"), \
             "GUI text did not read back from ROM"
-        text_differences = [index for index, pair in enumerate(
-            zip(text_rom, original_bytes)) if pair[0] != pair[1]]
-        assert text_differences == [text_address], \
-            f"text edit changed unrelated ROM offsets: {text_differences[:16]}"
+        assert_rom_delta(original_bytes, text_rom, [text_address], "text edit")
         semantics_path.write_bytes(semantics_original)
         assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, \
             "text restore must be exact"
@@ -284,10 +308,8 @@ def main() -> int:
         palette_word = palette_address + 2
         assert palette_rom[palette_word:palette_word + 2] == new_colour.to_bytes(2, "big"), \
             "GUI CRAM colour did not read back from ROM"
-        palette_differences = [index for index, pair in enumerate(
-            zip(palette_rom, original_bytes)) if pair[0] != pair[1]]
-        assert palette_differences == [palette_word + 1], \
-            f"palette edit changed unrelated ROM offsets: {palette_differences[:16]}"
+        assert_rom_delta(original_bytes, palette_rom, [palette_word + 1],
+                         "palette edit")
         semantics_path.write_bytes(semantics_original)
         assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, \
             "palette restore must be exact"
@@ -323,10 +345,8 @@ def main() -> int:
         mapping_x_address = mapping_address + 2 + 4
         assert mapping_rom[mapping_x_address] == new_x & 0xFF, \
             "GUI sprite x did not read back from ROM"
-        mapping_differences = [index for index, pair in enumerate(
-            zip(mapping_rom, original_bytes)) if pair[0] != pair[1]]
-        assert mapping_differences == [mapping_x_address], \
-            f"mapping edit changed unrelated ROM offsets: {mapping_differences[:16]}"
+        assert_rom_delta(original_bytes, mapping_rom, [mapping_x_address],
+                         "mapping edit")
         sequences_path.write_bytes(sequences_original)
         assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, \
             "mapping restore must be exact"
@@ -358,10 +378,8 @@ def main() -> int:
         animation_rom = (project / animation_build["artifact"]["path"]).read_bytes()
         assert animation_rom[animation_address + 1] == new_delay, \
             "GUI animation delay did not read back from ROM"
-        animation_differences = [index for index, pair in enumerate(
-            zip(animation_rom, original_bytes)) if pair[0] != pair[1]]
-        assert animation_differences == [animation_address + 1], \
-            f"animation edit changed unrelated ROM offsets: {animation_differences[:16]}"
+        assert_rom_delta(original_bytes, animation_rom, [animation_address + 1],
+                         "animation edit")
         sequences_path.write_bytes(sequences_original)
         assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, \
             "animation restore must be exact"
@@ -391,14 +409,12 @@ def main() -> int:
         new_pointer = timer_addresses[1].to_bytes(4, "big")
         assert frame_rom[pointer_address:pointer_address + 4] == new_pointer, \
             "GUI animation frame pointer did not read back from ROM"
-        frame_differences = [index for index, pair in enumerate(
-            zip(frame_rom, original_bytes)) if pair[0] != pair[1]]
         expected_pointer_differences = [pointer_address + index
             for index, (before, after) in enumerate(zip(
                 timer_addresses[0].to_bytes(4, "big"), new_pointer))
             if before != after]
-        assert frame_differences == expected_pointer_differences, \
-            f"animation frame edit changed unrelated ROM offsets: {frame_differences[:16]}"
+        assert_rom_delta(original_bytes, frame_rom, expected_pointer_differences,
+                         "animation frame edit")
         sequences_path.write_bytes(sequences_original)
         assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, \
             "animation frame restore must be exact"
@@ -435,10 +451,7 @@ def main() -> int:
         note_address = sequence_address + note["offset"]
         assert note_rom[note_address] == 0x81 + new_note, \
             "GUI SFX note did not read back from ROM"
-        note_differences = [index for index, pair in enumerate(
-            zip(note_rom, original_bytes)) if pair[0] != pair[1]]
-        assert note_differences == [note_address], \
-            f"SFX note changed unrelated ROM offsets: {note_differences[:16]}"
+        assert_rom_delta(original_bytes, note_rom, [note_address], "SFX note")
         sound_path.write_bytes(sound_original)
         assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, \
             "sound note restore must be exact"
@@ -469,10 +482,8 @@ def main() -> int:
         voice_rom = (project / voice_build["artifact"]["path"]).read_bytes()
         assert voice_rom[voice_address] == saved_voice["voices"][0][0], \
             "GUI FM algorithm did not read back from ROM"
-        voice_differences = [index for index, pair in enumerate(
-            zip(voice_rom, original_bytes)) if pair[0] != pair[1]]
-        assert voice_differences == [voice_address], \
-            f"FM voice edit changed unrelated ROM offsets: {voice_differences[:16]}"
+        assert_rom_delta(original_bytes, voice_rom, [voice_address],
+                         "FM voice edit")
         sound_path.write_bytes(sound_original)
         assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, \
             "FM voice restore must be exact"
@@ -516,10 +527,8 @@ def main() -> int:
         tempo_rom = (project / tempo_build["artifact"]["path"]).read_bytes()
         assert tempo_rom[tempo_address] == new_tempo, \
             "GUI music tempo did not read back from ROM"
-        tempo_differences = [index for index, pair in enumerate(
-            zip(tempo_rom, original_bytes)) if pair[0] != pair[1]]
-        assert tempo_differences == [tempo_address], \
-            f"music tempo changed unrelated ROM offsets: {tempo_differences[:16]}"
+        assert_rom_delta(original_bytes, tempo_rom, [tempo_address],
+                         "music tempo")
         sound_path.write_bytes(sound_original)
         assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, \
             "music tempo restore must be exact"

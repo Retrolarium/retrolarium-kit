@@ -17,6 +17,8 @@ import subprocess
 import sys
 import tempfile
 
+from .megadrive import stamp_cartridge_checksum
+
 
 CANONICAL_SHA256 = "4df1a91e08376ae773a6eb8e5abe310f94ca39d8f81583b91a9477fedcb68c11"
 CANONICAL_SIZE = 131072
@@ -207,7 +209,9 @@ def validate_flicky_source_snapshot(project_root: Path) -> dict[str, str]:
             for key, relative in WORKSPACE_FILES.items()}
 
 
-def build_flicky_source_snapshot(project_root: Path) -> dict[str, object]:
+def build_flicky_source_snapshot(
+    project_root: Path, *, native_writer: Path | None = None,
+) -> dict[str, object]:
     """Build edited Flicky documents in the imported snapshot and publish a ROM."""
 
     project_root = project_root.resolve()
@@ -228,7 +232,19 @@ def build_flicky_source_snapshot(project_root: Path) -> dict[str, object]:
         raise FlickyContentError(f"Flicky assembler tools are missing: {tool_dir}")
     env = os.environ.copy()
     env["AS_MSGPATH"] = str(tool_dir)
-    _run([sys.executable, "scripts/run.py", "authoring.build_content",
+    selected_writer = native_writer or env.get("RETROLARIUM_FLICKY_LEVEL_WRITER") \
+        or shutil.which("retrolarium-flicky-level-writer")
+    if not selected_writer:
+        raise FlickyContentError(
+            "native Flicky level writer is required; pass "
+            "--flicky-level-writer, set RETROLARIUM_FLICKY_LEVEL_WRITER, "
+            "or install it on PATH"
+        )
+    writer = Path(selected_writer).resolve()
+    if not writer.is_file():
+        raise FlickyContentError(f"native Flicky level writer is missing: {writer}")
+    _run([sys.executable, str(Path(__file__).with_name("flicky_native_build.py")),
+          "--source", str(source), "--writer", str(writer),
           "--as-bin", str(as_bin), "--p2bin", str(p2bin)], source, env=env)
     built = source / "build/content/flicky.bin"
     if not built.is_file() or built.stat().st_size != CANONICAL_SIZE:
@@ -241,7 +257,10 @@ def build_flicky_source_snapshot(project_root: Path) -> dict[str, object]:
     temporary = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "wb") as stream:
-            stream.write(built.read_bytes())
+            # The source assembler leaves the canonical header checksum in
+            # place after edits. The tested MAME boot path rejects it, so publish a
+            # stamped ROM; the zero-edit image stays byte-for-byte canonical.
+            stream.write(stamp_cartridge_checksum(built.read_bytes()))
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, output)
@@ -261,13 +280,15 @@ def main() -> int:
     importing.add_argument("project_root", type=Path)
     building = subcommands.add_parser("build", help="build imported Flicky documents")
     building.add_argument("project_root", type=Path)
+    building.add_argument("--native-writer", type=Path)
     args = parser.parse_args()
     if args.operation == "import":
         result = import_flicky_source(
             args.source_root, args.canonical_rom, args.project_root
         )
     else:
-        result = build_flicky_source_snapshot(args.project_root)
+        result = build_flicky_source_snapshot(
+            args.project_root, native_writer=args.native_writer)
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 
