@@ -18,7 +18,11 @@ from retrolarium_kit.doraemon_world2_branches import (
 from retrolarium_kit.doraemon_world2_chapters import (
     decode_chapters, encode_chapters,
 )
-from retrolarium_kit.doraemon_world2_routes import ROUTE_NAMES, build_routes
+from retrolarium_kit.doraemon_world2_routes import (
+    ROUTE_NAMES, build_routes, paint_route_cell,
+)
+from retrolarium_kit.doraemon_world2_projection import project_screen
+from retrolarium_kit.doraemon_world2_streams import decode_screens, encode_screens
 from retrolarium_kit.game_profiles import packaged_game_profiles
 
 
@@ -53,6 +57,8 @@ def main() -> int:
     from scripts.validation.world2 import world2_stage_branches
     from scripts.validation.world2 import world2_palettes
     from scripts.authoring.world2_route_model import build_world2_routes
+    from scripts.authoring.world2_level_model import World2ScreenDocument
+    from scripts.validation.world2 import world2_streaming
 
     source = json.loads((root / "data/world2/stage_sequence.json")
                         .read_text(encoding="utf-8"))
@@ -143,6 +149,42 @@ def main() -> int:
         edited_palettes[0x8BA6 + index] for index in range(6)):
         raise AssertionError("World 2 edited chapter selectors differ from source")
     verify_routes()
+    screen_path = root / "data/world2/compressed_screens.json"
+    screen_source = json.loads(screen_path.read_text(encoding="utf-8"))
+    screen_document = decode_screens(world2_streaming.encode_authoring(screen_source))
+    screen_reference = World2ScreenDocument.load(screen_path)
+    painted = False
+    for route in build_routes(decoded, branch_document, chapter_document).values():
+        for placement in route.visible_placements():
+            if placement.selector_id not in (0, 50):
+                continue
+            projected = project_screen(
+                screen_document, placement.selector_id, placement.direction)
+            for local_y, row in enumerate(projected.cells):
+                for local_x, value in enumerate(row):
+                    if value >= 208 or projected.raw_coordinates[local_y][local_x] is None:
+                        continue
+                    global_x = (placement.screen_x - route.min_x) * 16 + local_x
+                    global_y = (placement.screen_y - route.min_y) * 15 + local_y
+                    raw_x, raw_y = projected.raw_coordinate(local_x, local_y)
+                    brush = (value + 1) % 208
+                    target = paint_route_cell(
+                        screen_document, route, global_x, global_y, brush)
+                    if target != (placement.selector_id, raw_x, raw_y):
+                        raise AssertionError("World 2 route paint target differs")
+                    screen_reference.paint(placement.selector_id, raw_x, raw_y, brush)
+                    if encode_screens(screen_document) != screen_reference.encode():
+                        raise AssertionError("World 2 route paint ROM payload differs")
+                    painted = True
+                    break
+                if painted:
+                    break
+            if painted:
+                break
+        if painted:
+            break
+    if not painted:
+        raise AssertionError("World 2 route has no editable aliased screen")
     decoded["start_offsets"][1] = 38
     source["start_offsets"][1] = 38
     edited = world2_stage_sequence.encode_authoring(source)
@@ -157,6 +199,7 @@ def main() -> int:
     print(f"World 2 branches: 68 bytes, CRC32 {branch_checksum}, exact source edit")
     print("World 2 chapters: six exact source bytes and two-field edit")
     print("World 2 routes: five geometries and annotations match after control edits")
+    print("World 2 route paint: inverse coordinate and repacked bytes match source")
     return 0
 
 

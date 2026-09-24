@@ -11,7 +11,9 @@ from typing import Any
 
 from .doraemon_world2_branches import encode_branches
 from .doraemon_world2_chapters import encode_chapters
+from .doraemon_world2_projection import project_screen
 from .doraemon_world2_stage import encode_stage
+from .doraemon_world2_streams import encode_screens
 
 
 ROUTE_NAMES = ("Part 1", "Part 2", "Part 2A", "Part 2B", "Part 3")
@@ -43,6 +45,14 @@ class Route:
     annotations: tuple[Annotation, ...] = ()
 
     @property
+    def min_x(self) -> int:
+        return min(item.screen_x for item in self.placements)
+
+    @property
+    def min_y(self) -> int:
+        return min(item.screen_y for item in self.placements)
+
+    @property
     def width(self) -> int:
         return (max(item.screen_x for item in self.placements)
                 - min(item.screen_x for item in self.placements) + 1) * 16
@@ -61,6 +71,16 @@ class Route:
                 seen.add(position)
                 result.append(item)
         return tuple(result)
+
+    def locate(self, x: int, y: int) -> tuple[Placement, int, int] | None:
+        if not 0 <= x < self.width or not 0 <= y < self.height:
+            return None
+        screen_x = x // 16 + self.min_x
+        screen_y = y // 15 + self.min_y
+        for item in self.visible_placements():
+            if (item.screen_x, item.screen_y) == (screen_x, screen_y):
+                return item, x % 16, y % 15
+        return None
 
 
 def _walk(tokens: bytes, start: int, end: int, palette: int) -> tuple[Placement, ...]:
@@ -195,3 +215,44 @@ def build_routes(
                          _endpoints("Part 2B", part2b_segments[0])),
         "Part 3": Route("Part 3", part3),
     }
+
+
+def paint_route_cell(
+    screen_resource: dict[str, Any],
+    route: Route,
+    x: int,
+    y: int,
+    metatile: int,
+) -> tuple[int, int, int] | None:
+    """Paint a background cell, propagating pointer aliases atomically.
+
+    Returns (selector, raw_x, raw_y), or None for an empty or unchanged cell.
+    The original payload stays in raw_hex so zero-edit and inverse ownership
+    remain explicit; the edited logical screens are capacity-checked now.
+    """
+    if not isinstance(metatile, int) or isinstance(metatile, bool) or not 0 <= metatile < 208:
+        raise ValueError("World 2 route brush must be a background metatile")
+    located = route.locate(x, y)
+    if located is None:
+        return None
+    placement, local_x, local_y = located
+    projection = project_screen(
+        screen_resource, placement.selector_id, placement.direction)
+    if projection.cells[local_y][local_x] >= 208:
+        raise ValueError("World 2 spawn or padding cell is not a background")
+    raw_x, raw_y = projection.raw_coordinate(local_x, local_y)
+    if projection.cells[local_y][local_x] == metatile:
+        return None
+    payload = bytes.fromhex(screen_resource["raw_hex"])
+    selected_pointer = payload[
+        placement.selector_id * 2:placement.selector_id * 2 + 2]
+    updated = [
+        [list(row) for row in screen]
+        for screen in screen_resource["screens"]
+    ]
+    for selector in range(119):
+        if payload[selector * 2:selector * 2 + 2] == selected_pointer:
+            updated[selector][raw_y][raw_x] = metatile
+    encode_screens({"raw_hex": screen_resource["raw_hex"], "screens": updated})
+    screen_resource["screens"] = updated
+    return placement.selector_id, raw_x, raw_y

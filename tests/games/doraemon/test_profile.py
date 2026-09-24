@@ -50,6 +50,10 @@ from retrolarium_kit.doraemon_world2_chapters import (
     decode_chapters as decode_world2_chapters,
     encode_chapters as encode_world2_chapters,
 )
+from retrolarium_kit.doraemon_world2_projection import project_screen
+from retrolarium_kit.doraemon_world2_routes import (
+    Placement, Route, paint_route_cell,
+)
 from retrolarium_kit.nes_resources import (
     build_resources,
     decode_resources,
@@ -259,6 +263,21 @@ class DoraemonProfileTests(unittest.TestCase):
             [screen[0][0] for screen in decode_world2_screens(rebuilt)["screens"]],
             [1] * 119,
         )
+
+    def test_world2_route_projection_paints_shared_physical_selector(self) -> None:
+        resource = decode_world2_screens(synthetic_world2_payload())
+        route = Route("fixture", (Placement(0, 0, 0, 0, 0, 0),))
+        projected = project_screen(resource, 0, 0)
+        self.assertEqual((len(projected.cells), len(projected.cells[0])), (15, 16))
+        self.assertEqual(projected.raw_coordinate(0, 0), (0, 0))
+        self.assertEqual(route.locate(0, 0), (route.placements[0], 0, 0))
+        self.assertEqual(paint_route_cell(resource, route, 0, 0, 1),
+                         (0, 0, 0))
+        self.assertEqual(project_screen(resource, 118, 0).cells[0][0], 1)
+        self.assertEqual(paint_route_cell(resource, route, 0, 0, 1), None)
+        self.assertEqual(paint_route_cell(resource, route, 16, 0, 1), None)
+        with self.assertRaisesRegex(ValueError, "brush"):
+            paint_route_cell(resource, route, 0, 0, 208)
 
     def test_world2_screen_repack_stays_in_its_rom_owner(self) -> None:
         header = b"NES\x1a" + bytes((8, 4, 0x20, 0x40)) + bytes(8)
@@ -486,6 +505,12 @@ class DoraemonProfileTests(unittest.TestCase):
             self.assertEqual(screens["kind"], "doraemon.world2-screens")
             self.assertEqual(screens["depends_on"],
                              ["world2-metatiles", "graphics", "palettes"])
+            routes = next(tab for tab in inspection["workspace"]["tabs"]
+                          if tab["id"] == "world2-routes")
+            self.assertEqual(routes["kind"], "doraemon.world2-routes")
+            self.assertEqual(routes["codec"], "doraemon.world2-stage.v1")
+            self.assertEqual(routes["depends_on"], [
+                "world2-screens", "world2-metatiles", "graphics", "palettes"])
 
 
 if __name__ == "__main__":
