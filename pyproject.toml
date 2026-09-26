@@ -18,6 +18,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 retrolarium_kit = [
+  "flicky_sound_preview_runtime.py",
   "ghidra_scripts/*.java",
   "profiles/*.json",
   "runtime/*.lua",

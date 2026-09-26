@@ -1016,8 +1016,9 @@ def studio_flicky_round_playtest_plan(
 def studio_flicky_sound_preview(
     path: Path, *, header: str, seconds: int = 30,
     enabled_channels: tuple[int, ...] | None = None,
+    document_override: Path | None = None,
 ) -> dict[str, Any]:
-    """Render current Flicky Sound authoring data through the pinned source oracle."""
+    """Render saved or transient Flicky Sound data through the pinned source oracle."""
 
     inspection = load_studio_project(path)
     project = inspection["project"]
@@ -1047,6 +1048,24 @@ def studio_flicky_sound_preview(
     expected_document = source / FLICKY_WORKSPACE_FILES["z80_sound_banks"]
     if document != expected_document.resolve():
         raise StudioProjectError("Flicky Sound tab does not own the source workspace")
+    output_dir = root / "build/sound-preview"
+    if not output_dir.resolve().is_relative_to(root):
+        raise StudioProjectError(
+            "Flicky Sound preview output must remain inside the project"
+        )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    document_origin = "saved"
+    if document_override is not None:
+        candidate = document_override.resolve()
+        if candidate.parent != output_dir.resolve() \
+                or not candidate.name.startswith(".flicky-unsaved-") \
+                or candidate.suffix != ".asm" or not candidate.is_file():
+            raise StudioProjectError(
+                "transient Flicky Sound document must be an ASM file in "
+                "this project's build/sound-preview directory"
+            )
+        document = candidate
+        document_origin = "unsaved"
     model_path = source / "scripts/authoring/sound_studio_model.py"
     try:
         sound_model = runpy.run_path(str(model_path))
@@ -1072,8 +1091,6 @@ def studio_flicky_sound_preview(
         raise StudioProjectError(
             "pinned Flicky YMFM renderer is unavailable in the source snapshot"
         )
-    output_dir = root / "build/sound-preview"
-    output_dir.mkdir(parents=True, exist_ok=True)
     channel_key = "all" if enabled_channels is None else "-".join(
         str(index) for index in enabled_channels)
     stem = f"{header}-{sha256_file(document)[:12]}-s{seconds}-c{channel_key}"
@@ -1082,7 +1099,8 @@ def studio_flicky_sound_preview(
     with tempfile.TemporaryDirectory(prefix=".flicky-sound-", dir=output_dir) as name:
         temporary = Path(name)
         command = [
-            sys.executable, "scripts/run.py", "authoring.sound_preview", header,
+            sys.executable, str(Path(__file__).with_name(
+                "flicky_sound_preview_runtime.py")), header,
             "--workspace", str(document),
             "--vgm", str(temporary / "preview.vgm"),
             "--wav", str(temporary / "preview.wav"),
@@ -1120,6 +1138,7 @@ def studio_flicky_sound_preview(
         "schema_version": 1,
         "status": "rendered",
         "project_file": inspection["project_file"],
+        "document_origin": document_origin,
         "header": header,
         "seconds": seconds,
         "enabled_channels": list(range(track_count)) if enabled_channels is None

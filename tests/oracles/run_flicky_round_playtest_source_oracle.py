@@ -14,6 +14,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import struct
+import sys
 import tempfile
 
 from retrolarium_kit.flicky_content import WORKSPACE_FILES, import_flicky_source
@@ -27,13 +28,16 @@ from retrolarium_kit.studio_project import (
 
 
 def launch(plan: dict, round_number: int, root: Path,
-           snapshot: Path | None = None, snapshot_delay: int = 60) -> None:
+           snapshot: Path | None = None, snapshot_delay: int = 60,
+           extra_environment: dict[str, str] | None = None) -> None:
     result = root / f"round-{round_number}.txt"
     result.unlink(missing_ok=True)
     if snapshot is not None:
         snapshot.unlink(missing_ok=True)
     environment = os.environ.copy()
     environment.update(plan["environment"])
+    if extra_environment:
+        environment.update(extra_environment)
     environment.update({
         "FLICKY_PLAYTEST_EXIT": "1",
         "FLICKY_PLAYTEST_RESULT": str(result),
@@ -62,7 +66,8 @@ def launch(plan: dict, round_number: int, root: Path,
     )
     assert int(fields["round"]) == round_number, fields
     assert int(fields["round_word"], 16) == expected_word, fields
-    assert int(fields["mode"], 16) == 0x24, fields
+    expected_mode = 0x2C if round_number % 4 == 3 else 0x24
+    assert int(fields["mode"], 16) == expected_mode, fields
     assert int(fields["lives"]) == 3, fields
     if snapshot is not None:
         png = snapshot.read_bytes()
@@ -75,8 +80,8 @@ def launch(plan: dict, round_number: int, root: Path,
     print(f"round {round_number}: {result.read_text(encoding='utf-8').strip()}")
 
 
-def compare_vdp_scene(native_renderer: Path, source: Path, snapshot: Path,
-                      output: Path) -> None:
+def compare_vdp_scene(snapshot: Path, output: Path, round_number: int,
+                      label: str) -> float:
     """Compare static VDP geometry plus bounded full-frame animation drift.
 
     The source preview uses linear 3-bit RGB; MAME uses the Mega Drive DAC
@@ -86,17 +91,8 @@ def compare_vdp_scene(native_renderer: Path, source: Path, snapshot: Path,
     try:
         from PIL import Image
     except ImportError as error:
-        raise RuntimeError("Pillow is required for --native-renderer VDP comparison") from error
+        raise RuntimeError("Pillow is required for VDP scene comparison") from error
 
-    root = source / "content" / "workspace"
-    subprocess.run([
-        str(native_renderer.resolve()), "--render-image", str(source),
-        str(root / "level" / "levels.json"),
-        str(root / "graphics" / "graphics.json"),
-        str(root / "graphics" / "semantics.json"),
-        str(root / "graphics" / "sequences.json"),
-        "1", str(output),
-    ], check=True)
     with Image.open(output) as native_image, Image.open(snapshot) as mame_image:
         native = native_image.convert("RGB")
         mame = mame_image.convert("RGB")
@@ -112,18 +108,43 @@ def compare_vdp_scene(native_renderer: Path, source: Path, snapshot: Path,
     width, height = 256, 224
     matches = sum(left == right for left, right in zip(normalized, emulated))
     agreement = matches / (width * height)
-    assert agreement >= 0.93, (
-        f"Flicky round 1 native scene/MAME VDP agreement is only {agreement:.2%}"
-    )
+    print(f"round {round_number} {label}/MAME VDP: {agreement:.2%} "
+          "full-frame pixels after DAC normalization")
     # Static strips cross the tilemap, platform, and background independently
     # of the HUD and animated windows/actors on this deterministic frame.
-    for left, top, right, bottom in ((0, 16, 256, 24), (32, 64, 96, 96)):
-        assert all(normalized[y * width + x] == emulated[y * width + x]
-                   for y in range(top, bottom) for x in range(left, right)), (
-            f"Flicky static VDP region differs: {(left, top, right, bottom)}"
-        )
-    print(f"round 1 native/MAME VDP: {agreement:.2%} full-frame pixels; "
-          "static tilemap regions pixel-exact after DAC normalization")
+    if round_number == 1:
+        for left, top, right, bottom in ((0, 16, 256, 24), (32, 64, 96, 96)):
+            assert all(normalized[y * width + x] == emulated[y * width + x]
+                       for y in range(top, bottom) for x in range(left, right)), (
+                f"Flicky static VDP region differs: {(left, top, right, bottom)}"
+            )
+        print("round 1 static tilemap regions pixel-exact after DAC normalization")
+    return agreement
+
+
+def render_native(executable: Path, source: Path, round_number: int,
+                  output: Path) -> None:
+    root = source / "content" / "workspace"
+    subprocess.run([
+        str(executable.resolve()), "--render-image", str(source),
+        str(root / "level" / "levels.json"),
+        str(root / "graphics" / "graphics.json"),
+        str(root / "graphics" / "semantics.json"),
+        str(root / "graphics" / "sequences.json"),
+        str(round_number), str(output),
+    ], check=True)
+
+
+def render_source_runtime(preview: object, layouts: dict, round_number: int,
+                          output: Path) -> None:
+    from PIL import Image
+    from authoring.level_preview import md_color
+
+    layout = layouts["layouts"][layouts["round_layouts"][round_number - 1]]
+    frame = preview.render(layout, round_number)
+    rgb = bytes.fromhex("".join(
+        md_color(word)[1:] for row in frame for word in row))
+    Image.frombytes("RGB", (256, 224), rgb).save(output)
 
 
 def compare_player_vdp(baseline: Path, edited: Path) -> None:
@@ -151,6 +172,14 @@ def main() -> int:
     parser.add_argument("--mame", type=Path, required=True)
     parser.add_argument("--native-renderer", type=Path,
                         help="also compare the native Level scene with MAME VDP pixels")
+    parser.add_argument("--source-runtime-preview", action="store_true",
+                        help="compare MAME with source preview corrected for Plane A scroll")
+    parser.add_argument("--all-rounds-audit", action="store_true",
+                        help="Playtest all 48 rounds and compare normal-round VDP scenes")
+    parser.add_argument("--all-rounds-playtest", action="store_true",
+                        help="verify normal/bonus entry for all 48 rounds")
+    parser.add_argument("--audit-rounds", nargs="+", type=int, metavar="ROUND",
+                        help="compare selected rounds; round 1 is included for baseline checks")
     parser.add_argument("--native-level-editor", type=Path,
                         help="move the round-1 player via its Qt Levels widget")
     parser.add_argument("--snapshot-output", type=Path,
@@ -162,6 +191,21 @@ def main() -> int:
     assert 0 <= args.snapshot_delay <= 60
     if args.native_level_editor and args.snapshot_delay != 60:
         parser.error("--native-level-editor requires the deterministic 60-frame snapshot")
+    if args.native_renderer and args.source_runtime_preview:
+        parser.error("choose --native-renderer or --source-runtime-preview")
+    if args.all_rounds_audit and not (args.native_renderer or args.source_runtime_preview):
+        parser.error("--all-rounds-audit requires a scene preview")
+    if args.audit_rounds and not (args.native_renderer or args.source_runtime_preview):
+        parser.error("--audit-rounds requires a scene preview")
+    if args.audit_rounds and args.all_rounds_audit:
+        parser.error("choose --audit-rounds or --all-rounds-audit")
+    if args.all_rounds_playtest and (args.all_rounds_audit or args.audit_rounds):
+        parser.error("--all-rounds-playtest cannot be combined with VDP audits")
+    if args.all_rounds_playtest and (args.native_renderer or args.source_runtime_preview):
+        parser.error("--all-rounds-playtest is a boot-only gate; omit scene preview")
+    if args.audit_rounds and any(not 1 <= round_number <= 48
+                                 for round_number in args.audit_rounds):
+        parser.error("--audit-rounds values must be in 1..48")
     os.environ["RETROLARIUM_FLICKY_LEVEL_WRITER"] = str(args.native_writer.resolve())
     scratch = Path(__file__).resolve().parents[2] / "build"
     scratch.mkdir(exist_ok=True)
@@ -180,20 +224,76 @@ def main() -> int:
             shutil.copyfile(root / "build" / "flicky-edited.bin",
                             args.diagnostics_dir / "zero-edit.bin")
         source = root / "flicky-source"
-        for round_number in (1, 26, 48):
+        source_preview = None
+        source_layouts = None
+        if args.source_runtime_preview:
+            sys.path.insert(0, str(source / "scripts"))
+            from authoring import level_preview
+            level_preview.PLANE_A_SCROLL_X = -1
+            workspace = source / "content" / "workspace"
+            source_preview = level_preview.LevelPreview.load(
+                source, workspace / "graphics" / "graphics.json",
+                workspace / "graphics" / "semantics.json",
+                workspace / "graphics" / "sequences.json")
+            source_layouts = json.loads((workspace / "level" / "levels.json")
+                                        .read_text(encoding="utf-8"))
+        if args.all_rounds_audit or args.all_rounds_playtest:
+            rounds = range(1, 49)
+        elif args.audit_rounds:
+            rounds = tuple(dict.fromkeys((1, *args.audit_rounds)))
+        else:
+            rounds = (1, 3, 26, 48)
+        vdp_agreements = {}
+        for round_number in rounds:
             plan = studio_flicky_round_playtest_plan(
                 project, mame=args.mame, round=round_number)
             assert plan["operation"] == "retrolarium.studio.flicky-round-playtest"
+            snapshot = root / f"round-{round_number}-vdp.png"
             launch(plan, round_number, root,
-                   root / "round-1-vdp.png" if round_number == 1 else None,
+                   snapshot if (round_number == 1 or args.native_renderer
+                                or args.source_runtime_preview) else None,
                    snapshot_delay=args.snapshot_delay)
-            if round_number == 1 and args.native_renderer is not None:
-                compare_vdp_scene(args.native_renderer, source,
-                                  root / "round-1-vdp.png", root / "native-round-1.png")
+            if (args.native_renderer or args.source_runtime_preview) \
+                    and round_number % 4 != 3:
+                native_snapshot = root / f"native-round-{round_number}.png"
+                if args.native_renderer:
+                    render_native(args.native_renderer, source, round_number,
+                                  native_snapshot)
+                else:
+                    render_source_runtime(source_preview, source_layouts,
+                                          round_number, native_snapshot)
+                vdp_agreements[round_number] = compare_vdp_scene(
+                    snapshot, native_snapshot, round_number,
+                    "native" if args.native_renderer else "source-runtime")
+                if (args.diagnostics_dir is not None
+                        and vdp_agreements[round_number] < 0.93):
+                    shutil.copyfile(snapshot, args.diagnostics_dir
+                                    / f"round-{round_number}-mame.png")
+                    shutil.copyfile(native_snapshot, args.diagnostics_dir
+                                    / f"round-{round_number}-native.png")
             if round_number == 1 and args.snapshot_output is not None:
                 destination = args.snapshot_output.resolve()
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(root / "round-1-vdp.png", destination)
+        weak_rounds = {round_number: agreement
+                       for round_number, agreement in vdp_agreements.items()
+                       if agreement < 0.93}
+        if vdp_agreements:
+            weakest = min(vdp_agreements, key=vdp_agreements.get)
+            print(f"VDP audit: {len(vdp_agreements)} normal rounds, weakest "
+                  f"round {weakest}={vdp_agreements[weakest]:.2%}")
+        if args.all_rounds_audit:
+            assert len(vdp_agreements) == 36
+        if args.all_rounds_audit or args.all_rounds_playtest:
+            print("Playtest audit: all 48 rounds reached their expected "
+                  "normal/bonus mode"
+                  + ("; 12 bonus VDP scenes lack native parity"
+                     if args.all_rounds_audit else ""))
+        assert not weak_rounds, (
+            "Flicky native/MAME VDP below 93%: "
+            + ", ".join(f"{round_number}={agreement:.2%}"
+                        for round_number, agreement in weak_rounds.items())
+        )
         for invalid in (0, 49, True):
             try:
                 studio_flicky_round_playtest_plan(
