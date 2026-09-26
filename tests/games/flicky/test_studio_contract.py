@@ -73,11 +73,14 @@ class FlickyStudioContractTests(unittest.TestCase):
                 "studio", "flicky-sound-preview", "flicky-ue.rlj",
                 "--header", "zMusic81Header", "--seconds", "2",
                 "--channel", "1", "--channel", "3",
+                "--document-override", "build/sound-preview/.flicky-unsaved-123.asm",
             ])
         self.assertEqual(0, status)
         rendering.assert_called_once_with(
             Path("flicky-ue.rlj"), header="zMusic81Header", seconds=2,
             enabled_channels=(1, 3),
+            document_override=Path(
+                "build/sound-preview/.flicky-unsaved-123.asm"),
         )
         self.assertIn("rendered", output.getvalue())
 

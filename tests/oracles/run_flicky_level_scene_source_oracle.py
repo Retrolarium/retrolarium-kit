@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare every native Flicky VDP scene pixel against the source renderer.
+"""Compare every native Flicky VDP scene with runtime-corrected source data.
 
 Reads the neighboring canonical workspace and ROM reconstruction; never writes
 to them. Pass a freshly built retrolarium-flicky-level-scene-tests.exe.
@@ -41,7 +41,7 @@ def compare(project: Path, args: argparse.Namespace) -> int:
     create_flicky_studio_project(project)
     source = project / "flicky-source"
     sys.path.insert(0, str(source / "scripts"))
-    from authoring.level_preview import LevelPreview, md_color  # noqa: E402
+    from authoring import level_preview  # noqa: E402
 
     level_path = source / "content/workspace/level/levels.json"
     graphics_path = source / "content/workspace/graphics/graphics.json"
@@ -61,17 +61,21 @@ def compare(project: Path, args: argparse.Namespace) -> int:
     assert len(reported) == 48, f"native renderer returned {len(reported)} rounds"
 
     document = json.loads(level_path.read_text(encoding="utf-8"))
-    preview = LevelPreview.load(
+    # Game_SetupLevel sets CameraX=1 and Gfx_UpdateScrollRegs applies -CameraX
+    # to both VDP planes. The upstream preview's Plane A=0 is a source-preview
+    # discrepancy, proven by independent MAME screenshots; do not edit source.
+    level_preview.PLANE_A_SCROLL_X = -1
+    preview = level_preview.LevelPreview.load(
         source, graphics_path, semantics_path, sequences_path)
     for round_number in range(1, 49):
         layout = document["layouts"][document["round_layouts"][round_number - 1]]
         frame = preview.render(layout, round_number)
         rgb = bytes.fromhex("".join(
-            md_color(word)[1:] for row in frame for word in row))
+            level_preview.md_color(word)[1:] for row in frame for word in row))
         expected = hashlib.sha256(rgb).hexdigest()
         actual = reported[round_number]
         assert actual == expected, (
-            f"round {round_number} native VDP scene differs from source: "
+            f"round {round_number} native VDP scene differs from runtime-corrected source: "
             f"{actual} != {expected}"
         )
     if args.native_editor:
@@ -85,7 +89,8 @@ def compare(project: Path, args: argparse.Namespace) -> int:
             str(args.native_factory.resolve()), str(project / "flicky-ue.rlj"),
             "--flicky-scene",
         ], check=True)
-    print("Flicky native VDP scene: all 48 rounds pixel-exact against source"
+    print("Flicky native VDP scene: all 48 rounds pixel-exact against "
+          "runtime-corrected source preview"
           + ("; Qt Level view refresh verified" if args.native_editor else "")
           + ("; .rlj factory verified" if args.native_factory else ""))
     return 0
