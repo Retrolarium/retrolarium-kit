@@ -8,6 +8,7 @@ this repository's ignored build directory.
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
 from pathlib import Path
@@ -77,6 +78,14 @@ def launch(plan: dict, round_number: int, root: Path,
         assert width >= 256 and height >= 224, \
             f"MAME VDP screenshot is unexpectedly small: {width}x{height}"
         print(f"round {round_number} VDP snapshot: {width}x{height}, {len(png)} bytes")
+        capture_lines = [line.strip() for line in run.stdout.splitlines()
+                         if "Flicky VDP snapshot:" in line]
+        assert len(capture_lines) == 1, "MAME did not report screenshot mode"
+        capture = capture_lines[0]
+        assert (f"mode={expected_mode:02X}" in capture
+                and f"round_word={expected_word:04X}" in capture), (
+            f"MAME captured a different round/mode: {capture}")
+        print(capture)
     print(f"round {round_number}: {result.read_text(encoding='utf-8').strip()}")
 
 
@@ -122,6 +131,122 @@ def compare_vdp_scene(snapshot: Path, output: Path, round_number: int,
     return agreement
 
 
+def compare_bonus_static_ground(snapshot: Path, output: Path,
+                                round_number: int, phase: int) -> None:
+    """Prove a source-owned bonus strip without claiming animated-scene parity."""
+    from PIL import Image
+
+    dac = {0: 0, 36: 52, 72: 87, 108: 116,
+           144: 144, 180: 172, 216: 206, 252: 255}
+    with Image.open(output) as native_image, Image.open(snapshot) as mame_image:
+        native = native_image.convert("RGB")
+        mame = mame_image.convert("RGB")
+        assert native.size == mame.size == (256, 224)
+        matches = sum(
+            tuple(dac[value] for value in native.getpixel((x, y)))
+            == mame.getpixel((x, y))
+            for y in range(208, 224) for x in range(32, 192))
+    agreement = matches / 2560
+    assert agreement >= 0.95, (
+        f"bonus lower-ground static VDP below 95%: {agreement:.2%}")
+    label_matches = sum(
+        tuple(dac[value] for value in native.getpixel((x, y)))
+        == mame.getpixel((x, y))
+        for y in range(24, 32) for x in range(80, 168))
+    # Later flying chicks can cross the title/HUD. The canonical +60 probe
+    # has no sprite occlusion in these masks; do not claim other phases exact.
+    if phase == 60:
+        assert label_matches == 88 * 8, (
+            f"bonus title label differs from MAME: {label_matches}/704 pixels")
+    hud_regions = {
+        "1UP/score": (32, 8, 104, 16),
+        "HI/high score": (144, 8, 224, 16),
+        "lives": (16, 208, 32, 216),
+        "RD/round": (208, 208, 248, 216),
+    }
+    for label, (left, top, right, bottom) in hud_regions.items():
+        hud_matches = sum(
+            tuple(dac[value] for value in native.getpixel((x, y)))
+            == mame.getpixel((x, y))
+            for y in range(top, bottom) for x in range(left, right))
+        hud_pixels = (right - left) * (bottom - top)
+        if phase == 60:
+            assert hud_matches == hud_pixels, (
+                f"bonus {label} HUD differs from MAME: "
+                f"{hud_matches}/{hud_pixels} pixels")
+    print(f"round {round_number} bonus lower-ground strip: "
+          f"{agreement:.2%} MAME agreement "
+          f"after DAC normalization; BONUS ROUND label {label_matches}/704; "
+          + ("canonical score/lives HUD exact at +60; " if phase == 60 else
+             "HUD can be occluded by chicks at this phase; ")
+          + "moving Chick and dynamic HUD parity is audited separately")
+
+
+def compare_bonus_actor_phase(snapshot: Path, static: Path, phased: Path,
+                              round_number: int, phase: int) -> None:
+    """Require source-driven actors to improve the lower-stage VDP region."""
+    from PIL import Image
+
+    dac = {0: 0, 36: 52, 72: 87, 108: 116,
+           144: 144, 180: 172, 216: 206, 252: 255}
+    with (Image.open(snapshot) as mame_image,
+          Image.open(static) as static_image,
+          Image.open(phased) as phased_image):
+        mame = mame_image.convert("RGB")
+        baseline = static_image.convert("RGB")
+        actors = phased_image.convert("RGB")
+        assert mame.size == baseline.size == actors.size == (256, 224)
+        positions = ((x, y) for y in range(168, 224)
+                     for x in range(32, 224))
+        static_matches = 0
+        actor_matches = 0
+        changed = 0
+        for point in positions:
+            expected = mame.getpixel(point)
+            before = tuple(dac[value] for value in baseline.getpixel(point))
+            after = tuple(dac[value] for value in actors.getpixel(point))
+            static_matches += before == expected
+            actor_matches += after == expected
+            changed += before != after
+        full_matches = sum(
+            tuple(dac[value] for value in actors.getpixel((x, y)))
+            == mame.getpixel((x, y))
+            for y in range(224) for x in range(256))
+        player_matches = sum(
+            tuple(dac[value] for value in actors.getpixel((x, y)))
+            == mame.getpixel((x, y))
+            for y in range(128, 192) for x in range(96, 152))
+    full_agreement = full_matches / (256 * 224)
+    print(f"round {round_number} bonus phase {phase}: "
+          f"lower-stage VDP matches {static_matches}→{actor_matches}; "
+          f"{changed} native actor pixels changed; "
+          f"full frame {full_matches}/57344 ({full_agreement:.2%}) agreement; "
+          f"player/held ROI {player_matches}/3584")
+    assert changed > 0 and actor_matches > static_matches, (
+        "bonus actor phase did not improve MAME lower-stage pixels")
+    if phase in (18, 120, 240, 298, 300, 302, 303, 304, 480, 600) \
+            and round_number == 3:
+        assert full_matches == 256 * 224, (
+            f"bonus phase +{phase} full frame differs: {full_matches}/57344")
+    if phase == 60:
+        assert full_matches == 256 * 224, (
+            f"bonus phase +60 full frame differs: {full_matches}/57344")
+    if phase == 180:
+        assert full_matches == 256 * 224, (
+            f"bonus phase +180 full frame differs: {full_matches}/57344")
+    if phase == 67 and round_number == 3:
+        assert full_matches == 256 * 224, (
+            f"bonus scenery/slot-0 Chick VDP cadence regressed at +67: "
+            f"{full_matches}/57344")
+    if phase in (374, 375, 376) and round_number == 7:
+        assert full_matches == 256 * 224, (
+            f"bonus catch/VDP boundary regressed at +{phase}: "
+            f"{full_matches}/57344")
+    if (phase == 18 and round_number == 3) or phase == 60:
+        assert player_matches == 3584, (
+            f"bonus player/held Chick ROI differs from MAME: {player_matches}/3584")
+
+
 def render_native(executable: Path, source: Path, round_number: int,
                   output: Path) -> None:
     root = source / "content" / "workspace"
@@ -132,6 +257,19 @@ def render_native(executable: Path, source: Path, round_number: int,
         str(root / "graphics" / "semantics.json"),
         str(root / "graphics" / "sequences.json"),
         str(round_number), str(output),
+    ], check=True)
+
+
+def render_native_bonus_phase(executable: Path, source: Path, round_number: int,
+                              phase: int, output: Path) -> None:
+    root = source / "content" / "workspace"
+    subprocess.run([
+        str(executable.resolve()), "--render-bonus-phase", str(source),
+        str(root / "level" / "levels.json"),
+        str(root / "graphics" / "graphics.json"),
+        str(root / "graphics" / "semantics.json"),
+        str(root / "graphics" / "sequences.json"),
+        str(round_number), str(phase), str(output),
     ], check=True)
 
 
@@ -176,6 +314,8 @@ def main() -> int:
                         help="compare MAME with source preview corrected for Plane A scroll")
     parser.add_argument("--all-rounds-audit", action="store_true",
                         help="Playtest all 48 rounds and compare normal-round VDP scenes")
+    parser.add_argument("--bonus-actor-phase-audit", action="store_true",
+                        help="also compare native seesaw/Tiger phase with MAME lower-stage pixels")
     parser.add_argument("--all-rounds-playtest", action="store_true",
                         help="verify normal/bonus entry for all 48 rounds")
     parser.add_argument("--audit-rounds", nargs="+", type=int, metavar="ROUND",
@@ -183,20 +323,33 @@ def main() -> int:
     parser.add_argument("--native-level-editor", type=Path,
                         help="move the round-1 player via its Qt Levels widget")
     parser.add_argument("--snapshot-output", type=Path,
-                        help="copy the round-1 VDP PNG for local visual inspection")
+                        help="copy the selected round VDP PNG for local visual inspection")
+    parser.add_argument("--bonus-actor-trace-output", type=Path,
+                        help="copy player, Tiger and seesaw RAM frames through the selected bonus snapshot")
+    parser.add_argument("--snapshot-round", type=int, default=1,
+                        help="round copied by --snapshot-output (default: 1)")
     parser.add_argument("--diagnostics-dir", type=Path,
                         help="retain zero/edited ROM images for failed-gate diagnosis")
     parser.add_argument("--snapshot-delay", type=int, default=60)
     args = parser.parse_args()
-    assert 0 <= args.snapshot_delay <= 60
+    if not 1 <= args.snapshot_round <= 48:
+        parser.error("--snapshot-round must be in 1..48")
+    if args.bonus_actor_trace_output and args.snapshot_round % 4 != 3:
+        parser.error("--bonus-actor-trace-output requires a bonus --snapshot-round")
+    if not 0 <= args.snapshot_delay <= 600:
+        parser.error("--snapshot-delay must be in 0..600")
     if args.native_level_editor and args.snapshot_delay != 60:
         parser.error("--native-level-editor requires the deterministic 60-frame snapshot")
     if args.native_renderer and args.source_runtime_preview:
         parser.error("choose --native-renderer or --source-runtime-preview")
     if args.all_rounds_audit and not (args.native_renderer or args.source_runtime_preview):
         parser.error("--all-rounds-audit requires a scene preview")
-    if args.audit_rounds and not (args.native_renderer or args.source_runtime_preview):
-        parser.error("--audit-rounds requires a scene preview")
+    if args.bonus_actor_phase_audit and (not args.native_renderer
+                                        or args.snapshot_delay < 1):
+        parser.error("--bonus-actor-phase-audit requires --native-renderer and phase >=1")
+    if args.audit_rounds and not (args.native_renderer or args.source_runtime_preview
+                                  or args.snapshot_output):
+        parser.error("--audit-rounds requires a scene preview or snapshot output")
     if args.audit_rounds and args.all_rounds_audit:
         parser.error("choose --audit-rounds or --all-rounds-audit")
     if args.all_rounds_playtest and (args.all_rounds_audit or args.audit_rounds):
@@ -249,10 +402,40 @@ def main() -> int:
                 project, mame=args.mame, round=round_number)
             assert plan["operation"] == "retrolarium.studio.flicky-round-playtest"
             snapshot = root / f"round-{round_number}-vdp.png"
+            actor_trace = (root / f"round-{round_number}-bonus-actors.csv"
+                           if args.bonus_actor_trace_output is not None
+                           and round_number == args.snapshot_round else None)
             launch(plan, round_number, root,
-                   snapshot if (round_number == 1 or args.native_renderer
+                   snapshot if (round_number == 1 or
+                                (args.snapshot_output is not None
+                                 and round_number == args.snapshot_round) or
+                                actor_trace is not None or
+                                args.native_renderer
                                 or args.source_runtime_preview) else None,
-                   snapshot_delay=args.snapshot_delay)
+                   snapshot_delay=args.snapshot_delay,
+                   extra_environment={"FLICKY_PLAYTEST_BONUS_ACTORS_TRACE":
+                                      str(actor_trace)} if actor_trace else None)
+            if actor_trace is not None:
+                assert actor_trace.is_file(), "MAME bonus actor RAM trace is missing"
+                if round_number == 7 and args.snapshot_delay >= 376:
+                    with actor_trace.open(newline="", encoding="utf-8") as stream:
+                        rows = {(int(row["phase"]), row["name"]): row
+                                for row in csv.DictReader(stream)}
+                    before = rows[(374, "chick03")]
+                    caught = rows[(375, "chick03")]
+                    held = rows[(375, "held")]
+                    assert (before["object"] == "8038"
+                            and before["collision_type"] == "03"
+                            and before["caught_count"] == "00"
+                            and before["chicks_remaining"] == "14"
+                            and caught["object"] == "0000"
+                            and caught["caught_count"] == "01"
+                            and caught["chicks_remaining"] == "13"
+                            and held["collision_type"] == "11"), (
+                        "round-7 Chick slot 3 catch does not match source AABB event")
+                destination = args.bonus_actor_trace_output.resolve()
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(actor_trace, destination)
             if (args.native_renderer or args.source_runtime_preview) \
                     and round_number % 4 != 3:
                 native_snapshot = root / f"native-round-{round_number}.png"
@@ -271,10 +454,32 @@ def main() -> int:
                                     / f"round-{round_number}-mame.png")
                     shutil.copyfile(native_snapshot, args.diagnostics_dir
                                     / f"round-{round_number}-native.png")
-            if round_number == 1 and args.snapshot_output is not None:
+            elif args.native_renderer and round_number % 4 == 3:
+                native_snapshot = root / f"native-round-{round_number}.png"
+                render_native(args.native_renderer, source, round_number,
+                              native_snapshot)
+                if args.diagnostics_dir is not None:
+                    shutil.copyfile(snapshot, args.diagnostics_dir
+                                    / f"round-{round_number}-bonus-mame.png")
+                    shutil.copyfile(native_snapshot, args.diagnostics_dir
+                                    / f"round-{round_number}-bonus-native.png")
+                compare_bonus_static_ground(snapshot, native_snapshot,
+                                            round_number, args.snapshot_delay)
+                if args.bonus_actor_phase_audit:
+                    actor_snapshot = root / f"native-round-{round_number}-phase-{args.snapshot_delay}.png"
+                    render_native_bonus_phase(args.native_renderer, source,
+                                              round_number, args.snapshot_delay,
+                                              actor_snapshot)
+                    if args.diagnostics_dir is not None:
+                        shutil.copyfile(actor_snapshot, args.diagnostics_dir
+                                        / f"round-{round_number}-bonus-actors.png")
+                    compare_bonus_actor_phase(snapshot, native_snapshot,
+                                              actor_snapshot, round_number,
+                                              args.snapshot_delay)
+            if round_number == args.snapshot_round and args.snapshot_output is not None:
                 destination = args.snapshot_output.resolve()
                 destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(root / "round-1-vdp.png", destination)
+                shutil.copyfile(snapshot, destination)
         weak_rounds = {round_number: agreement
                        for round_number, agreement in vdp_agreements.items()
                        if agreement < 0.93}

@@ -23,10 +23,15 @@ from .games import (
 from .game_profiles import packaged_game_profiles
 from .flicky_content import (
     CANONICAL_SHA256 as FLICKY_SHA256,
+    SNAPSHOT_RECORD as FLICKY_SNAPSHOT_RECORD,
+    SOURCE_DIRECTORY as FLICKY_SOURCE_DIRECTORY,
     WORKSPACE_FILES as FLICKY_WORKSPACE_FILES,
     build_flicky_source_snapshot,
     validate_flicky_source_snapshot,
     FlickyContentError,
+)
+from .flicky_bonus_placement import (
+    export_bonus_placements, validate_bonus_placements,
 )
 from .ines import load_ines
 from .megadrive import load_megadrive
@@ -568,8 +573,19 @@ def load_studio_project(path: Path) -> dict[str, Any]:
             "flicky.animations": "graphics_sequences",
             "flicky.sound": "z80_sound_banks",
         }
-        if len(tabs) != len(expected_tabs) or {tab["kind"] for tab in tabs} != set(expected_tabs):
-            raise _error("workspace.tabs", "Flicky requires its five content documents")
+        kinds = {tab["kind"] for tab in tabs}
+        if len(tabs) not in {len(expected_tabs), len(expected_tabs) + 1} \
+                or kinds != set(expected_tabs):
+            raise _error("workspace.tabs", "Flicky requires five content documents and optional Text view")
+        if len(tabs) == len(expected_tabs) + 1 and sum(
+            tab["kind"] == "flicky.semantics" for tab in tabs
+        ) != 2:
+            raise _error("workspace.tabs", "Flicky permits only one extra Text view")
+        if len(tabs) == len(expected_tabs) + 1 and not any(
+            tab["id"] == "text" and tab["kind"] == "flicky.semantics"
+            for tab in tabs
+        ):
+            raise _error("workspace.tabs", "Flicky Text view must use the text tab id")
         for tab in tabs:
             expected_document = "flicky-source/" + FLICKY_WORKSPACE_FILES[
                 expected_tabs[tab["kind"]]
@@ -1634,7 +1650,8 @@ def create_flicky_studio_project(project_root: Path) -> dict[str, Any]:
     definitions = (
         ("levels", "Levels", "flicky.levels", "content", "level_layouts"),
         ("graphics", "Graphics", "flicky.graphics", "assets", "graphics_assets"),
-        ("semantics", "Palettes & Text", "flicky.semantics", "assets", "graphics_semantics"),
+        ("semantics", "Palettes", "flicky.semantics", "assets", "graphics_semantics"),
+        ("text", "Text", "flicky.semantics", "content", "graphics_semantics"),
         ("animations", "Animations", "flicky.animations", "assets", "graphics_sequences"),
         ("sound", "Music & Sound", "flicky.sound", "content", "z80_sound_banks"),
     )
@@ -1661,10 +1678,12 @@ def create_flicky_studio_project(project_root: Path) -> dict[str, Any]:
              'capabilities = ["edit", "preview", "navigate", "undo", "restore"]'
              if identifier == "sound" else
              'capabilities = ["edit", "navigate", "undo", "restore"]'
-             if identifier in {"semantics", "animations"} else 'capabilities = []'),
+             if identifier in {"semantics", "text", "animations"} else 'capabilities = []'),
         ))
         if identifier == "levels":
             lines.append('depends_on = ["graphics", "semantics", "animations"]')
+        elif identifier == "graphics":
+            lines.append('depends_on = ["semantics"]')
     lines.extend(("", "[operations]", 'validate = "project.validate"',
                   'build = "project.build"', 'verify = "project.verify"',
                   'launch = "project.launch"', ""))
@@ -1675,7 +1694,7 @@ def create_flicky_studio_project(project_root: Path) -> dict[str, Any]:
 def upgrade_flicky_studio_project(
     path: Path, *, output: Path | None = None,
 ) -> dict[str, Any]:
-    """Add current Flicky capabilities to an older imported .rlj in place."""
+    """Upgrade capabilities and pinned bonus placements without reimporting."""
 
     source_path = path.resolve()
     destination = (output or source_path).resolve()
@@ -1691,6 +1710,37 @@ def upgrade_flicky_studio_project(
             or project["platform"] != "megadrive" \
             or project["profile"] != "flicky-ue.v1":
         raise StudioProjectError("Flicky upgrade requires canonical flicky-ue.v1")
+    project_root = Path(inspection["project_root"])
+    source_root = project_root / FLICKY_SOURCE_DIRECTORY
+    snapshot_record = source_root / FLICKY_SNAPSHOT_RECORD
+    objects_source = source_root / "src/game/bonus/objects.s"
+    skipped_documents = (["levels.bonus_placements"]
+                         if not snapshot_record.is_file() and not objects_source.exists()
+                         else [])
+    bonus_document_path: Path | None = None
+    bonus_document_payload: str | None = None
+    if snapshot_record.is_file():
+        try:
+            validate_flicky_source_snapshot(project_root)
+            levels_tab = next(tab for tab in inspection["workspace"]["tabs"]
+                              if tab["kind"] == "flicky.levels")
+            levels_path = Path(levels_tab["document_path"])
+            levels = json.loads(levels_path.read_text(encoding="utf-8"))
+            if not isinstance(levels, dict):
+                raise ValueError("Flicky Levels document is not an object")
+            if "bonus_placements" not in levels:
+                levels["bonus_placements"] = export_bonus_placements(source_root)
+                validate_bonus_placements(levels, source_root)
+                bonus_document_path = levels_path
+                bonus_document_payload = json.dumps(levels, indent=2) + "\n"
+        except (FlickyContentError, OSError, UnicodeError, ValueError) as exc:
+            raise StudioProjectError(
+                f"cannot safely upgrade Flicky bonus placements: {exc}"
+            ) from exc
+    elif objects_source.exists():
+        raise StudioProjectError(
+            "cannot upgrade Flicky bonus placements without a pinned source snapshot"
+        )
     payload = source_path.read_bytes().decode("utf-8")
     parsed = tomllib.loads(payload)
     raw_tabs = parsed["workspace"]["tabs"]
@@ -1723,12 +1773,48 @@ def upgrade_flicky_studio_project(
                        + ", ".join(json.dumps(value) for value in values)
                        + "]" + line.group("suffix") + line.group("cr"))
         updates.append((start + line.start(), start + line.end(), replacement))
+    if not any(tab.get("id") == "text" for tab in raw_tabs):
+        semantics_index = next(
+            index for index, tab in enumerate(raw_tabs)
+            if tab.get("kind") == "flicky.semantics"
+        )
+        semantics = raw_tabs[semantics_index]
+        start = markers[semantics_index].end()
+        end = markers[semantics_index + 1].start() \
+            if semantics_index + 1 < len(markers) else len(payload)
+        block = payload[start:end]
+        old_title = re.search(r'(?m)^(?P<prefix>[ \t]*title[ \t]*=[ \t]*)"Palettes & Text"', block)
+        if old_title:
+            title_start = start + old_title.start()
+            title_end = start + old_title.end()
+            updates.append((title_start, title_end,
+                            old_title.group("prefix") + '"Palettes"'))
+        text_block = (
+            '[[workspace.tabs]]\n'
+            'id = "text"\n'
+            'title = "Text"\n'
+            'kind = "flicky.semantics"\n'
+            'group = "content"\n'
+            f'document = {json.dumps(semantics["document"])}\n'
+            'codec = "flicky.semantics.v1"\n'
+            'capabilities = ["edit", "navigate", "undo", "restore"]\n\n'
+        )
+        if "\r\n" in payload:
+            text_block = text_block.replace("\n", "\r\n")
+        updates.append((end, end, text_block))
     upgraded = payload
-    for start, end, replacement in reversed(updates):
+    for start, end, replacement in sorted(updates, key=lambda item: item[0], reverse=True):
         upgraded = upgraded[:start] + replacement + upgraded[end:]
     if destination == source_path and not updates:
-        return {"status": "current", "project_file": str(destination),
-                "inspection": inspection}
+        if bonus_document_path is None or bonus_document_payload is None:
+            return {"status": "current", "project_file": str(destination),
+                    "inspection": inspection, "upgraded_documents": [],
+                    "skipped_documents": skipped_documents}
+        _atomic_write(bonus_document_path, bonus_document_payload)
+        return {"status": "upgraded", "project_file": str(destination),
+                "inspection": load_studio_project(destination),
+                "upgraded_documents": ["levels"],
+                "skipped_documents": skipped_documents}
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=".flicky-upgrade-", suffix=".rlj", dir=destination.parent
     )
@@ -1737,11 +1823,15 @@ def upgrade_flicky_studio_project(
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as stream:
             stream.write(upgraded)
         load_studio_project(temporary)
+        if bonus_document_path is not None and bonus_document_payload is not None:
+            _atomic_write(bonus_document_path, bonus_document_payload)
         os.replace(temporary, destination)
     finally:
         temporary.unlink(missing_ok=True)
-    return {"status": "upgraded" if updates else "current",
+    return {"status": "upgraded" if updates or bonus_document_payload else "current",
             "project_file": str(destination),
+            "upgraded_documents": (["levels"] if bonus_document_payload else []),
+            "skipped_documents": skipped_documents,
             "inspection": load_studio_project(destination)}
 
 

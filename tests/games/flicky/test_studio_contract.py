@@ -106,8 +106,13 @@ class FlickyStudioContractTests(unittest.TestCase):
             self.assertIn('"status": "upgraded"', output.getvalue())
             result = upgrade_flicky_studio_project(project)
             self.assertEqual("current", result["status"])
+            self.assertEqual(["levels.bonus_placements"],
+                             result["skipped_documents"])
             self.assertIn("# user's Flicky note", project.read_text(encoding="utf-8"))
             tabs = {tab["id"]: tab for tab in result["inspection"]["workspace"]["tabs"]}
+            self.assertEqual("Palettes", tabs["semantics"]["title"])
+            self.assertEqual("Text", tabs["text"]["title"])
+            self.assertEqual(tabs["semantics"]["document"], tabs["text"]["document"])
             self.assertIn("playtest", tabs["levels"]["capabilities"])
             self.assertIn("preview", tabs["sound"]["capabilities"])
             upgraded = project.read_bytes()
@@ -125,6 +130,20 @@ class FlickyStudioContractTests(unittest.TestCase):
         self.assertEqual(0, status)
         upgrading.assert_called_once_with(Path("flicky-ue.rlj"), output=None)
         self.assertIn("upgraded", output.getvalue())
+
+    def test_bonus_upgrade_rejects_unpinned_source_without_touching_project(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            shutil.copytree(FIXTURE / "flicky-source", root / "flicky-source")
+            project = root / "flicky-ue.rlj"
+            project.write_bytes((FIXTURE / "accept-flicky-content.rlj").read_bytes())
+            source = root / "flicky-source/src/game/bonus/objects.s"
+            source.parent.mkdir(parents=True)
+            source.write_text("Obj_BonusSeesaw:\n", encoding="utf-8")
+            before = project.read_bytes()
+            with self.assertRaisesRegex(StudioProjectError, "pinned source snapshot"):
+                upgrade_flicky_studio_project(project)
+            self.assertEqual(before, project.read_bytes())
 
     def test_wrong_document_owner_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

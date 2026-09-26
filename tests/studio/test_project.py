@@ -9,7 +9,9 @@ from unittest.mock import patch
 
 from retrolarium_kit.game_profiles import packaged_game_profiles
 from retrolarium_kit.studio_project import (
+    FLICKY_WORKSPACE_FILES,
     StudioProjectError,
+    create_flicky_studio_project,
     create_studio_project,
     load_studio_project,
     migrate_studio_project,
@@ -94,6 +96,31 @@ class StudioProjectTests(unittest.TestCase):
             return_value=manifest(),
         ):
             return load_studio_project(path)
+
+    def test_flicky_graphics_depends_on_live_palette_document(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "flicky-source"
+            manifest_path = source / "config/authoring/content_studios.json"
+            manifest_path.parent.mkdir(parents=True)
+            manifest_path.write_text(json.dumps({
+                "schema_version": 1,
+                "profile": "canonical",
+                "image_size": 131072,
+                "image_sha1": "83d8bbf0a9b38c42a0bf492d105cc3abe9644a96",
+            }), encoding="utf-8")
+            for relative in FLICKY_WORKSPACE_FILES.values():
+                document = source / relative
+                document.parent.mkdir(parents=True, exist_ok=True)
+                document.write_text("{}", encoding="utf-8")
+            with patch("retrolarium_kit.studio_project.validate_flicky_source_snapshot"):
+                project = create_flicky_studio_project(root)
+            tabs = {tab["id"]: tab for tab in project["workspace"]["tabs"]}
+            self.assertEqual(["semantics"], tabs["graphics"]["depends_on"])
+            self.assertEqual(
+                ["graphics", "semantics", "animations"],
+                tabs["levels"]["depends_on"],
+            )
 
     def test_project_owns_visible_tab_order(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

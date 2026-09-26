@@ -16,6 +16,23 @@ if snapshot_delay == nil or snapshot_delay ~= math.floor(snapshot_delay)
         or snapshot_delay < 0 or snapshot_delay > 600 then
     error("FLICKY_PLAYTEST_SNAPSHOT_DELAY must be an integer in 0..600")
 end
+local sweep_text = os.getenv("FLICKY_PLAYTEST_SNAPSHOT_PHASES")
+local sweep_prefix = os.getenv("FLICKY_PLAYTEST_SNAPSHOT_PREFIX")
+local sweep_phases = {}
+if sweep_text ~= nil and sweep_text ~= "" then
+    if snapshot_path == nil or sweep_prefix == nil or sweep_prefix == "" then
+        error("Flicky snapshot sweep requires a final snapshot and prefix")
+    end
+    for token in string.gmatch(sweep_text .. ",", "([^,]*),") do
+        local phase = tonumber(token)
+        if phase == nil or phase ~= math.floor(phase)
+                or phase < 1 or phase >= snapshot_delay
+                or sweep_phases[phase] then
+            error("Flicky snapshot sweep phases must be unique integers in 1..delay-1")
+        end
+        sweep_phases[phase] = true
+    end
+end
 local round_word = (math.floor(round / 10) * 16 + round % 10) * 256 + round
 -- Game_PreRoundDelay enters Bonus_Init/MainLoop every fourth slot starting
 -- with round 3. Those rounds never reach the ordinary Game_MainLoop ($24).
@@ -44,6 +61,17 @@ local anim_trace_path = os.getenv("FLICKY_PLAYTEST_ANIM_TRACE")
 local anim_trace_file = nil
 if anim_trace_path ~= nil and anim_trace_path ~= "" then
     anim_trace_file = assert(io.open(anim_trace_path, "w"))
+end
+local bonus_trace_path = os.getenv("FLICKY_PLAYTEST_BONUS_TRACE")
+local bonus_trace_file = nil
+if bonus_trace_path ~= nil and bonus_trace_path ~= "" then
+    bonus_trace_file = assert(io.open(bonus_trace_path, "w"))
+end
+local bonus_actor_trace_path = os.getenv("FLICKY_PLAYTEST_BONUS_ACTORS_TRACE")
+local bonus_actor_trace_file = nil
+if bonus_actor_trace_path ~= nil and bonus_actor_trace_path ~= "" then
+    bonus_actor_trace_file = assert(io.open(bonus_actor_trace_path, "w"))
+    bonus_actor_trace_file:write("phase,name,object,x,y,yfrac,animation,frame,timer,flags,mapping_hi,mapping_lo,state,yspeed_hi,yspeed_lo,airborne,side,index,delay,collision_type,caught_count,caught_bcd,chicks_remaining\n")
 end
 local sfx_code_text = os.getenv("FLICKY_PLAYTEST_SFX")
 local sfx_code = nil
@@ -133,6 +161,57 @@ local function on_frame()
             read_byte(0xFFD254), read_byte(0xFFD255), read_byte(0xFFD256),
             read_byte(0xFFD258), read_byte(0xFFD259), read_byte(0xFFD25A)))
     end
+    if bonus_trace_file ~= nil and ready_frame ~= nil
+            and frame <= ready_frame + snapshot_delay then
+        -- src/memory/ram.inc: Ram_BonusChickSlots=$FFC080; each slot is $40.
+        -- Obj_BonusChick stores its table-derived countdown at slot+$3A.
+        -- Slot 0 state/X/Y/X-speed live at +$3C/+$30/+$24/+$34 respectively.
+        bonus_trace_file:write(string.format("%d,%04X,%04X,%04X,%04X,%04X,%04X,%04X,%04X,%04X\n",
+            frame - ready_frame, mode,
+            read_word(0xFFC080), read_word(0xFFC0C0), read_word(0xFFC0FA),
+            read_word(0xFFC0BC), read_word(0xFFC0B0), read_word(0xFFC0A4),
+            read_word(0xFFC0B4), read_word(0xFFC0B6)))
+    end
+    if bonus_actor_trace_file ~= nil and ready_frame ~= nil
+            and frame <= ready_frame + snapshot_delay then
+            -- src/memory/ram.inc and Sprite_RenderObject in src/game/world.s.
+            -- Screen X/Y retain the Mega Drive hardware +$80 origin.
+            local actors = {
+                {"player", 0xFFC580},
+                {"held", 0xFFC040},
+                {"tiger0", 0xFFC5C0}, {"tiger1", 0xFFC600},
+                {"seesaw0", 0xFFC640}, {"seesaw1", 0xFFC680},
+            }
+            for index = 0, 19 do
+                table.insert(actors, {string.format("chick%02d", index),
+                    0xFFC080 + index * 0x40})
+            end
+            for _, actor in ipairs(actors) do
+                local name, base = actor[1], actor[2]
+                bonus_actor_trace_file:write(string.format(
+                    "%d,%s,%04X,%04X,%04X,%04X,%04X,%02X,%02X,%02X,%04X,%04X,%04X,%04X,%04X,%02X,%02X,%02X,%04X,%02X,%02X,%02X,%02X\n",
+                    frame - ready_frame, name, read_word(base), read_word(base + 0x20),
+                    read_word(base + 0x24), read_word(base + 0x26), read_word(base + 0x06),
+                    read_byte(base + 0x10), read_byte(base + 0x11),
+                    read_byte(base + 0x02), read_word(base + 0x0C),
+                    read_word(base + 0x0E), read_word(base + 0x3C),
+                    read_word(base + 0x2C), read_word(base + 0x2E),
+                    read_byte(base + 0x38), read_byte(base + 0x39),
+                    read_byte(base + 0x3E), read_word(base + 0x3A),
+                    read_byte(base + 0x04), read_byte(0xFFD28E),
+                    read_byte(0xFFD28F), read_byte(0xFFD883)))
+            end
+            bonus_actor_trace_file:flush()
+    end
+    if ready_frame ~= nil and sweep_phases[frame - ready_frame] then
+        local screen = manager.machine.screens:at(1)
+        if screen == nil then error("MAME Mega Drive screen is unavailable") end
+        local path = string.format("%s-%03d.png", sweep_prefix, frame - ready_frame)
+        local failure = screen:snapshot(path)
+        if failure ~= nil then
+            error("Flicky sweep screenshot failed: " .. tostring(failure))
+        end
+    end
     if ready_frame ~= nil and snapshot_path ~= nil and not snapshot_done
             and frame >= ready_frame + snapshot_delay then
         local screen = manager.machine.screens:at(1)
@@ -141,9 +220,12 @@ local function on_frame()
         if failure ~= nil then
             error("Flicky screenshot failed: " .. tostring(failure))
         end
+        print(string.format("Flicky VDP snapshot: frame=%d mode=%02X round_word=%04X",
+            frame, read_word(ram.next_game_mode), read_word(ram.round_number)))
         snapshot_done = true
         if ym_trace_tap ~= nil then ym_trace_file:flush() end
         if anim_trace_file ~= nil then anim_trace_file:flush() end
+        if bonus_trace_file ~= nil then bonus_trace_file:flush() end
         if exit_after_ready then manager.machine:exit() end
     end
     if frame >= 1200 and not reported then

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare every native Flicky VDP scene with runtime-corrected source data.
+"""Compare normal Flicky VDP scenes with runtime-corrected source data.
 
 Reads the neighboring canonical workspace and ROM reconstruction; never writes
 to them. Pass a freshly built retrolarium-flicky-level-scene-tests.exe.
@@ -68,6 +68,10 @@ def compare(project: Path, args: argparse.Namespace) -> int:
     preview = level_preview.LevelPreview.load(
         source, graphics_path, semantics_path, sequences_path)
     for round_number in range(1, 49):
+        # Upstream level_preview has no Bonus_Init scene path; its bonus slots
+        # still render the aliased normal layout. That is not a parity oracle.
+        if round_number % 4 == 3:
+            continue
         layout = document["layouts"][document["round_layouts"][round_number - 1]]
         frame = preview.render(layout, round_number)
         rgb = bytes.fromhex("".join(
@@ -89,8 +93,9 @@ def compare(project: Path, args: argparse.Namespace) -> int:
             str(args.native_factory.resolve()), str(project / "flicky-ue.rlj"),
             "--flicky-scene",
         ], check=True)
-    print("Flicky native VDP scene: all 48 rounds pixel-exact against "
-          "runtime-corrected source preview"
+    print("Flicky native VDP scene: all 36 normal rounds pixel-exact against "
+          "runtime-corrected source preview; 12 bonus scenes rendered "
+          "from Bonus_Init without false normal-layout parity"
           + ("; Qt Level view refresh verified" if args.native_editor else "")
           + ("; .rlj factory verified" if args.native_factory else ""))
     return 0

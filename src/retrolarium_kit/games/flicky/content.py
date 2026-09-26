@@ -18,6 +18,10 @@ import sys
 import tempfile
 
 from .megadrive import stamp_cartridge_checksum
+from .flicky_bonus_motion import export_bonus_motion, validate_bonus_motion
+from .flicky_bonus_placement import (
+    export_bonus_placements, validate_bonus_placements,
+)
 
 
 CANONICAL_SHA256 = "4df1a91e08376ae773a6eb8e5abe310f94ca39d8f81583b91a9477fedcb68c11"
@@ -168,6 +172,16 @@ def import_flicky_source(
         _extract_assets(staging, staging / ROM_NAME)
         _run([sys.executable, "scripts/run.py", "authoring.content_workspace",
               "init"], staging)
+        levels_path = staging / WORKSPACE_FILES["level_layouts"]
+        levels = json.loads(levels_path.read_text(encoding="utf-8"))
+        levels["bonus_placements"] = export_bonus_placements(staging)
+        levels_path.write_text(json.dumps(levels, indent=2) + "\n",
+                               encoding="utf-8", newline="\n")
+        sequences_path = staging / WORKSPACE_FILES["graphics_sequences"]
+        sequences = json.loads(sequences_path.read_text(encoding="utf-8"))
+        sequences["bonus_motion"] = export_bonus_motion(staging)
+        sequences_path.write_text(json.dumps(sequences, indent=2) + "\n",
+                                  encoding="utf-8", newline="\n")
         for relative in WORKSPACE_FILES.values():
             if not (staging / relative).is_file():
                 raise FlickyContentError(f"Flicky workspace missing {relative}")
@@ -203,6 +217,12 @@ def validate_flicky_source_snapshot(project_root: Path) -> dict[str, str]:
     for relative in WORKSPACE_FILES.values():
         if not (source / relative).is_file():
             raise FlickyContentError(f"Flicky workspace missing {relative}")
+    sequences = json.loads((source / WORKSPACE_FILES["graphics_sequences"])
+                           .read_text(encoding="utf-8"))
+    validate_bonus_motion(sequences, source)
+    levels = json.loads((source / WORKSPACE_FILES["level_layouts"])
+                        .read_text(encoding="utf-8"))
+    validate_bonus_placements(levels, source)
     _run([sys.executable, "scripts/run.py", "authoring.content_workspace",
           "validate"], source)
     return {key: _sha256(source / relative)
