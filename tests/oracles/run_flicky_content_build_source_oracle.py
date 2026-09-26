@@ -114,7 +114,7 @@ def main() -> int:
         imported = import_flicky_source(args.source_root, args.rom, project)
         assert imported["tracked_files"] > 150
         inspection = create_flicky_studio_project(project)
-        assert len(inspection["workspace"]["tabs"]) == 5
+        assert len(inspection["workspace"]["tabs"]) == 6
         project_file = project / "flicky-ue.rlj"
         assert validate_studio_project(project_file)["status"] == "valid"
         zero = build_studio_project(project_file)
@@ -419,6 +419,45 @@ def main() -> int:
         assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, \
             "animation frame restore must be exact"
 
+        sequences_document = json.loads(sequences_original)
+        bonus = next(record for record in sequences_document["bonus_motion"]
+                     if record["id"] == "Bonus_ChickDelays0")
+        bonus_payload = b"".join(word.to_bytes(2, "big") for word in bonus["words"])
+        assert original_bytes.count(bonus_payload) == 1, \
+            "bonus delay table has no unique ROM address"
+        bonus_address = original_bytes.find(bonus_payload)
+        old_bonus_word = bonus["words"][1]
+        new_bonus_word = old_bonus_word - 1
+        if args.native_sequences_editor:
+            subprocess.run([
+                str(args.native_sequences_editor.resolve()), "--edit-bonus-word",
+                str(sequences_path), bonus["id"], "1", str(new_bonus_word),
+            ], check=True)
+        else:
+            bonus["words"][1] = new_bonus_word
+            sequences_path.write_text(json.dumps(sequences_document, indent=2) + "\n",
+                                      encoding="utf-8")
+        saved_bonus = next(record for record in json.loads(
+            sequences_path.read_text(encoding="utf-8"))["bonus_motion"]
+            if record["id"] == bonus["id"])
+        assert saved_bonus["words"][1] == new_bonus_word
+        assert verify_studio_project(project_file)["status"] == "mismatch"
+        bonus_build = build_studio_project(project_file)
+        assert verify_studio_project(project_file)["status"] == "current"
+        bonus_rom = (project / bonus_build["artifact"]["path"]).read_bytes()
+        bonus_word_address = bonus_address + 2
+        assert bonus_rom[bonus_word_address:bonus_word_address + 2] \
+            == new_bonus_word.to_bytes(2, "big"), \
+            "GUI bonus delay did not read back from ROM"
+        changed_bonus_bytes = [bonus_word_address + index for index, (before, after)
+            in enumerate(zip(old_bonus_word.to_bytes(2, "big"),
+                             new_bonus_word.to_bytes(2, "big"))) if before != after]
+        assert_rom_delta(original_bytes, bonus_rom, changed_bonus_bytes,
+                         "bonus delay edit")
+        sequences_path.write_bytes(sequences_original)
+        assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, \
+            "bonus delay restore must be exact"
+
         source_copy = project / SOURCE_DIRECTORY
         sound_path = source_copy / WORKSPACE_FILES["z80_sound_banks"]
         sound_original = sound_path.read_bytes()
@@ -561,7 +600,7 @@ def main() -> int:
     print(f"Flicky isolated content build: zero edit, {level_editor} collision/player/special edit, "
           f"{graphics_editor} 1bpp edit/ROM readback, "
           f"{semantics_editor} text/CRAM edit/ROM readback, "
-          f"{sequences_editor} mapping/animation delay/frame edit/ROM readback, "
+          f"{sequences_editor} mapping/animation/bonus-motion edit/ROM readback, "
           f"{sound_editor} SFX note/FM voice/music tempo edit/ROM readback, "
           "restore, relocate, source drift")
     return 0
