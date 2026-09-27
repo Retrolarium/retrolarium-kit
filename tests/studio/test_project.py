@@ -116,6 +116,7 @@ class StudioProjectTests(unittest.TestCase):
             with patch("retrolarium_kit.studio_project.validate_flicky_source_snapshot"):
                 project = create_flicky_studio_project(root)
             tabs = {tab["id"]: tab for tab in project["workspace"]["tabs"]}
+            self.assertEqual("Sound", tabs["sound"]["title"])
             self.assertEqual(["semantics"], tabs["graphics"]["depends_on"])
             self.assertEqual(
                 ["graphics", "semantics", "animations"],

@@ -1653,7 +1653,7 @@ def create_flicky_studio_project(project_root: Path) -> dict[str, Any]:
         ("semantics", "Palettes", "flicky.semantics", "assets", "graphics_semantics"),
         ("text", "Text", "flicky.semantics", "content", "graphics_semantics"),
         ("animations", "Animations", "flicky.animations", "assets", "graphics_sequences"),
-        ("sound", "Music & Sound", "flicky.sound", "content", "z80_sound_banks"),
+        ("sound", "Sound", "flicky.sound", "content", "z80_sound_banks"),
     )
     lines = [
         'schema = "retrolarium.project"',
