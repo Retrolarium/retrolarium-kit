@@ -22,6 +22,11 @@ from .authoring import (
     ResourceSpec,
     RevisionSpec,
 )
+from .solomon_expansion import (
+    expand_image,
+    mirror_set_capacity,
+    mirror_set_changes,
+)
 from .ines import parse_ines
 from .solomon_streams import (
     EnemyStream,
@@ -61,6 +66,9 @@ MIRROR_SET_CODEC = "solomon.mirror-enemy-sets.v1"
 SPECIAL_CODEC = "solomon.special-rooms.v1"
 
 
+STREAM_LIMIT = 256      # the decoders index a stream with Y
+
+
 class SolomonError(AuthoringError):
     """A Solomon profile, image or room document violates its contract."""
 
@@ -97,6 +105,9 @@ class SolomonRoomDocument:
     mirror_schedules: tuple[MirrorSchedule, ...] = ()
     mirror_enemy_sets: tuple[MirrorEnemySet, ...] = ()
     special_rooms: SpecialRooms | None = None
+    # Build into the 64 KiB mapper-66 layout (solomon_expansion) instead of
+    # the original arenas.
+    expanded_rom: bool = False
 
     def as_dict(self) -> dict[str, object]:
         result: dict[str, object] = {
@@ -117,6 +128,8 @@ class SolomonRoomDocument:
                 record.as_dict() for record in self.mirror_enemy_sets
             ]
             result["special_rooms"] = self.special_rooms.as_dict()
+            if self.expanded_rom:
+                result["expanded_rom"] = True
         return result
 
 
@@ -350,6 +363,10 @@ def parse_room_document(
     root_fields = set(expected) | {"width", "height", "rooms"}
     if version == DOCUMENT_VERSION:
         root_fields |= {"mirror_schedules", "mirror_enemy_sets", "special_rooms"}
+        if "expanded_rom" in document:
+            root_fields.add("expanded_rom")
+            if document["expanded_rom"] is not True and document["expanded_rom"] is not False:
+                raise SolomonError("expanded_rom must be true or false")
     if set(document) != root_fields:
         raise SolomonError("Solomon room document has invalid fields")
     count, width, height, _, _ = _geometry(_resource(profile, revision))
@@ -400,6 +417,7 @@ def parse_room_document(
         profile.game_id, revision.revision_id, revision.sha256,
         width, height, tuple(rooms), version,
         schedules, mirror_sets, special_rooms,
+        document.get("expanded_rom") is True,
     )
 
 
@@ -476,7 +494,20 @@ def build_rooms(
         Provenance(revision.sha256, "room-blocks", "encode"),
     )]
     stream_reports: dict[str, dict[str, int]] = {}
-    if document.schema_version >= STREAM_DOCUMENT_VERSION:
+    if document.schema_version >= STREAM_DOCUMENT_VERSION and document.expanded_rom:
+        # The streams go to bank 0 of the expanded image (expand_room_build);
+        # here they only have to fit the decoders and the enemy pool.
+        for room in document.rooms:
+            if room.item_stream is None or room.enemy_stream is None:
+                raise SolomonError("expanded rooms need item and enemy streams")
+            for label, stream in (("item", encode_item_stream(room.item_stream)),
+                                  ("enemy", encode_enemy_stream(room.enemy_stream))):
+                if len(stream) > STREAM_LIMIT:
+                    raise SolomonError(
+                        f"room {room.number} {label} stream is {len(stream)} bytes; "
+                        f"the decoder reads at most {STREAM_LIMIT}"
+                    )
+    elif document.schema_version >= STREAM_DOCUMENT_VERSION:
         resources = _stream_resources(profile, revision)
         if resources is None:
             raise SolomonError("Solomon room streams need a version-2 profile")
@@ -499,17 +530,38 @@ def build_rooms(
                 or len(document.mirror_schedules) != 16 \
                 or len(document.mirror_enemy_sets) != 17:
             raise SolomonError("Spawn Mirror and special-room records are incomplete")
-        for key, resource, records, encoder in (
-            ("mirror_schedules", resources[0],
-             list(document.mirror_schedules), encode_mirror_schedule),
-            ("mirror_enemy_sets", resources[1],
-             list(document.mirror_enemy_sets), encode_mirror_enemy_set),
-        ):
+        mirror_records = [("mirror_schedules", resources[0],
+                           list(document.mirror_schedules), encode_mirror_schedule)]
+        if not document.expanded_rom:
+            mirror_records.append(("mirror_enemy_sets", resources[1],
+                                   list(document.mirror_enemy_sets), encode_mirror_enemy_set))
+        for key, resource, records, encoder in mirror_records:
             mirror_changes, report = _stream_changes(
                 source, image, resource, records, encoder, revision.sha256
             )
             changes.extend(mirror_changes)
             stream_reports[key] = report
+        if document.expanded_rom:
+            # Gameplay reads the sets from bank 1: they move into its freed
+            # enemy-stream arena, with room to grow.
+            base = len(image.header) + len(image.trainer)
+            sets = [encode_mirror_enemy_set(record) for record in document.mirror_enemy_sets]
+            try:
+                writes = mirror_set_changes(sets, revision.revision_id)
+            except AuthoringError as exc:
+                raise SolomonError(str(exc)) from exc
+            for address, replacement in writes:
+                file_offset = base + address - 0x8000
+                changes.append(Change(
+                    AddressRange(Address("file", file_offset), len(replacement)),
+                    source[file_offset:file_offset + len(replacement)],
+                    replacement,
+                    Provenance(revision.sha256, resources[1].resource_id, "encode"),
+                ))
+            stream_reports["mirror_enemy_sets"] = {
+                "used_bytes": sum(map(len, sets)),
+                "capacity_bytes": mirror_set_capacity(revision.revision_id),
+            }
         offsets = _special_offsets(resources[2])
         encoded_special = encode_special_rooms(document.special_rooms)
         base = len(image.header) + len(image.trainer)
@@ -526,6 +578,8 @@ def build_rooms(
             "encoded_bytes": sum(map(len, encoded_special.values()))
         }
     output = BuildPlan(revision.sha256, ChangeSet(tuple(changes))).apply(source)
+    if document.expanded_rom:
+        stream_reports["expanded_rom"] = True
     return output, {
         "schema": "retrolarium.solomon-room-build",
         "schema_version": 1,
@@ -540,3 +594,17 @@ def build_rooms(
         "room_block_bytes": len(encoded),
         **stream_reports,
     }
+
+
+def expand_room_build(
+    image: bytes, document: SolomonRoomDocument, revision: RevisionSpec,
+) -> tuple[bytes, dict[str, object]]:
+    """The expanded mapper-66 image of a build whose rooms are expanded."""
+    if not document.expanded_rom:
+        raise SolomonError("the room document is not expanded")
+    items = [encode_item_stream(room.item_stream) for room in document.rooms]
+    enemies = [encode_enemy_stream(room.enemy_stream) for room in document.rooms]
+    try:
+        return expand_image(image, revision.revision_id, items, enemies)
+    except AuthoringError as exc:
+        raise SolomonError(str(exc)) from exc

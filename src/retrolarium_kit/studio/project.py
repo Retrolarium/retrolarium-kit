@@ -815,6 +815,7 @@ def build_studio_project(
             os.replace(temporary, output)
         finally:
             temporary.unlink(missing_ok=True)
+    expansion = _expand_solomon_build(base_artifact, output, authoring_documents)
     _validate_container(output, inspection["project"]["platform"])
 
     report = {
@@ -841,8 +842,44 @@ def build_studio_project(
         },
         "authoring": authoring,
     }
+    if expansion is not None:
+        report["expansion"] = expansion
     write_document(root / "build" / "studio-build-result.json", report)
     return report
+
+
+def _expand_solomon_build(
+    base_artifact: Path, output: Path, documents: list[Path],
+) -> dict[str, Any] | None:
+    """Rewrite a Solomon's Key build in the expanded mapper-66 layout when its
+    rooms document asks for it (solomon_expansion)."""
+    from .games import _read_image
+    from .solomon import expand_room_build, parse_room_document
+
+    for document_path in documents:
+        try:
+            value = json.loads(document_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise StudioProjectError(f"cannot read {document_path}: {exc}") from exc
+        if not isinstance(value, Mapping) or value.get("schema") != "retrolarium.solomon-rooms"                 or value.get("expanded_rom") is not True:
+            continue
+        _payload, profile, revision = _read_image(base_artifact, None)
+        document = parse_room_document(value, profile, revision)
+        expanded, report = expand_room_build(output.read_bytes(), document, revision)
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{output.name}.", suffix=".tmp", dir=output.parent
+        )
+        temporary = Path(temporary_name)
+        try:
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(expanded)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, output)
+        finally:
+            temporary.unlink(missing_ok=True)
+        return report
+    return None
 
 
 def _build_flicky_studio_project(
@@ -933,7 +970,11 @@ def verify_studio_project(path: Path) -> dict[str, Any]:
         manifest = load_disassembly_manifest(
             Path(inspection["source"]["disassembly_path"]), verify_rebuilt=False
         )
-        if artifact.stat().st_size != manifest["input"]["size"]:
+        expected_size = manifest["input"]["size"]
+        # An expanded Solomon build adds a second 32 KiB PRG bank.
+        if isinstance(report.get("expansion"), Mapping):
+            expected_size += 0x8000
+        if artifact.stat().st_size != expected_size:
             differences.append("artifact-size")
     _validate_container(artifact, inspection["project"]["platform"])
 
@@ -1556,7 +1597,13 @@ def studio_solomon_point_playtest_plan(
     artifact = Path(verification["artifact"]["absolute_path"]).resolve()
     source = artifact.read_bytes()
     hook_offset = 16 + hooks["room_load_address"] - 0x8000
-    if len(source) != revision.size or source[:4] != b"NES\x1a" \
+    # An expanded build (solomon_expansion) runs the game from its second
+    # 32 KiB PRG bank.
+    expanded = len(source) == 16 + 0x10000 + 0x8000 \
+        and ((source[6] >> 4) | (source[7] & 0xF0)) == 66
+    if expanded:
+        hook_offset += 0x8000
+    if (len(source) != revision.size and not expanded) or source[:4] != b"NES\x1a" \
             or source[hook_offset:hook_offset + 6] != b"\xa9\xfd\x25\x7c\x85\x7c":
         raise StudioProjectError(
             "Solomon build does not match the guarded room-loader layout"
