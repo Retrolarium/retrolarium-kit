@@ -120,7 +120,9 @@ from .smb_world import (
 from .smb_level import (
     CODEC as SMB_LEVEL_CODEC,
     decode_levels as decode_smb_levels,
+    encode_level_pointers as encode_smb_level_pointers,
     encode_levels as encode_smb_levels,
+    stream_pool as smb_level_stream_pool,
 )
 from .smb_player_frames import (
     CODEC as SMB_PLAYER_FRAME_CODEC,
@@ -1278,6 +1280,13 @@ def _decode_smb_level_resource(
     world_resource_id = resource.parameters.get("world_resource")
     if world_resource_id is not None:
         result["world_resource"] = world_resource_id
+    try:
+        pooled = smb_level_stream_pool(resource.parameters) is not None
+    except AuthoringError as exc:
+        raise NesResourceError(str(exc)) from exc
+    if pooled:
+        # Editors size areas against the shared range, not each capacity.
+        result["capacity_pool"] = True
     return result
 
 
@@ -1788,6 +1797,9 @@ def _parse_resource(
         expected_fields = {"id", "kind", "codec", "screens"}
         if "encoding" in spec.parameters or "text_fields" in spec.parameters:
             expected_fields.update(("encoding", "text_fields"))
+        # A pooled profile's documents may carry these; the codec checks them.
+        if spec.parameters.get("packet_pool") is not None:
+            expected_fields.update(key for key in ("capacity_pool", "growable_fields") if key in raw)
         try:
             encoded_spans = tuple(
                 _EncodedSpan(offset, replacement)
@@ -1877,14 +1889,24 @@ def _parse_resource(
                     f"{spec.resource_id}.world_resource differs from the profile"
                 )
         try:
-            area, enemy = encode_smb_levels(
-                {
-                    key: raw.get(key)
-                    for key in expected_fields
-                    - {"id", "kind", "codec", "rendering", "world_resource"}
-                },
-                spec.parameters,
-            )
+            pooled = smb_level_stream_pool(spec.parameters) is not None
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        # Documents decoded before pooling lack the flag; it is optional.
+        if "capacity_pool" in raw:
+            expected_fields.add("capacity_pool")
+            if raw.get("capacity_pool") is not pooled:
+                raise NesResourceError(
+                    f"{spec.resource_id}.capacity_pool differs from the profile"
+                )
+        level_value = {
+            key: raw.get(key)
+            for key in expected_fields
+            - {"id", "kind", "codec", "rendering", "world_resource", "capacity_pool"}
+        }
+        try:
+            area, enemy = encode_smb_levels(level_value, spec.parameters)
+            pointers = encode_smb_level_pointers(level_value, spec.parameters)
         except AuthoringError as exc:
             raise NesResourceError(str(exc)) from exc
         encoded_spans = (
@@ -1894,6 +1916,7 @@ def _parse_resource(
             *_encoded_resource_spans(
                 enemy, _level_stream_spans(spec, "enemy")
             ),
+            *(_EncodedSpan(offset, table) for offset, table in pointers),
         )
     else:
         raise NesResourceError(f"unsupported NES resource codec {spec.codec}")

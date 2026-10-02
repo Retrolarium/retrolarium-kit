@@ -186,7 +186,82 @@ def aliased_fds_fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
     return source, profile, revision
 
 
+POOL = {
+    "cpu_bias": 0x8000 - 16,
+    "area_pointer_low": 80,
+    "area_pointer_high": 82,
+    "enemy_pointer_low": 84,
+    "enemy_pointer_high": 86,
+    # The engine's tables list the second area first.
+    "area_pointer_streams": [1, 0],
+    "enemy_pointer_streams": [0, 1],
+}
+
+
+def pooled_fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
+    """The fixture with the engine's pointer tables and a stream pool."""
+    image, profile, _revision = fixture()
+    body = bytearray(image)
+    bias = POOL["cpu_bias"]
+    area = [32 + bias, 39 + bias]
+    enemy = [48 + bias, 53 + bias]
+    body[80:82] = bytes((area[1] & 0xFF, area[0] & 0xFF))
+    body[82:84] = bytes((area[1] >> 8, area[0] >> 8))
+    body[84:86] = bytes((enemy[0] & 0xFF, enemy[1] & 0xFF))
+    body[86:88] = bytes((enemy[0] >> 8, enemy[1] >> 8))
+    image = bytes(body)
+    revision = RevisionSpec(
+        "probe", "SMB level probe", len(image), hashlib.sha1(image).hexdigest(),
+        hashlib.sha256(image).hexdigest(), "ines", 0,
+    )
+    parameters = {**PARAMETERS, "stream_pool": POOL}
+    profile = replace(profile, revisions=(revision,), resources=(
+        profile.resources[0],
+        ResourceSpec("levels", "level", "smb.levels.v1", "fixed", parameters),
+    ))
+    return image, profile, revision
+
+
 class SmbLevelTests(unittest.TestCase):
+    def test_pooled_streams_share_the_range_and_follow_pointers(self) -> None:
+        image, profile, revision = pooled_fixture()
+        document = decode_resources(image, profile, revision)
+        self.assertTrue(document.resources[0]["capacity_pool"])
+        exact, report = build_resources(image, document, profile, revision)
+        self.assertEqual(exact, image)
+        self.assertEqual(report["changed_bytes"], 0)
+
+        # Bytes freed in the first area hold two more objects in the second.
+        raw = copy.deepcopy(document.as_dict())
+        areas = raw["resources"][0]["areas"]
+        areas[0]["objects"] = []
+        extra = {"column": 2, "row": 3, "page_advance": False, "object_control": 1}
+        areas[1]["objects"] += [dict(extra), dict(extra)]
+        parsed = parse_resource_document(raw, profile, revision)
+        edited, _report = build_resources(image, parsed, profile, revision)
+        # With the old padding the streams would not fit: it is left out.
+        self.assertEqual(edited[32:35], bytes((0x6B, 0x92, 0xFD)))
+        self.assertEqual(edited[35:44], bytes((0x10, 0x23, 0xDF, 0x01, 0x23, 0x01, 0x23, 0x01, 0xFD)))
+        moved = 35 + POOL["cpu_bias"]
+        self.assertEqual(edited[80], moved & 0xFF)
+        self.assertEqual(edited[82], moved >> 8)
+        self.assertEqual(edited[81], (32 + POOL["cpu_bias"]) & 0xFF)
+
+        # More than the whole range holds is refused, naming both sizes.
+        areas[1]["objects"] += [dict(extra)] * 4
+        with self.assertRaisesRegex(AuthoringError, "need 20 bytes; the ROM keeps 12"):
+            parsed = parse_resource_document(raw, profile, revision)
+            build_resources(image, parsed, profile, revision)
+
+    def test_pooled_streams_stay_within_the_engine_index(self) -> None:
+        image, profile, revision = pooled_fixture()
+        raw = copy.deepcopy(decode_resources(image, profile, revision).as_dict())
+        record = {"column": 0, "row": 1, "page_advance": False, "object_control": 1}
+        raw["resources"][0]["areas"][1]["objects"] = [dict(record)] * 127
+        with self.assertRaisesRegex(AuthoringError, "engine reads at most 256"):
+            parsed = parse_resource_document(raw, profile, revision)
+            build_resources(image, parsed, profile, revision)
+
     def test_codec_round_trips_headers_records_and_padding(self) -> None:
         area = bytes((0x6B, 0x92, 0x34, 0x85, 0xFD, 0xAA, 0xBB,
                       0x10, 0x23, 0xDF, 0x01, 0xFD))

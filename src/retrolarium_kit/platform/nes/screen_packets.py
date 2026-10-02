@@ -54,6 +54,22 @@ class ScreenTextField:
         }
 
 
+@dataclass(frozen=True)
+class PacketPool:
+    """Screens packed one after another behind the engine's offset table.
+
+    The screens' spans form one contiguous range; the engine finds each
+    display list through an 8-bit offset table relative to `offset_base`,
+    each entry naming a screen and the command it starts at (a variant may
+    start past a leading command). Screens may then grow and shrink within
+    the range, and the fields in `growable` may lengthen their text.
+    """
+    offset_table: int
+    offset_base: int
+    entries: tuple[tuple[str, int], ...]
+    growable: tuple[str, ...]
+
+
 def _integer(
     value: object, name: str, *, minimum: int = 0, maximum: int = 0xFF
 ) -> int:
@@ -201,6 +217,90 @@ def _text_layout(
         keys.add(key)
         fields.append(ScreenTextField(key, label, screen, start[1], width))
     return encoding, tuple(fields)
+
+
+def _packet_pool(
+    parameters: Mapping[str, object], spans: tuple[ScreenSpan, ...],
+    fields: tuple[ScreenTextField, ...],
+) -> PacketPool | None:
+    value = parameters.get("packet_pool")
+    if value is None:
+        return None
+    if not isinstance(value, Mapping) or set(value) != {
+        "offset_table", "offset_base", "entries", "growable_fields"
+    }:
+        raise NesScreenPacketError("packet_pool fields differ from contract")
+    for first, second in zip(spans, spans[1:]):
+        if first.file_offset + first.size != second.file_offset:
+            raise NesScreenPacketError("packet_pool screens must be contiguous")
+    keys = {span.key for span in spans}
+    raw_entries = value.get("entries")
+    if not isinstance(raw_entries, list) or not raw_entries:
+        raise NesScreenPacketError("packet_pool.entries must be a non-empty array")
+    entries = []
+    for index, raw in enumerate(raw_entries):
+        if not isinstance(raw, Mapping) or set(raw) != {"screen", "command"} \
+                or raw.get("screen") not in keys:
+            raise NesScreenPacketError(f"packet_pool.entries[{index}] is invalid")
+        entries.append((str(raw["screen"]), _integer(
+            raw.get("command"), f"packet_pool.entries[{index}].command", maximum=0x3F
+        )))
+    growable = value.get("growable_fields")
+    field_keys = {field.key for field in fields}
+    if not isinstance(growable, list) or not all(item in field_keys for item in growable):
+        raise NesScreenPacketError("packet_pool.growable_fields must name text fields")
+    return PacketPool(
+        _integer(value.get("offset_table"), "packet_pool.offset_table", maximum=0x7FFFFFFF),
+        _integer(value.get("offset_base"), "packet_pool.offset_base", maximum=0x7FFFFFFF),
+        tuple(entries),
+        tuple(str(item) for item in growable),
+    )
+
+
+def _grown_fields(
+    raw_fields: object, fields: tuple[ScreenTextField, ...], pool: PacketPool,
+    screens: list[Mapping[str, object]], geometry: ScreenGeometry,
+) -> tuple[ScreenTextField, ...]:
+    """The document's text fields: the profile's, with growable widths.
+
+    A growable field may take another width when it is exactly the run of
+    one non-repeated command across a row, so lengthening the text means
+    lengthening that command.
+    """
+    if not isinstance(raw_fields, list) or len(raw_fields) != len(fields):
+        raise NesScreenPacketError("screen text fields differ from the profile")
+    by_key = {str(screen.get("key")): screen for screen in screens}
+    result = []
+    for raw, field in zip(raw_fields, fields):
+        if not isinstance(raw, Mapping):
+            raise NesScreenPacketError("screen text fields differ from the profile")
+        expected = field.as_dict()
+        if field.key not in pool.growable or raw == expected:
+            if raw != expected:
+                raise NesScreenPacketError(f"screen text field {field.key} differs from the profile")
+            result.append(field)
+            continue
+        if {key: raw.get(key) for key in expected if key != "width"} != {
+            key: value for key, value in expected.items() if key != "width"
+        } or set(raw) != set(expected):
+            raise NesScreenPacketError(f"screen text field {field.key} differs from the profile")
+        width = _integer(raw.get("width"), f"text field {field.key}.width", minimum=1, maximum=0x3F)
+        if field.start % geometry.width + width > geometry.width:
+            raise NesScreenPacketError(f"text field {field.key} runs past its row")
+        commands = by_key[field.screen].get("commands")
+        address = geometry.base_address + field.start
+        owned = isinstance(commands, list) and any(
+            isinstance(command, Mapping) and command.get("address") == address
+            and command.get("length") == width and command.get("vertical") is False
+            and command.get("repeat") is False
+            for command in commands
+        )
+        if not owned:
+            raise NesScreenPacketError(
+                f"text field {field.key} can only grow as the whole write it starts"
+            )
+        result.append(ScreenTextField(field.key, field.label, field.screen, field.start, width))
+    return tuple(result)
 
 
 def _validate_text_tiles(
@@ -351,12 +451,17 @@ def decode_screen_packets(
         _validate_text_tiles(screens, text_fields, encoding, geometry)
         result["encoding"] = encoding.as_dict()
         result["text_fields"] = [field.as_dict() for field in text_fields]
+    pool = _packet_pool(parameters, spans, text_fields)
+    if pool is not None:
+        # Editors size screens against the shared range and may grow these.
+        result["capacity_pool"] = True
+        result["growable_fields"] = list(pool.growable)
     return result
 
 
 def _encode_commands(
     screen: Mapping[str, object], span: ScreenSpan, terminator: int,
-    geometry: ScreenGeometry,
+    geometry: ScreenGeometry, pooled: bool = False, trailing_kept: bool = True,
 ) -> bytes:
     if set(screen) != {
         "key", "label", "capacity", "width", "height", "tiles",
@@ -464,15 +569,28 @@ def _encode_commands(
     trailing = screen.get("trailing")
     if not isinstance(trailing, list):
         raise NesScreenPacketError(f"screen {span.key}.trailing must be an array")
-    output.extend(
+    trailing_bytes = [
         _integer(value, f"screen {span.key}.trailing[{index}]")
         for index, value in enumerate(trailing)
-    )
-    if len(output) != span.size:
+    ]
+    if trailing_kept:
+        output.extend(trailing_bytes)
+    if not pooled and len(output) != span.size:
         raise NesScreenPacketError(
             f"screen {span.key} encoded size differs from its capacity"
         )
     return bytes(output)
+
+
+def _command_offset(screen: Mapping[str, object], command: int, key: str) -> int:
+    commands = screen.get("commands")
+    if not isinstance(commands, list) or command > len(commands):
+        raise NesScreenPacketError(f"screen {key} has no command {command}")
+    offset = 0
+    for item in commands[:command]:
+        values = item.get("values") if isinstance(item, Mapping) else None
+        offset += 3 + (len(values) if isinstance(values, list) else 0)
+    return offset
 
 
 def encode_screen_packets(
@@ -481,9 +599,19 @@ def encode_screen_packets(
     """Validate and encode named fixed-capacity PPU display lists."""
     spans, terminator, geometry = _layout(parameters)
     encoding, text_fields = _text_layout(parameters, spans, geometry)
+    pool = _packet_pool(parameters, spans, text_fields)
     expected_fields = {"screens"}
     if encoding is not None:
         expected_fields.update(("encoding", "text_fields"))
+    # Documents decoded before pooling lack these; they are optional.
+    if pool is not None:
+        for key in ("capacity_pool", "growable_fields"):
+            if key in value:
+                expected_fields.add(key)
+        if "capacity_pool" in value and value.get("capacity_pool") is not True:
+            raise NesScreenPacketError("capacity_pool differs from the profile")
+        if "growable_fields" in value and value.get("growable_fields") != list(pool.growable):
+            raise NesScreenPacketError("growable_fields differ from the profile")
     if set(value) != expected_fields:
         raise NesScreenPacketError("screen-packet resource has the wrong shape")
     screens = value.get("screens")
@@ -492,10 +620,47 @@ def encode_screen_packets(
     if encoding is not None:
         if value.get("encoding") != encoding.as_dict():
             raise NesScreenPacketError("screen text encoding differs from the profile")
-        if value.get("text_fields") != [field.as_dict() for field in text_fields]:
-            raise NesScreenPacketError("screen text fields differ from the profile")
-        _validate_text_tiles(screens, text_fields, encoding, geometry)
-    return tuple(
-        (span.file_offset, _encode_commands(screen, span, terminator, geometry))
-        for screen, span in zip(screens, spans)
-    )
+        if pool is None:
+            if value.get("text_fields") != [field.as_dict() for field in text_fields]:
+                raise NesScreenPacketError("screen text fields differ from the profile")
+            fields = text_fields
+        else:
+            fields = _grown_fields(value.get("text_fields"), text_fields, pool, screens, geometry)
+        _validate_text_tiles(screens, fields, encoding, geometry)
+    if pool is None:
+        return tuple(
+            (span.file_offset, _encode_commands(screen, span, terminator, geometry))
+            for screen, span in zip(screens, spans)
+        )
+
+    # One after another through the whole range, the offset table rewritten.
+    # Trailing bytes stay after their screen while everything fits.
+    start = spans[0].file_offset
+    size = sum(span.size for span in spans)
+
+    def pack(trailing_kept: bool) -> tuple[bytearray, dict[str, int]]:
+        packed = bytearray()
+        starts: dict[str, int] = {}
+        for screen, span in zip(screens, spans):
+            starts[span.key] = start + len(packed)
+            packed.extend(_encode_commands(
+                screen, span, terminator, geometry, pooled=True, trailing_kept=trailing_kept
+            ))
+        return packed, starts
+
+    packed, starts = pack(True)
+    if len(packed) > size:
+        packed, starts = pack(False)
+    if len(packed) > size:
+        raise NesScreenPacketError(
+            f"the screens need {len(packed)} bytes; the ROM keeps {size} for them"
+        )
+    packed.extend(bytes((terminator,)) * (size - len(packed)))
+    by_key = {span.key: screen for screen, span in zip(screens, spans)}
+    offsets = bytearray()
+    for key, command in pool.entries:
+        offset = starts[key] + _command_offset(by_key[key], command, key) - pool.offset_base
+        if not 0 <= offset <= 0xFF:
+            raise NesScreenPacketError(f"screen {key} moved beyond its 8-bit offset")
+        offsets.append(offset)
+    return ((start, bytes(packed)), (pool.offset_table, bytes(offsets)))

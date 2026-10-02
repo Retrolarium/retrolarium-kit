@@ -92,6 +92,7 @@
           "id": "levels",
           "payload": "chr",
           "parameters": {
+            "stream_pool": null,
             "area_file_offset": 9571,
             "area_size": 4439,
             "enemy_file_offset": 8203,
@@ -156,7 +157,8 @@
               {"key": "world-lives", "label": "World and lives", "file_offset": 2421, "size": 31},
               {"key": "time-up", "label": "Time up", "file_offset": 2452, "size": 19},
               {"key": "game-over", "label": "Game over", "file_offset": 2471, "size": 21}
-            ]
+            ],
+            "packet_pool": null
           }
         },
         {
@@ -278,6 +280,7 @@
           "id": "levels",
           "payload": "prg",
           "parameters": {
+            "stream_pool": null,
             "area_file_offset": 8631,
             "enemy_file_offset": 7544
           }
@@ -306,7 +309,8 @@
               {"key": "world-lives", "label": "World and lives", "file_offset": 1919, "size": 31},
               {"key": "time-up", "label": "Time up", "file_offset": 1950, "size": 19},
               {"key": "game-over", "label": "Game over", "file_offset": 1969, "size": 21}
-            ]
+            ],
+            "packet_pool": null
           }
         },
         {
@@ -1466,7 +1470,22 @@
           39, 25, 47, 43, 21, 58, 37, 29, 14, 39, 49, 30, 29, 21,
           42, 1, 36, 9, 37, 35, 9, 1, 58, 43, 46, 28, 9, 37,
           45, 46, 45, 17, 42, 20
-        ]
+        ],
+        "stream_pool": {
+          "cpu_bias": 32752,
+          "area_pointer_low": 7484,
+          "area_pointer_high": 7518,
+          "enemy_pointer_low": 7412,
+          "enemy_pointer_high": 7446,
+          "area_pointer_streams": [
+            31, 32, 33, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+            20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 0, 1, 2, 3, 4, 5
+          ],
+          "enemy_pointer_streams": [
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+            17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33
+          ]
+        }
       }
     },
     {
@@ -1550,7 +1569,22 @@
           {"key": "world-lives", "label": "World and lives", "file_offset": 1929, "size": 31},
           {"key": "time-up", "label": "Time up", "file_offset": 1960, "size": 19},
           {"key": "game-over", "label": "Game over", "file_offset": 1979, "size": 21}
-        ]
+        ],
+        "packet_pool": {
+          "offset_table": 2062,
+          "offset_base": 1890,
+          "entries": [
+            {"screen": "status", "command": 0},
+            {"screen": "status", "command": 0},
+            {"screen": "world-lives", "command": 0},
+            {"screen": "world-lives", "command": 0},
+            {"screen": "time-up", "command": 0},
+            {"screen": "time-up", "command": 1},
+            {"screen": "game-over", "command": 0},
+            {"screen": "game-over", "command": 1}
+          ],
+          "growable_fields": ["status-headings", "time-up", "game-over"]
+        }
       }
     },
     {

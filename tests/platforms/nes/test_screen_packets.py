@@ -81,7 +81,99 @@ def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
     return source, profile, revision
 
 
+POOL = {
+    "offset_table": 60,
+    "offset_base": 16,
+    "entries": [
+        {"screen": "title", "command": 0},
+        {"screen": "menu", "command": 0},
+        {"screen": "title", "command": 1},
+    ],
+    "growable_fields": ["logo"],
+}
+
+
+def pooled_fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
+    """Both screens back to back behind an engine offset table."""
+    _source, profile, _revision = fixture()
+    image = bytearray(b"NES" + bytes((1, 1, 0, 0)) + bytes(8) + bytes(0x6000))
+    image[16:16 + len(TITLE)] = TITLE
+    image[29:29 + len(MENU)] = MENU
+    image[60:63] = bytes((0, 13, 6))
+    source = bytes(image)
+    revision = RevisionSpec(
+        "probe", "PPU screen probe", len(source), hashlib.sha1(source).hexdigest(),
+        hashlib.sha256(source).hexdigest(), "ines", 0,
+    )
+    parameters = copy.deepcopy(PARAMETERS)
+    parameters["screens"][1]["file_offset"] = 29
+    parameters["packet_pool"] = POOL
+    profile = GameProfile(
+        profile.game_id, profile.profile_version, profile.name, profile.platform,
+        profile.capabilities, (revision,),
+        (
+            profile.resources[0],
+            ResourceSpec("screens", "screen", "nes.ppu-screen-packets.v1", "fixed", parameters),
+        ),
+    )
+    return source, profile, revision
+
+
+def grow_logo(raw: dict, text: list[int]) -> None:
+    resource = raw["resources"][0]
+    command = resource["screens"][0]["commands"][0]
+    command["length"] = len(text)
+    command["values"] = list(text)
+    resource["screens"][0]["tiles"][4][0:len(text)] = list(text)
+    resource["text_fields"][0]["width"] = len(text)
+
+
 class NesScreenPacketTests(unittest.TestCase):
+    def test_pooled_screens_grow_text_and_follow_the_offset_table(self) -> None:
+        source, profile, revision = pooled_fixture()
+        document = decode_resources(source, profile, revision)
+        resource = document.resources[0]
+        self.assertTrue(resource["capacity_pool"])
+        self.assertEqual(resource["growable_fields"], ["logo"])
+        exact, report = build_resources(source, document, profile, revision)
+        self.assertEqual(exact, source)
+        self.assertEqual(report["changed_bytes"], 0)
+
+        # Two more letters take the title's trailing bytes; the menu stays
+        # put and the second title entry follows its command.
+        raw = copy.deepcopy(document.as_dict())
+        grow_logo(raw, [1, 2, 3, 1, 2])
+        edited, _report = build_resources(
+            source, parse_resource_document(raw, profile, revision), profile, revision
+        )
+        self.assertEqual(edited[16:29], bytes((
+            0x20, 0x80, 0x05, 1, 2, 3, 1, 2, 0x23, 0xC0, 0x42, 0xAA, 0,
+        )))
+        self.assertEqual(edited[29:35], MENU)
+        self.assertEqual(edited[60:63], bytes((0, 13, 8)))
+
+        # A shorter title frees bytes after the menu.
+        raw = copy.deepcopy(document.as_dict())
+        grow_logo(raw, [1, 2])
+        raw["resources"][0]["screens"][0]["tiles"][4][2] = 0x24
+        edited, _report = build_resources(
+            source, parse_resource_document(raw, profile, revision), profile, revision
+        )
+        self.assertEqual(edited[60:63], bytes((0, 12, 5)))
+        self.assertEqual(edited[28:34], MENU)
+        self.assertEqual(edited[34:35], bytes((0,)))
+
+        raw = copy.deepcopy(document.as_dict())
+        grow_logo(raw, [1, 2, 3, 1, 2, 3])
+        with self.assertRaisesRegex(Exception, "need 20 bytes; the ROM keeps 19"):
+            parse_resource_document(raw, profile, revision)
+
+        # A field grows only as the whole write it starts.
+        raw = copy.deepcopy(document.as_dict())
+        raw["resources"][0]["text_fields"][0]["width"] = 4
+        with self.assertRaisesRegex(Exception, "only grow as the whole write"):
+            parse_resource_document(raw, profile, revision)
+
     def test_codec_preserves_commands_flags_and_trailing_bytes(self) -> None:
         source, _profile, _revision = fixture()
         value = decode_screen_packets(source, PARAMETERS)

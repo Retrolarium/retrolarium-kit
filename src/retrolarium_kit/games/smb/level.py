@@ -216,7 +216,8 @@ def decode_levels(
     return {"area_types": list(AREA_TYPES), "areas": result}
 
 
-def _encode_area(value: Mapping[str, object], name: str, capacity: int) -> bytes:
+def _area_stream(value: Mapping[str, object], name: str) -> bytes:
+    """The area stream of a document area: header, objects, terminator."""
     header = value.get("header")
     if not isinstance(header, dict) or set(header) != {
         "timer_setting", "entrance_control", "foreground_or_color", "area_style",
@@ -244,6 +245,11 @@ def _encode_area(value: Mapping[str, object], name: str, capacity: int) -> bytes
         output.append((0x80 if _boolean(raw["page_advance"], f"{context}.page_advance") else 0)
                       | _integer(raw["object_control"], f"{context}.object_control", maximum=127))
     output.append(0xFD)
+    return bytes(output)
+
+
+def _encode_area(value: Mapping[str, object], name: str, capacity: int) -> bytes:
+    output = _area_stream(value, name)
     implicit = _boolean(value.get("area_implicit_terminator"), f"{name}.area_implicit_terminator")
     padding = _byte_array(value.get("area_padding"), f"{name}.area_padding")
     if implicit:
@@ -256,7 +262,8 @@ def _encode_area(value: Mapping[str, object], name: str, capacity: int) -> bytes
     return bytes(output) + bytes(capacity - len(output) - len(suffix)) + suffix
 
 
-def _encode_enemies(value: Mapping[str, object], name: str, capacity: int) -> bytes:
+def _enemy_stream(value: Mapping[str, object], name: str) -> bytes:
+    """The enemy stream of a document area: records, terminator."""
     records = value.get("enemies")
     if not isinstance(records, list):
         raise SmbLevelError(f"area {name!r} enemies must be an array")
@@ -282,6 +289,11 @@ def _encode_enemies(value: Mapping[str, object], name: str, capacity: int) -> by
             output.append((_integer(raw["destination_world"], f"{context}.destination_world", maximum=7) << 5)
                           | _integer(raw["destination_page"], f"{context}.destination_page", maximum=31))
     output.append(0xFF)
+    return bytes(output)
+
+
+def _encode_enemies(value: Mapping[str, object], name: str, capacity: int) -> bytes:
+    output = _enemy_stream(value, name)
     implicit = _boolean(value.get("enemy_implicit_terminator"), f"{name}.enemy_implicit_terminator")
     padding = _byte_array(value.get("enemy_padding"), f"{name}.enemy_padding")
     if implicit:
@@ -294,18 +306,101 @@ def _encode_enemies(value: Mapping[str, object], name: str, capacity: int) -> by
     return bytes(output) + bytes(capacity - len(output) - len(suffix)) + suffix
 
 
-def encode_levels(
+# The engine indexes an area or enemy stream with an 8-bit Y register.
+MAX_STREAM_BYTES = 256
+
+_POOL_FIELDS = {
+    "cpu_bias", "area_pointer_low", "area_pointer_high", "enemy_pointer_low",
+    "enemy_pointer_high", "area_pointer_streams", "enemy_pointer_streams",
+}
+
+
+def stream_pool(parameters: Mapping[str, object]) -> dict[str, object] | None:
+    """The pooled layout of a profile, or None for fixed stream capacities.
+
+    A pooled profile names the engine's area and enemy pointer tables (low
+    and high byte arrays at file offsets), which stream each entry points
+    at, and the bias from a file offset to its CPU address. Streams are then
+    packed one after another into the whole range, so bytes freed in one area
+    serve any other, and the pointer tables are rewritten to match.
+    """
+    value = parameters.get("stream_pool")
+    if value is None:
+        return None
+    if not isinstance(value, Mapping) or set(value) != _POOL_FIELDS:
+        raise SmbLevelError("stream_pool fields differ from contract")
+    if "area_file_offset" not in parameters or "enemy_file_offset" not in parameters:
+        raise SmbLevelError("stream_pool needs one contiguous area and enemy range")
+    names, _areas, _enemies = _layout(parameters)
+    result: dict[str, object] = {}
+    for key in ("cpu_bias", "area_pointer_low", "area_pointer_high",
+                "enemy_pointer_low", "enemy_pointer_high"):
+        result[key] = _integer(value[key], f"stream_pool.{key}", maximum=0x7FFFFFFF)
+    for key in ("area_pointer_streams", "enemy_pointer_streams"):
+        entries = value[key]
+        if not isinstance(entries, list) or not entries:
+            raise SmbLevelError(f"stream_pool.{key} must be a non-empty array")
+        result[key] = [
+            _integer(item, f"stream_pool.{key}[{index}]", maximum=len(names) - 1)
+            for index, item in enumerate(entries)
+        ]
+    return result
+
+
+def _pack(
+    streams: Sequence[bytes], implicit: Sequence[bool], paddings: Sequence[Sequence[int]],
+    terminator: int, size: int, label: str,
+) -> tuple[bytes, list[int]]:
+    """Pack streams in their original order into a range of `size` bytes.
+
+    A stream marked implicit leaves out its terminator while the next stream
+    starts with that byte, as the original layout shares it. Declared padding
+    stays after its stream while everything fits, so unedited levels keep
+    their bytes; the free rest of the range is filled with $FF.
+    """
+    def build(with_padding: bool) -> tuple[bytearray, list[int]]:
+        output = bytearray()
+        starts = []
+        for index, stream in enumerate(streams):
+            starts.append(len(output))
+            following = streams[index + 1] if index + 1 < len(streams) else b""
+            if implicit[index] and following[:1] == bytes((terminator,)):
+                output.extend(stream[:-1])
+                continue
+            output.extend(stream)
+            if with_padding:
+                output.extend(paddings[index])
+        return output, starts
+
+    output, starts = build(True)
+    if len(output) > size:
+        output, starts = build(False)
+    if len(output) > size:
+        raise SmbLevelError(
+            f"the {label} streams of all areas need {len(output)} bytes; "
+            f"the ROM keeps {size} for them"
+        )
+    return bytes(output) + b"\xFF" * (size - len(output)), starts
+
+
+def _encode(
     value: Mapping[str, object], parameters: Mapping[str, object]
-) -> tuple[bytes, bytes]:
-    """Validate and encode all level streams, preserving declared padding."""
+) -> tuple[bytes, bytes, tuple[tuple[int, bytes], ...]]:
     if set(value) != {"area_types", "areas"} or value.get("area_types") != list(AREA_TYPES):
         raise SmbLevelError("SMB level resource fields differ from its codec contract")
     names, area_capacities, enemy_capacities = _layout(parameters)
     areas = value.get("areas")
     if not isinstance(areas, list) or len(areas) != len(names):
         raise SmbLevelError(f"areas must contain {len(names)} entries")
+    pool = stream_pool(parameters)
     area_output = bytearray()
     enemy_output = bytearray()
+    area_streams: list[bytes] = []
+    enemy_streams: list[bytes] = []
+    area_implicit: list[bool] = []
+    enemy_implicit: list[bool] = []
+    area_paddings: list[list[int]] = []
+    enemy_paddings: list[list[int]] = []
     required = {
         "name", "area_capacity", "enemy_capacity", "header", "objects",
         "area_implicit_terminator", "area_padding", "enemies",
@@ -319,6 +414,66 @@ def encode_levels(
         if raw.get("name") != name or raw.get("area_capacity") != area_capacity \
                 or raw.get("enemy_capacity") != enemy_capacity:
             raise SmbLevelError(f"areas[{index}] identity differs from profile")
-        area_output.extend(_encode_area(raw, name, area_capacity))
-        enemy_output.extend(_encode_enemies(raw, name, enemy_capacity))
-    return bytes(area_output), bytes(enemy_output)
+        if pool is None:
+            area_output.extend(_encode_area(raw, name, area_capacity))
+            enemy_output.extend(_encode_enemies(raw, name, enemy_capacity))
+            continue
+        area_stream = _area_stream(raw, name)
+        enemy_stream = _enemy_stream(raw, name)
+        for kind, stream in (("area", area_stream), ("enemy", enemy_stream)):
+            if len(stream) > MAX_STREAM_BYTES:
+                raise SmbLevelError(
+                    f"{kind} stream {name!r} is {len(stream)} bytes; "
+                    f"the engine reads at most {MAX_STREAM_BYTES}"
+                )
+        area_streams.append(area_stream)
+        enemy_streams.append(enemy_stream)
+        area_implicit.append(_boolean(raw.get("area_implicit_terminator"),
+                                      f"{name}.area_implicit_terminator"))
+        enemy_implicit.append(_boolean(raw.get("enemy_implicit_terminator"),
+                                       f"{name}.enemy_implicit_terminator"))
+        area_paddings.append(_byte_array(raw.get("area_padding"), f"{name}.area_padding"))
+        enemy_paddings.append(_byte_array(raw.get("enemy_padding"), f"{name}.enemy_padding"))
+    if pool is None:
+        return bytes(area_output), bytes(enemy_output), ()
+
+    area_size = _integer(parameters.get("area_size"), "area_size")
+    enemy_size = _integer(parameters.get("enemy_size"), "enemy_size")
+    area, area_starts = _pack(area_streams, area_implicit, area_paddings, 0xFD, area_size, "object")
+    enemy, enemy_starts = _pack(enemy_streams, enemy_implicit, enemy_paddings, 0xFF, enemy_size, "enemy")
+    bias = int(pool["cpu_bias"])
+
+    def table(base: int, starts: list[int], entries: list[int], shift: int) -> bytes:
+        return bytes(((base + starts[stream] + bias) >> shift) & 0xFF for stream in entries)
+
+    area_base = _integer(parameters.get("area_file_offset"), "area_file_offset", maximum=0x7FFFFFFF)
+    enemy_base = _integer(parameters.get("enemy_file_offset"), "enemy_file_offset", maximum=0x7FFFFFFF)
+    area_entries = list(pool["area_pointer_streams"])
+    enemy_entries = list(pool["enemy_pointer_streams"])
+    pointers = (
+        (int(pool["area_pointer_low"]), table(area_base, area_starts, area_entries, 0)),
+        (int(pool["area_pointer_high"]), table(area_base, area_starts, area_entries, 8)),
+        (int(pool["enemy_pointer_low"]), table(enemy_base, enemy_starts, enemy_entries, 0)),
+        (int(pool["enemy_pointer_high"]), table(enemy_base, enemy_starts, enemy_entries, 8)),
+    )
+    return area, enemy, pointers
+
+
+def encode_levels(
+    value: Mapping[str, object], parameters: Mapping[str, object]
+) -> tuple[bytes, bytes]:
+    """Validate and encode all level streams, preserving declared padding.
+
+    With a stream pool the streams are packed into the whole ranges instead
+    of each area's own capacity; encode_level_pointers gives the pointer
+    tables that go with them.
+    """
+    area, enemy, _pointers = _encode(value, parameters)
+    return area, enemy
+
+
+def encode_level_pointers(
+    value: Mapping[str, object], parameters: Mapping[str, object]
+) -> tuple[tuple[int, bytes], ...]:
+    """The rewritten (file offset, bytes) pointer tables of a pooled layout."""
+    return _encode(value, parameters)[2]
