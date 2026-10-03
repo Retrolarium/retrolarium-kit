@@ -1414,7 +1414,14 @@
       "kind": "resource-bundle",
       "codec": "nes.resource-bundle.v1",
       "capacity_policy": "fixed",
-      "parameters": {}
+      "parameters": {"resource_ids": ["world", "levels", "background-metatiles", "area-palette-packets", "player-palettes", "game-screen-packets", "warp-zone-screen", "ui-text", "player-frames", "music", "swim-stomp-envelope", "character-graphics"]}
+    },
+    {
+      "id": "demo",
+      "kind": "demo",
+      "codec": "smb.demo-input.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"actions_cpu": 33600, "durations_cpu": 33621, "engine_cpu": 33643, "capacity": 21}
     },
     {
       "id": "world",

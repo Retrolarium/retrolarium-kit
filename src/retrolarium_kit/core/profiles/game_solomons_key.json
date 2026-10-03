@@ -92,7 +92,9 @@
           "record_cpu": 52463,
           "logo_cpu": 52618,
           "demo_duration_cpu": 52865,
-          "demo_input_cpu": 52899
+          "demo_input_cpu": 52899,
+          "demo_code_cpu": 51899,
+          "demo_end_cpu": 53035
         }},
         {"id": "text", "parameters": {
           "static_pointer_low_cpu": 38050,
@@ -260,7 +262,9 @@
         "record_cpu": 52575,
         "logo_cpu": 52730,
         "demo_duration_cpu": 52977,
-        "demo_input_cpu": 53011
+        "demo_input_cpu": 53011,
+        "demo_code_cpu": 52011,
+        "demo_end_cpu": 53163
       }
     },
     {

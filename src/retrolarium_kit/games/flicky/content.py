@@ -19,6 +19,7 @@ import tempfile
 
 from .megadrive import stamp_cartridge_checksum
 from .flicky_bonus_motion import export_bonus_motion, validate_bonus_motion
+from .flicky_demo import export_attract_demos, validate_attract_demos
 from .flicky_bonus_placement import (
     export_bonus_placements, validate_bonus_placements,
 )
@@ -175,6 +176,7 @@ def import_flicky_source(
         levels_path = staging / WORKSPACE_FILES["level_layouts"]
         levels = json.loads(levels_path.read_text(encoding="utf-8"))
         levels["bonus_placements"] = export_bonus_placements(staging)
+        levels["attract_demos"] = export_attract_demos(staging)
         levels_path.write_text(json.dumps(levels, indent=2) + "\n",
                                encoding="utf-8", newline="\n")
         sequences_path = staging / WORKSPACE_FILES["graphics_sequences"]
@@ -223,6 +225,7 @@ def validate_flicky_source_snapshot(project_root: Path) -> dict[str, str]:
     levels = json.loads((source / WORKSPACE_FILES["level_layouts"])
                         .read_text(encoding="utf-8"))
     validate_bonus_placements(levels, source)
+    validate_attract_demos(levels, source)
     _run([sys.executable, "scripts/run.py", "authoring.content_workspace",
           "validate"], source)
     return {key: _sha256(source / relative)
