@@ -33,6 +33,7 @@ from .flicky_content import (
 from .flicky_bonus_placement import (
     export_bonus_placements, validate_bonus_placements,
 )
+from .flicky_demo import export_attract_demos, validate_attract_demos
 from .ines import load_ines
 from .megadrive import load_megadrive
 from .project import (
@@ -93,6 +94,8 @@ EDITOR_KINDS = frozenset(
         "solomon.screens",
         "solomon.presentation",
         "solomon.text",
+        "smb.demo",
+        "castle.demo",
         "text.fixed",
         "world.routing",
     }
@@ -149,6 +152,8 @@ CODECS = frozenset(
         "solomon.screens@1",
         "solomon.presentation@1",
         "solomon.text@1",
+        "smb.demo@1",
+        "castle.demo@1",
     }
 )
 
@@ -185,7 +190,8 @@ _AUTHORING_SCHEMAS = frozenset(
      "retrolarium.solomon-rooms", "retrolarium.solomon-room-art",
      "retrolarium.solomon-sprite-frames", "retrolarium.solomon-animations",
      "retrolarium.solomon-audio",
-     "retrolarium.solomon-presentation", "retrolarium.solomon-text"}
+     "retrolarium.solomon-presentation", "retrolarium.solomon-text",
+     "retrolarium.smb-demo", "retrolarium.castle-demo"}
 )
 
 
@@ -1072,6 +1078,52 @@ def studio_flicky_round_playtest_plan(
     return plan
 
 
+def studio_flicky_demo_plan(
+    path: Path, *, mame: Path, demo: int, record: Path | None = None,
+) -> dict[str, Any]:
+    """Loop one attract demo (1-4) of the current Flicky build in MAME, or
+    record a new one from the player's controller into ``record``."""
+
+    inspection = load_studio_project(path)
+    _require_declared_operation(inspection, "launch")
+    project = inspection["project"]
+    if project["source_mode"] != "flicky-content"             or project["platform"] != "megadrive"             or project["profile"] != "flicky-ue.v1":
+        raise StudioProjectError(
+            "Flicky demo playtest requires the canonical flicky-ue.v1 source profile"
+        )
+    demo = _bounded_integer(demo, "demo", 1, 4)
+    executable = mame.resolve()
+    if not executable.is_file():
+        raise StudioProjectError(f"MAME executable does not exist: {executable}")
+    verification = verify_studio_project(path)
+    if verification["status"] != "current":
+        raise StudioProjectError("Studio artifact is stale; build it again before the demo")
+    lua = Path(__file__).with_name("runtime") / "flicky_mame_demo.lua"
+    if not lua.is_file():
+        raise StudioProjectError(f"packaged Flicky demo script is missing: {lua}")
+    artifact = Path(verification["artifact"]["absolute_path"])
+    plan = launch_image_plan(
+        artifact, platform="megadrive", mame=executable, machine="genesis",
+    )
+    recording = "" if record is None else str(record.resolve())
+    plan.update({
+        "operation": "retrolarium.studio.flicky-demo",
+        "backend": "mame-lua",
+        "arguments": [
+            *plan["arguments"], "-autoboot_delay", "0",
+            "-autoboot_script", str(lua.resolve()),
+        ],
+        "environment": {
+            "FLICKY_DEMO_INDEX": str(demo - 1),
+            "FLICKY_DEMO_RECORD": recording,
+        },
+        "project_file": inspection["project_file"],
+        "script": {"path": str(lua.resolve()), "sha256": sha256_file(lua)},
+        "demo": {"index": demo, "record": recording or None},
+    })
+    return plan
+
+
 def studio_flicky_sound_preview(
     path: Path, *, header: str, seconds: int = 30,
     enabled_channels: tuple[int, ...] | None = None,
@@ -1639,16 +1691,140 @@ def studio_solomon_point_playtest_plan(
     return plan
 
 
-# Attract-demo hooks per revision: the demo input thread's entry, the
-# post-game thread's entry, the licence and title wait loops, the wait
-# counter's high byte and the controller and demo-step bytes.
+# Attract-demo hooks per revision: the demo input thread's entry and the
+# post-game thread's entry.
 SOLOMON_DEMO_HOOKS = {
-    "usa": {"run": 0xCB2B, "post_game": 0xCA6E, "wait_summary": 0xCAA4,
-            "wait_title": 0xCAE0, "counter_high": 0x043D},
-    "europe": {"run": 0xCABB, "post_game": 0xC9FE, "wait_summary": 0xCA34,
-               "wait_title": 0xCA70, "counter_high": 0x043E},
+    "usa": {"run": 0xCB2B, "post_game": 0xCA6E},
+    "europe": {"run": 0xCABB, "post_game": 0xC9FE},
 }
 SOLOMON_DEMO_RUN_GUARD = bytes.fromhex("a90085228581")
+
+# SMB JU: the title demo's exit to the title screen and the RAM the demo
+# script reads and writes (the tables and the engine come from the profile).
+SMB_DEMO_HOOKS = {
+    "reset_title": 0x82C9, "saved_joypad": 0x06FC, "demo_action": 0x0717,
+    "action_timer": 0x0718, "oper_mode": 0x0770,
+}
+
+
+def studio_smb_demo_plan(path: Path, *, mame: Path, record: Path | None = None) -> dict[str, Any]:
+    """Loop the SMB title demo of the current build in MAME, or record a new
+    one from the player's controller into ``record``."""
+
+    inspection = load_studio_project(path)
+    _require_declared_operation(inspection, "launch")
+    if inspection["project"]["platform"] != "nes" or inspection["project"]["profile"] != "smb1.v1":
+        raise StudioProjectError("SMB demo playtest requires the smb1.v1 NES profile")
+    profile = packaged_game_profiles().get("smb1")
+    revision = next(
+        (item for item in profile.revisions if item.sha256 == inspection["source"]["sha256"]), None
+    )
+    if revision is None or revision.revision_id != "ju":
+        raise StudioProjectError("SMB demo playtest supports the JU revision")
+    demo = next(item for item in profile.resources_for(revision) if item.codec == "smb.demo-input.v1")
+    tables = demo.parameters
+    executable = mame.resolve()
+    if not executable.is_file():
+        raise StudioProjectError(f"MAME executable does not exist: {executable}")
+    verification = verify_studio_project(path)
+    if verification["status"] != "current":
+        raise StudioProjectError("Studio artifact is stale; build it again before the demo")
+    artifact = Path(verification["artifact"]["absolute_path"]).resolve()
+    source = artifact.read_bytes()
+    engine = 16 + tables["engine_cpu"] - 0x8000
+    expected = (tables["durations_cpu"] - 1).to_bytes(2, "little")
+    if source[engine:engine + 3] != b"\xae\x17\x07" or source[engine + 14:engine + 16] != expected:
+        raise StudioProjectError("SMB build does not match the guarded demo layout")
+    lua = Path(__file__).with_name("runtime") / "smb1_mame_demo.lua"
+    if not lua.is_file():
+        raise StudioProjectError(f"packaged SMB demo script is missing: {lua}")
+    plan = launch_image_plan(artifact, platform="nes", mame=executable, machine="nes")
+    recording = "" if record is None else str(record.resolve())
+    plan.update({
+        "operation": "retrolarium.studio.smb-demo",
+        "backend": "mame-lua",
+        "arguments": [
+            *plan["arguments"], "-autoboot_delay", "0",
+            "-autoboot_script", str(lua.resolve()),
+        ],
+        "environment": {
+            "SMB_DEMO_ENGINE": str(tables["engine_cpu"]),
+            "SMB_DEMO_RESET_TITLE": str(SMB_DEMO_HOOKS["reset_title"]),
+            "SMB_DEMO_ACTIONS": str(tables["actions_cpu"]),
+            "SMB_DEMO_DURATIONS": str(tables["durations_cpu"]),
+            "SMB_DEMO_CAPACITY": str(tables["capacity"]),
+            "SMB_DEMO_SAVED_JOYPAD": str(SMB_DEMO_HOOKS["saved_joypad"]),
+            "SMB_DEMO_ACTION": str(SMB_DEMO_HOOKS["demo_action"]),
+            "SMB_DEMO_ACTION_TIMER": str(SMB_DEMO_HOOKS["action_timer"]),
+            "SMB_DEMO_OPER_MODE": str(SMB_DEMO_HOOKS["oper_mode"]),
+            "SMB_DEMO_RECORD": recording,
+        },
+        "project_file": inspection["project_file"],
+        "script": {"path": str(lua.resolve()), "sha256": sha256_file(lua)},
+        "demo": {"revision": revision.revision_id, "record": recording or None},
+    })
+    return plan
+
+
+# Castle Excellent: the RAM flag that plays the demo in place of controller 1.
+CASTLE_DEMO_ACTIVE = 0x07C7
+
+
+def studio_castle_demo_plan(path: Path, *, mame: Path, record: Path | None = None) -> dict[str, Any]:
+    """Loop the Castle Excellent title demo of the current build in MAME, or
+    record a new one from the player's controller into ``record``."""
+
+    inspection = load_studio_project(path)
+    _require_declared_operation(inspection, "launch")
+    if inspection["project"]["platform"] != "nes" \
+            or inspection["project"]["profile"] != "castle-excellent.v1":
+        raise StudioProjectError("Castle demo playtest requires the castle-excellent.v1 NES profile")
+    profile = packaged_game_profiles().get("castle-excellent")
+    revision = next(
+        (item for item in profile.revisions if item.sha256 == inspection["source"]["sha256"]), None
+    )
+    if revision is None:
+        raise StudioProjectError("Castle demo playtest needs a known Castle Excellent source")
+    demo = next(item for item in profile.resources_for(revision) if item.codec == "castle.title-demo.v1")
+    layout = demo.parameters
+    executable = mame.resolve()
+    if not executable.is_file():
+        raise StudioProjectError(f"MAME executable does not exist: {executable}")
+    verification = verify_studio_project(path)
+    if verification["status"] != "current":
+        raise StudioProjectError("Studio artifact is stale; build it again before the demo")
+    artifact = Path(verification["artifact"]["absolute_path"]).resolve()
+    source = artifact.read_bytes()
+    init = 16 + layout["init_cpu"] - 0x8000
+    script = layout["script_cpu"]
+    reader = 16 + layout["reader_cpu"] - 0x8000
+    if source[init:init + 8] != bytes((0xA9, script & 0xFF, 0x85, 0xFD, 0xA9, script >> 8, 0x85, 0xFE)) \
+            or source[reader + 10:reader + 12] != b"\xb1\xfd":
+        raise StudioProjectError("Castle build does not match the guarded demo layout")
+    lua = Path(__file__).with_name("runtime") / "castle_mame_demo.lua"
+    if not lua.is_file():
+        raise StudioProjectError(f"packaged Castle demo script is missing: {lua}")
+    plan = launch_image_plan(artifact, platform="nes", mame=executable, machine="nes")
+    recording = "" if record is None else str(record.resolve())
+    plan.update({
+        "operation": "retrolarium.studio.castle-demo",
+        "backend": "mame-lua",
+        "arguments": [
+            *plan["arguments"], "-autoboot_delay", "0",
+            "-autoboot_script", str(lua.resolve()),
+        ],
+        "environment": {
+            "CASTLE_DEMO_SCRIPT": str(script),
+            "CASTLE_DEMO_READER": str(layout["reader_cpu"]),
+            "CASTLE_DEMO_CAPACITY": str(layout["capacity"]),
+            "CASTLE_DEMO_ACTIVE": str(CASTLE_DEMO_ACTIVE),
+            "CASTLE_DEMO_RECORD": recording,
+        },
+        "project_file": inspection["project_file"],
+        "script": {"path": str(lua.resolve()), "sha256": sha256_file(lua)},
+        "demo": {"revision": revision.revision_id, "record": recording or None},
+    })
+    return plan
 
 
 def studio_solomon_demo_plan(
@@ -1681,8 +1857,12 @@ def studio_solomon_demo_plan(
     # An expanded build (solomon_expansion) runs the game from its second bank.
     if len(source) == 16 + 0x10000 + 0x8000 and ((source[6] >> 4) | (source[7] & 0xF0)) == 66:
         offset += 0x8000
-    if source[offset:offset + len(SOLOMON_DEMO_RUN_GUARD)] != SOLOMON_DEMO_RUN_GUARD:
+    if source[offset:offset + len(SOLOMON_DEMO_RUN_GUARD)] != SOLOMON_DEMO_RUN_GUARD             or source[offset + 0x1A] != 0xBD or source[offset + 0x21] != 0xE0:
         raise StudioProjectError("Solomon build does not match the guarded demo layout")
+    # The demo's step tables as this build has them (LDA durations,X and
+    # CPX #count in the playback loop).
+    durations = source[offset + 0x1B] | (source[offset + 0x1C] << 8)
+    steps = source[offset + 0x22]
     lua = Path(__file__).with_name("runtime") / "solomon_mame_demo.lua"
     if not lua.is_file():
         raise StudioProjectError(f"packaged Solomon demo script is missing: {lua}")
@@ -1701,10 +1881,8 @@ def studio_solomon_demo_plan(
         "environment": {
             "SOLOMON_DEMO_RUN": str(hooks["run"]),
             "SOLOMON_DEMO_POST_GAME": str(hooks["post_game"]),
-            "SOLOMON_DEMO_WAIT_SUMMARY": str(hooks["wait_summary"]),
-            "SOLOMON_DEMO_WAIT_TITLE": str(hooks["wait_title"]),
-            "SOLOMON_DEMO_COUNTER_HIGH": str(hooks["counter_high"]),
-            "SOLOMON_DEMO_JOYPAD_CACHED": str(0x03E4),
+            "SOLOMON_DEMO_DURATIONS": str(durations),
+            "SOLOMON_DEMO_STEPS": str(steps),
             "SOLOMON_DEMO_JOYPAD_RAW": str(0x0082),
             "SOLOMON_DEMO_INDEX": str(0x0081),
             "SOLOMON_DEMO_NMI_COUNTER": str(0x0022),
@@ -1818,32 +1996,36 @@ def create_flicky_studio_project(project_root: Path) -> dict[str, Any]:
     return load_studio_project(project)
 
 
-SOLOMON_TEXT_TAB = """[[workspace.tabs]]
-id = "text"
-title = "Text"
-kind = "solomon.text"
-group = "content"
-document = "documents/text.json"
-codec = "solomon.text@1"
-capabilities = ["edit", "preview", "restore", "undo"]
+def _tab_block(tab_id: str, title: str, kind: str, document: str, codec: str) -> str:
+    return (
+        "[[workspace.tabs]]\n"
+        f'id = "{tab_id}"\n'
+        f'title = "{title}"\n'
+        f'kind = "{kind}"\n'
+        'group = "content"\n'
+        f'document = "{document}"\n'
+        f'codec = "{codec}"\n'
+        'capabilities = ["edit", "preview", "restore", "undo"]\n\n'
+    )
 
-"""
 
-
-def upgrade_solomon_studio_project(path: Path) -> dict[str, Any]:
-    """Add the documents later kits know to a Solomon's Key project: today the
-    screen text (documents/text.json), read from the project's own source."""
+def _add_document_tab(
+    path: Path, *, profile: str, resource: str, document_name: str,
+    tab_id: str, title: str, kind: str, codec: str,
+) -> dict[str, Any]:
+    """Extract one more document from a project's own source and give it a
+    tab, unless the project has one with that codec already."""
 
     from .games import extract_game
 
     project_file = path.resolve()
     inspection = load_studio_project(project_file)
-    if inspection["project"]["profile"] != "solomons-key.v1":
-        raise StudioProjectError("Solomon upgrade requires a solomons-key.v1 project")
-    if any(tab.get("codec") == "solomon.text@1" for tab in inspection["workspace"]["tabs"]):
+    if inspection["project"]["profile"] != profile:
+        raise StudioProjectError(f"this upgrade requires a {profile} project")
+    if any(tab.get("codec") == codec for tab in inspection["workspace"]["tabs"]):
         return {"status": "current", "project_file": str(project_file), "added_documents": []}
     root = Path(inspection["project_root"])
-    document = root / "documents" / "text.json"
+    document = root / "documents" / document_name
     if document.exists():
         raise StudioProjectError(f"{document} exists but no tab uses it; move it away first")
     manifest_path = Path(inspection["source"]["disassembly_path"])
@@ -1861,14 +2043,14 @@ def upgrade_solomon_studio_project(path: Path) -> dict[str, Any]:
         source = (manifest_path.parent / built["artifact"]["path"]).resolve()
         if sha256_file(source) != inspection["source"]["sha256"]:
             raise StudioProjectError("the project's source does not rebuild exactly")
-    extract_game(source, document, resource="text")
+    extract_game(source, document, resource=resource)
+    block = _tab_block(tab_id, title, kind, f"documents/{document_name}", codec)
     payload = project_file.read_text(encoding="utf-8")
     marker = "\n[operations]"
     at = payload.find(marker)
-    upgraded = payload + "\n" + SOLOMON_TEXT_TAB if at < 0 else \
-        payload[:at + 1] + SOLOMON_TEXT_TAB + payload[at + 1:]
+    upgraded = payload + "\n" + block if at < 0 else payload[:at + 1] + block + payload[at + 1:]
     descriptor, temporary_name = tempfile.mkstemp(
-        prefix=".solomon-upgrade-", suffix=".rlj", dir=project_file.parent
+        prefix=".project-upgrade-", suffix=".rlj", dir=project_file.parent
     )
     temporary = Path(temporary_name)
     try:
@@ -1884,13 +2066,38 @@ def upgrade_solomon_studio_project(path: Path) -> dict[str, Any]:
         document.unlink(missing_ok=True)
         raise
     return {"status": "upgraded", "project_file": str(project_file),
-            "added_documents": ["documents/text.json"]}
+            "added_documents": [f"documents/{document_name}"]}
+
+
+def upgrade_solomon_studio_project(path: Path) -> dict[str, Any]:
+    """Add the screen text (documents/text.json) to a Solomon's Key project."""
+    return _add_document_tab(
+        path, profile="solomons-key.v1", resource="text", document_name="text.json",
+        tab_id="text", title="Text", kind="solomon.text", codec="solomon.text@1",
+    )
+
+
+def upgrade_smb_studio_project(path: Path) -> dict[str, Any]:
+    """Add the title demo (documents/demo.json) to a Super Mario Bros. project."""
+    return _add_document_tab(
+        path, profile="smb1.v1", resource="demo", document_name="demo.json",
+        tab_id="demo", title="Demo", kind="smb.demo", codec="smb.demo@1",
+    )
+
+
+def upgrade_castle_studio_project(path: Path) -> dict[str, Any]:
+    """Add the title demo (documents/demo.json) to a Castle Excellent project."""
+    return _add_document_tab(
+        path, profile="castle-excellent.v1", resource="title-demo", document_name="demo.json",
+        tab_id="demo", title="Demo", kind="castle.demo", codec="castle.demo@1",
+    )
 
 
 def upgrade_flicky_studio_project(
     path: Path, *, output: Path | None = None,
 ) -> dict[str, Any]:
-    """Upgrade capabilities and pinned bonus placements without reimporting."""
+    """Upgrade capabilities, pinned bonus placements and attract demos without
+    reimporting."""
 
     source_path = path.resolve()
     destination = (output or source_path).resolve()
@@ -1924,9 +2131,13 @@ def upgrade_flicky_studio_project(
             levels = json.loads(levels_path.read_text(encoding="utf-8"))
             if not isinstance(levels, dict):
                 raise ValueError("Flicky Levels document is not an object")
-            if "bonus_placements" not in levels:
-                levels["bonus_placements"] = export_bonus_placements(source_root)
-                validate_bonus_placements(levels, source_root)
+            if "bonus_placements" not in levels or "attract_demos" not in levels:
+                if "bonus_placements" not in levels:
+                    levels["bonus_placements"] = export_bonus_placements(source_root)
+                    validate_bonus_placements(levels, source_root)
+                if "attract_demos" not in levels:
+                    levels["attract_demos"] = export_attract_demos(source_root)
+                    validate_attract_demos(levels, source_root)
                 bonus_document_path = levels_path
                 bonus_document_payload = json.dumps(levels, indent=2) + "\n"
         except (FlickyContentError, OSError, UnicodeError, ValueError) as exc:
@@ -2232,11 +2443,11 @@ def create_studio_project(
                 or not isinstance(resource_root.get("streams"), list)
                 or len(resource_root["streams"]) != 2
                 or not isinstance(resource_root.get("demo_steps"), list)
-                or len(resource_root["demo_steps"]) != 34
+                or not 1 <= len(resource_root["demo_steps"]) <= 93
             ):
                 raise StudioProjectError(
                     "Solomon presentation requires USA/Europe title streams "
-                    "and 34 demo input steps"
+                    "and 1-93 demo input steps"
                 )
             resources = [{
                 "id": "screens", "kind": "solomon-title",
@@ -2245,6 +2456,16 @@ def create_studio_project(
                 "id": "demo", "kind": "solomon-demo",
                 "codec": "solomon.presentation@1",
             }]
+        elif document_schema == "retrolarium.castle-demo":
+            if profile != "castle-excellent.v1" or resource_root.get("game") != "castle-excellent" \
+                    or not isinstance(resource_root.get("steps"), list):
+                raise StudioProjectError("Castle demo requires the castle-excellent.v1 profile")
+            resources = [{"id": "title-demo", "kind": "castle-demo", "codec": "castle.demo@1"}]
+        elif document_schema == "retrolarium.smb-demo":
+            if profile != "smb1.v1" or resource_root.get("game") != "smb1" \
+                    or not isinstance(resource_root.get("steps"), list):
+                raise StudioProjectError("SMB demo requires the smb1.v1 profile")
+            resources = [{"id": "demo", "kind": "smb-demo", "codec": "smb.demo@1"}]
         elif document_schema == "retrolarium.solomon-text":
             if (
                 profile != "solomons-key.v1"
@@ -2315,6 +2536,12 @@ def create_studio_project(
              ["edit", "preview", "restore", "undo"]),
             ("solomon-demo", "demo", "Presentation", "solomon.presentation",
              "content", "solomon.presentation@1",
+             ["edit", "preview", "restore", "undo"]),
+            ("smb-demo", "demo", "Demo", "smb.demo",
+             "content", "smb.demo@1",
+             ["edit", "preview", "restore", "undo"]),
+            ("castle-demo", "demo", "Demo", "castle.demo",
+             "content", "castle.demo@1",
              ["edit", "preview", "restore", "undo"]),
             ("solomon-text", "text", "Text", "solomon.text",
              "content", "solomon.text@1",

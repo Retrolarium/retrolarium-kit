@@ -281,6 +281,13 @@
         "mml_capacity": 1574,
         "stream_count": 21
       }
+    },
+    {
+      "id": "title-demo",
+      "kind": "demo",
+      "codec": "castle.title-demo.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"script_cpu": 47148, "init_cpu": 47101, "reader_cpu": 47114, "capacity": 72}
     }
   ]
 }

@@ -81,6 +81,22 @@ from .solomon_presentation import (
     decode_presentation as decode_solomon_presentation,
     parse_presentation_document as parse_solomon_presentation_document,
 )
+from .castle_demo import (
+    CODEC as CASTLE_DEMO_CODEC,
+    SCHEMA as CASTLE_DEMO_SCHEMA,
+    CastleDemoDocument,
+    build_demo as build_castle_demo,
+    decode_demo as decode_castle_demo,
+    parse_demo_document as parse_castle_demo_document,
+)
+from .smb_demo import (
+    CODEC as SMB_DEMO_CODEC,
+    SCHEMA as SMB_DEMO_SCHEMA,
+    SmbDemoDocument,
+    build_demo as build_smb_demo,
+    decode_demo as decode_smb_demo,
+    parse_demo_document as parse_smb_demo_document,
+)
 from .solomon_text import (
     CODEC as SOLOMON_TEXT_CODEC,
     SCHEMA as SOLOMON_TEXT_SCHEMA,
@@ -341,6 +357,56 @@ class _SolomonPresentationAuthoringAdapter:
     document_schema = SOLOMON_PRESENTATION_SCHEMA
 
 
+class _SmbDemoAuthoringAdapter:
+    def decode(
+        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
+    ) -> SmbDemoDocument:
+        return decode_smb_demo(payload, profile, revision)
+
+    def parse(
+        self, document: object, profile: GameProfile, revision: RevisionSpec
+    ) -> SmbDemoDocument:
+        return parse_smb_demo_document(document, profile, revision)
+
+    def build(
+        self, payload: bytes, document: SmbDemoDocument,
+        profile: GameProfile, revision: RevisionSpec,
+    ) -> tuple[bytes, dict[str, object]]:
+        return build_smb_demo(payload, document, profile, revision)
+
+    @staticmethod
+    def details(document: SmbDemoDocument) -> dict[str, int]:
+        return {"steps": len(document.steps)}
+
+    resource_id = "demo"
+    document_schema = SMB_DEMO_SCHEMA
+
+
+class _CastleDemoAuthoringAdapter:
+    def decode(
+        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
+    ) -> CastleDemoDocument:
+        return decode_castle_demo(payload, profile, revision)
+
+    def parse(
+        self, document: object, profile: GameProfile, revision: RevisionSpec
+    ) -> CastleDemoDocument:
+        return parse_castle_demo_document(document, profile, revision)
+
+    def build(
+        self, payload: bytes, document: CastleDemoDocument,
+        profile: GameProfile, revision: RevisionSpec,
+    ) -> tuple[bytes, dict[str, object]]:
+        return build_castle_demo(payload, document, profile, revision)
+
+    @staticmethod
+    def details(document: CastleDemoDocument) -> dict[str, int]:
+        return {"steps": len(document.steps)}
+
+    resource_id = "title-demo"
+    document_schema = CASTLE_DEMO_SCHEMA
+
+
 class _SolomonTextAuthoringAdapter:
     def decode(
         self, payload: bytes, profile: GameProfile, revision: RevisionSpec
@@ -382,6 +448,8 @@ def authoring_adapters() -> Registry[object]:
         SOLOMON_PRESENTATION_CODEC, _SolomonPresentationAuthoringAdapter()
     )
     registry.register(SOLOMON_TEXT_CODEC, _SolomonTextAuthoringAdapter())
+    registry.register(SMB_DEMO_CODEC, _SmbDemoAuthoringAdapter())
+    registry.register(CASTLE_DEMO_CODEC, _CastleDemoAuthoringAdapter())
     return registry
 
 

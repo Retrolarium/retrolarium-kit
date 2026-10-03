@@ -17,7 +17,13 @@ CODEC = "solomon.presentation.v1"
 SCHEMA = "retrolarium.solomon-presentation"
 VERSION = 1
 STREAMS = (("record", 155), ("logo", 247))
-DEMO_STEPS = 34
+DEMO_STEPS = 34                 # the game's own demo; longer ones grow into the filler
+# Offsets from RunDemoInputPlayback (the demo_code_cpu parameter) of the
+# operands the build patches when the demo changes length: LDA durations,X,
+# CPX #count and LDA values,X.
+DEMO_DURATIONS_OPERAND = 0x1B
+DEMO_COUNT_OPERAND = 0x22
+DEMO_VALUES_OPERAND = 0x26
 BUTTON_BITS = (
     (0x80, "A"), (0x40, "B"), (0x20, "SELECT"), (0x10, "START"),
     (0x08, "UP"), (0x04, "DOWN"), (0x02, "LEFT"), (0x01, "RIGHT"),
@@ -99,6 +105,44 @@ def _layout(profile: GameProfile, revision: RevisionSpec) -> dict[str, Any]:
             "step_count": DEMO_STEPS,
         },
     }
+
+
+def _demo_room(profile: GameProfile, revision: RevisionSpec) -> dict[str, int] | None:
+    """Where a demo of another length may live: its code and the end of the
+    free filler after the tables. None keeps the game's 34 steps."""
+    resource = next(
+        resource for resource in profile.resources_for(revision) if resource.codec == CODEC
+    )
+    parameters = resource.parameters
+    if "demo_code_cpu" not in parameters and "demo_end_cpu" not in parameters:
+        return None
+    code, end = parameters.get("demo_code_cpu"), parameters.get("demo_end_cpu")
+    start = parameters["demo_duration_cpu"]
+    if type(code) is not int or type(end) is not int or not 0x8000 <= code <= 0xFFC0 \
+            or not start + 2 * DEMO_STEPS <= end <= 0x10000:
+        raise SolomonPresentationError("presentation demo room is invalid")
+    return {"code": code, "end": end, "capacity": (end - start) // 2}
+
+
+def demo_capacity(profile: GameProfile, revision: RevisionSpec) -> int:
+    room = _demo_room(profile, revision)
+    return DEMO_STEPS if room is None else room["capacity"]
+
+
+def _demo_count(prg: bytes, layout: dict[str, Any], room: dict[str, int] | None) -> int:
+    """The step count the code holds, its operands checked."""
+    if room is None:
+        return DEMO_STEPS
+    code = room["code"] - 0x8000
+    start = layout["demo"]["duration_address"]
+    count = prg[code + DEMO_COUNT_OPERAND]
+    word = lambda offset: prg[code + offset] | (prg[code + offset + 1] << 8)
+    if prg[code + DEMO_DURATIONS_OPERAND - 1] != 0xBD or word(DEMO_DURATIONS_OPERAND) != start \
+            or prg[code + DEMO_COUNT_OPERAND - 1] != 0xE0 \
+            or prg[code + DEMO_VALUES_OPERAND - 1] != 0xBD or word(DEMO_VALUES_OPERAND) != start + count \
+            or not 1 <= count <= room["capacity"]:
+        raise SolomonPresentationError("demo playback code differs from the guarded layout")
+    return count
 
 
 def _source(source: bytes, revision: RevisionSpec, *, verify: bool = True):
@@ -206,8 +250,9 @@ def decode_presentation(
             "tokens": _decode_stream(payload),
         })
     demo = layout["demo"]
-    durations = _slice(prg, demo["duration_address"], DEMO_STEPS)
-    inputs = _slice(prg, demo["input_address"], DEMO_STEPS)
+    count = _demo_count(prg, layout, _demo_room(profile, revision))
+    durations = _slice(prg, demo["duration_address"], count)
+    inputs = _slice(prg, demo["duration_address"] + count, count)
     steps = [
         {"index": index, "duration": duration, "buttons": [
             name for mask, name in BUTTON_BITS if buttons & mask
@@ -223,7 +268,9 @@ def decode_presentation(
     return result
 
 
-def _encode(value: Mapping[str, Any], layout: dict[str, Any]) -> bytes:
+def _encode(value: Mapping[str, Any], layout: dict[str, Any], capacity: int = DEMO_STEPS) -> bytes:
+    """The title streams and the demo tables, one run of bytes; the demo
+    has 34 steps unless `capacity` lets it grow."""
     if value.get("layout") != layout:
         raise SolomonPresentationError("presentation layout differs from profile")
     streams = value.get("streams")
@@ -278,15 +325,26 @@ def _encode(value: Mapping[str, Any], layout: dict[str, Any]) -> bytes:
             )
         output.extend(encoded)
     steps = value.get("demo_steps")
-    if not isinstance(steps, list) or len(steps) != DEMO_STEPS:
-        raise SolomonPresentationError("demo needs 34 input steps")
+    if not isinstance(steps, list) or not steps or len(steps) > capacity \
+            or (capacity == DEMO_STEPS and len(steps) != DEMO_STEPS):
+        raise SolomonPresentationError(
+            "demo needs 34 input steps" if capacity == DEMO_STEPS
+            else f"demo needs 1-{capacity} input steps"
+        )
     durations = bytearray()
     inputs = bytearray()
     button_names = [name for _mask, name in BUTTON_BITS]
     for index, step in enumerate(steps):
         if not isinstance(step, Mapping) or step.get("index") != index:
             raise SolomonPresentationError("demo step indices differ")
-        durations.append(_byte(step.get("duration"), "demo duration"))
+        duration = _byte(step.get("duration"), "demo duration")
+        # PollDemoInputPlayback waits for its 8-bit frame counter to pass
+        # the duration; it never passes 255 and the demo would stall.
+        if duration == 255:
+            raise SolomonPresentationError(
+                f"demo step {index + 1} waits 255 frames, which the game never reaches; use 0-254"
+            )
+        durations.append(duration)
         buttons = step.get("buttons")
         if (not isinstance(buttons, list)
                 or buttons != [name for name in button_names if name in buttons]):
@@ -296,7 +354,7 @@ def _encode(value: Mapping[str, Any], layout: dict[str, Any]) -> bytes:
         ))
     output.extend(durations)
     output.extend(inputs)
-    if len(output) != 155 + 247 + 68:
+    if len(output) != 155 + 247 + 2 * len(steps):
         raise SolomonPresentationError("presentation bank size differs")
     return bytes(output)
 
@@ -317,7 +375,7 @@ def parse_presentation_document(
     ):
         if value[key] != expected:
             raise SolomonPresentationError(f"presentation {key} differs from profile")
-    _encode(value, layout)
+    _encode(value, layout, demo_capacity(profile, revision))
     result = SolomonPresentationDocument(
         profile.game_id, revision.revision_id, revision.sha256,
         layout, tuple(value["streams"]), tuple(value["demo_steps"]),
@@ -336,19 +394,27 @@ def build_presentation(
         document.as_dict(), profile, revision
     )
     layout = _layout(profile, revision)
-    encoded = _encode(checked.as_dict(), layout)
-    start = layout["streams"][0]["address"] - 0x8000
+    room = _demo_room(profile, revision)
+    encoded = _encode(checked.as_dict(), layout, demo_capacity(profile, revision))
+    count = len(checked.demo_steps)
     base = len(image.header) + len(image.trainer)
-    file_start = base + start
-    if encoded == image.prg[start:start + len(encoded)]:
-        output = source
-    else:
-        change = Change(
-            AddressRange(Address("file", file_start), len(encoded)),
-            source[file_start:file_start + len(encoded)], encoded,
-            Provenance(revision.sha256, "presentation", "encode"),
-        )
-        output = BuildPlan(revision.sha256, ChangeSet((change,))).apply(source)
+    pieces = [(layout["streams"][0]["address"], encoded)]
+    if room is not None:
+        values = layout["demo"]["duration_address"] + count
+        pieces += [
+            (room["code"] + DEMO_COUNT_OPERAND, bytes((count,))),
+            (room["code"] + DEMO_VALUES_OPERAND, bytes((values & 0xFF, values >> 8))),
+        ]
+    changes = []
+    for address, payload in pieces:
+        file_start = base + address - 0x8000
+        if source[file_start:file_start + len(payload)] != payload:
+            changes.append(Change(
+                AddressRange(Address("file", file_start), len(payload)),
+                source[file_start:file_start + len(payload)], payload,
+                Provenance(revision.sha256, "presentation", "encode"),
+            ))
+    output = BuildPlan(revision.sha256, ChangeSet(tuple(changes))).apply(source) if changes else source
     rebuilt = decode_presentation(
         output, profile, revision, _verify_identity=False
     )
@@ -364,5 +430,5 @@ def build_presentation(
         "output_sha256": hashlib.sha256(output).hexdigest(),
         "size": len(output),
         "changed_bytes": sum(a != b for a, b in zip(source, output)),
-        "title_streams": 2, "demo_steps": DEMO_STEPS,
+        "title_streams": 2, "demo_steps": count,
     }

@@ -63,7 +63,8 @@ LAYOUTS = {
     "usa": ExpansionLayout(
         chr_consume=0x8051, item_call=0x9071, enemy_call=0x9091,
         item_decoder=0x97C8, enemy_decoder=0x961B,
-        wrapper=0xCF35, wrapper_end=0xCFFF, reset=0x8C00,
+        # The end of the filler: the attract demo may grow into its start.
+        wrapper=0xCFAB, wrapper_end=0xCFFF, reset=0x8C00,
         item_pointers=0xEA1C, enemy_pointers=0xDCEC, mirror_set_pointers=0xDC20,
         mirror_set_region=(0xDD56, 0xE02B),
         data_regions=((0xDD56, 0xEA1B), (0xEA86, 0xFFF9)),
@@ -71,7 +72,7 @@ LAYOUTS = {
     "europe": ExpansionLayout(
         chr_consume=0x8051, item_call=0x9080, enemy_call=0x90A0,
         item_decoder=0x97D0, enemy_decoder=0x9623,
-        wrapper=0xCEC5, wrapper_end=0xCF7F, reset=0x8C00,
+        wrapper=0xCF2B, wrapper_end=0xCF7F, reset=0x8C00,
         item_pointers=0xE99C, enemy_pointers=0xDC6C, mirror_set_pointers=0xDBA0,
         mirror_set_region=(0xDCD6, 0xDFAB),
         data_regions=((0xDCD6, 0xE99B), (0xEA06, 0xFFF9)),
