@@ -92,6 +92,7 @@ EDITOR_KINDS = frozenset(
         "solomon.audio",
         "solomon.screens",
         "solomon.presentation",
+        "solomon.text",
         "text.fixed",
         "world.routing",
     }
@@ -147,6 +148,7 @@ CODECS = frozenset(
         "solomon.audio@1",
         "solomon.screens@1",
         "solomon.presentation@1",
+        "solomon.text@1",
     }
 )
 
@@ -183,7 +185,7 @@ _AUTHORING_SCHEMAS = frozenset(
      "retrolarium.solomon-rooms", "retrolarium.solomon-room-art",
      "retrolarium.solomon-sprite-frames", "retrolarium.solomon-animations",
      "retrolarium.solomon-audio",
-     "retrolarium.solomon-presentation"}
+     "retrolarium.solomon-presentation", "retrolarium.solomon-text"}
 )
 
 
@@ -1637,6 +1639,84 @@ def studio_solomon_point_playtest_plan(
     return plan
 
 
+# Attract-demo hooks per revision: the demo input thread's entry, the
+# post-game thread's entry, the licence and title wait loops, the wait
+# counter's high byte and the controller and demo-step bytes.
+SOLOMON_DEMO_HOOKS = {
+    "usa": {"run": 0xCB2B, "post_game": 0xCA6E, "wait_summary": 0xCAA4,
+            "wait_title": 0xCAE0, "counter_high": 0x043D},
+    "europe": {"run": 0xCABB, "post_game": 0xC9FE, "wait_summary": 0xCA34,
+               "wait_title": 0xCA70, "counter_high": 0x043E},
+}
+SOLOMON_DEMO_RUN_GUARD = bytes.fromhex("a90085228581")
+
+
+def studio_solomon_demo_plan(
+    path: Path, *, mame: Path, record: Path | None = None,
+) -> dict[str, Any]:
+    """Loop the attract demo of the current build in MAME, or record a new one
+    from the player's controller into ``record``."""
+
+    inspection = load_studio_project(path)
+    _require_declared_operation(inspection, "launch")
+    if inspection["project"]["platform"] != "nes" \
+            or inspection["project"]["profile"] != "solomons-key.v1":
+        raise StudioProjectError("Solomon demo playtest requires the solomons-key.v1 NES profile")
+    profile = packaged_game_profiles().get("solomons-key")
+    revision = next(
+        (item for item in profile.revisions if item.sha256 == inspection["source"]["sha256"]), None
+    )
+    if revision is None or revision.revision_id not in SOLOMON_DEMO_HOOKS:
+        raise StudioProjectError("Solomon demo playtest needs the USA or Europe source")
+    hooks = SOLOMON_DEMO_HOOKS[revision.revision_id]
+    executable = mame.resolve()
+    if not executable.is_file():
+        raise StudioProjectError(f"MAME executable does not exist: {executable}")
+    verification = verify_studio_project(path)
+    if verification["status"] != "current":
+        raise StudioProjectError("Studio artifact is stale; build it again before the demo")
+    artifact = Path(verification["artifact"]["absolute_path"]).resolve()
+    source = artifact.read_bytes()
+    offset = 16 + hooks["run"] - 0x8000
+    # An expanded build (solomon_expansion) runs the game from its second bank.
+    if len(source) == 16 + 0x10000 + 0x8000 and ((source[6] >> 4) | (source[7] & 0xF0)) == 66:
+        offset += 0x8000
+    if source[offset:offset + len(SOLOMON_DEMO_RUN_GUARD)] != SOLOMON_DEMO_RUN_GUARD:
+        raise StudioProjectError("Solomon build does not match the guarded demo layout")
+    lua = Path(__file__).with_name("runtime") / "solomon_mame_demo.lua"
+    if not lua.is_file():
+        raise StudioProjectError(f"packaged Solomon demo script is missing: {lua}")
+    plan = launch_image_plan(
+        artifact, platform="nes", mame=executable,
+        machine="nespal" if revision.revision_id == "europe" else "nes",
+    )
+    recording = "" if record is None else str(record.resolve())
+    plan.update({
+        "operation": "retrolarium.studio.solomon-demo",
+        "backend": "mame-lua",
+        "arguments": [
+            *plan["arguments"], "-autoboot_delay", "0",
+            "-autoboot_script", str(lua.resolve()),
+        ],
+        "environment": {
+            "SOLOMON_DEMO_RUN": str(hooks["run"]),
+            "SOLOMON_DEMO_POST_GAME": str(hooks["post_game"]),
+            "SOLOMON_DEMO_WAIT_SUMMARY": str(hooks["wait_summary"]),
+            "SOLOMON_DEMO_WAIT_TITLE": str(hooks["wait_title"]),
+            "SOLOMON_DEMO_COUNTER_HIGH": str(hooks["counter_high"]),
+            "SOLOMON_DEMO_JOYPAD_CACHED": str(0x03E4),
+            "SOLOMON_DEMO_JOYPAD_RAW": str(0x0082),
+            "SOLOMON_DEMO_INDEX": str(0x0081),
+            "SOLOMON_DEMO_NMI_COUNTER": str(0x0022),
+            "SOLOMON_DEMO_RECORD": recording,
+        },
+        "project_file": inspection["project_file"],
+        "script": {"path": str(lua.resolve()), "sha256": sha256_file(lua)},
+        "demo": {"revision": revision.revision_id, "record": recording or None},
+    })
+    return plan
+
+
 def launch_studio_smoke(
     path: Path,
     *,
@@ -1736,6 +1816,75 @@ def create_flicky_studio_project(project_root: Path) -> dict[str, Any]:
                   'launch = "project.launch"', ""))
     _atomic_write(project, "\n".join(lines))
     return load_studio_project(project)
+
+
+SOLOMON_TEXT_TAB = """[[workspace.tabs]]
+id = "text"
+title = "Text"
+kind = "solomon.text"
+group = "content"
+document = "documents/text.json"
+codec = "solomon.text@1"
+capabilities = ["edit", "preview", "restore", "undo"]
+
+"""
+
+
+def upgrade_solomon_studio_project(path: Path) -> dict[str, Any]:
+    """Add the documents later kits know to a Solomon's Key project: today the
+    screen text (documents/text.json), read from the project's own source."""
+
+    from .games import extract_game
+
+    project_file = path.resolve()
+    inspection = load_studio_project(project_file)
+    if inspection["project"]["profile"] != "solomons-key.v1":
+        raise StudioProjectError("Solomon upgrade requires a solomons-key.v1 project")
+    if any(tab.get("codec") == "solomon.text@1" for tab in inspection["workspace"]["tabs"]):
+        return {"status": "current", "project_file": str(project_file), "added_documents": []}
+    root = Path(inspection["project_root"])
+    document = root / "documents" / "text.json"
+    if document.exists():
+        raise StudioProjectError(f"{document} exists but no tab uses it; move it away first")
+    manifest_path = Path(inspection["source"]["disassembly_path"])
+    source = None
+    record = manifest_path.parent / "build-result.json"
+    try:
+        artifact = json.loads(record.read_text(encoding="utf-8"))["artifact"]["path"]
+        candidate = (manifest_path.parent / artifact).resolve()
+        if sha256_file(candidate) == inspection["source"]["sha256"]:
+            source = candidate
+    except (OSError, KeyError, TypeError, ValueError):
+        source = None
+    if source is None:
+        built = build_project(manifest_path)
+        source = (manifest_path.parent / built["artifact"]["path"]).resolve()
+        if sha256_file(source) != inspection["source"]["sha256"]:
+            raise StudioProjectError("the project's source does not rebuild exactly")
+    extract_game(source, document, resource="text")
+    payload = project_file.read_text(encoding="utf-8")
+    marker = "\n[operations]"
+    at = payload.find(marker)
+    upgraded = payload + "\n" + SOLOMON_TEXT_TAB if at < 0 else \
+        payload[:at + 1] + SOLOMON_TEXT_TAB + payload[at + 1:]
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=".solomon-upgrade-", suffix=".rlj", dir=project_file.parent
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as stream:
+            stream.write(upgraded)
+        os.replace(temporary, project_file)
+    finally:
+        temporary.unlink(missing_ok=True)
+    try:
+        load_studio_project(project_file)
+    except StudioProjectError:
+        project_file.write_text(payload, encoding="utf-8", newline="")
+        document.unlink(missing_ok=True)
+        raise
+    return {"status": "upgraded", "project_file": str(project_file),
+            "added_documents": ["documents/text.json"]}
 
 
 def upgrade_flicky_studio_project(
@@ -2096,6 +2245,24 @@ def create_studio_project(
                 "id": "demo", "kind": "solomon-demo",
                 "codec": "solomon.presentation@1",
             }]
+        elif document_schema == "retrolarium.solomon-text":
+            if (
+                profile != "solomons-key.v1"
+                or resource_root.get("game") != "solomons-key"
+                or resource_root.get("revision") not in {"usa", "europe"}
+                or not isinstance(resource_root.get("static_programs"), list)
+                or len(resource_root["static_programs"]) != 18
+                or not isinstance(resource_root.get("ending_messages"), list)
+                or len(resource_root["ending_messages"]) != 10
+            ):
+                raise StudioProjectError(
+                    "Solomon text requires the USA/Europe static PPU programs "
+                    "and ten ending messages"
+                )
+            resources = [{
+                "id": "text", "kind": "solomon-text",
+                "codec": "solomon.text@1",
+            }]
         else:
             resources = resource_root.get("resources")
             if not isinstance(resources, list) or not resources:
@@ -2148,6 +2315,9 @@ def create_studio_project(
              ["edit", "preview", "restore", "undo"]),
             ("solomon-demo", "demo", "Presentation", "solomon.presentation",
              "content", "solomon.presentation@1",
+             ["edit", "preview", "restore", "undo"]),
+            ("solomon-text", "text", "Text", "solomon.text",
+             "content", "solomon.text@1",
              ["edit", "preview", "restore", "undo"]),
             ("castle", "rooms", "Rooms & Objects", "castle.rooms", "content",
              "castle.prefix-rooms@1", ["edit", "preview", "restore", "undo"]),

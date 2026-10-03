@@ -81,6 +81,14 @@ from .solomon_presentation import (
     decode_presentation as decode_solomon_presentation,
     parse_presentation_document as parse_solomon_presentation_document,
 )
+from .solomon_text import (
+    CODEC as SOLOMON_TEXT_CODEC,
+    SCHEMA as SOLOMON_TEXT_SCHEMA,
+    SolomonTextDocument,
+    build_text as build_solomon_text,
+    decode_text as decode_solomon_text,
+    parse_text_document as parse_solomon_text_document,
+)
 
 
 def _profiles(custom_profile: Path | None) -> tuple[GameProfile, ...]:
@@ -333,6 +341,34 @@ class _SolomonPresentationAuthoringAdapter:
     document_schema = SOLOMON_PRESENTATION_SCHEMA
 
 
+class _SolomonTextAuthoringAdapter:
+    def decode(
+        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
+    ) -> SolomonTextDocument:
+        return decode_solomon_text(payload, profile, revision)
+
+    def parse(
+        self, document: object, profile: GameProfile, revision: RevisionSpec
+    ) -> SolomonTextDocument:
+        return parse_solomon_text_document(document, profile, revision)
+
+    def build(
+        self, payload: bytes, document: SolomonTextDocument,
+        profile: GameProfile, revision: RevisionSpec,
+    ) -> tuple[bytes, dict[str, object]]:
+        return build_solomon_text(payload, document, profile, revision)
+
+    @staticmethod
+    def details(document: SolomonTextDocument) -> dict[str, int]:
+        return {
+            "static_programs": len(document.static_programs),
+            "ending_messages": len(document.ending_initial) + len(document.ending_messages),
+        }
+
+    resource_id = "text"
+    document_schema = SOLOMON_TEXT_SCHEMA
+
+
 def authoring_adapters() -> Registry[object]:
     registry: Registry[object] = Registry("authoring adapter")
     registry.register("castle.prefix-rooms.v1", _CastleAuthoringAdapter())
@@ -345,6 +381,7 @@ def authoring_adapters() -> Registry[object]:
     registry.register(
         SOLOMON_PRESENTATION_CODEC, _SolomonPresentationAuthoringAdapter()
     )
+    registry.register(SOLOMON_TEXT_CODEC, _SolomonTextAuthoringAdapter())
     return registry
 
 

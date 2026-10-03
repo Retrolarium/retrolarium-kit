@@ -93,6 +93,14 @@
           "logo_cpu": 52618,
           "demo_duration_cpu": 52865,
           "demo_input_cpu": 52899
+        }},
+        {"id": "text", "parameters": {
+          "static_pointer_low_cpu": 38050,
+          "static_pointer_high_cpu": 38068,
+          "static_region_cpu": 38086,
+          "static_region_end_cpu": 38435,
+          "room_intro_cpu": 37516,
+          "special_names_cpu": 37547
         }}
       ]
     }
@@ -253,6 +261,28 @@
         "logo_cpu": 52730,
         "demo_duration_cpu": 52977,
         "demo_input_cpu": 53011
+      }
+    },
+    {
+      "id": "text",
+      "kind": "text",
+      "codec": "solomon.text.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "static_pointer_low_cpu": 38024,
+        "static_pointer_high_cpu": 38042,
+        "static_region_cpu": 38060,
+        "static_region_end_cpu": 38427,
+        "static_05_reference_cpu": 48538,
+        "ending_initial_cpu": 48725,
+        "ending_initial_end_cpu": 48783,
+        "ending_initial_second_operand_cpu": 48328,
+        "ending_offsets_cpu": 48804,
+        "ending_data_cpu": 48814,
+        "ending_data_end_cpu": 49066,
+        "ending_single_address_operand_cpu": 48409,
+        "room_intro_cpu": 37490,
+        "special_names_cpu": 37521
       }
     },
     {
