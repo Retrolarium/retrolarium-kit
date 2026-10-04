@@ -48,6 +48,16 @@ from .doraemon_palettes import (
     decode_room_selectors as decode_doraemon_room_selectors,
     encode_room_selectors as encode_doraemon_room_selectors,
 )
+from .doraemon_metasprites import (
+    VARIABLE_CODEC as DORAEMON_METASPRITE_CODEC,
+    WORLD2_ATTRIBUTES as DORAEMON_WORLD2_METASPRITE_ATTRIBUTES,
+    WORLD2_CODEC as DORAEMON_WORLD2_METASPRITE_CODEC,
+    WORLD2_RECORDS as DORAEMON_WORLD2_METASPRITE_RECORDS,
+    decode_variable as decode_doraemon_metasprites,
+    decode_world2 as decode_doraemon_world2_metasprites,
+    encode_variable as encode_doraemon_metasprites,
+    encode_world2 as encode_doraemon_world2_metasprites,
+)
 from .doraemon_world2_metatiles import (
     CODEC as DORAEMON_WORLD2_METATILE_CODEC,
     COLLISION_SIZE as DORAEMON_WORLD2_COLLISION_SIZE,
@@ -185,6 +195,7 @@ SUPPORTED_CODECS = (
     DORAEMON_WORLD2_SCREEN_CODEC, DORAEMON_WORLD2_STAGE_CODEC,
     DORAEMON_WORLD2_BRANCH_CODEC,
     DORAEMON_WORLD2_CHAPTER_CODEC,
+    DORAEMON_METASPRITE_CODEC, DORAEMON_WORLD2_METASPRITE_CODEC,
 )
 
 
@@ -750,6 +761,29 @@ def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
             raise NesResourceError(str(exc)) from exc
         return {"id": resource.resource_id, "kind": resource.kind,
                 "codec": resource.codec, **decoded}
+    if resource.codec == DORAEMON_METASPRITE_CODEC:
+        offset, size = _span(resource, _integer(resource.parameters.get("size"), f"{resource.resource_id}.size", minimum=2))
+        records_offset = _integer(resource.parameters.get("records_file_offset"), f"{resource.resource_id}.records_file_offset")
+        records_size = _integer(resource.parameters.get("records_size"), f"{resource.resource_id}.records_size", minimum=1)
+        records_address = _integer(resource.parameters.get("records_address"), f"{resource.resource_id}.records_address")
+        try:
+            decoded = decode_doraemon_metasprites(
+                image[offset:offset + size], image[records_offset:records_offset + records_size], records_address)
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return {"id": resource.resource_id, "kind": resource.kind, "codec": resource.codec, **decoded}
+    if resource.codec == DORAEMON_WORLD2_METASPRITE_CODEC:
+        offset, size = _span(resource, DORAEMON_WORLD2_METASPRITE_RECORDS * 4)
+        descriptors = _integer(resource.parameters.get("descriptors_file_offset"), f"{resource.resource_id}.descriptors_file_offset")
+        attributes = _integer(resource.parameters.get("attributes_file_offset"), f"{resource.resource_id}.attributes_file_offset")
+        try:
+            decoded = decode_doraemon_world2_metasprites(
+                image[offset:offset + size],
+                image[descriptors:descriptors + DORAEMON_WORLD2_METASPRITE_RECORDS],
+                image[attributes:attributes + DORAEMON_WORLD2_METASPRITE_ATTRIBUTES])
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return {"id": resource.resource_id, "kind": resource.kind, "codec": resource.codec, **decoded}
     if resource.codec == DORAEMON_WORLD2_METATILE_CODEC:
         offset, size = _span(resource, DORAEMON_WORLD2_VISUAL_SIZE)
         collision_offset = _integer(resource.parameters.get("collision_file_offset"),
@@ -1382,6 +1416,30 @@ def _parse_resource(
             )
         except AuthoringError as exc:
             raise NesResourceError(str(exc)) from exc
+    elif spec.codec == DORAEMON_METASPRITE_CODEC:
+        expected_fields = {"id", "kind", "codec", "entries", "records"}
+        offset, size = _span(spec, _integer(spec.parameters.get("size"), f"{spec.resource_id}.size", minimum=2))
+        records_offset = _integer(spec.parameters.get("records_file_offset"), f"{spec.resource_id}.records_file_offset")
+        records_size = _integer(spec.parameters.get("records_size"), f"{spec.resource_id}.records_size", minimum=1)
+        records_address = _integer(spec.parameters.get("records_address"), f"{spec.resource_id}.records_address")
+        try:
+            index, records = encode_doraemon_metasprites(
+                {"entries": raw.get("entries"), "records": raw.get("records")}, records_address, size, records_size)
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        encoded_spans = (_EncodedSpan(offset, index), _EncodedSpan(records_offset, records))
+    elif spec.codec == DORAEMON_WORLD2_METASPRITE_CODEC:
+        expected_fields = {"id", "kind", "codec", "tiles", "descriptors", "attributes"}
+        offset, _ = _span(spec, DORAEMON_WORLD2_METASPRITE_RECORDS * 4)
+        descriptors = _integer(spec.parameters.get("descriptors_file_offset"), f"{spec.resource_id}.descriptors_file_offset")
+        attributes = _integer(spec.parameters.get("attributes_file_offset"), f"{spec.resource_id}.attributes_file_offset")
+        try:
+            tiles, descriptor_bytes, attribute_bytes = encode_doraemon_world2_metasprites(
+                {key: raw.get(key) for key in ("tiles", "descriptors", "attributes")})
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        encoded_spans = (_EncodedSpan(offset, tiles), _EncodedSpan(descriptors, descriptor_bytes),
+                         _EncodedSpan(attributes, attribute_bytes))
     elif spec.codec == DORAEMON_WORLD2_METATILE_CODEC:
         expected_fields = {"id", "kind", "codec", "palettes", "tiles", "solid"}
         offset, _ = _span(spec, DORAEMON_WORLD2_VISUAL_SIZE)

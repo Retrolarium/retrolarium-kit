@@ -40,7 +40,21 @@
       "kind": "resource-bundle",
       "codec": "nes.resource-bundle.v1",
       "capacity_policy": "fixed",
-      "parameters": {}
+      "parameters": {
+        "resource_ids": [
+          "maze",
+          "title-background",
+          "screen-content",
+          "sound-streams",
+          "attract-bg-sprite",
+          "round-gameplay",
+          "frightened-active-normal",
+          "intermission-sprites",
+          "fruit-by-stage",
+          "character-graphics",
+          "actor-frames"
+        ]
+      }
     },
     {
       "id": "maze",
@@ -251,6 +265,13 @@
         "file_offset": 7017,
         "size": 624
       }
+    },
+    {
+      "id": "attract-demo",
+      "kind": "demo",
+      "codec": "pacman.attract-demo.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"script_cpu": 54385, "table_cpu": 54410, "pairs": 28}
     }
   ]
 }

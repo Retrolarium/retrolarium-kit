@@ -162,6 +162,13 @@ class PacmanSoundTests(unittest.TestCase):
         self.assertEqual(first[8:12], b"WAVE")
         self.assertGreater(len(first), 44)
 
+    def test_preview_mixes_slots_playing_together(self) -> None:
+        alone = render_stream_wav(stream(3), sample_rate=8_000)
+        mixed = render_stream_wav(stream(3), sample_rate=8_000, also=(stream(5),))
+        self.assertNotEqual(alone, mixed)
+        self.assertEqual(mixed, render_stream_wav(stream(3), sample_rate=8_000, also=(stream(5),)))
+        self.assertGreaterEqual(len(mixed), len(alone))
+
     def test_nes_resource_bundle_rebuilds_pointer_table_and_arena(self) -> None:
         config = parameters()
         raw_image = image_for_document(document(), config)

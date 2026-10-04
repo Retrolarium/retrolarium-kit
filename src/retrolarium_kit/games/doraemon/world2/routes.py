@@ -256,3 +256,72 @@ def paint_route_cell(
     encode_screens({"raw_hex": screen_resource["raw_hex"], "screens": updated})
     screen_resource["screens"] = updated
     return placement.selector_id, raw_x, raw_y
+
+
+def route_view(
+    screen_resource: dict[str, Any],
+    stage: dict[str, Any],
+    branch_document: dict[str, Any],
+    chapter_document: dict[str, Any],
+) -> dict[str, Any]:
+    """The five routes as panels an editor can draw and paint.
+
+    Each visible panel carries its selector, direction and background palette
+    preset, and per runtime cell either the raw (x, y) of the selector's
+    logical screen it shows or the fixed value of a padding cell. The
+    geometry depends only on the stage, branch and chapter bytes and the
+    original stream layout (raw_hex), so an editor can keep it while it
+    changes cell values; aliases lists the selectors that share one stream.
+    """
+    routes = build_routes(stage, branch_document, chapter_document)
+    payload = bytes.fromhex(screen_resource["raw_hex"])
+    pointers = [payload[index * 2:index * 2 + 2] for index in range(119)]
+    projections: dict[tuple[int, int], Any] = {}
+    result_routes = []
+    for name in ROUTE_NAMES:
+        route = routes[name]
+        panels = []
+        for item in route.visible_placements():
+            key = (item.selector_id, item.direction)
+            if key not in projections:
+                projections[key] = project_screen(screen_resource, *key)
+            projection = projections[key]
+            panels.append({
+                "selector": item.selector_id,
+                "direction": item.direction,
+                "x": item.screen_x - route.min_x,
+                "y": item.screen_y - route.min_y,
+                "palette": item.palette_index,
+                "sequence_offset": item.sequence_offset,
+                "cells": [
+                    [list(coordinate) if coordinate is not None else None
+                     for coordinate in row]
+                    for row in projection.raw_coordinates
+                ],
+                "fixed": [
+                    [value if coordinate is None else None
+                     for value, coordinate in zip(values, coordinates)]
+                    for values, coordinates in zip(
+                        projection.cells, projection.raw_coordinates)
+                ],
+            })
+        result_routes.append({
+            "name": name,
+            "columns": route.width // 16,
+            "rows": route.height // 15,
+            "panels": panels,
+            "annotations": [
+                {"x": item.screen_x - route.min_x, "y": item.screen_y - route.min_y,
+                 "text": item.text}
+                for item in route.annotations
+            ],
+        })
+    return {
+        "schema": "retrolarium.doraemon-world2-view",
+        "schema_version": 1,
+        "routes": result_routes,
+        "aliases": [
+            [other for other in range(119) if pointers[other] == pointers[selector]]
+            for selector in range(119)
+        ],
+    }

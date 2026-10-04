@@ -96,6 +96,9 @@ EDITOR_KINDS = frozenset(
         "solomon.text",
         "smb.demo",
         "castle.demo",
+        "castle.screens",
+        "pacman.demo",
+        "doraemon.text",
         "text.fixed",
         "world.routing",
     }
@@ -106,6 +109,7 @@ CODECS = frozenset(
         "castle.object-stream@1",
         "doraemon.hierarchy.v1",
         "doraemon.world2-metatiles.v1",
+        "doraemon.metasprites.v1",
         "doraemon.world2-screens.v1",
         "doraemon.world2-stage.v1",
         "castle.prefix-rooms@1",
@@ -154,6 +158,9 @@ CODECS = frozenset(
         "solomon.text@1",
         "smb.demo@1",
         "castle.demo@1",
+        "castle.screens@1",
+        "pacman.demo@1",
+        "doraemon.text@1",
     }
 )
 
@@ -191,7 +198,8 @@ _AUTHORING_SCHEMAS = frozenset(
      "retrolarium.solomon-sprite-frames", "retrolarium.solomon-animations",
      "retrolarium.solomon-audio",
      "retrolarium.solomon-presentation", "retrolarium.solomon-text",
-     "retrolarium.smb-demo", "retrolarium.castle-demo"}
+     "retrolarium.smb-demo", "retrolarium.castle-demo", "retrolarium.castle-screens",
+     "retrolarium.pacman-demo", "retrolarium.doraemon-text"}
 )
 
 
@@ -1827,6 +1835,94 @@ def studio_castle_demo_plan(path: Path, *, mame: Path, record: Path | None = Non
     return plan
 
 
+def studio_pacman_round_playtest_plan(path: Path, *, mame: Path, round: int) -> dict[str, Any]:
+    """Run the current Pac-Man build from power-on into a one-player game
+    that starts at ``round`` (1-23, where the game stops counting)."""
+
+    inspection = load_studio_project(path)
+    _require_declared_operation(inspection, "launch")
+    if inspection["project"]["platform"] != "nes"             or inspection["project"]["profile"] != "pacman.v1":
+        raise StudioProjectError("Pac-Man round playtest requires the pacman.v1 NES profile")
+    round = _bounded_integer(round, "round", 1, 23)
+    executable = mame.resolve()
+    if not executable.is_file():
+        raise StudioProjectError(f"MAME executable does not exist: {executable}")
+    verification = verify_studio_project(path)
+    if verification["status"] != "current":
+        raise StudioProjectError("Studio artifact is stale; build it again before round playtest")
+    lua = Path(__file__).with_name("runtime") / "pacman_mame_round_playtest.lua"
+    if not lua.is_file():
+        raise StudioProjectError(f"packaged Pac-Man round playtest script is missing: {lua}")
+    artifact = Path(verification["artifact"]["absolute_path"]).resolve()
+    plan = launch_image_plan(artifact, platform="nes", mame=executable, machine="nes")
+    plan.update({
+        "operation": "retrolarium.studio.pacman-round-playtest",
+        "backend": "mame-lua",
+        "arguments": [
+            *plan["arguments"], "-autoboot_delay", "0",
+            "-autoboot_script", str(lua.resolve()),
+        ],
+        "environment": {"PACMAN_PLAYTEST_ROUND": str(round)},
+        "project_file": inspection["project_file"],
+        "script": {"path": str(lua.resolve()), "sha256": sha256_file(lua)},
+        "point": {"round": round},
+    })
+    return plan
+
+
+def studio_pacman_demo_plan(path: Path, *, mame: Path, record: Path | None = None) -> dict[str, Any]:
+    """Loop the Pac-Man attract demo of the current build in MAME, or record
+    a new one from the player's controller into ``record``."""
+
+    inspection = load_studio_project(path)
+    _require_declared_operation(inspection, "launch")
+    if inspection["project"]["platform"] != "nes"             or inspection["project"]["profile"] != "pacman.v1":
+        raise StudioProjectError("Pac-Man demo playtest requires the pacman.v1 NES profile")
+    profile = packaged_game_profiles().get("pacman")
+    revision = next(
+        (item for item in profile.revisions if item.sha256 == inspection["source"]["sha256"]), None
+    )
+    if revision is None:
+        raise StudioProjectError("Pac-Man demo playtest needs a known Pac-Man source")
+    demo = next(item for item in profile.resources_for(revision) if item.codec == "pacman.attract-demo.v1")
+    layout = demo.parameters
+    executable = mame.resolve()
+    if not executable.is_file():
+        raise StudioProjectError(f"MAME executable does not exist: {executable}")
+    verification = verify_studio_project(path)
+    if verification["status"] != "current":
+        raise StudioProjectError("Studio artifact is stale; build it again before the demo")
+    artifact = Path(verification["artifact"]["absolute_path"]).resolve()
+    source = artifact.read_bytes()
+    script = 16 + layout["script_cpu"] - 0xC000
+    table = layout["table_cpu"]
+    if source[script + 12:script + 15] != bytes((0xB9, table & 0xFF, table >> 8)):
+        raise StudioProjectError("Pac-Man build does not match the guarded demo layout")
+    lua = Path(__file__).with_name("runtime") / "pacman_mame_demo.lua"
+    if not lua.is_file():
+        raise StudioProjectError(f"packaged Pac-Man demo script is missing: {lua}")
+    plan = launch_image_plan(artifact, platform="nes", mame=executable, machine="nes")
+    recording = "" if record is None else str(record.resolve())
+    plan.update({
+        "operation": "retrolarium.studio.pacman-demo",
+        "backend": "mame-lua",
+        "arguments": [
+            *plan["arguments"], "-autoboot_delay", "0",
+            "-autoboot_script", str(lua.resolve()),
+        ],
+        "environment": {
+            "PACMAN_DEMO_SCRIPT": str(layout["script_cpu"]),
+            "PACMAN_DEMO_TABLE": str(table),
+            "PACMAN_DEMO_PAIRS": str(layout["pairs"]),
+            "PACMAN_DEMO_RECORD": recording,
+        },
+        "project_file": inspection["project_file"],
+        "script": {"path": str(lua.resolve()), "sha256": sha256_file(lua)},
+        "demo": {"revision": revision.revision_id, "record": recording or None},
+    })
+    return plan
+
+
 def studio_solomon_demo_plan(
     path: Path, *, mame: Path, record: Path | None = None,
 ) -> dict[str, Any]:
@@ -2009,6 +2105,67 @@ def _tab_block(tab_id: str, title: str, kind: str, document: str, codec: str) ->
     )
 
 
+def _project_source(inspection: Mapping[str, Any]) -> Path:
+    """The project's unedited source image: its disassembly's recorded
+    build, or a fresh one that must match the source identity."""
+
+    manifest_path = Path(inspection["source"]["disassembly_path"])
+    record = manifest_path.parent / "build-result.json"
+    try:
+        artifact = json.loads(record.read_text(encoding="utf-8"))["artifact"]["path"]
+        candidate = (manifest_path.parent / artifact).resolve()
+        if sha256_file(candidate) == inspection["source"]["sha256"]:
+            return candidate
+    except (OSError, KeyError, TypeError, ValueError):
+        pass
+    built = build_project(manifest_path)
+    source = (manifest_path.parent / built["artifact"]["path"]).resolve()
+    if sha256_file(source) != inspection["source"]["sha256"]:
+        raise StudioProjectError("the project's source does not rebuild exactly")
+    return source
+
+
+def _add_bundle_resources(path: Path, *, profile: str, codec: str) -> list[str]:
+    """Give a project's resource bundle the resources newer kits add to its
+    profile, decoded from the project's own source; edited resources stay."""
+
+    from .games import extract_game
+
+    project_file = path.resolve()
+    inspection = load_studio_project(project_file)
+    if inspection["project"]["profile"] != profile:
+        raise StudioProjectError(f"this upgrade requires a {profile} project")
+    tab = next((item for item in inspection["workspace"]["tabs"] if item.get("codec") == codec), None)
+    if tab is None:
+        raise StudioProjectError(f"the project has no {codec} tab")
+    document_path = Path(tab["document_path"])
+    document = json.loads(document_path.read_text(encoding="utf-8"))
+    present = {item.get("id") for item in document.get("resources", [])}
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".bundle-upgrade-", suffix=".json", dir=document_path.parent)
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    try:
+        extract_game(_project_source(inspection), temporary)
+        fresh = json.loads(temporary.read_text(encoding="utf-8"))
+    finally:
+        temporary.unlink(missing_ok=True)
+    added = [item["id"] for item in fresh["resources"] if item["id"] not in present]
+    if not added:
+        return []
+    by_id = {item.get("id"): item for item in document["resources"]}
+    document["resources"] = [by_id.get(item["id"], item) for item in fresh["resources"]]
+    payload = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".bundle-upgrade-", suffix=".json", dir=document_path.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
+            stream.write(payload)
+        os.replace(temporary, document_path)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return added
+
+
 def _add_document_tab(
     path: Path, *, profile: str, resource: str, document_name: str,
     tab_id: str, title: str, kind: str, codec: str,
@@ -2028,22 +2185,7 @@ def _add_document_tab(
     document = root / "documents" / document_name
     if document.exists():
         raise StudioProjectError(f"{document} exists but no tab uses it; move it away first")
-    manifest_path = Path(inspection["source"]["disassembly_path"])
-    source = None
-    record = manifest_path.parent / "build-result.json"
-    try:
-        artifact = json.loads(record.read_text(encoding="utf-8"))["artifact"]["path"]
-        candidate = (manifest_path.parent / artifact).resolve()
-        if sha256_file(candidate) == inspection["source"]["sha256"]:
-            source = candidate
-    except (OSError, KeyError, TypeError, ValueError):
-        source = None
-    if source is None:
-        built = build_project(manifest_path)
-        source = (manifest_path.parent / built["artifact"]["path"]).resolve()
-        if sha256_file(source) != inspection["source"]["sha256"]:
-            raise StudioProjectError("the project's source does not rebuild exactly")
-    extract_game(source, document, resource=resource)
+    extract_game(_project_source(inspection), document, resource=resource)
     block = _tab_block(tab_id, title, kind, f"documents/{document_name}", codec)
     payload = project_file.read_text(encoding="utf-8")
     marker = "\n[operations]"
@@ -2086,10 +2228,39 @@ def upgrade_smb_studio_project(path: Path) -> dict[str, Any]:
 
 
 def upgrade_castle_studio_project(path: Path) -> dict[str, Any]:
-    """Add the title demo (documents/demo.json) to a Castle Excellent project."""
+    """Add the documents newer kits edit to a Castle Excellent project: the
+    title demo (documents/demo.json) and the screens (documents/screens.json)."""
+    added: list[str] = []
+    for resource, name, tab_id, title, kind, codec in (
+        ("title-demo", "demo.json", "demo", "Demo", "castle.demo", "castle.demo@1"),
+        ("screens", "screens.json", "screens", "Screens", "castle.screens", "castle.screens@1"),
+    ):
+        result = _add_document_tab(
+            path, profile="castle-excellent.v1", resource=resource, document_name=name,
+            tab_id=tab_id, title=title, kind=kind, codec=codec,
+        )
+        added += result["added_documents"]
+    return {"status": "upgraded" if added else "current", "project_file": str(path.resolve()),
+            "added_documents": added}
+
+
+def upgrade_doraemon_studio_project(path: Path) -> dict[str, Any]:
+    """Add what newer kits edit to a Doraemon project: the shell text
+    (documents/text.json) and new bundle resources (the shell palettes)."""
+    result = _add_document_tab(
+        path, profile="doraemon.v1", resource="text", document_name="text.json",
+        tab_id="text", title="Text", kind="doraemon.text", codec="doraemon.text@1",
+    )
+    added = _add_bundle_resources(path, profile="doraemon.v1", codec="doraemon.hierarchy.v1")
+    return {**result, "status": "upgraded" if added or result["added_documents"] else "current",
+            "added_resources": added}
+
+
+def upgrade_pacman_studio_project(path: Path) -> dict[str, Any]:
+    """Add the attract demo (documents/demo.json) to a Pac-Man project."""
     return _add_document_tab(
-        path, profile="castle-excellent.v1", resource="title-demo", document_name="demo.json",
-        tab_id="demo", title="Demo", kind="castle.demo", codec="castle.demo@1",
+        path, profile="pacman.v1", resource="attract-demo", document_name="demo.json",
+        tab_id="demo", title="Demo", kind="pacman.demo", codec="pacman.demo@1",
     )
 
 
@@ -2456,11 +2627,24 @@ def create_studio_project(
                 "id": "demo", "kind": "solomon-demo",
                 "codec": "solomon.presentation@1",
             }]
+        elif document_schema == "retrolarium.castle-screens":
+            if profile != "castle-excellent.v1" or resource_root.get("game") != "castle-excellent" \
+                    or not isinstance(resource_root.get("screens"), list):
+                raise StudioProjectError("Castle screens require the castle-excellent.v1 profile")
+            resources = [{"id": "screens", "kind": "castle-screens", "codec": "castle.screens@1"}]
         elif document_schema == "retrolarium.castle-demo":
             if profile != "castle-excellent.v1" or resource_root.get("game") != "castle-excellent" \
                     or not isinstance(resource_root.get("steps"), list):
                 raise StudioProjectError("Castle demo requires the castle-excellent.v1 profile")
             resources = [{"id": "title-demo", "kind": "castle-demo", "codec": "castle.demo@1"}]
+        elif document_schema == "retrolarium.doraemon-text":
+            if profile != "doraemon.v1" or resource_root.get("game") != "doraemon"                     or not isinstance(resource_root.get("ending_credit_rows"), list):
+                raise StudioProjectError("Doraemon text requires the doraemon.v1 profile")
+            resources = [{"id": "text", "kind": "doraemon-text", "codec": "doraemon.text@1"}]
+        elif document_schema == "retrolarium.pacman-demo":
+            if profile != "pacman.v1" or resource_root.get("game") != "pacman"                     or not isinstance(resource_root.get("steps"), list):
+                raise StudioProjectError("Pac-Man demo requires the pacman.v1 profile")
+            resources = [{"id": "attract-demo", "kind": "pacman-demo", "codec": "pacman.demo@1"}]
         elif document_schema == "retrolarium.smb-demo":
             if profile != "smb1.v1" or resource_root.get("game") != "smb1" \
                     or not isinstance(resource_root.get("steps"), list):
@@ -2542,6 +2726,15 @@ def create_studio_project(
              ["edit", "preview", "restore", "undo"]),
             ("castle-demo", "demo", "Demo", "castle.demo",
              "content", "castle.demo@1",
+             ["edit", "preview", "restore", "undo"]),
+            ("castle-screens", "screens", "Screens", "castle.screens",
+             "content", "castle.screens@1",
+             ["edit", "preview", "restore", "undo"]),
+            ("doraemon-text", "text", "Text", "doraemon.text",
+             "content", "doraemon.text@1",
+             ["edit", "preview", "restore", "undo"]),
+            ("pacman-demo", "demo", "Demo", "pacman.demo",
+             "content", "pacman.demo@1",
              ["edit", "preview", "restore", "undo"]),
             ("solomon-text", "text", "Text", "solomon.text",
              "content", "solomon.text@1",
@@ -2719,6 +2912,15 @@ def create_studio_project(
                 title = "Room Cells"
                 editor_kind = "castle.room-cells"
                 selected_codec = "castle.room-cell-visuals.v1"
+                capabilities = ["edit", "preview", "restore", "undo"]
+            elif kind == "animation" and kinds[kind].issubset({
+                    "doraemon.metasprites.v1", "doraemon.world2-metasprites.v1"}):
+                if profile != "doraemon.v1" or resource_root.get("game") != "doraemon":
+                    raise StudioProjectError("Doraemon metasprites require the Doraemon profile")
+                tab_id = "animations"
+                title = "Animations"
+                editor_kind = "animation.mapping"
+                selected_codec = "doraemon.metasprites.v1"
                 capabilities = ["edit", "preview", "restore", "undo"]
             elif kind == "metatile" and kinds[kind] == {
                     "doraemon.world2-metatiles.v1"}:

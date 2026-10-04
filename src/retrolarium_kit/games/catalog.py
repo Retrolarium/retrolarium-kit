@@ -81,6 +81,14 @@ from .solomon_presentation import (
     decode_presentation as decode_solomon_presentation,
     parse_presentation_document as parse_solomon_presentation_document,
 )
+from .castle_screens import (
+    CODEC as CASTLE_SCREENS_CODEC,
+    SCHEMA as CASTLE_SCREENS_SCHEMA,
+    CastleScreensDocument,
+    build_screens as build_castle_screens,
+    decode_screens as decode_castle_screens,
+    parse_screens_document as parse_castle_screens_document,
+)
 from .castle_demo import (
     CODEC as CASTLE_DEMO_CODEC,
     SCHEMA as CASTLE_DEMO_SCHEMA,
@@ -88,6 +96,22 @@ from .castle_demo import (
     build_demo as build_castle_demo,
     decode_demo as decode_castle_demo,
     parse_demo_document as parse_castle_demo_document,
+)
+from .doraemon_text import (
+    CODEC as DORAEMON_TEXT_CODEC,
+    SCHEMA as DORAEMON_TEXT_SCHEMA,
+    DoraemonTextDocument,
+    build_text as build_doraemon_text,
+    decode_text as decode_doraemon_text,
+    parse_text_document as parse_doraemon_text_document,
+)
+from .pacman_demo import (
+    CODEC as PACMAN_DEMO_CODEC,
+    SCHEMA as PACMAN_DEMO_SCHEMA,
+    PacmanDemoDocument,
+    build_demo as build_pacman_demo,
+    decode_demo as decode_pacman_demo,
+    parse_demo_document as parse_pacman_demo_document,
 )
 from .smb_demo import (
     CODEC as SMB_DEMO_CODEC,
@@ -407,6 +431,81 @@ class _CastleDemoAuthoringAdapter:
     document_schema = CASTLE_DEMO_SCHEMA
 
 
+class _DoraemonTextAuthoringAdapter:
+    def decode(
+        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
+    ) -> DoraemonTextDocument:
+        return decode_doraemon_text(payload, profile, revision)
+
+    def parse(
+        self, document: object, profile: GameProfile, revision: RevisionSpec
+    ) -> DoraemonTextDocument:
+        return parse_doraemon_text_document(document, profile, revision)
+
+    def build(
+        self, payload: bytes, document: DoraemonTextDocument,
+        profile: GameProfile, revision: RevisionSpec,
+    ) -> tuple[bytes, dict[str, object]]:
+        return build_doraemon_text(payload, document, profile, revision)
+
+    @staticmethod
+    def details(document: DoraemonTextDocument) -> dict[str, int]:
+        return {"credit_rows": len(document.content["ending_credit_rows"])}
+
+    resource_id = "text"
+    document_schema = DORAEMON_TEXT_SCHEMA
+
+
+class _PacmanDemoAuthoringAdapter:
+    def decode(
+        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
+    ) -> PacmanDemoDocument:
+        return decode_pacman_demo(payload, profile, revision)
+
+    def parse(
+        self, document: object, profile: GameProfile, revision: RevisionSpec
+    ) -> PacmanDemoDocument:
+        return parse_pacman_demo_document(document, profile, revision)
+
+    def build(
+        self, payload: bytes, document: PacmanDemoDocument,
+        profile: GameProfile, revision: RevisionSpec,
+    ) -> tuple[bytes, dict[str, object]]:
+        return build_pacman_demo(payload, document, profile, revision)
+
+    @staticmethod
+    def details(document: PacmanDemoDocument) -> dict[str, int]:
+        return {"steps": len(document.steps)}
+
+    resource_id = "attract-demo"
+    document_schema = PACMAN_DEMO_SCHEMA
+
+
+class _CastleScreensAuthoringAdapter:
+    def decode(
+        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
+    ) -> CastleScreensDocument:
+        return decode_castle_screens(payload, profile, revision)
+
+    def parse(
+        self, document: object, profile: GameProfile, revision: RevisionSpec
+    ) -> CastleScreensDocument:
+        return parse_castle_screens_document(document, profile, revision)
+
+    def build(
+        self, payload: bytes, document: CastleScreensDocument,
+        profile: GameProfile, revision: RevisionSpec,
+    ) -> tuple[bytes, dict[str, object]]:
+        return build_castle_screens(payload, document, profile, revision)
+
+    @staticmethod
+    def details(document: CastleScreensDocument) -> dict[str, int]:
+        return {"screens": len(document.screens)}
+
+    resource_id = "screens"
+    document_schema = CASTLE_SCREENS_SCHEMA
+
+
 class _SolomonTextAuthoringAdapter:
     def decode(
         self, payload: bytes, profile: GameProfile, revision: RevisionSpec
@@ -450,6 +549,9 @@ def authoring_adapters() -> Registry[object]:
     registry.register(SOLOMON_TEXT_CODEC, _SolomonTextAuthoringAdapter())
     registry.register(SMB_DEMO_CODEC, _SmbDemoAuthoringAdapter())
     registry.register(CASTLE_DEMO_CODEC, _CastleDemoAuthoringAdapter())
+    registry.register(CASTLE_SCREENS_CODEC, _CastleScreensAuthoringAdapter())
+    registry.register(PACMAN_DEMO_CODEC, _PacmanDemoAuthoringAdapter())
+    registry.register(DORAEMON_TEXT_CODEC, _DoraemonTextAuthoringAdapter())
     return registry
 
 

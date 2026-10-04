@@ -10,6 +10,7 @@ from retrolarium_kit.studio_project import (
     StudioProjectError,
     build_studio_project,
     studio_castle_point_playtest_plan,
+    studio_pacman_round_playtest_plan,
     studio_solomon_point_playtest_plan,
     studio_smb_point_playtest_plan,
     validate_studio_project,
@@ -426,6 +427,59 @@ class StudioOperationTests(unittest.TestCase):
                         studio_castle_point_playtest_plan(
                             root / "fixture.rlj", mame=mame, room=1, x=0, y=0,
                         )
+
+    def test_bundle_upgrade_adds_new_profile_resources_and_keeps_edits(self) -> None:
+        from retrolarium_kit import studio_project
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            state = self.prepare(root)
+            state["project"]["profile"] = "doraemon.v1"
+            bundle = root / "documents/resources.json"
+            bundle.write_text(json.dumps({"schema": "x", "resources": [
+                {"id": "a", "values": [9]}, {"id": "c", "values": [3]},
+            ]}), encoding="utf-8")
+
+            def extract(_source: Path, output: Path, resource: str | None = None) -> None:
+                output.write_text(json.dumps({"schema": "x", "resources": [
+                    {"id": "a", "values": [1]}, {"id": "b", "values": [2]}, {"id": "c", "values": [3]},
+                ]}), encoding="utf-8")
+
+            with patch("retrolarium_kit.studio_project.load_studio_project", return_value=state),                     patch("retrolarium_kit.studio_project._project_source", return_value=root / "base.nes"),                     patch("retrolarium_kit.games.extract_game", side_effect=extract):
+                added = studio_project._add_bundle_resources(
+                    root / "fixture.rlj", profile="doraemon.v1", codec="nes.chr-2bpp.v1")
+                self.assertEqual(["b"], added)
+                merged = json.loads(bundle.read_text(encoding="utf-8"))
+                self.assertEqual([{"id": "a", "values": [9]}, {"id": "b", "values": [2]},
+                                  {"id": "c", "values": [3]}], merged["resources"])
+                self.assertEqual([], studio_project._add_bundle_resources(
+                    root / "fixture.rlj", profile="doraemon.v1", codec="nes.chr-2bpp.v1"))
+
+    def test_pacman_round_playtest_runs_the_build_with_a_round(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            state = self.prepare(root)
+            state["project"]["profile"] = "pacman.v1"
+            artifact = root / "disassembly/generated/base.nes"
+            artifact.write_bytes(b"NES" + bytes((1, 1)) + bytes(10) + bytes(0x4000 + 0x2000))
+            mame = root / "mame.exe"
+            mame.write_bytes(b"fixture")
+            verification = {"status": "current", "artifact": {"absolute_path": str(artifact)}}
+            with patch(
+                "retrolarium_kit.studio_project.load_studio_project", return_value=state,
+            ), patch(
+                "retrolarium_kit.studio_project.verify_studio_project", return_value=verification,
+            ):
+                plan = studio_pacman_round_playtest_plan(root / "fixture.rlj", mame=mame, round=7)
+                self.assertEqual({"PACMAN_PLAYTEST_ROUND": "7"}, plan["environment"])
+                self.assertEqual("retrolarium.studio.pacman-round-playtest", plan["operation"])
+                self.assertIn(str(artifact.resolve()), plan["arguments"])
+                self.assertTrue(Path(plan["arguments"][-1]).is_file())
+                with self.assertRaisesRegex(StudioProjectError, "round must be"):
+                    studio_pacman_round_playtest_plan(root / "fixture.rlj", mame=mame, round=24)
+                state["project"]["profile"] = "castle-excellent.v1"
+                with self.assertRaisesRegex(StudioProjectError, "pacman.v1"):
+                    studio_pacman_round_playtest_plan(root / "fixture.rlj", mame=mame, round=1)
 
     def test_solomon_point_playtest_uses_profile_hooks_without_rom_patch(self) -> None:
         for revision, hook, machine in (

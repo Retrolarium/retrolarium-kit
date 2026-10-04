@@ -314,17 +314,27 @@ def render_document_wav(
     slot: int,
     sample_rate: int = 44_100,
     profile_path: Path | None = None,
+    mix_slots: tuple[int, ...] = (),
 ) -> dict[str, object]:
-    """Render one validated sound slot into deterministic mono PCM WAV."""
+    """Render one validated sound slot into deterministic mono PCM WAV.
+
+    ``mix_slots`` play along with it on the other square channel (the
+    player-ready and intermission tunes take two slots)."""
 
     document = _load_document(document_path)
     profile, revision = _profile(document, profile_path)
     resource, _spec = _sound_resource(document, profile, revision, resource_id)
+
+    def slot_stream(number: int) -> Mapping[str, object]:
+        stream = _slot(resource, number).get("stream")
+        if not isinstance(stream, Mapping):
+            raise AuthoringError(f"sound slot {number} stream must be an object")
+        return stream
+
     item = _slot(resource, slot)
-    stream = item.get("stream")
-    if not isinstance(stream, Mapping):
-        raise AuthoringError(f"sound slot {slot} stream must be an object")
-    payload = render_stream_wav(stream, sample_rate)
+    stream = slot_stream(slot)
+    payload = render_stream_wav(stream, sample_rate,
+                                also=tuple(slot_stream(number) for number in mix_slots))
     _atomic_write(output_path, payload)
     return {
         "schema": "retrolarium.audio-preview",
@@ -332,6 +342,7 @@ def render_document_wav(
         "engine": CODEC,
         "resource": resource_id,
         "slot": slot,
+        "mixed_slots": list(mix_slots),
         "label": item.get("label"),
         "sample_rate": sample_rate,
         "output": str(output_path.resolve()),

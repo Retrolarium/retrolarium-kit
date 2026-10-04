@@ -59,6 +59,12 @@ from retrolarium_kit.nes_resources import (
     decode_resources,
     parse_resource_document,
 )
+from retrolarium_kit.doraemon_metasprites import (
+    DoraemonMetaspriteError,
+    decode_variable as decode_doraemon_metasprites,
+    decode_world2 as decode_doraemon_world2_metasprites,
+    encode_variable as encode_doraemon_metasprites,
+)
 from retrolarium_kit.studio_project import create_studio_project
 
 
@@ -66,10 +72,27 @@ def synthetic_world2_payload() -> bytes:
     return (0xBFCC).to_bytes(2, "little") * 119 + bytes(16431)
 
 
+def synthetic_metasprite_records(size: int) -> bytes:
+    """Records of up to 64 pieces filling `size` bytes (a multiple of 3)."""
+    units = size // 3
+    output = bytearray()
+    while units:
+        count = min(64, units - 1)
+        output += bytes((count, 16, 16)) + bytes(3 * count)
+        units -= count + 1
+    return bytes(output)
+
+
 def with_world2_screens(image: bytes) -> bytes:
     edited = bytearray(image)
     edited[48878:48878 + 16669] = synthetic_world2_payload()
-    edited[19382:19388] = bytes((1, 4, 5, 16, 32, 48))
+    edited[35766:35772] = bytes((1, 4, 5, 16, 32, 48))
+    # Metasprite catalogs: every index entry points at the first record.
+    for index, size, records, records_size, address in (
+        (7366, 230, 7596, 1509, 0x9D9C), (79591, 376, 79967, 1119, 0xB84F),
+    ):
+        edited[index:index + size] = address.to_bytes(2, "little") * (size // 2)
+        edited[records:records + records_size] = synthetic_metasprite_records(records_size)
     return bytes(edited)
 
 
@@ -88,7 +111,9 @@ class DoraemonProfileTests(unittest.TestCase):
         )
         for revision in self.profile.revisions:
             self.assertEqual(revision.size, 16 + 8 * 16384 + 4 * 8192)
-            resources = self.profile.resources_for(revision)
+            # The bundle's resources; the text has its own document.
+            resources = [resource for resource in self.profile.resources_for(revision)
+                         if resource.codec != "doraemon.shell-text.v1"]
             self.assertEqual(resources[0].parameters["resource_ids"],
                              [resource.resource_id for resource in resources[1:]])
             self.assertEqual(
@@ -120,12 +145,12 @@ class DoraemonProfileTests(unittest.TestCase):
             self.assertEqual(resources[-4].parameters,
                              {"file_offset": 48878, "size": 16669})
             self.assertEqual(resources[-3].parameters,
-                             {"file_offset": 32239, "size": 229,
-                              "start_file_offset": 19272, "start_size": 3})
+                             {"file_offset": 48623, "size": 229,
+                              "start_file_offset": 35656, "start_size": 3})
             self.assertEqual(resources[-2].parameters,
-                             {"file_offset": 26399, "size": 68})
+                             {"file_offset": 42783, "size": 68})
             self.assertEqual(resources[-1].parameters,
-                             {"file_offset": 19382, "size": 6})
+                             {"file_offset": 35766, "size": 6})
 
     def test_all_banks_round_trip_and_isolated_pixel_edit(self) -> None:
         # A private retail ROM is not required to verify the profile's physical
@@ -339,7 +364,7 @@ class DoraemonProfileTests(unittest.TestCase):
         )
         changed = [index for index, (before, after) in
                    enumerate(zip(image, rebuilt)) if before != after]
-        self.assertEqual(changed, [19273, 32243])
+        self.assertEqual(changed, [35657, 48627])
         self.assertEqual(report["changed_bytes"], 2)
 
     def test_world2_branch_tables_have_one_disjoint_owner(self) -> None:
@@ -365,7 +390,7 @@ class DoraemonProfileTests(unittest.TestCase):
         )
         changed = [index for index, (before, after) in
                    enumerate(zip(image, rebuilt)) if before != after]
-        self.assertEqual(changed, [26399 + 34])
+        self.assertEqual(changed, [42783 + 34])
         self.assertEqual(report["changed_bytes"], 1)
 
     def test_world2_chapter_palette_selectors_have_one_owner(self) -> None:
@@ -393,8 +418,31 @@ class DoraemonProfileTests(unittest.TestCase):
         )
         changed = [index for index, (before, after) in
                    enumerate(zip(image, rebuilt)) if before != after]
-        self.assertEqual(changed, [19382, 19385])
+        self.assertEqual(changed, [35766, 35769])
         self.assertEqual(report["changed_bytes"], 2)
+
+    def test_metasprite_catalog_keeps_its_size_and_recomputes_pointers(self) -> None:
+        index = bytes((0x00, 0x90, 0x00, 0x01, 0x06, 0x90))
+        records = bytes((1, 8, 8, 0x00, 0x00, 0x10)) + bytes((1, 8, 8, 0x80, 0x00, 0x11))
+        catalog = decode_doraemon_metasprites(index, records, 0x9000)
+        self.assertEqual([{"record": 0}, {"alias": 0, "flip": 1}, {"record": 1}], catalog["entries"])
+        self.assertEqual([[0x80, 0, 0x11]], catalog["records"][1]["pieces"])
+        # A piece moves from the second record to the first: the second
+        # record's pointer follows.
+        catalog["records"] = [
+            {"x_extent": 8, "y_extent": 8, "pieces": [[0, 0, 0x10], [0, 8, 0x12]]},
+            {"x_extent": 8, "y_extent": 8, "pieces": []},
+        ]
+        with self.assertRaisesRegex(DoraemonMetaspriteError, "1-64 pieces"):
+            encode_doraemon_metasprites(catalog, 0x9000, 6, 12)
+        catalog["records"] = [{"x_extent": 8, "y_extent": 8, "pieces": [[0, 0, 0x10], [0, 8, 0x12], [8, 0, 0x13]]}]
+        catalog["entries"] = [{"record": 0}, {"alias": 0, "flip": 1}, {"record": 0}]
+        new_index, new_records = encode_doraemon_metasprites(catalog, 0x9000, 6, 12)
+        self.assertEqual(bytes((0x00, 0x90, 0x00, 0x01, 0x00, 0x90)), new_index)
+        self.assertEqual(bytes((3, 8, 8, 0, 0, 0x10, 0, 8, 0x12, 8, 0, 0x13)), new_records)
+        catalog["records"][0]["pieces"].pop()
+        with self.assertRaisesRegex(DoraemonMetaspriteError, "keeps 12 bytes"):
+            encode_doraemon_metasprites(catalog, 0x9000, 6, 12)
 
     def test_world3_room_palette_selector_domain(self) -> None:
         selectors = [index % 11 for index in range(64)]
@@ -450,6 +498,22 @@ class DoraemonProfileTests(unittest.TestCase):
                      "kind": "palette", "codec": "nes.palette-table.v1",
                      "values": [0] * 16}
                     for index in range(9)
+                ] + [
+                    {"id": f"shell-palette-{name}",
+                     "kind": "palette", "codec": "nes.palette-table.v1",
+                     "values": [0] * 32}
+                    for name in ("title", "help-1", "help-2", "help-3", "chapter", "ending")
+                ] + [
+                    {"id": f"world{world}-metasprites", "kind": "animation",
+                     "codec": "doraemon.metasprites.v1",
+                     **decode_doraemon_metasprites(
+                         address.to_bytes(2, "little") * (size // 2),
+                         synthetic_metasprite_records(records_size), address)}
+                    for world, size, records_size, address in ((1, 230, 1509, 0x9D9C), (3, 376, 1119, 0xB84F))
+                ] + [
+                    {"id": "world2-metasprites", "kind": "animation",
+                     "codec": "doraemon.world2-metasprites.v1",
+                     **decode_doraemon_world2_metasprites(bytes(232), bytes(58), bytes(36))},
                 ] + [
                     {"id": "world2-screens", "kind": "screen-stream",
                      "codec": "doraemon.world2-screens.v1",
