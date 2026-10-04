@@ -288,6 +288,13 @@
       "codec": "castle.title-demo.v1",
       "capacity_policy": "fixed",
       "parameters": {"script_cpu": 47148, "init_cpu": 47101, "reader_cpu": 47114, "capacity": 72}
+    },
+    {
+      "id": "screens",
+      "kind": "screens",
+      "codec": "castle.screens.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"chr_file_offset": 57360, "pages": [20, 24, 28], "page_names": ["completion", "title", "castle-map"], "chr_banks": [0, 1, 1], "game_over_cpu": 65156, "game_over_length": 9}
     }
   ]
 }

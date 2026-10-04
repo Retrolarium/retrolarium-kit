@@ -45,11 +45,11 @@ def main() -> int:
         for name, (address, size) in expected_offsets.items():
             parameters = resources[name].parameters
             if (parameters["file_offset"], parameters["size"]) != (
-                16 + 0x4000 + address - 0x8000, size
+                16 + 0x8000 + address - 0x8000, size
             ):
                 raise AssertionError(f"{revision.revision_id} {name} ROM span differs")
         if resources["world2-stage"].parameters["start_file_offset"] != (
-            16 + 0x4000 + 0x8B38 - 0x8000
+            16 + 0x8000 + 0x8B38 - 0x8000
         ):
             raise AssertionError(f"{revision.revision_id} stage start span differs")
     sys.path.insert(0, str(root))

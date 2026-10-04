@@ -397,15 +397,34 @@ def note_frequency(value: int) -> float:
     return CPU_FREQUENCY / (16.0 * (period + 1))
 
 
+# The APU's length-counter loads ($4003 bits 3-7); its frame sequencer
+# clocks envelopes at ~240 Hz and length counters at ~120 Hz (as the game
+# sounds in MAME).
+LENGTH_TABLE = (
+    10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14,
+    12, 16, 24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30,
+)
+ENVELOPE_RATE = 240.0
+LENGTH_RATE = 120.0
+
+
 def render_stream_pcm(stream: Mapping[str, object], sample_rate: int = 44_100) -> bytes:
+    """A square channel as the engine drives it: the prologue's $4000 byte
+    (duty, constant volume or envelope, halt) and $4003 byte (length load);
+    each note rewrites the quad, restarting the envelope and length."""
+
     sample_rate = _integer(sample_rate, "sample_rate", minimum=1, maximum=384_000)
     encode_stream(stream)
     prologue = stream["prologue"]
     register0 = int(prologue[1])
-    duty = DUTY_CYCLES[(register0 >> 6) & 3]
-    volume = (register0 & 0x0F) / 15.0
+    control = int(prologue[3])
     frequency = 0.0
     phase = 0.0
+    envelope = 0
+    divider = 0
+    length = 0
+    envelope_clock = 0.0
+    length_clock = 0.0
     samples = bytearray()
     for command in stream["commands"]:
         kind = command["kind"]
@@ -413,25 +432,61 @@ def render_stream_pcm(stream: Mapping[str, object], sample_rate: int = 44_100) -
             opcode = int(command["opcode"])
             if opcode == 0xF6:
                 register0 = int(command["operand"])
-                duty = DUTY_CYCLES[(register0 >> 6) & 3]
-                volume = (register0 & 0x0F) / 15.0
             if opcode == 0xF0 or opcode >= 0xF7:
                 break
             continue
         if kind == "note":
             frequency = note_frequency(int(command["value"]))
+            envelope = 15
+            divider = register0 & 0x0F
+            length = LENGTH_TABLE[control >> 3]
         duration = int(command["duration"])
         count = round(duration * sample_rate / NTSC_FRAME_RATE)
         for _ in range(count):
+            halt = bool(register0 & 0x20)
+            level = register0 & 0x0F if register0 & 0x10 else envelope
+            sounding = frequency and (halt or length > 0)
+            volume = level / 15.0 if sounding else 0.0
+            duty = DUTY_CYCLES[(register0 >> 6) & 3]
             amplitude = volume if phase < duty else -volume
             samples.extend(struct.pack("<h", round(amplitude * 12_000)))
             if frequency:
                 phase = math.fmod(phase + frequency / sample_rate, 1.0)
+            envelope_clock += ENVELOPE_RATE / sample_rate
+            while envelope_clock >= 1.0:
+                envelope_clock -= 1.0
+                if divider == 0:
+                    divider = register0 & 0x0F
+                    if envelope > 0:
+                        envelope -= 1
+                    elif halt:
+                        envelope = 15
+                else:
+                    divider -= 1
+            length_clock += LENGTH_RATE / sample_rate
+            while length_clock >= 1.0:
+                length_clock -= 1.0
+                if not halt and length > 0:
+                    length -= 1
     return bytes(samples)
 
 
-def render_stream_wav(stream: Mapping[str, object], sample_rate: int = 44_100) -> bytes:
+def mix_pcm(parts: list[bytes]) -> bytes:
+    """Sum 16-bit mono PCM streams (the APU's square channels play together)."""
+
+    length = max((len(part) for part in parts), default=0) // 2
+    total = [0] * length
+    for part in parts:
+        for index, (sample,) in enumerate(struct.iter_unpack("<h", part)):
+            total[index] += sample
+    return b"".join(struct.pack("<h", max(-32_768, min(32_767, sample))) for sample in total)
+
+
+def render_stream_wav(stream: Mapping[str, object], sample_rate: int = 44_100,
+                      *, also: tuple[Mapping[str, object], ...] = ()) -> bytes:
     pcm = render_stream_pcm(stream, sample_rate)
+    if also:
+        pcm = mix_pcm([pcm, *(render_stream_pcm(other, sample_rate) for other in also)])
     output = io.BytesIO()
     with wave.open(output, "wb") as wav:
         wav.setnchannels(1)
