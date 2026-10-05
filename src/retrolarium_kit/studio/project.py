@@ -99,6 +99,8 @@ EDITOR_KINDS = frozenset(
         "castle.screens",
         "pacman.demo",
         "doraemon.text",
+        "doraemon.music",
+        "doraemon.demo",
         "text.fixed",
         "world.routing",
     }
@@ -161,6 +163,8 @@ CODECS = frozenset(
         "castle.screens@1",
         "pacman.demo@1",
         "doraemon.text@1",
+        "doraemon.music@1",
+        "doraemon.demo@1",
     }
 )
 
@@ -199,7 +203,8 @@ _AUTHORING_SCHEMAS = frozenset(
      "retrolarium.solomon-audio",
      "retrolarium.solomon-presentation", "retrolarium.solomon-text",
      "retrolarium.smb-demo", "retrolarium.castle-demo", "retrolarium.castle-screens",
-     "retrolarium.pacman-demo", "retrolarium.doraemon-text"}
+     "retrolarium.pacman-demo", "retrolarium.doraemon-text", "retrolarium.doraemon-music",
+     "retrolarium.doraemon-demo"}
 )
 
 
@@ -1870,6 +1875,32 @@ def studio_pacman_round_playtest_plan(path: Path, *, mame: Path, round: int) -> 
     return plan
 
 
+# The shell's reads when Start begins a game (bank 3 CPU addresses).
+DORAEMON_START_BUTTONS_READ = 0x83EE
+DORAEMON_START_CHAPTER_READ = 0x83FD
+# The world start-up stores a playtest point answers (CPU addresses in the
+# world's bank): World1_InitializeDemoState's camera, player position and
+# area palette ($29),
+# Bank1_World2Main's stage index, Bank2_World3Main's two room clears.
+DORAEMON_WORLD1_START_WRITES = (0x831C, 0x8320, 0x8324, 0x8328, 0x8342)
+# World 1's underground: World1_TryEnterManhole's reads of the buttons and
+# the manhole flag, World1_EnterManhole's store of the manhole's object id
+# (the room + 8), then the room profile's player X/Y, camera X and axis
+# position stores.
+DORAEMON_UNDERGROUND_WRITES = (0xD237, 0xD23D, 0xD268, 0xCDF3, 0xCDF8, 0xCE07, 0xCE16)
+DORAEMON_UNDERGROUND_GUARDS = {
+    0xD237: (0xA5, 0x21), 0xD23D: (0xA5, 0x81), 0xD268: (0x85, 0x81), 0xCDF3: (0x85, 0x75),
+    0xCDF8: (0x85, 0x76), 0xCE07: (0x85, 0x5B), 0xCE16: (0x85, 0x89),
+}
+# World1_UndergroundRoomCameraProfiles ($D1EF: camera X, camera Y, axis
+# limit, axis start) and World1_UndergroundRoomEntryProfiles ($D213: player
+# X, Y and the two city returns), four bytes a room.
+DORAEMON_UNDERGROUND_CAMERAS = 0xD1EF
+DORAEMON_UNDERGROUND_ROOMS = 9
+DORAEMON_WORLD2_START_WRITES = (0x88B5,)
+DORAEMON_WORLD3_START_WRITES = (0x830C, 0x8326)
+
+
 def studio_pacman_demo_plan(path: Path, *, mame: Path, record: Path | None = None) -> dict[str, Any]:
     """Loop the Pac-Man attract demo of the current build in MAME, or record
     a new one from the player's controller into ``record``."""
@@ -1915,6 +1946,207 @@ def studio_pacman_demo_plan(path: Path, *, mame: Path, record: Path | None = Non
             "PACMAN_DEMO_TABLE": str(table),
             "PACMAN_DEMO_PAIRS": str(layout["pairs"]),
             "PACMAN_DEMO_RECORD": recording,
+        },
+        "project_file": inspection["project_file"],
+        "script": {"path": str(lua.resolve()), "sha256": sha256_file(lua)},
+        "demo": {"revision": revision.revision_id, "record": recording or None},
+    })
+    return plan
+
+
+def _doraemon_underground_rooms(prg_bank0: bytes) -> list[tuple[int, int, int, int]]:
+    """Each room's (camera X, camera Y, axis limit, axis start) in cells."""
+    base = DORAEMON_UNDERGROUND_CAMERAS - 0x8000
+    return [tuple(prg_bank0[base + room * 4:base + room * 4 + 4])
+            for room in range(DORAEMON_UNDERGROUND_ROOMS)]
+
+
+def _doraemon_underground_point(
+    block: tuple[int, int], rooms: list[tuple[int, int, int, int]],
+) -> tuple[str, dict[str, Any]]:
+    x, y = block
+    if not (0 <= x < 64 and 0 <= y < 25):
+        raise StudioProjectError("World 1 underground blocks are 0-63 across and 0-24 down")
+    # The underground atlas is 64x25 blocks of 32 pixels. A room scrolls
+    # across from its axis origin (camera X - axis start) by its limit, a
+    # screen of 32x30 cells at its fixed camera Y; duplicate entrances
+    # (rooms 5/6 and 7/8) share one region, the first one is used.
+    cx, cy = x * 4 + 2, y * 4 + 2
+    for room, (camera_x, camera_y, limit, start) in enumerate(rooms):
+        origin = camera_x - start
+        if origin <= cx < origin + limit + 32 and camera_y <= cy < camera_y + 30:
+            break
+    else:
+        raise StudioProjectError("that underground block is not in a room a manhole leads to")
+    coarse = max(0, min(limit, cx - origin - 16))
+    left = origin + coarse
+    sx = max(0x10, min(0xF0, x * 32 + 16 - left * 8))
+    sy = max(0x10, min(0xE0, y * 32 + 16 - camera_y * 8))
+    return (f"underground {room} {sx} {sy} {left} {coarse}",
+            {"world": 1, "underground": [x, y], "room": room, "camera": [left, camera_y],
+             "axis": coarse, "player": [sx, sy]})
+
+
+def _doraemon_playtest_point(
+    world: int, block: tuple[int, int] | None, stage: int | None, room: int | None,
+    underground: tuple[int, int] | None = None,
+    underground_rooms: list[tuple[int, int, int, int]] | None = None,
+) -> tuple[str, tuple[int, ...], dict[str, Any] | None]:
+    """The Lua point, the store PCs it answers and the plan's description."""
+    if world == 1 and underground is not None:
+        if block is not None or underground_rooms is None:
+            raise StudioProjectError("pick a city block or an underground block, not both")
+        point, described = _doraemon_underground_point(underground, underground_rooms)
+        return point, DORAEMON_UNDERGROUND_WRITES, described
+    if underground is not None:
+        raise StudioProjectError("an underground block is for World 1")
+    if world == 1 and block is not None:
+        x, y = block
+        if not (0 <= x < 64 and 0 <= y < 64):
+            raise StudioProjectError("World 1 city blocks are 0-63 on each axis")
+        # The city is 64x64 blocks of 32 pixels; the camera counts 8-pixel
+        # cells (0-$E0 across, 0-$E2 down) and the player is on the screen.
+        px, py = x * 32 + 16, y * 32 + 16
+        cx = max(0, min(0xE0, (px - 0x78) // 8))
+        cy = max(0, min(0xE2, (py - 0x80) // 8))
+        sx = max(8, min(0xF0, px - cx * 8))
+        sy = max(16, min(0xE0, py - cy * 8))
+        # Above camera row $40 is the mountain, reached from the underground,
+        # which then sets the area palette $29 to 1.
+        area = 1 if cy < 0x40 else 0
+        return (f"camera {cx} {cy} {sx} {sy} {area}", DORAEMON_WORLD1_START_WRITES,
+                {"world": 1, "block": [x, y], "camera": [cx, cy], "player": [sx, sy], "area": area})
+    if world == 2 and stage is not None:
+        if stage not in (0, 1, 2):
+            raise StudioProjectError("World 2 stages are 0-2")
+        return f"stage {stage}", DORAEMON_WORLD2_START_WRITES, {"world": 2, "stage": stage}
+    if world == 3 and room is not None:
+        if not 1 <= room <= 63:
+            raise StudioProjectError("World 3 rooms are 1-63 (room 0 is the start)")
+        return f"room {room}", DORAEMON_WORLD3_START_WRITES, {"world": 3, "room": room}
+    if block is not None or stage is not None or room is not None:
+        raise StudioProjectError("a city block is for World 1, a stage for World 2, a room for World 3")
+    return "", (), None
+
+
+def studio_doraemon_playtest_plan(
+    path: Path, *, mame: Path, world: int, block: tuple[int, int] | None = None,
+    stage: int | None = None, room: int | None = None, underground: tuple[int, int] | None = None,
+) -> dict[str, Any]:
+    """Start the current Doraemon build in one world in MAME, through the
+    title's chapter select (A and B held with Start), optionally at a city
+    block (World 1), a stage (World 2) or a room (World 3)."""
+
+    if world not in (1, 2, 3):
+        raise StudioProjectError("Doraemon playtest world must be 1, 2 or 3")
+    inspection = load_studio_project(path)
+    _require_declared_operation(inspection, "launch")
+    if inspection["project"]["platform"] != "nes" or inspection["project"]["profile"] != "doraemon.v1":
+        raise StudioProjectError("Doraemon playtest requires the doraemon.v1 NES profile")
+    executable = mame.resolve()
+    if not executable.is_file():
+        raise StudioProjectError(f"MAME executable does not exist: {executable}")
+    verification = verify_studio_project(path)
+    if verification["status"] != "current":
+        raise StudioProjectError("Studio artifact is stale; build it again before the playtest")
+    artifact = Path(verification["artifact"]["absolute_path"]).resolve()
+    source = artifact.read_bytes()
+    # Bank 3's game start: LDA $21 / AND #$C0 / CMP #$C0, then LDX $3C.
+    shell = 16 + 3 * 0x8000 - 0x8000
+    if source[shell + DORAEMON_START_BUTTONS_READ:shell + DORAEMON_START_BUTTONS_READ + 6] \
+            != bytes((0xA5, 0x21, 0x29, 0xC0, 0xC9, 0xC0)) \
+            or source[shell + DORAEMON_START_CHAPTER_READ:shell + DORAEMON_START_CHAPTER_READ + 2] != bytes((0xA6, 0x3C)):
+        raise StudioProjectError("Doraemon build does not match the guarded chapter start")
+    bank = 16 + (world - 1) * 0x8000 - 0x8000
+    point, writes, described = _doraemon_playtest_point(
+        world, block, stage, room, underground,
+        _doraemon_underground_rooms(source[16:16 + 0x8000]) if underground is not None else None)
+    if writes == DORAEMON_UNDERGROUND_WRITES:
+        for pc, expected in DORAEMON_UNDERGROUND_GUARDS.items():
+            if source[bank + pc:bank + pc + 2] != bytes(expected):
+                raise StudioProjectError("Doraemon build does not match the guarded manhole entry")
+        writes_checked: tuple[int, ...] = ()
+    else:
+        writes_checked = writes
+    # The stores the point answers: LDA #imm / STA zp in the world's bank.
+    for pc in writes_checked:
+        target = {0x831C: 0x5B, 0x8320: 0x5C, 0x8324: 0x75, 0x8328: 0x76, 0x8342: 0x29,
+                  0x88B5: 0xA9, 0x830C: 0xDF, 0x8326: 0xDF}[pc]
+        if source[bank + pc:bank + pc + 2] != bytes((0x85, target)):
+            raise StudioProjectError("Doraemon build does not match the guarded world start")
+    lua = Path(__file__).with_name("runtime") / "doraemon_mame_playtest.lua"
+    if not lua.is_file():
+        raise StudioProjectError(f"packaged Doraemon playtest script is missing: {lua}")
+    plan = launch_image_plan(artifact, platform="nes", mame=executable, machine="nes")
+    plan.update({
+        "operation": "retrolarium.studio.doraemon-playtest",
+        "backend": "mame-lua",
+        "arguments": [
+            *plan["arguments"], "-autoboot_delay", "0",
+            "-autoboot_script", str(lua.resolve()),
+        ],
+        "environment": {
+            "DORAEMON_PLAYTEST_WORLD": str(world),
+            "DORAEMON_PLAYTEST_BUTTONS_READ": str(DORAEMON_START_BUTTONS_READ),
+            "DORAEMON_PLAYTEST_CHAPTER_READ": str(DORAEMON_START_CHAPTER_READ),
+            "DORAEMON_PLAYTEST_POINT": point,
+            "DORAEMON_PLAYTEST_WRITES": ",".join(str(pc) for pc in writes),
+        },
+        "project_file": inspection["project_file"],
+        "script": {"path": str(lua.resolve()), "sha256": sha256_file(lua)},
+        "point": described or {"world": world},
+    })
+    return plan
+
+
+def studio_doraemon_demo_plan(path: Path, *, mame: Path, record: Path | None = None) -> dict[str, Any]:
+    """Loop World 1's attract demo of the current Doraemon build in MAME, or
+    record a new one from the player's controller into ``record``."""
+
+    from .doraemon_demo import CODEC as DEMO_CODEC, capacity
+
+    inspection = load_studio_project(path)
+    _require_declared_operation(inspection, "launch")
+    if inspection["project"]["platform"] != "nes" or inspection["project"]["profile"] != "doraemon.v1":
+        raise StudioProjectError("Doraemon demo playtest requires the doraemon.v1 NES profile")
+    profile = packaged_game_profiles().get("doraemon")
+    revision = next(
+        (item for item in profile.revisions if item.sha256 == inspection["source"]["sha256"]), None
+    )
+    if revision is None:
+        raise StudioProjectError("Doraemon demo playtest needs a known Doraemon source")
+    layout = next(item for item in profile.resources_for(revision) if item.codec == DEMO_CODEC).parameters
+    executable = mame.resolve()
+    if not executable.is_file():
+        raise StudioProjectError(f"MAME executable does not exist: {executable}")
+    verification = verify_studio_project(path)
+    if verification["status"] != "current":
+        raise StudioProjectError("Studio artifact is stale; build it again before the demo")
+    artifact = Path(verification["artifact"]["absolute_path"]).resolve()
+    source = artifact.read_bytes()
+    stream = layout["stream_cpu"]
+    entry = 16 + layout["bank"] * 0x8000 + layout["entry_cpu"] - 0x8000
+    reader = 16 + layout["bank"] * 0x8000 + layout["reader_cpu"] + 46 - 0x8000
+    if source[entry:entry + 8] != bytes((0xA9, stream & 0xFF, 0x85, 0xA6, 0xA9, stream >> 8, 0x85, 0xA7)) \
+            or source[reader:reader + 2] != bytes((0x85, 0x21)):
+        raise StudioProjectError("Doraemon build does not match the guarded demo layout")
+    lua = Path(__file__).with_name("runtime") / "doraemon_mame_demo.lua"
+    if not lua.is_file():
+        raise StudioProjectError(f"packaged Doraemon demo script is missing: {lua}")
+    plan = launch_image_plan(artifact, platform="nes", mame=executable, machine="nes")
+    recording = "" if record is None else str(record.resolve())
+    plan.update({
+        "operation": "retrolarium.studio.doraemon-demo",
+        "backend": "mame-lua",
+        "arguments": [
+            *plan["arguments"], "-autoboot_delay", "0",
+            "-autoboot_script", str(lua.resolve()),
+        ],
+        "environment": {
+            "DORAEMON_DEMO_ENTRY": str(layout["entry_cpu"]),
+            "DORAEMON_DEMO_READER": str(layout["reader_cpu"]),
+            "DORAEMON_DEMO_STEPS": str(capacity(layout)),
+            "DORAEMON_DEMO_RECORD": recording,
         },
         "project_file": inspection["project_file"],
         "script": {"path": str(lua.resolve()), "sha256": sha256_file(lua)},
@@ -2247,12 +2479,19 @@ def upgrade_castle_studio_project(path: Path) -> dict[str, Any]:
 def upgrade_doraemon_studio_project(path: Path) -> dict[str, Any]:
     """Add what newer kits edit to a Doraemon project: the shell text
     (documents/text.json) and new bundle resources (the shell palettes)."""
-    result = _add_document_tab(
-        path, profile="doraemon.v1", resource="text", document_name="text.json",
-        tab_id="text", title="Text", kind="doraemon.text", codec="doraemon.text@1",
-    )
+    documents: list[str] = []
+    for resource, name, tab_id, title, kind, codec in (
+        ("text", "text.json", "text", "Text", "doraemon.text", "doraemon.text@1"),
+        ("music", "music.json", "sound", "Sound", "doraemon.music", "doraemon.music@1"),
+        ("demo", "demo.json", "demo", "Demo", "doraemon.demo", "doraemon.demo@1"),
+    ):
+        documents += _add_document_tab(
+            path, profile="doraemon.v1", resource=resource, document_name=name,
+            tab_id=tab_id, title=title, kind=kind, codec=codec,
+        )["added_documents"]
     added = _add_bundle_resources(path, profile="doraemon.v1", codec="doraemon.hierarchy.v1")
-    return {**result, "status": "upgraded" if added or result["added_documents"] else "current",
+    return {"status": "upgraded" if added or documents else "current",
+            "project_file": str(path.resolve()), "added_documents": documents,
             "added_resources": added}
 
 
@@ -2637,6 +2876,16 @@ def create_studio_project(
                     or not isinstance(resource_root.get("steps"), list):
                 raise StudioProjectError("Castle demo requires the castle-excellent.v1 profile")
             resources = [{"id": "title-demo", "kind": "castle-demo", "codec": "castle.demo@1"}]
+        elif document_schema == "retrolarium.doraemon-demo":
+            if profile != "doraemon.v1" or resource_root.get("game") != "doraemon" \
+                    or not isinstance(resource_root.get("steps"), list):
+                raise StudioProjectError("Doraemon demo requires the doraemon.v1 profile")
+            resources = [{"id": "demo", "kind": "doraemon-demo", "codec": "doraemon.demo@1"}]
+        elif document_schema == "retrolarium.doraemon-music":
+            if profile != "doraemon.v1" or resource_root.get("game") != "doraemon" \
+                    or not isinstance(resource_root.get("drivers"), list):
+                raise StudioProjectError("Doraemon music requires the doraemon.v1 profile")
+            resources = [{"id": "music", "kind": "doraemon-music", "codec": "doraemon.music@1"}]
         elif document_schema == "retrolarium.doraemon-text":
             if profile != "doraemon.v1" or resource_root.get("game") != "doraemon"                     or not isinstance(resource_root.get("ending_credit_rows"), list):
                 raise StudioProjectError("Doraemon text requires the doraemon.v1 profile")
@@ -2730,6 +2979,12 @@ def create_studio_project(
             ("castle-screens", "screens", "Screens", "castle.screens",
              "content", "castle.screens@1",
              ["edit", "preview", "restore", "undo"]),
+            ("doraemon-demo", "demo", "Demo", "doraemon.demo",
+             "content", "doraemon.demo@1",
+             ["edit", "preview", "restore", "undo"]),
+            ("doraemon-music", "sound", "Sound", "doraemon.music",
+             "content", "doraemon.music@1",
+             ["edit", "piano-roll", "wav-preview", "restore", "undo"]),
             ("doraemon-text", "text", "Text", "doraemon.text",
              "content", "doraemon.text@1",
              ["edit", "preview", "restore", "undo"]),

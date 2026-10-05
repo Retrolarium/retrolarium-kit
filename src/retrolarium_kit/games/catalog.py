@@ -97,6 +97,22 @@ from .castle_demo import (
     decode_demo as decode_castle_demo,
     parse_demo_document as parse_castle_demo_document,
 )
+from .doraemon_demo import (
+    CODEC as DORAEMON_DEMO_CODEC,
+    SCHEMA as DORAEMON_DEMO_SCHEMA,
+    DoraemonDemoDocument,
+    build_demo as build_doraemon_demo,
+    decode_demo as decode_doraemon_demo,
+    parse_demo_document as parse_doraemon_demo_document,
+)
+from .doraemon_music import (
+    CODEC as DORAEMON_MUSIC_CODEC,
+    SCHEMA as DORAEMON_MUSIC_SCHEMA,
+    DoraemonMusicDocument,
+    build_music as build_doraemon_music,
+    decode_music as decode_doraemon_music,
+    parse_music_document as parse_doraemon_music_document,
+)
 from .doraemon_text import (
     CODEC as DORAEMON_TEXT_CODEC,
     SCHEMA as DORAEMON_TEXT_SCHEMA,
@@ -431,6 +447,56 @@ class _CastleDemoAuthoringAdapter:
     document_schema = CASTLE_DEMO_SCHEMA
 
 
+class _DoraemonDemoAuthoringAdapter:
+    def decode(
+        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
+    ) -> DoraemonDemoDocument:
+        return decode_doraemon_demo(payload, profile, revision)
+
+    def parse(
+        self, document: object, profile: GameProfile, revision: RevisionSpec
+    ) -> DoraemonDemoDocument:
+        return parse_doraemon_demo_document(document, profile, revision)
+
+    def build(
+        self, payload: bytes, document: DoraemonDemoDocument,
+        profile: GameProfile, revision: RevisionSpec,
+    ) -> tuple[bytes, dict[str, object]]:
+        return build_doraemon_demo(payload, document, profile, revision)
+
+    @staticmethod
+    def details(document: DoraemonDemoDocument) -> dict[str, int]:
+        return {"steps": len(document.steps)}
+
+    resource_id = "demo"
+    document_schema = DORAEMON_DEMO_SCHEMA
+
+
+class _DoraemonMusicAuthoringAdapter:
+    def decode(
+        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
+    ) -> DoraemonMusicDocument:
+        return decode_doraemon_music(payload, profile, revision)
+
+    def parse(
+        self, document: object, profile: GameProfile, revision: RevisionSpec
+    ) -> DoraemonMusicDocument:
+        return parse_doraemon_music_document(document, profile, revision)
+
+    def build(
+        self, payload: bytes, document: DoraemonMusicDocument,
+        profile: GameProfile, revision: RevisionSpec,
+    ) -> tuple[bytes, dict[str, object]]:
+        return build_doraemon_music(payload, document, profile, revision)
+
+    @staticmethod
+    def details(document: DoraemonMusicDocument) -> dict[str, int]:
+        return {"drivers": len(document.drivers)}
+
+    resource_id = "music"
+    document_schema = DORAEMON_MUSIC_SCHEMA
+
+
 class _DoraemonTextAuthoringAdapter:
     def decode(
         self, payload: bytes, profile: GameProfile, revision: RevisionSpec
@@ -552,6 +618,8 @@ def authoring_adapters() -> Registry[object]:
     registry.register(CASTLE_SCREENS_CODEC, _CastleScreensAuthoringAdapter())
     registry.register(PACMAN_DEMO_CODEC, _PacmanDemoAuthoringAdapter())
     registry.register(DORAEMON_TEXT_CODEC, _DoraemonTextAuthoringAdapter())
+    registry.register(DORAEMON_MUSIC_CODEC, _DoraemonMusicAuthoringAdapter())
+    registry.register(DORAEMON_DEMO_CODEC, _DoraemonDemoAuthoringAdapter())
     return registry
 
 
