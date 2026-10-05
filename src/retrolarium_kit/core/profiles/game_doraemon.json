@@ -43,7 +43,10 @@
           "world2-palette-00", "world2-palette-01", "world2-palette-02", "world2-palette-03", "world2-palette-04", "world2-palette-05", "world2-palette-06", "world2-palette-07", "world2-palette-08",
           "shell-palette-title", "shell-palette-help-1", "shell-palette-help-2",
           "shell-palette-help-3", "shell-palette-chapter", "shell-palette-ending",
-          "world1-metasprites", "world3-metasprites", "world2-metasprites",
+          "shell-help-sprites-1", "shell-help-sprites-2", "shell-help-sprites-3",
+          "world1-city-objects", "world1-underground-objects",
+          "world1-enemy-properties", "world1-descriptors",
+          "world1-metasprites", "world3-metasprites", "world2-enemy-metasprites",
           "world2-screens", "world2-stage", "world2-branches", "world2-chapters"
         ]
       }
@@ -342,6 +345,41 @@
       "parameters": {"file_offset": 101419, "size": 32, "entries": 32}
     },
     {
+      "id": "shell-help-sprites-1", "kind": "sprites",
+      "codec": "doraemon.oam-stream.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 100064, "size": 89}
+    },
+    {
+      "id": "shell-help-sprites-2", "kind": "sprites",
+      "codec": "doraemon.oam-stream.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 100153, "size": 57}
+    },
+    {
+      "id": "shell-help-sprites-3", "kind": "sprites",
+      "codec": "doraemon.oam-stream.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 100210, "size": 105}
+    },
+    {
+      "id": "world1-city-objects", "kind": "objects",
+      "codec": "doraemon.world1-placements.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 22937, "size": 337, "sorted_tail": true}
+    },
+    {
+      "id": "world1-underground-objects", "kind": "objects",
+      "codec": "doraemon.world1-placements.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 22837, "size": 100, "sorted_tail": false}
+    },
+    {
+      "id": "world1-enemy-properties", "kind": "objects",
+      "codec": "doraemon.world1-enemy-properties.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 3712, "size": 48}
+    },
+    {
+      "id": "world1-descriptors", "kind": "objects",
+      "codec": "doraemon.world1-descriptors.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 19482, "size": 52}
+    },
+    {
       "id": "world1-metasprites", "kind": "animation",
       "codec": "doraemon.metasprites.v1", "capacity_policy": "fixed",
       "parameters": {"file_offset": 7366, "size": 230, "records_file_offset": 7596, "records_size": 1509, "records_address": 40348}
@@ -352,9 +390,9 @@
       "parameters": {"file_offset": 79591, "size": 376, "records_file_offset": 79967, "records_size": 1119, "records_address": 47183}
     },
     {
-      "id": "world2-metasprites", "kind": "animation",
+      "id": "world2-enemy-metasprites", "kind": "animation",
       "codec": "doraemon.world2-metasprites.v1", "capacity_policy": "fixed",
-      "parameters": {"file_offset": 41948, "size": 232, "descriptors_file_offset": 42196, "attributes_file_offset": 42294}
+      "parameters": {"file_offset": 41964, "size": 232, "descriptors_file_offset": 42196, "attributes_file_offset": 42294}
     },
     {
       "id": "world2-screens", "kind": "screen-stream",

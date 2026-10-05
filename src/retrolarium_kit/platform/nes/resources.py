@@ -48,6 +48,17 @@ from .doraemon_palettes import (
     decode_room_selectors as decode_doraemon_room_selectors,
     encode_room_selectors as encode_doraemon_room_selectors,
 )
+from .doraemon_objects import (
+    DESCRIPTORS_CODEC as DORAEMON_DESCRIPTORS_CODEC,
+    ENEMY_PROPERTIES_CODEC as DORAEMON_ENEMY_PROPERTIES_CODEC,
+    PLACEMENTS_CODEC as DORAEMON_PLACEMENTS_CODEC,
+    decode_descriptors as decode_doraemon_descriptors,
+    decode_enemy_properties as decode_doraemon_enemy_properties,
+    decode_placements as decode_doraemon_placements,
+    encode_descriptors as encode_doraemon_descriptors,
+    encode_enemy_properties as encode_doraemon_enemy_properties,
+    encode_placements as encode_doraemon_placements,
+)
 from .doraemon_metasprites import (
     VARIABLE_CODEC as DORAEMON_METASPRITE_CODEC,
     WORLD2_ATTRIBUTES as DORAEMON_WORLD2_METASPRITE_ATTRIBUTES,
@@ -57,6 +68,9 @@ from .doraemon_metasprites import (
     decode_world2 as decode_doraemon_world2_metasprites,
     encode_variable as encode_doraemon_metasprites,
     encode_world2 as encode_doraemon_world2_metasprites,
+    OAM_STREAM_CODEC as DORAEMON_OAM_STREAM_CODEC,
+    decode_oam_stream as decode_doraemon_oam_stream,
+    encode_oam_stream as encode_doraemon_oam_stream,
 )
 from .doraemon_world2_metatiles import (
     CODEC as DORAEMON_WORLD2_METATILE_CODEC,
@@ -196,6 +210,8 @@ SUPPORTED_CODECS = (
     DORAEMON_WORLD2_BRANCH_CODEC,
     DORAEMON_WORLD2_CHAPTER_CODEC,
     DORAEMON_METASPRITE_CODEC, DORAEMON_WORLD2_METASPRITE_CODEC,
+    DORAEMON_OAM_STREAM_CODEC, DORAEMON_PLACEMENTS_CODEC,
+    DORAEMON_ENEMY_PROPERTIES_CODEC, DORAEMON_DESCRIPTORS_CODEC,
 )
 
 
@@ -801,6 +817,31 @@ def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
             raise NesResourceError(str(exc)) from exc
         return {"id": resource.resource_id, "kind": resource.kind,
                 "codec": resource.codec, **decoded}
+    if resource.codec in (DORAEMON_PLACEMENTS_CODEC, DORAEMON_ENEMY_PROPERTIES_CODEC,
+                          DORAEMON_DESCRIPTORS_CODEC):
+        size = _integer(resource.parameters.get("size"), f"{resource.resource_id}.size", minimum=4)
+        offset, _ = _span(resource, size)
+        payload = image[offset:offset + size]
+        try:
+            if resource.codec == DORAEMON_PLACEMENTS_CODEC:
+                fields: dict[str, object] = {"records": decode_doraemon_placements(payload)}
+            elif resource.codec == DORAEMON_ENEMY_PROPERTIES_CODEC:
+                fields = decode_doraemon_enemy_properties(payload)
+            else:
+                fields = {"records": decode_doraemon_descriptors(payload)}
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return {"id": resource.resource_id, "kind": resource.kind,
+                "codec": resource.codec, **fields}
+    if resource.codec == DORAEMON_OAM_STREAM_CODEC:
+        size = _integer(resource.parameters.get("size"), f"{resource.resource_id}.size", minimum=5)
+        offset, _ = _span(resource, size)
+        try:
+            sprites = decode_doraemon_oam_stream(image[offset:offset + size])
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return {"id": resource.resource_id, "kind": resource.kind,
+                "codec": resource.codec, "sprites": sprites}
     if resource.codec == DORAEMON_ROOM_SELECTOR_CODEC:
         offset, size = _span(resource, 64)
         try:
@@ -1459,6 +1500,32 @@ def _parse_resource(
             _EncodedSpan(offset, visual),
             _EncodedSpan(collision_offset, collision),
         )
+    elif spec.codec in (DORAEMON_PLACEMENTS_CODEC, DORAEMON_ENEMY_PROPERTIES_CODEC,
+                        DORAEMON_DESCRIPTORS_CODEC):
+        size = _integer(spec.parameters.get("size"), f"{spec.resource_id}.size", minimum=4)
+        _span(spec, size)
+        try:
+            if spec.codec == DORAEMON_PLACEMENTS_CODEC:
+                expected_fields = {"id", "kind", "codec", "records"}
+                payload = encode_doraemon_placements(
+                    raw.get("records"), size, sorted_tail=spec.parameters.get("sorted_tail") is True)
+            elif spec.codec == DORAEMON_ENEMY_PROPERTIES_CODEC:
+                expected_fields = {"id", "kind", "codec", "metasprites", "render_flags", "health"}
+                payload = encode_doraemon_enemy_properties(
+                    {name: raw.get(name) for name in ("metasprites", "render_flags", "health")})
+            else:
+                expected_fields = {"id", "kind", "codec", "records"}
+                payload = encode_doraemon_descriptors(raw.get("records"))
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+    elif spec.codec == DORAEMON_OAM_STREAM_CODEC:
+        expected_fields = {"id", "kind", "codec", "sprites"}
+        size = _integer(spec.parameters.get("size"), f"{spec.resource_id}.size", minimum=5)
+        _span(spec, size)
+        try:
+            payload = encode_doraemon_oam_stream(raw.get("sprites"), size)
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
     elif spec.codec == DORAEMON_ROOM_SELECTOR_CODEC:
         expected_fields = {"id", "kind", "codec", "selectors"}
         _span(spec, 64)

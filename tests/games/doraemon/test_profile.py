@@ -68,6 +68,10 @@ from retrolarium_kit.doraemon_metasprites import (
 from retrolarium_kit.studio_project import create_studio_project
 
 
+HELP_SPRITE_STREAMS = ((100064, 89), (100153, 57), (100210, 105))
+OBJECT_LISTS = ((22937, 337), (22837, 100))     # city, underground placements
+
+
 def synthetic_world2_payload() -> bytes:
     return (0xBFCC).to_bytes(2, "little") * 119 + bytes(16431)
 
@@ -87,6 +91,12 @@ def with_world2_screens(image: bytes) -> bytes:
     edited = bytearray(image)
     edited[48878:48878 + 16669] = synthetic_world2_payload()
     edited[35766:35772] = bytes((1, 4, 5, 16, 32, 48))
+    # The help screens' OAM streams: whole sprites, then the zero Y.
+    for offset, size in HELP_SPRITE_STREAMS:
+        edited[offset:offset + size] = bytes((8, 1, 0, 8)) * (size // 4) + bytes(1)
+    # World 1 placement lists: whole records, then the zero X.
+    for offset, size in OBJECT_LISTS:
+        edited[offset:offset + size] = bytes((1, 1, 0)) * (size // 3) + bytes(1)
     # Metasprite catalogs: every index entry points at the first record.
     for index, size, records, records_size, address in (
         (7366, 230, 7596, 1509, 0x9D9C), (79591, 376, 79967, 1119, 0xB84F),
@@ -505,6 +515,23 @@ class DoraemonProfileTests(unittest.TestCase):
                      "values": [0] * 32}
                     for name in ("title", "help-1", "help-2", "help-3", "chapter", "ending")
                 ] + [
+                    {"id": f"shell-help-sprites-{n + 1}", "kind": "sprites",
+                     "codec": "doraemon.oam-stream.v1",
+                     "sprites": [{"x": 8, "y": 8, "tile": 1, "attributes": 0}] * (size // 4)}
+                    for n, (_, size) in enumerate(HELP_SPRITE_STREAMS)
+                ] + [
+                    {"id": f"world1-{name}-objects", "kind": "objects",
+                     "codec": "doraemon.world1-placements.v1",
+                     "records": [{"x": 1, "y": 1, "type": 0}] * (size // 3)}
+                    for name, (_, size) in zip(("city", "underground"), OBJECT_LISTS)
+                ] + [
+                    {"id": "world1-enemy-properties", "kind": "objects",
+                     "codec": "doraemon.world1-enemy-properties.v1",
+                     "metasprites": [0] * 16, "render_flags": [0] * 16, "health": [0] * 16},
+                    {"id": "world1-descriptors", "kind": "objects",
+                     "codec": "doraemon.world1-descriptors.v1",
+                     "records": [{"runtime_type": 0, "metasprite": 0, "render_flags": 0, "behavior": 0}] * 13},
+                ] + [
                     {"id": f"world{world}-metasprites", "kind": "animation",
                      "codec": "doraemon.metasprites.v1",
                      **decode_doraemon_metasprites(
@@ -512,7 +539,7 @@ class DoraemonProfileTests(unittest.TestCase):
                          synthetic_metasprite_records(records_size), address)}
                     for world, size, records_size, address in ((1, 230, 1509, 0x9D9C), (3, 376, 1119, 0xB84F))
                 ] + [
-                    {"id": "world2-metasprites", "kind": "animation",
+                    {"id": "world2-enemy-metasprites", "kind": "animation",
                      "codec": "doraemon.world2-metasprites.v1",
                      **decode_doraemon_world2_metasprites(bytes(232), bytes(58), bytes(36))},
                 ] + [
