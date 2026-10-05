@@ -111,9 +111,10 @@ class DoraemonProfileTests(unittest.TestCase):
         )
         for revision in self.profile.revisions:
             self.assertEqual(revision.size, 16 + 8 * 16384 + 4 * 8192)
-            # The bundle's resources; the text has its own document.
+            # The bundle's resources; the text, music and demo have their own documents.
             resources = [resource for resource in self.profile.resources_for(revision)
-                         if resource.codec != "doraemon.shell-text.v1"]
+                         if resource.codec not in ("doraemon.shell-text.v1", "doraemon.music-streams.v1",
+                                                  "doraemon.world1-demo.v1")]
             self.assertEqual(resources[0].parameters["resource_ids"],
                              [resource.resource_id for resource in resources[1:]])
             self.assertEqual(
