@@ -112,6 +112,39 @@ def encode_variable(value: Any, records_address: int, index_size: int, records_s
     return bytes(index), bytes(body)
 
 
+OAM_STREAM_CODEC = "doraemon.oam-stream.v1"
+
+
+def decode_oam_stream(payload: bytes) -> list[dict[str, int]]:
+    """A terminated OAM stream (Shell_CopyTerminatedOamStream): Y, tile,
+    attributes, X per sprite, ended by a zero Y. The sprite count is fixed."""
+    if len(payload) % 4 != 1 or payload[-1] != 0:
+        raise DoraemonMetaspriteError("an OAM stream is whole sprites and a zero terminator")
+    sprites = []
+    for at in range(0, len(payload) - 1, 4):
+        y, tile, attributes, x = payload[at:at + 4]
+        if y == 0:
+            raise DoraemonMetaspriteError("an OAM stream ends before its span")
+        sprites.append({"x": x, "y": y, "tile": tile, "attributes": attributes})
+    return sprites
+
+
+def encode_oam_stream(value: Any, size: int) -> bytes:
+    if not isinstance(value, list) or len(value) * 4 + 1 != size:
+        raise DoraemonMetaspriteError(f"the OAM stream holds {(size - 1) // 4} sprites")
+    payload = bytearray()
+    for i, sprite in enumerate(value):
+        if not isinstance(sprite, Mapping) or set(sprite) != {"x", "y", "tile", "attributes"}:
+            raise DoraemonMetaspriteError(f"OAM sprite {i} fields differ")
+        y = _byte(sprite["y"], f"OAM sprite {i} y")
+        if y == 0:
+            raise DoraemonMetaspriteError(f"OAM sprite {i} y 0 would end the stream")
+        payload += bytes((y, _byte(sprite["tile"], f"OAM sprite {i} tile"),
+                          _byte(sprite["attributes"], f"OAM sprite {i} attributes"),
+                          _byte(sprite["x"], f"OAM sprite {i} x")))
+    return bytes(payload) + b"\x00"
+
+
 def decode_world2(tiles: bytes, descriptors: bytes, attributes: bytes) -> dict[str, Any]:
     if len(tiles) != WORLD2_RECORDS * 4 or len(descriptors) != WORLD2_RECORDS or len(attributes) != WORLD2_ATTRIBUTES:
         raise DoraemonMetaspriteError("World 2 metasprite table sizes differ")
