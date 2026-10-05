@@ -43,6 +43,15 @@
         {
           "id": "swim-stomp-envelope",
           "parameters": {"file_offset": 29634}
+        },
+        {
+          "id": "sfx-tables",
+          "parameters": {"records": [
+            {"id": "extra_life", "file_offset": 29925, "size": 6, "kind": "note"},
+            {"id": "power_up_grab", "file_offset": 29931, "size": 27, "kind": "note"},
+            {"id": "power_up_reveal_and_vine", "file_offset": 29961, "size": 32, "kind": "note"},
+            {"id": "brick_shatter_noise", "file_offset": 30268, "size": 16, "kind": "noise"}
+          ]}
         }
       ]
     },
@@ -237,6 +246,16 @@
           "parameters": {"file_offset": 29369}
         },
         {
+          "id": "sfx-tables",
+          "payload": "prg",
+          "parameters": {"records": [
+            {"id": "extra_life", "file_offset": 29660, "size": 6, "kind": "note"},
+            {"id": "power_up_grab", "file_offset": 29666, "size": 27, "kind": "note"},
+            {"id": "power_up_reveal_and_vine", "file_offset": 29696, "size": 32, "kind": "note"},
+            {"id": "brick_shatter_noise", "file_offset": 30003, "size": 16, "kind": "noise"}
+          ]}
+        },
+        {
           "id": "character-graphics",
           "payload": "chr",
           "parameters": {"file_offset": 0}
@@ -350,6 +369,16 @@
           "id": "swim-stomp-envelope",
           "payload": "prg",
           "parameters": {"file_offset": 29617}
+        },
+        {
+          "id": "sfx-tables",
+          "payload": "prg",
+          "parameters": {"records": [
+            {"id": "extra_life", "file_offset": 29908, "size": 6, "kind": "note"},
+            {"id": "power_up_grab", "file_offset": 29914, "size": 27, "kind": "note"},
+            {"id": "power_up_reveal_and_vine", "file_offset": 29944, "size": 32, "kind": "note"},
+            {"id": "brick_shatter_noise", "file_offset": 30251, "size": 16, "kind": "noise"}
+          ]}
         },
         {
           "id": "character-graphics",
@@ -830,6 +859,19 @@
             "file_offset": 29638,
             "size": 14
           }
+        },
+        {
+          "id": "sfx-tables",
+          "kind": "audio",
+          "codec": "smb.sfx-tables.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {"records": [
+            {"id": "extra_life", "file_offset": 29929, "size": 6, "kind": "note"},
+            {"id": "power_up_grab", "file_offset": 29935, "size": 27, "kind": "note"},
+            {"id": "power_up_reveal_and_vine", "file_offset": 29965, "size": 32, "kind": "note"},
+            {"id": "brick_shatter_noise", "file_offset": 30272, "size": 16, "kind": "noise"}
+          ]}
         },
         {
           "id": "fds-music",
@@ -1360,6 +1402,19 @@
           }
         },
         {
+          "id": "sfx-tables",
+          "kind": "audio",
+          "codec": "smb.sfx-tables.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {"records": [
+            {"id": "extra_life", "file_offset": 29860, "size": 6, "kind": "note"},
+            {"id": "power_up_grab", "file_offset": 29866, "size": 27, "kind": "note"},
+            {"id": "power_up_reveal_and_vine", "file_offset": 29896, "size": 32, "kind": "note"},
+            {"id": "brick_shatter_noise", "file_offset": 30227, "size": 16, "kind": "noise"}
+          ]}
+        },
+        {
           "id": "fds-music",
           "kind": "audio",
           "codec": "fds.music.v1",
@@ -1414,7 +1469,7 @@
       "kind": "resource-bundle",
       "codec": "nes.resource-bundle.v1",
       "capacity_policy": "fixed",
-      "parameters": {"resource_ids": ["world", "levels", "background-metatiles", "area-palette-packets", "player-palettes", "game-screen-packets", "warp-zone-screen", "ui-text", "player-frames", "music", "swim-stomp-envelope", "character-graphics"]}
+      "parameters": {"resource_ids": ["world", "levels", "background-metatiles", "area-palette-packets", "player-palettes", "game-screen-packets", "warp-zone-screen", "ui-text", "player-frames", "music", "swim-stomp-envelope", "sfx-tables", "character-graphics"]}
     },
     {
       "id": "demo",
@@ -1723,6 +1778,18 @@
         "file_offset": 29633,
         "size": 14
       }
+    },
+    {
+      "id": "sfx-tables",
+      "kind": "audio",
+      "codec": "smb.sfx-tables.v1",
+      "capacity_policy": "fixed",
+      "parameters": {"records": [
+        {"id": "extra_life", "file_offset": 29924, "size": 6, "kind": "note"},
+        {"id": "power_up_grab", "file_offset": 29930, "size": 27, "kind": "note"},
+        {"id": "power_up_reveal_and_vine", "file_offset": 29960, "size": 32, "kind": "note"},
+        {"id": "brick_shatter_noise", "file_offset": 30267, "size": 16, "kind": "noise"}
+      ]}
     },
     {
       "id": "character-graphics",

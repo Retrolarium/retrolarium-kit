@@ -45,7 +45,8 @@
           "shell-palette-help-3", "shell-palette-chapter", "shell-palette-ending",
           "shell-help-sprites-1", "shell-help-sprites-2", "shell-help-sprites-3",
           "world1-city-objects", "world1-underground-objects",
-          "world1-enemy-properties", "world1-descriptors",
+          "world1-enemy-properties", "world1-descriptors", "world3-objects",
+          "world2-secret-screens", "world3-schedule",
           "world1-metasprites", "world3-metasprites", "world2-enemy-metasprites",
           "world2-screens", "world2-stage", "world2-branches", "world2-chapters"
         ]
@@ -378,6 +379,21 @@
       "id": "world1-descriptors", "kind": "objects",
       "codec": "doraemon.world1-descriptors.v1", "capacity_policy": "fixed",
       "parameters": {"file_offset": 19482, "size": 52}
+    },
+    {
+      "id": "world3-objects", "kind": "objects",
+      "codec": "doraemon.world3-registry.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 88443, "size": 65}
+    },
+    {
+      "id": "world2-secret-screens", "kind": "objects",
+      "codec": "doraemon.world2-secret-screens.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 42693, "size": 7}
+    },
+    {
+      "id": "world3-schedule", "kind": "objects",
+      "codec": "doraemon.world3-schedule.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 87675, "size": 768}
     },
     {
       "id": "world1-metasprites", "kind": "animation",

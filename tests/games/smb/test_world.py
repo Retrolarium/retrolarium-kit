@@ -386,7 +386,7 @@ class SmbWorldTests(unittest.TestCase):
                 "world-extended", "levels-extended", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
                 "game-screen-packets", "warp-zone-screen", "title-screen",
-                "music", "swim-stomp-envelope", "fds-music",
+                "music", "swim-stomp-envelope", "sfx-tables", "fds-music",
                 "character-graphics",
             ],
         )
@@ -531,7 +531,7 @@ class SmbWorldTests(unittest.TestCase):
                 "world-hard", "levels-hard", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
                 "game-screen-packets", "warp-zone-screen", "title-screen",
-                "music", "swim-stomp-envelope", "fds-music",
+                "music", "swim-stomp-envelope", "sfx-tables", "fds-music",
                 "character-graphics",
             ],
         )
@@ -696,7 +696,7 @@ class SmbWorldTests(unittest.TestCase):
                 "world-extended", "levels-extended", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
                 "game-screen-packets", "warp-zone-screen", "title-screen",
-                "music", "swim-stomp-envelope", "fds-music",
+                "music", "swim-stomp-envelope", "sfx-tables", "fds-music",
                 "character-graphics",
             ],
         )
@@ -711,7 +711,7 @@ class SmbWorldTests(unittest.TestCase):
                 "world-hard", "levels-hard", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
                 "game-screen-packets", "warp-zone-screen", "title-screen",
-                "music", "swim-stomp-envelope", "fds-music",
+                "music", "swim-stomp-envelope", "sfx-tables", "fds-music",
                 "character-graphics",
             ],
         )

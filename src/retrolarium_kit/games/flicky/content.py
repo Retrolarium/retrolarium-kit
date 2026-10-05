@@ -23,6 +23,7 @@ from .flicky_demo import export_attract_demos, validate_attract_demos
 from .flicky_bonus_placement import (
     export_bonus_placements, validate_bonus_placements,
 )
+from .flicky_title_layout import export_title_layout, validate_title_layout
 
 
 CANONICAL_SHA256 = "4df1a91e08376ae773a6eb8e5abe310f94ca39d8f81583b91a9477fedcb68c11"
@@ -184,6 +185,11 @@ def import_flicky_source(
         sequences["bonus_motion"] = export_bonus_motion(staging)
         sequences_path.write_text(json.dumps(sequences, indent=2) + "\n",
                                   encoding="utf-8", newline="\n")
+        semantics_path = staging / WORKSPACE_FILES["graphics_semantics"]
+        semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+        semantics["title_layout"] = export_title_layout(staging)
+        semantics_path.write_text(json.dumps(semantics, indent=2) + "\n",
+                                  encoding="utf-8", newline="\n")
         for relative in WORKSPACE_FILES.values():
             if not (staging / relative).is_file():
                 raise FlickyContentError(f"Flicky workspace missing {relative}")
@@ -226,6 +232,9 @@ def validate_flicky_source_snapshot(project_root: Path) -> dict[str, str]:
                         .read_text(encoding="utf-8"))
     validate_bonus_placements(levels, source)
     validate_attract_demos(levels, source)
+    semantics = json.loads((source / WORKSPACE_FILES["graphics_semantics"])
+                           .read_text(encoding="utf-8"))
+    validate_title_layout(semantics, source)
     _run([sys.executable, "scripts/run.py", "authoring.content_workspace",
           "validate"], source)
     return {key: _sha256(source / relative)
