@@ -52,6 +52,15 @@ from .doraemon_objects import (
     DESCRIPTORS_CODEC as DORAEMON_DESCRIPTORS_CODEC,
     ENEMY_PROPERTIES_CODEC as DORAEMON_ENEMY_PROPERTIES_CODEC,
     PLACEMENTS_CODEC as DORAEMON_PLACEMENTS_CODEC,
+    REGISTRY_CODEC as DORAEMON_REGISTRY_CODEC,
+    SCHEDULE_CODEC as DORAEMON_SCHEDULE_CODEC,
+    SECRET_SCREENS_CODEC as DORAEMON_SECRET_SCREENS_CODEC,
+    decode_schedule as decode_doraemon_schedule,
+    encode_schedule as encode_doraemon_schedule,
+    decode_secret_screens as decode_doraemon_secret_screens,
+    encode_secret_screens as encode_doraemon_secret_screens,
+    decode_registry as decode_doraemon_registry,
+    encode_registry as encode_doraemon_registry,
     decode_descriptors as decode_doraemon_descriptors,
     decode_enemy_properties as decode_doraemon_enemy_properties,
     decode_placements as decode_doraemon_placements,
@@ -165,6 +174,11 @@ from .smb_apu_envelope import (
     decode_envelope as decode_smb_apu_envelope,
     encode_envelope as encode_smb_apu_envelope,
 )
+from .smb_sfx_tables import (
+    CODEC as SMB_SFX_TABLES_CODEC,
+    decode as decode_smb_sfx_tables,
+    encode as encode_smb_sfx_tables,
+)
 from .nes_visuals import (
     METATILE_CODEC,
     PALETTE_PACKET_CODEC,
@@ -199,6 +213,7 @@ SUPPORTED_CODECS = (
     SMB_PLAYER_FRAME_CODEC,
     SMB_APU_CODEC,
     SMB_APU_ENVELOPE_CODEC,
+    SMB_SFX_TABLES_CODEC,
     FDS_SYNTHESIS_CODEC,
     FDS_MUSIC_CODEC,
     METATILE_CODEC,
@@ -211,7 +226,8 @@ SUPPORTED_CODECS = (
     DORAEMON_WORLD2_CHAPTER_CODEC,
     DORAEMON_METASPRITE_CODEC, DORAEMON_WORLD2_METASPRITE_CODEC,
     DORAEMON_OAM_STREAM_CODEC, DORAEMON_PLACEMENTS_CODEC,
-    DORAEMON_ENEMY_PROPERTIES_CODEC, DORAEMON_DESCRIPTORS_CODEC,
+    DORAEMON_ENEMY_PROPERTIES_CODEC, DORAEMON_DESCRIPTORS_CODEC, DORAEMON_REGISTRY_CODEC,
+    DORAEMON_SECRET_SCREENS_CODEC, DORAEMON_SCHEDULE_CODEC,
 )
 
 
@@ -818,7 +834,8 @@ def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
         return {"id": resource.resource_id, "kind": resource.kind,
                 "codec": resource.codec, **decoded}
     if resource.codec in (DORAEMON_PLACEMENTS_CODEC, DORAEMON_ENEMY_PROPERTIES_CODEC,
-                          DORAEMON_DESCRIPTORS_CODEC):
+                          DORAEMON_DESCRIPTORS_CODEC, DORAEMON_REGISTRY_CODEC,
+                          DORAEMON_SECRET_SCREENS_CODEC, DORAEMON_SCHEDULE_CODEC):
         size = _integer(resource.parameters.get("size"), f"{resource.resource_id}.size", minimum=4)
         offset, _ = _span(resource, size)
         payload = image[offset:offset + size]
@@ -827,6 +844,12 @@ def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
                 fields: dict[str, object] = {"records": decode_doraemon_placements(payload)}
             elif resource.codec == DORAEMON_ENEMY_PROPERTIES_CODEC:
                 fields = decode_doraemon_enemy_properties(payload)
+            elif resource.codec == DORAEMON_REGISTRY_CODEC:
+                fields = {"records": decode_doraemon_registry(payload)}
+            elif resource.codec == DORAEMON_SECRET_SCREENS_CODEC:
+                fields = {"screens": decode_doraemon_secret_screens(payload)}
+            elif resource.codec == DORAEMON_SCHEDULE_CODEC:
+                fields = {"rooms": decode_doraemon_schedule(payload)}
             else:
                 fields = {"records": decode_doraemon_descriptors(payload)}
         except AuthoringError as exc:
@@ -1126,6 +1149,12 @@ def _decode_resource(image: bytes, resource: ResourceSpec) -> dict[str, object]:
             "codec": resource.codec,
             **decoded,
         }
+    if resource.codec == SMB_SFX_TABLES_CODEC:
+        try:
+            fields = decode_smb_sfx_tables(image, resource.parameters)
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+        return {"id": resource.resource_id, "kind": resource.kind, "codec": resource.codec, **fields}
     if resource.codec == SMB_APU_ENVELOPE_CODEC:
         try:
             size = _integer(
@@ -1501,7 +1530,8 @@ def _parse_resource(
             _EncodedSpan(collision_offset, collision),
         )
     elif spec.codec in (DORAEMON_PLACEMENTS_CODEC, DORAEMON_ENEMY_PROPERTIES_CODEC,
-                        DORAEMON_DESCRIPTORS_CODEC):
+                        DORAEMON_DESCRIPTORS_CODEC, DORAEMON_REGISTRY_CODEC,
+                        DORAEMON_SECRET_SCREENS_CODEC, DORAEMON_SCHEDULE_CODEC):
         size = _integer(spec.parameters.get("size"), f"{spec.resource_id}.size", minimum=4)
         _span(spec, size)
         try:
@@ -1509,6 +1539,15 @@ def _parse_resource(
                 expected_fields = {"id", "kind", "codec", "records"}
                 payload = encode_doraemon_placements(
                     raw.get("records"), size, sorted_tail=spec.parameters.get("sorted_tail") is True)
+            elif spec.codec == DORAEMON_REGISTRY_CODEC:
+                expected_fields = {"id", "kind", "codec", "records"}
+                payload = encode_doraemon_registry(raw.get("records"))
+            elif spec.codec == DORAEMON_SECRET_SCREENS_CODEC:
+                expected_fields = {"id", "kind", "codec", "screens"}
+                payload = encode_doraemon_secret_screens(raw.get("screens"))
+            elif spec.codec == DORAEMON_SCHEDULE_CODEC:
+                expected_fields = {"id", "kind", "codec", "rooms"}
+                payload = encode_doraemon_schedule(raw.get("rooms"))
             elif spec.codec == DORAEMON_ENEMY_PROPERTIES_CODEC:
                 expected_fields = {"id", "kind", "codec", "metasprites", "render_flags", "health"}
                 payload = encode_doraemon_enemy_properties(
@@ -1808,6 +1847,13 @@ def _parse_resource(
                 },
                 spec.parameters,
             )
+        except AuthoringError as exc:
+            raise NesResourceError(str(exc)) from exc
+    elif spec.codec == SMB_SFX_TABLES_CODEC:
+        expected_fields = {"id", "kind", "codec", "records"}
+        try:
+            encoded_spans = tuple(_EncodedSpan(offset, table)
+                                  for offset, table in encode_smb_sfx_tables(raw.get("records"), spec.parameters))
         except AuthoringError as exc:
             raise NesResourceError(str(exc)) from exc
     elif spec.codec == SMB_APU_ENVELOPE_CODEC:

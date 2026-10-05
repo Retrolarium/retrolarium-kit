@@ -8,7 +8,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from retrolarium_kit.doraemon_metasprites import WORLD2_CODEC, decode_world2
 from retrolarium_kit.doraemon_objects import (
-    DoraemonObjectError, decode_descriptors, decode_placements, encode_placements,
+    DoraemonObjectError, decode_descriptors, decode_placements, decode_registry, decode_schedule,
+    encode_placements, encode_registry, encode_schedule,
 )
 from retrolarium_kit.game_profiles import packaged_game_profiles
 
@@ -54,6 +55,24 @@ class DoraemonRomTableTests(unittest.TestCase):
         if unordered[50]["x"] != unordered[60]["x"]:
             with self.assertRaises(DoraemonObjectError):
                 encode_placements(unordered, 337, sorted_tail=True)
+
+    def test_world3_registry_round_trips(self) -> None:
+        source = ROM.read_bytes()
+        registry = decode_registry(source[88443:88443 + 65])
+        self.assertEqual({"room": 7, "type": 0x18, "x": 160, "y": 64, "state": 0}, registry[0])
+        self.assertEqual(0x3F, registry[12]["room"])
+        self.assertEqual(source[88443:88443 + 65], encode_registry(registry))
+
+    def test_world3_schedule_round_trips(self) -> None:
+        source = ROM.read_bytes()
+        payload = source[87675:87675 + 768]
+        rooms = decode_schedule(payload)
+        # Room 0: channel 0 spawns one type $00 every 15, channel 3 one $05.
+        self.assertEqual({"type": 0, "count": 1, "delay": 15}, rooms[0]["channels"][0])
+        self.assertEqual({"type": 5, "count": 1, "delay": 100}, rooms[0]["channels"][3])
+        active = sum(1 for room in rooms for channel in room["channels"] if channel["count"])
+        self.assertEqual(132, active)
+        self.assertEqual(payload, encode_schedule(rooms))
 
 
 if __name__ == "__main__":

@@ -33,6 +33,9 @@ from .flicky_content import (
 from .flicky_bonus_placement import (
     export_bonus_placements, validate_bonus_placements,
 )
+from .flicky_title_layout import (
+    export_title_layout, validate_title_layout,
+)
 from .flicky_demo import export_attract_demos, validate_attract_demos
 from .ines import load_ines
 from .megadrive import load_megadrive
@@ -56,7 +59,9 @@ SCHEMA_VERSION = 1
 INSPECTION_SCHEMA = "retrolarium.project-inspection"
 PROJECT_SUFFIX = ".rlj"
 
-SOURCE_MODES = frozenset({"binary-profile", "source-project", "flicky-content"})
+# "rom": a project generated from a game repository's descriptor for one
+# revision; its base is the verified copy of that revision's ROM.
+SOURCE_MODES = frozenset({"binary-profile", "source-project", "flicky-content", "rom"})
 LAYOUTS = frozenset({"auto", "single-row", "two-row"})
 GROUPS = frozenset({"content", "assets", "tools"})
 PLATFORMS = frozenset({"nes", "snes", "megadrive"})
@@ -261,8 +266,12 @@ def _string_list(value: object, context: str) -> list[str]:
 
 
 def _project_path(
-    root: Path, value: object, context: str, *, must_exist: bool = True
+    root: Path, value: object, context: str, *, must_exist: bool = True,
+    boundary: Path | None = None,
 ) -> tuple[str, Path]:
+    """A portable path relative to `root`. With a `boundary` (a generated
+    project's repository) it may climb out of `root` but not out of the
+    boundary."""
     source = _string(value, context)
     if "\\" in source:
         raise _error(context, "must use portable forward slashes")
@@ -270,15 +279,26 @@ def _project_path(
     windows = PureWindowsPath(source)
     if posix.is_absolute() or windows.is_absolute() or windows.drive:
         raise _error(context, "absolute paths are forbidden")
-    if not posix.parts or any(part in {"", ".", ".."} for part in posix.parts):
+    parts = list(posix.parts)
+    if boundary is not None:
+        while parts and parts[0] == "..":
+            parts.pop(0)
+    if not parts or any(part in {"", ".", ".."} for part in parts):
         raise _error(context, "must be a normalized relative path without '..'")
     resolved_root = root.resolve()
     resolved = resolved_root.joinpath(*posix.parts).resolve()
-    if not resolved.is_relative_to(resolved_root):
+    limit = boundary.resolve() if boundary is not None else resolved_root
+    if not resolved.is_relative_to(limit):
         raise _error(context, "path escapes the project directory")
     if must_exist and not resolved.is_file():
         raise _error(context, f"file does not exist: {source}")
     return posix.as_posix(), resolved
+
+
+def _portable(path: Path, root: Path) -> str:
+    """A path relative to `root`, climbing out with '..' for a generated
+    project's documents in its repository."""
+    return Path(os.path.relpath(path.resolve(), root.resolve())).as_posix()
 
 
 def _read_toml(path: Path) -> Mapping[str, Any]:
@@ -473,16 +493,31 @@ def load_studio_project(path: Path) -> dict[str, Any]:
 
     source_table = _mapping(source["source"], "source")
     flicky_content = normalized_metadata["source_mode"] == "flicky-content"
-    source_key = "manifest" if flicky_content else "disassembly"
-    _check_keys(source_table, "source", {source_key, "sha256"},
-                {source_key, "sha256"})
+    rom_mode = normalized_metadata["source_mode"] == "rom"
+    boundary: Path | None = None
+    if rom_mode:
+        source_key = "rom"
+        _check_keys(source_table, "source", {"rom", "sha256", "repository"},
+                    {"rom", "sha256", "repository"})
+        repository = PurePosixPath(_string(source_table["repository"], "source.repository"))
+        if not repository.parts or any(part != ".." for part in repository.parts):
+            raise _error("source.repository", "must name the repository root as '../..'")
+        boundary = root.joinpath(*repository.parts).resolve()
+    else:
+        source_key = "manifest" if flicky_content else "disassembly"
+        _check_keys(source_table, "source", {source_key, "sha256"},
+                    {source_key, "sha256"})
     source_relative, source_path = _project_path(
-        root, source_table[source_key], f"source.{source_key}"
+        root, source_table[source_key], f"source.{source_key}", boundary=boundary
     )
     source_sha256 = _string(source_table["sha256"], "source.sha256")
     if _SHA256.fullmatch(source_sha256) is None:
         raise _error("source.sha256", "must be 64 lowercase hexadecimal characters")
-    if flicky_content:
+    if rom_mode:
+        if sha256_file(source_path) != source_sha256:
+            raise _error("source.rom", "the ROM differs from this revision")
+        manifest_schema = "retrolarium.rom"
+    elif flicky_content:
         if normalized_metadata["platform"] != "megadrive" \
                 or normalized_metadata["profile"] != "flicky-ue.v1":
             raise _error("project", "Flicky content requires megadrive/flicky-ue.v1")
@@ -565,7 +600,7 @@ def load_studio_project(path: Path) -> dict[str, Any]:
         document_path: str | None = None
         if "document" in tab:
             document, resolved_document = _project_path(
-                root, tab["document"], f"{context}.document"
+                root, tab["document"], f"{context}.document", boundary=boundary
             )
             document_path = str(resolved_document)
         elif kind != "code.analysis":
@@ -700,7 +735,7 @@ def _validate_editor_documents(
                    for key, relative in FLICKY_WORKSPACE_FILES.items()
                    for digest in [hashes[key]]}
         return [{"status": "valid", "document": str(document),
-                 "sha256": by_path[document.relative_to(root).as_posix()]}
+                 "sha256": by_path[_portable(document, root)]}
                 for document in _unique_editor_documents(inspection)]
     documents = []
     for document_path in _unique_editor_documents(inspection):
@@ -785,18 +820,25 @@ def build_studio_project(
         return _build_flicky_studio_project(inspection, flicky_level_writer)
     if flicky_level_writer is not None:
         raise StudioProjectError("--flicky-level-writer requires a Flicky project")
-    manifest_path = Path(inspection["source"]["disassembly_path"])
-    base_build = build_project(
-        manifest_path, container=container, toolchain_cache=toolchain_cache
-    )
-    base_verification = verify_project(manifest_path)
-    if base_verification["status"] != "exact":
-        raise StudioProjectError(
-            "Studio source project does not rebuild the immutable source exactly"
+    if inspection["project"]["source_mode"] == "rom":
+        # The revision's own ROM: what its repository assembles, byte for byte.
+        base_artifact = Path(inspection["source"]["rom_path"])
+        base_build = {"artifact": {"path": inspection["source"]["rom"],
+                                   "size": base_artifact.stat().st_size,
+                                   "sha256": inspection["source"]["sha256"]}}
+    else:
+        manifest_path = Path(inspection["source"]["disassembly_path"])
+        base_build = build_project(
+            manifest_path, container=container, toolchain_cache=toolchain_cache
         )
-    base_artifact = (
-        manifest_path.parent / base_build["artifact"]["path"]
-    ).resolve()
+        base_verification = verify_project(manifest_path)
+        if base_verification["status"] != "exact":
+            raise StudioProjectError(
+                "Studio source project does not rebuild the immutable source exactly"
+            )
+        base_artifact = (
+            manifest_path.parent / base_build["artifact"]["path"]
+        ).resolve()
     root = Path(inspection["project_root"])
     output = _studio_output(
         root, inspection["project"]["id"], inspection["project"]["platform"]
@@ -851,7 +893,7 @@ def build_studio_project(
         "base": base_build["artifact"],
         "documents": [
             {
-                "path": document.relative_to(root).as_posix(),
+                "path": _portable(document, root),
                 "sha256": sha256_file(document),
             }
             for document in editor_documents
@@ -922,7 +964,7 @@ def _build_flicky_studio_project(
         "source_sha256": FLICKY_SHA256,
         "base": {"mode": "flicky-content", "sha256": FLICKY_SHA256},
         "documents": [
-            {"path": document.relative_to(root).as_posix(),
+            {"path": _portable(document, root),
              "sha256": sha256_file(document)}
             for document in editor_documents
         ],
@@ -958,7 +1000,7 @@ def verify_studio_project(path: Path) -> dict[str, Any]:
         differences.append("source")
 
     expected_documents = {
-        document.relative_to(root).as_posix(): sha256_file(document)
+        _portable(document, root): sha256_file(document)
         for document in _unique_editor_documents(inspection)
     }
     records = report.get("documents")
@@ -988,10 +1030,13 @@ def verify_studio_project(path: Path) -> dict[str, Any]:
         except FlickyContentError:
             differences.append("source-snapshot")
     else:
-        manifest = load_disassembly_manifest(
-            Path(inspection["source"]["disassembly_path"]), verify_rebuilt=False
-        )
-        expected_size = manifest["input"]["size"]
+        if inspection["project"]["source_mode"] == "rom":
+            expected_size = Path(inspection["source"]["rom_path"]).stat().st_size
+        else:
+            manifest = load_disassembly_manifest(
+                Path(inspection["source"]["disassembly_path"]), verify_rebuilt=False
+            )
+            expected_size = manifest["input"]["size"]
         # An expanded Solomon build adds a second 32 KiB PRG bank.
         if isinstance(report.get("expansion"), Mapping):
             expected_size += 0x8000
@@ -1881,7 +1926,9 @@ DORAEMON_START_CHAPTER_READ = 0x83FD
 # The world start-up stores a playtest point answers (CPU addresses in the
 # world's bank): World1_InitializeDemoState's camera, player position and
 # area palette ($29),
-# Bank1_World2Main's stage index, Bank2_World3Main's two room clears.
+# Bank1_World2Main's stage index, Bank2_World3Main's two room clears and
+# World3_LoadRoomFromPassHoop's store of the hoop's room (a respawn
+# returns to wherever the shuffled pass hoop lies).
 DORAEMON_WORLD1_START_WRITES = (0x831C, 0x8320, 0x8324, 0x8328, 0x8342)
 # World 1's underground: World1_TryEnterManhole's reads of the buttons and
 # the manhole flag, World1_EnterManhole's store of the manhole's object id
@@ -1898,7 +1945,7 @@ DORAEMON_UNDERGROUND_GUARDS = {
 DORAEMON_UNDERGROUND_CAMERAS = 0xD1EF
 DORAEMON_UNDERGROUND_ROOMS = 9
 DORAEMON_WORLD2_START_WRITES = (0x88B5,)
-DORAEMON_WORLD3_START_WRITES = (0x830C, 0x8326)
+DORAEMON_WORLD3_START_WRITES = (0x830C, 0x8326, 0x8557)
 
 
 def studio_pacman_demo_plan(path: Path, *, mame: Path, record: Path | None = None) -> dict[str, Any]:
@@ -2071,7 +2118,7 @@ def studio_doraemon_playtest_plan(
     # The stores the point answers: LDA #imm / STA zp in the world's bank.
     for pc in writes_checked:
         target = {0x831C: 0x5B, 0x8320: 0x5C, 0x8324: 0x75, 0x8328: 0x76, 0x8342: 0x29,
-                  0x88B5: 0xA9, 0x830C: 0xDF, 0x8326: 0xDF}[pc]
+                  0x88B5: 0xA9, 0x830C: 0xDF, 0x8326: 0xDF, 0x8557: 0xDF}[pc]
         if source[bank + pc:bank + pc + 2] != bytes((0x85, target)):
             raise StudioProjectError("Doraemon build does not match the guarded world start")
     lua = Path(__file__).with_name("runtime") / "doraemon_mame_playtest.lua"
@@ -2341,6 +2388,9 @@ def _project_source(inspection: Mapping[str, Any]) -> Path:
     """The project's unedited source image: its disassembly's recorded
     build, or a fresh one that must match the source identity."""
 
+    if inspection["project"]["source_mode"] == "rom":
+        return Path(inspection["source"]["rom_path"])
+
     manifest_path = Path(inspection["source"]["disassembly_path"])
     record = manifest_path.parent / "build-result.json"
     try:
@@ -2452,11 +2502,18 @@ def upgrade_solomon_studio_project(path: Path) -> dict[str, Any]:
 
 
 def upgrade_smb_studio_project(path: Path) -> dict[str, Any]:
-    """Add the title demo (documents/demo.json) to a Super Mario Bros. project."""
-    return _add_document_tab(
+    """Add what newer kits edit to a Super Mario Bros. project: the title
+    demo (documents/demo.json) and new bundle resources (the sound effect
+    tables)."""
+    result = _add_document_tab(
         path, profile="smb1.v1", resource="demo", document_name="demo.json",
         tab_id="demo", title="Demo", kind="smb.demo", codec="smb.demo@1",
     )
+    added = _add_bundle_resources(path, profile="smb1.v1", codec="smb.world.v1")
+    if added:
+        result["status"] = "upgraded"
+    result["added_resources"] = added
+    return result
 
 
 def upgrade_castle_studio_project(path: Path) -> dict[str, Any]:
@@ -2532,6 +2589,8 @@ def upgrade_flicky_studio_project(
                          else [])
     bonus_document_path: Path | None = None
     bonus_document_payload: str | None = None
+    title_document_path: Path | None = None
+    title_document_payload: str | None = None
     if snapshot_record.is_file():
         try:
             validate_flicky_source_snapshot(project_root)
@@ -2550,6 +2609,16 @@ def upgrade_flicky_studio_project(
                     validate_attract_demos(levels, source_root)
                 bonus_document_path = levels_path
                 bonus_document_payload = json.dumps(levels, indent=2) + "\n"
+            # The title sprites' positions join the semantics document.
+            semantics_tab = next(tab for tab in inspection["workspace"]["tabs"]
+                                 if tab["kind"] == "flicky.semantics")
+            semantics_path = Path(semantics_tab["document_path"])
+            semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+            if isinstance(semantics, dict) and "title_layout" not in semantics:
+                semantics["title_layout"] = export_title_layout(source_root)
+                validate_title_layout(semantics, source_root)
+                title_document_path = semantics_path
+                title_document_payload = json.dumps(semantics, indent=2) + "\n"
         except (FlickyContentError, OSError, UnicodeError, ValueError) as exc:
             raise StudioProjectError(
                 f"cannot safely upgrade Flicky bonus placements: {exc}"
@@ -2622,15 +2691,20 @@ def upgrade_flicky_studio_project(
     upgraded = payload
     for start, end, replacement in sorted(updates, key=lambda item: item[0], reverse=True):
         upgraded = upgraded[:start] + replacement + upgraded[end:]
+    upgraded_documents = (["levels"] if bonus_document_payload else []) \
+        + (["semantics"] if title_document_payload else [])
     if destination == source_path and not updates:
-        if bonus_document_path is None or bonus_document_payload is None:
+        if not upgraded_documents:
             return {"status": "current", "project_file": str(destination),
                     "inspection": inspection, "upgraded_documents": [],
                     "skipped_documents": skipped_documents}
-        _atomic_write(bonus_document_path, bonus_document_payload)
+        if bonus_document_path is not None and bonus_document_payload is not None:
+            _atomic_write(bonus_document_path, bonus_document_payload)
+        if title_document_path is not None and title_document_payload is not None:
+            _atomic_write(title_document_path, title_document_payload)
         return {"status": "upgraded", "project_file": str(destination),
                 "inspection": load_studio_project(destination),
-                "upgraded_documents": ["levels"],
+                "upgraded_documents": upgraded_documents,
                 "skipped_documents": skipped_documents}
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=".flicky-upgrade-", suffix=".rlj", dir=destination.parent
@@ -2642,12 +2716,14 @@ def upgrade_flicky_studio_project(
         load_studio_project(temporary)
         if bonus_document_path is not None and bonus_document_payload is not None:
             _atomic_write(bonus_document_path, bonus_document_payload)
+        if title_document_path is not None and title_document_payload is not None:
+            _atomic_write(title_document_path, title_document_payload)
         os.replace(temporary, destination)
     finally:
         temporary.unlink(missing_ok=True)
-    return {"status": "upgraded" if updates or bonus_document_payload else "current",
+    return {"status": "upgraded" if updates or upgraded_documents else "current",
             "project_file": str(destination),
-            "upgraded_documents": (["levels"] if bonus_document_payload else []),
+            "upgraded_documents": upgraded_documents,
             "skipped_documents": skipped_documents,
             "inspection": load_studio_project(destination)}
 
@@ -3069,7 +3145,7 @@ def create_studio_project(
                 capabilities = ["paint", "eyedropper", "preview", "restore", "undo"]
             elif kind == "audio" and "smb.apu-music.v1" in kinds[kind] \
                     and kinds[kind].issubset({
-                        "smb.apu-music.v1", "smb.apu-envelope.v1",
+                        "smb.apu-music.v1", "smb.apu-envelope.v1", "smb.sfx-tables.v1",
                         "fds.synthesis.v1", "fds.music.v1",
                     }):
                 selected_codec = "smb.apu-music.v1"
@@ -3103,7 +3179,7 @@ def create_studio_project(
                     or "fds.music.v1" in kinds[kind]) \
                     and kinds[kind].issubset({
                         "fds.synthesis.v1", "fds.music.v1",
-                        "smb.apu-envelope.v1"
+                        "smb.apu-envelope.v1", "smb.sfx-tables.v1"
                     }):
                 tab_id = "synthesis"
                 title = "FDS Synthesis"

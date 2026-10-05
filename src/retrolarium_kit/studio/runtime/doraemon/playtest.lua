@@ -60,8 +60,10 @@ local entered_at = 0
 --                       cells ($5B/$5C), player position ($75/$76) and area
 --                       palette ($29, 1 on the mountain);
 --   "stage N"           World 2: the stage index Bank1_World2Main clears;
---   "room N"            World 3: the room Bank2_World3Main sets to 0 (the
---                       game then picks a passable position, as on a respawn).
+--   "room N"            World 3: the room Bank2_World3Main sets to 0 and the
+--                       pass hoop's room the respawn then loads (the game
+--                       picks a passable position in it); answered until the
+--                       world shows.
 --   "underground R X Y CX A"  World 1's underground: on the city's first
 --                       frame World1_TryEnterManhole sees A on a manhole
 --                       (buttons and flag reads), World1_EnterManhole stores
@@ -83,7 +85,7 @@ if point[1] == "camera" and #point == 6 and #writes == 5 then
 elseif point[1] == "stage" and #writes >= 1 then
     overrides[0xA9] = {writes[1], tonumber(point[2])}
 elseif point[1] == "room" and #writes >= 1 then
-    overrides[0xDF] = {writes, tonumber(point[2])}
+    overrides[0xDF] = {writes, tonumber(point[2]), sticky = true}
 elseif point[1] == "underground" and #point == 6 and #writes == 7 then
     overrides[0x81] = {writes[3], tonumber(point[2]) + 8}
     overrides[0x75] = {writes[4], tonumber(point[3])}
@@ -114,12 +116,12 @@ end
 for address, override in pairs(overrides) do
     point_taps[#point_taps + 1] = memory:install_write_tap(address, address, "doraemon-playtest-point",
         function(_, value)
-            if not entered or override.done then return value end
+            if not entered or override.done or placed then return value end
             local pc = cpu.state["PC"].value
             local pcs = type(override[1]) == "table" and override[1] or {override[1]}
             for _, wanted in ipairs(pcs) do
                 if pc == wanted then
-                    override.done = true
+                    override.done = not override.sticky
                     if address == 0x89 then dived = true end
                     return override[2]
                 end
