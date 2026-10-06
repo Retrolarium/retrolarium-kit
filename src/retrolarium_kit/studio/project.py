@@ -23,6 +23,7 @@ from .games import (
 from .game_profiles import packaged_game_profiles
 from .flicky_content import (
     CANONICAL_SHA256 as FLICKY_SHA256,
+    ROM_NAME as FLICKY_ROM_NAME,
     SNAPSHOT_RECORD as FLICKY_SNAPSHOT_RECORD,
     SOURCE_DIRECTORY as FLICKY_SOURCE_DIRECTORY,
     WORKSPACE_FILES as FLICKY_WORKSPACE_FILES,
@@ -37,7 +38,8 @@ from .flicky_title_layout import (
     export_title_layout, validate_title_layout,
 )
 from .flicky_demo import export_attract_demos, validate_attract_demos
-from .ines import load_ines
+from .fds import FdsError, parse_fds_side
+from .ines import InesError, load_ines, parse_ines_prefix
 from .megadrive import load_megadrive
 from .project import (
     build_project,
@@ -788,13 +790,24 @@ def _document_schema(path: Path) -> str:
     return schema if isinstance(schema, str) and schema else "unregistered"
 
 
-def _studio_output(root: Path, project_id: str, platform: str) -> Path:
-    extension = {"nes": ".nes", "megadrive": ".bin", "snes": ".sfc"}[platform]
+def _studio_output(root: Path, project_id: str, platform: str, extension: str | None = None) -> Path:
+    extension = extension or {"nes": ".nes", "megadrive": ".bin", "snes": ".sfc"}[platform]
     return root / "build" / f"{project_id}-edited{extension}"
 
 
-def _validate_container(path: Path, platform: str) -> None:
-    if platform == "nes":
+def _validate_container(path: Path, platform: str, *, rom_mode: bool = False) -> None:
+    if platform == "nes" and rom_mode:
+        # A revision's own image may be a Disk System side or an iNES image
+        # with more after it (PlayChoice-10's instruction ROM).
+        data = path.read_bytes()
+        try:
+            if path.suffix.lower() == ".fds":
+                parse_fds_side(data)
+            else:
+                parse_ines_prefix(data, path)
+        except (FdsError, InesError) as exc:
+            raise StudioProjectError(f"{path.name}: {exc}") from exc
+    elif platform == "nes":
         load_ines(path)
     elif platform == "megadrive":
         load_megadrive(path)
@@ -840,8 +853,10 @@ def build_studio_project(
             manifest_path.parent / base_build["artifact"]["path"]
         ).resolve()
     root = Path(inspection["project_root"])
+    rom_mode = inspection["project"]["source_mode"] == "rom"
     output = _studio_output(
-        root, inspection["project"]["id"], inspection["project"]["platform"]
+        root, inspection["project"]["id"], inspection["project"]["platform"],
+        base_artifact.suffix.lower() if rom_mode else None,
     ).resolve()
     if not output.is_relative_to(root.resolve()):
         raise StudioProjectError("Studio build output escapes the project directory")
@@ -879,7 +894,7 @@ def build_studio_project(
         finally:
             temporary.unlink(missing_ok=True)
     expansion = _expand_solomon_build(base_artifact, output, authoring_documents)
-    _validate_container(output, inspection["project"]["platform"])
+    _validate_container(output, inspection["project"]["platform"], rom_mode=rom_mode)
 
     report = {
         "schema": "retrolarium.studio-build-result",
@@ -1042,7 +1057,8 @@ def verify_studio_project(path: Path) -> dict[str, Any]:
             expected_size += 0x8000
         if artifact.stat().st_size != expected_size:
             differences.append("artifact-size")
-    _validate_container(artifact, inspection["project"]["platform"])
+    _validate_container(artifact, inspection["project"]["platform"],
+                        rom_mode=inspection["project"]["source_mode"] == "rom")
 
     result = {
         "schema": "retrolarium.studio-verification-result",
@@ -1061,6 +1077,35 @@ def verify_studio_project(path: Path) -> dict[str, Any]:
     return result
 
 
+SOLOMON_REVISIONS = frozenset({"usa", "europe", "japan"})
+# Revisions made for 50 Hz consoles run on MAME's PAL machine.
+PAL_REVISIONS = frozenset({("smb1", "pal"), ("solomons-key", "europe")})
+# SMB revisions whose program runs the point playtest and the title demo
+# script: Japan/USA, its PlayChoice-10 copy (the same program) and Europe
+# (the same RAM and hooks).
+SMB_SCRIPTED_REVISIONS = frozenset({"ju", "pc10", "pal"})
+
+
+def _source_revision(inspection: Mapping[str, Any]):
+    """The profile and revision a project's source is, if the kit knows it."""
+    registry = packaged_game_profiles()
+    for identifier in registry.identifiers():
+        profile = registry.get(identifier)
+        if f"{profile.game_id}.v{profile.profile_version}" != inspection["project"]["profile"]:
+            continue
+        for revision in profile.revisions:
+            if revision.sha256 == inspection["source"].get("sha256"):
+                return profile, revision
+    return None, None
+
+
+def _revision_machine(inspection: Mapping[str, Any]) -> str | None:
+    profile, revision = _source_revision(inspection)
+    if profile is not None and (profile.game_id, revision.revision_id) in PAL_REVISIONS:
+        return "nespal"
+    return None
+
+
 def studio_launch_plan(
     path: Path,
     *,
@@ -1077,7 +1122,7 @@ def studio_launch_plan(
         Path(verification["artifact"]["absolute_path"]),
         platform=inspection["project"]["platform"],
         mame=mame,
-        machine=machine,
+        machine=machine or _revision_machine(inspection),
         attach_window=attach_window,
     )
     plan["operation"] = "retrolarium.studio.launch"
@@ -1396,9 +1441,12 @@ def studio_smb_point_playtest_plan(
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise StudioProjectError(f"cannot read SMB resource document: {exc}") from exc
     if document.get("schema") != "retrolarium.nes-resource-bundle" \
-            or document.get("game") != "smb1" or document.get("revision") != "ju":
+            or document.get("game") != "smb1":
+        raise StudioProjectError("SMB point playtest requires an smb1 resource document")
+    if document.get("revision") not in SMB_SCRIPTED_REVISIONS:
         raise StudioProjectError(
-            "SMB point playtest currently requires an smb1/ju resource document"
+            "Starting inside a level works in the Japan/USA, Europe and "
+            "PlayChoice-10 versions; play this one from power-on."
         )
     resources = document.get("resources")
     if not isinstance(resources, list):
@@ -1516,6 +1564,7 @@ def studio_smb_point_playtest_plan(
     }
     plan = launch_image_plan(
         artifact, platform="nes", mame=executable,
+        machine="nespal" if document.get("revision") == "pal" else "nes",
     )
     plan.update({
         "operation": "retrolarium.studio.smb-point-playtest",
@@ -1684,7 +1733,7 @@ def studio_solomon_point_playtest_plan(
     if document.get("schema") != "retrolarium.solomon-rooms" \
             or document.get("schema_version") != 3 \
             or document.get("game") != "solomons-key" \
-            or revision_id not in {"usa", "europe"} \
+            or revision_id not in SOLOMON_REVISIONS \
             or not isinstance(document.get("rooms"), list) \
             or len(document["rooms"]) != 53:
         raise StudioProjectError("Solomon rooms document has an unsupported identity")
@@ -1754,6 +1803,7 @@ def studio_solomon_point_playtest_plan(
 SOLOMON_DEMO_HOOKS = {
     "usa": {"run": 0xCB2B, "post_game": 0xCA6E},
     "europe": {"run": 0xCABB, "post_game": 0xC9FE},
+    "japan": {"run": 0xCBDC, "post_game": 0xCB6E},
 }
 SOLOMON_DEMO_RUN_GUARD = bytes.fromhex("a90085228581")
 
@@ -1777,8 +1827,10 @@ def studio_smb_demo_plan(path: Path, *, mame: Path, record: Path | None = None) 
     revision = next(
         (item for item in profile.revisions if item.sha256 == inspection["source"]["sha256"]), None
     )
-    if revision is None or revision.revision_id != "ju":
-        raise StudioProjectError("SMB demo playtest supports the JU revision")
+    if revision is None or revision.revision_id not in SMB_SCRIPTED_REVISIONS:
+        raise StudioProjectError(
+            "The demo plays in MAME in the Japan/USA, Europe and PlayChoice-10 versions."
+        )
     demo = next(item for item in profile.resources_for(revision) if item.codec == "smb.demo-input.v1")
     tables = demo.parameters
     executable = mame.resolve()
@@ -1796,7 +1848,8 @@ def studio_smb_demo_plan(path: Path, *, mame: Path, record: Path | None = None) 
     lua = Path(__file__).with_name("runtime") / "smb1_mame_demo.lua"
     if not lua.is_file():
         raise StudioProjectError(f"packaged SMB demo script is missing: {lua}")
-    plan = launch_image_plan(artifact, platform="nes", mame=executable, machine="nes")
+    plan = launch_image_plan(artifact, platform="nes", mame=executable,
+                             machine="nespal" if revision.revision_id == "pal" else "nes")
     recording = "" if record is None else str(record.resolve())
     plan.update({
         "operation": "retrolarium.studio.smb-demo",
@@ -1862,7 +1915,8 @@ def studio_castle_demo_plan(path: Path, *, mame: Path, record: Path | None = Non
     lua = Path(__file__).with_name("runtime") / "castle_mame_demo.lua"
     if not lua.is_file():
         raise StudioProjectError(f"packaged Castle demo script is missing: {lua}")
-    plan = launch_image_plan(artifact, platform="nes", mame=executable, machine="nes")
+    plan = launch_image_plan(artifact, platform="nes", mame=executable,
+                             machine="nespal" if revision.revision_id == "pal" else "nes")
     recording = "" if record is None else str(record.resolve())
     plan.update({
         "operation": "retrolarium.studio.castle-demo",
@@ -1979,7 +2033,8 @@ def studio_pacman_demo_plan(path: Path, *, mame: Path, record: Path | None = Non
     lua = Path(__file__).with_name("runtime") / "pacman_mame_demo.lua"
     if not lua.is_file():
         raise StudioProjectError(f"packaged Pac-Man demo script is missing: {lua}")
-    plan = launch_image_plan(artifact, platform="nes", mame=executable, machine="nes")
+    plan = launch_image_plan(artifact, platform="nes", mame=executable,
+                             machine="nespal" if revision.revision_id == "pal" else "nes")
     recording = "" if record is None else str(record.resolve())
     plan.update({
         "operation": "retrolarium.studio.pacman-demo",
@@ -2180,7 +2235,8 @@ def studio_doraemon_demo_plan(path: Path, *, mame: Path, record: Path | None = N
     lua = Path(__file__).with_name("runtime") / "doraemon_mame_demo.lua"
     if not lua.is_file():
         raise StudioProjectError(f"packaged Doraemon demo script is missing: {lua}")
-    plan = launch_image_plan(artifact, platform="nes", mame=executable, machine="nes")
+    plan = launch_image_plan(artifact, platform="nes", mame=executable,
+                             machine="nespal" if revision.revision_id == "pal" else "nes")
     recording = "" if record is None else str(record.resolve())
     plan.update({
         "operation": "retrolarium.studio.doraemon-demo",
@@ -2390,6 +2446,8 @@ def _project_source(inspection: Mapping[str, Any]) -> Path:
 
     if inspection["project"]["source_mode"] == "rom":
         return Path(inspection["source"]["rom_path"])
+    if inspection["project"]["source_mode"] == "flicky-content":
+        return Path(inspection["project_root"]) / FLICKY_SOURCE_DIRECTORY / FLICKY_ROM_NAME
 
     manifest_path = Path(inspection["source"]["disassembly_path"])
     record = manifest_path.parent / "build-result.json"
@@ -2842,7 +2900,7 @@ def create_studio_project(
         elif document_schema == "retrolarium.solomon-rooms":
             if profile != "solomons-key.v1" \
                     or resource_root.get("game") != "solomons-key" \
-                    or resource_root.get("revision") not in {"usa", "europe"} \
+                    or resource_root.get("revision") not in SOLOMON_REVISIONS \
                     or not isinstance(resource_root.get("rooms"), list) \
                     or len(resource_root["rooms"]) != 53:
                 raise StudioProjectError(
@@ -2860,7 +2918,7 @@ def create_studio_project(
         elif document_schema == "retrolarium.solomon-room-art":
             if profile != "solomons-key.v1" \
                     or resource_root.get("game") != "solomons-key" \
-                    or resource_root.get("revision") not in {"usa", "europe"} \
+                    or resource_root.get("revision") not in SOLOMON_REVISIONS \
                     or not isinstance(resource_root.get("room_group_colors"), list) \
                     or len(resource_root["room_group_colors"]) != 14 \
                     or not isinstance(resource_root.get("room_map_patterns"), list) \
@@ -2875,7 +2933,7 @@ def create_studio_project(
         elif document_schema == "retrolarium.solomon-sprite-frames":
             if profile != "solomons-key.v1" \
                     or resource_root.get("game") != "solomons-key" \
-                    or resource_root.get("revision") not in {"usa", "europe"} \
+                    or resource_root.get("revision") not in SOLOMON_REVISIONS \
                     or not isinstance(resource_root.get("frames"), list) \
                     or len(resource_root["frames"]) != 28:
                 raise StudioProjectError(
@@ -2888,7 +2946,7 @@ def create_studio_project(
         elif document_schema == "retrolarium.solomon-animations":
             if profile != "solomons-key.v1" \
                     or resource_root.get("game") != "solomons-key" \
-                    or resource_root.get("revision") not in {"usa", "europe"} \
+                    or resource_root.get("revision") not in SOLOMON_REVISIONS \
                     or not isinstance(resource_root.get("group_pointers"), list) \
                     or len(resource_root["group_pointers"]) != 33 \
                     or not isinstance(resource_root.get("descriptors"), list) \
@@ -2908,7 +2966,7 @@ def create_studio_project(
             if (
                 profile != "solomons-key.v1"
                 or resource_root.get("game") != "solomons-key"
-                or resource_root.get("revision") not in {"usa", "europe"}
+                or resource_root.get("revision") not in SOLOMON_REVISIONS
                 or not isinstance(resource_root.get("effects"), list)
                 or len(resource_root["effects"]) != 26
                 or not isinstance(resource_root.get("envelopes"), list)
@@ -2925,7 +2983,7 @@ def create_studio_project(
             if (
                 profile != "solomons-key.v1"
                 or resource_root.get("game") != "solomons-key"
-                or resource_root.get("revision") not in {"usa", "europe"}
+                or resource_root.get("revision") not in SOLOMON_REVISIONS
                 or not isinstance(resource_root.get("streams"), list)
                 or len(resource_root["streams"]) != 2
                 or not isinstance(resource_root.get("demo_steps"), list)
@@ -2979,7 +3037,7 @@ def create_studio_project(
             if (
                 profile != "solomons-key.v1"
                 or resource_root.get("game") != "solomons-key"
-                or resource_root.get("revision") not in {"usa", "europe"}
+                or resource_root.get("revision") not in SOLOMON_REVISIONS
                 or not isinstance(resource_root.get("static_programs"), list)
                 or len(resource_root["static_programs"]) != 18
                 or not isinstance(resource_root.get("ending_messages"), list)
@@ -3114,7 +3172,7 @@ def create_studio_project(
                 capabilities = ["edit", "preview", "playtest", "restore", "undo"]
             elif kind == "solomon" and profile == "solomons-key.v1" \
                     and resource_root.get("game") == "solomons-key" \
-                    and resource_root.get("revision") in {"usa", "europe"}:
+                    and resource_root.get("revision") in SOLOMON_REVISIONS:
                 capabilities = ["edit", "preview", "playtest", "restore", "undo"]
             elif kind == "level" and kinds[kind] == {"smb.levels.v1"}:
                 tab_id = "levels"

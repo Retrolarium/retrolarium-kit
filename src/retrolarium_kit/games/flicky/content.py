@@ -69,17 +69,28 @@ def _run(command: list[str], root: Path, *, env: dict[str, str] | None = None) -
         )
 
 
-def _tracked_files(source_root: Path) -> list[Path]:
+def _source_names(source_root: Path) -> list[str]:
+    """The repository's files under SOURCE_PATHS: Git's list in a checkout;
+    in a downloaded archive (no .git), the files there but what the
+    repository ignores: ROM slices (*.bin) and Python caches."""
+    if not (source_root / ".git").exists():
+        return sorted(
+            path.relative_to(source_root).as_posix()
+            for top in SOURCE_PATHS if (source_root / top).is_dir()
+            for path in (source_root / top).rglob("*")
+            if path.is_file() and path.suffix != ".bin" and "__pycache__" not in path.parts
+        )
     result = subprocess.run(["git", "ls-files", "-z", "--cached", "--",
                              *SOURCE_PATHS], cwd=source_root,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if result.returncode:
         raise FlickyContentError("Flicky source must be a readable Git checkout")
+    return [os.fsdecode(raw) for raw in result.stdout.split(b"\0") if raw]
+
+
+def _tracked_files(source_root: Path) -> list[Path]:
     files: list[Path] = []
-    for raw in result.stdout.split(b"\0"):
-        if not raw:
-            continue
-        name = os.fsdecode(raw)
+    for name in _source_names(source_root):
         portable = PurePosixPath(name)
         if portable.is_absolute() or PureWindowsPath(name).is_absolute() \
                 or "\\" in name or ".." in portable.parts:

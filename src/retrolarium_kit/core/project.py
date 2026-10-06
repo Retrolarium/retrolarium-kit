@@ -13,7 +13,8 @@ from typing import Any
 
 from .build_toolchains import ResolvedToolchain, materialize_build_toolchain
 from .contracts import artifact_path, load_disassembly_manifest
-from .ines import load_ines
+from .fds import FdsError, parse_fds_side
+from .ines import InesError, load_ines, parse_ines_prefix
 from .megadrive import load_megadrive
 from .snes import load_snes
 
@@ -22,7 +23,7 @@ class ProjectError(RuntimeError):
     """A declared project operation could not be completed."""
 
 
-MAME_NES_MACHINES = {"nes", "nespal", "famicom"}
+MAME_NES_MACHINES = {"nes", "nespal", "famicom", "fds"}
 MAME_MEGADRIVE_MACHINES = {"genesis", "megadriv"}
 MAME_SNES_MACHINES = {"snes", "snespal"}
 MAME_MACHINES = {
@@ -461,6 +462,48 @@ def launch_plan(
     }
 
 
+# The Famicom Disk System BIOS as MAME names it, with the SHA-1 of each
+# dump MAME accepts (disksys.rom is the first).
+FDS_BIOS = {
+    "rp2c33a-01a.bin": "57fe1bdee955bb48d357e463ccbf129496930b62",
+    "rp2c33-01.bin": "af5af53f66982e749643fdf8b2acbb7d4d3ed229",
+}
+
+
+def _fds_bios_directory(mame: Path) -> Path:
+    return mame.resolve().parent / "roms" / "fds"
+
+
+def fds_bios(mame: Path) -> Path | None:
+    """The Disk System BIOS MAME will find beside `mame`, if any."""
+    directory = _fds_bios_directory(mame)
+    for name in FDS_BIOS:
+        if (directory / name).is_file():
+            return directory / name
+    for archive in ("fds.zip", "fds.7z"):
+        if (directory.parent / archive).is_file():
+            return directory.parent / archive
+    return None
+
+
+def install_fds_bios(source: Path, mame: Path) -> dict[str, Any]:
+    """Copy a Disk System BIOS dump to where MAME looks for it, under the
+    name MAME gives that dump."""
+    try:
+        data = source.read_bytes()
+    except OSError as exc:
+        raise ProjectError(f"cannot read {source}: {exc}") from exc
+    digest = hashlib.sha1(data).hexdigest()
+    name = next((name for name, sha1 in FDS_BIOS.items() if sha1 == digest), None)
+    if name is None:
+        raise ProjectError(f"{source.name} is not a Famicom Disk System BIOS MAME knows")
+    directory = _fds_bios_directory(mame)
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / name
+    target.write_bytes(data)
+    return {"schema": "retrolarium.fds-bios", "schema_version": 1, "path": str(target), "sha1": digest}
+
+
 def launch_image_plan(
     rom: Path,
     *,
@@ -472,7 +515,8 @@ def launch_image_plan(
     """Create the same strict process-spec for a direct authoring artifact."""
     default_machines = {"nes": "nes", "megadrive": "genesis", "snes": "snes"}
     allowed_machines = MAME_MACHINES.get(platform)
-    selected_machine = machine or default_machines.get(platform)
+    disk = platform == "nes" and rom.suffix.lower() == ".fds"
+    selected_machine = "fds" if disk else machine or default_machines.get(platform)
     if allowed_machines is None or selected_machine not in allowed_machines:
         raise ProjectError(
             f"unsupported {platform} MAME machine: {selected_machine}"
@@ -483,8 +527,27 @@ def launch_image_plan(
     rom = rom.resolve()
     if not rom.is_file():
         raise ProjectError(f"launch artifact does not exist: {rom}")
-    if platform == "nes":
-        load_ines(rom)
+    if disk:
+        try:
+            parse_fds_side(rom.read_bytes())
+        except FdsError as exc:
+            raise ProjectError(f"{rom.name}: {exc}") from exc
+        if fds_bios(mame) is None:
+            raise ProjectError(
+                "MAME needs the Famicom Disk System BIOS to run disk games. "
+                "Choose it in Settings (it is usually called disksys.rom)."
+            )
+    elif platform == "nes":
+        # An arcade image may carry more after its cartridge (PlayChoice-10).
+        try:
+            image, _rest = parse_ines_prefix(rom.read_bytes(), rom)
+        except InesError as exc:
+            raise ProjectError(f"{rom.name}: {exc}") from exc
+        if image.mapper == 99:
+            raise ProjectError(
+                "Vs. System games run on MAME's arcade Vs. driver, which the "
+                "studio's MAME does not include."
+            )
     elif platform == "megadrive":
         load_megadrive(rom)
     elif platform == "snes":
@@ -493,7 +556,7 @@ def launch_image_plan(
         raise ProjectError(f"unsupported launch platform: {platform}")
     arguments = [
         selected_machine,
-        "-cart",
+        "-flop" if disk else "-cart",
         str(rom),
         "-skip_gameinfo",
         "-window",

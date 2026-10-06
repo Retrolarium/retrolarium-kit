@@ -4,20 +4,22 @@
 (``tbl_demo_joypad_actions``) are held for its number of frames
 (``tbl_demo_action_durations``, 1-255) and a duration of 0 ends the demo.
 Both tables stay where the engine reads them (``LDA table-1,X``), so a demo
-holds at most as many steps as the game's own: 21.
+holds at most as many steps as the game's own: 21 (19 in All Night Nippon,
+17 in Super Mario Bros. 2).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from .authoring import (
     Address, AddressRange, AuthoringError, BuildPlan, Change, ChangeSet,
     GameProfile, Provenance, RevisionSpec,
 )
-from .ines import parse_ines
+from .fds import FdsError, fds_payload, fds_payload_ranges
+from .ines import parse_ines, parse_ines_prefix
 
 
 CODEC = "smb.demo-input.v1"
@@ -75,22 +77,58 @@ def _layout(profile: GameProfile, revision: RevisionSpec) -> dict[str, int]:
     return layout
 
 
-def _source(source: bytes, revision: RevisionSpec, *, verify: bool = True):
+@dataclass(frozen=True)
+class _Program:
+    """The game's program as the CPU sees it from `base`, and where its
+    bytes sit in the image: (file offset, offset in the bytes asked, size)."""
+    data: bytes
+    base: int
+    file_ranges: Callable[[int, int], tuple[tuple[int, int, int], ...]]
+
+
+def _source(source: bytes, profile: GameProfile, revision: RevisionSpec, *, verify: bool = True) -> _Program:
     if verify and hashlib.sha256(source).hexdigest() != revision.sha256:
         raise SmbDemoError("demo source identity mismatch")
-    image = parse_ines(source)
+    if any(payload.payload_id == "prg" for payload in revision.payloads):
+        # Vs. and Disk System images name where their program lies.
+        payload = profile.payload_for(revision, "prg")
+        if payload.load_address is None:
+            raise SmbDemoError("the SMB program payload needs its load address")
+        if payload.storage == "range":
+            assert payload.file_offset is not None
+            start = payload.file_offset
+            data = source[start:start + payload.size]
+            ranges = lambda offset, size: ((start + offset, 0, size),)  # noqa: E731
+        elif payload.storage == "fds-records":
+            try:
+                data = fds_payload(source, payload.record_ids)
+            except FdsError as exc:
+                raise SmbDemoError(str(exc)) from exc
+            records = payload.record_ids
+            ranges = lambda offset, size: tuple(  # noqa: E731
+                (item.file_offset, item.payload_offset, item.size)
+                for item in fds_payload_ranges(source, records, offset, size))
+        else:
+            raise SmbDemoError(f"unsupported program storage {payload.storage!r}")
+        if len(data) != payload.size:
+            raise SmbDemoError("the SMB program payload is cut short")
+        return _Program(data, payload.load_address, ranges)
+    # A PlayChoice-10 image is the cartridge's iNES image followed by the
+    # arcade's instruction ROM.
+    image = parse_ines_prefix(source)[0] if revision.container == "ines-pc10" else parse_ines(source)
     if len(image.prg) != 0x8000:
         raise SmbDemoError("SMB demo needs 32 KiB PRG")
-    return image
+    file_base = len(image.header) + len(image.trainer)
+    return _Program(image.prg, 0x8000, lambda offset, size: ((file_base + offset, 0, size),))
 
 
-def _read(prg: bytes, address: int, count: int) -> bytes:
-    if not 0x8000 <= address <= 0x10000 - count:
+def _read(program: _Program, address: int, count: int) -> bytes:
+    if address < program.base or address + count > min(0x10000, program.base + len(program.data)):
         raise SmbDemoError("demo range escapes PRG")
-    return prg[address - 0x8000:address - 0x8000 + count]
+    return program.data[address - program.base:address - program.base + count]
 
 
-def _check_engine(prg: bytes, layout: Mapping[str, int]) -> None:
+def _check_engine(prg: _Program, layout: Mapping[str, int]) -> None:
     def word(offset: int) -> int:
         raw = _read(prg, layout["engine_cpu"] + offset, 2)
         return raw[0] | (raw[1] << 8)
@@ -106,7 +144,7 @@ def decode_demo(
     *, _verify_identity: bool = True,
 ) -> SmbDemoDocument:
     layout = _layout(profile, revision)
-    prg = _source(source, revision, verify=_verify_identity).prg
+    prg = _source(source, profile, revision, verify=_verify_identity)
     _check_engine(prg, layout)
     capacity = layout["capacity"]
     actions = _read(prg, layout["actions_cpu"], capacity)
@@ -125,7 +163,7 @@ def decode_demo(
     return result
 
 
-def _encode(value: Mapping[str, Any], layout: Mapping[str, int], prg: bytes) -> tuple[bytes, bytes]:
+def _encode(value: Mapping[str, Any], layout: Mapping[str, int], prg: _Program) -> tuple[bytes, bytes]:
     """The action and duration tables; bytes past the demo keep their values."""
     if value.get("layout") != dict(layout):
         raise SmbDemoError("demo layout differs from profile")
@@ -166,7 +204,7 @@ def parse_demo_document(value: object, profile: GameProfile, revision: RevisionS
             raise SmbDemoError(f"demo {key} differs from profile")
     # The tables' other bytes come from the ROM at build time; any stand-in
     # checks the steps.
-    _encode(value, layout, bytes(0x8000))
+    _encode(value, layout, _Program(bytes(0x10000), 0, lambda offset, size: ()))
     return SmbDemoDocument(
         profile.game_id, revision.revision_id, revision.sha256, layout,
         tuple({"index": s["index"], "frames": s["frames"], "buttons": list(s["buttons"])} for s in value["steps"]),
@@ -176,23 +214,23 @@ def parse_demo_document(value: object, profile: GameProfile, revision: RevisionS
 def build_demo(
     source: bytes, document: SmbDemoDocument, profile: GameProfile, revision: RevisionSpec,
 ) -> tuple[bytes, dict[str, object]]:
-    image = _source(source, revision)
+    program = _source(source, profile, revision)
     layout = _layout(profile, revision)
-    _check_engine(image.prg, layout)
+    _check_engine(program, layout)
     checked = parse_demo_document(document.as_dict(), profile, revision)
-    actions, durations = _encode(checked.as_dict(), layout, image.prg)
-    base = len(image.header) + len(image.trainer)
+    actions, durations = _encode(checked.as_dict(), layout, program)
     changes = []
     for address, payload, field in (
         (layout["actions_cpu"], actions, "actions"), (layout["durations_cpu"], durations, "durations"),
     ):
-        start = base + address - 0x8000
-        if source[start:start + len(payload)] != payload:
-            changes.append(Change(
-                AddressRange(Address("file", start), len(payload)),
-                source[start:start + len(payload)], payload,
-                Provenance(revision.sha256, "demo", field),
-            ))
+        for start, at, size in program.file_ranges(address - program.base, len(payload)):
+            part = payload[at:at + size]
+            if source[start:start + size] != part:
+                changes.append(Change(
+                    AddressRange(Address("file", start), size),
+                    source[start:start + size], part,
+                    Provenance(revision.sha256, "demo", field),
+                ))
     output = BuildPlan(revision.sha256, ChangeSet(tuple(changes))).apply(source) if changes else source
     rebuilt = decode_demo(output, profile, revision, _verify_identity=False)
     if rebuilt.as_dict() != checked.as_dict():
