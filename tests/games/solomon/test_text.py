@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from retrolarium_kit.authoring import GameProfile, ResourceSpec, RevisionSpec
 from retrolarium_kit.solomon_text import (
-    STATIC_ORDER, SolomonTextError, build_text, decode_text, parse_text_document,
+    SolomonTextError, build_text, decode_text, parse_text_document, static_order,
 )
 
 
@@ -39,7 +39,7 @@ def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
     programs[5] = program(0x3F00, list(range(16)))
     cursor = 0xE024
     pointers = [0] * 18
-    for index in STATIC_ORDER:
+    for index in static_order(18):
         pointers[index] = cursor
         put(cursor, programs[index])
         cursor += len(programs[index])
@@ -99,6 +99,10 @@ def prg_byte(output: bytes, address: int) -> int:
 
 
 class SolomonTextTests(unittest.TestCase):
+    def test_static_order_without_the_licence_screen(self) -> None:
+        self.assertEqual((0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 5, 13), static_order(18))
+        self.assertEqual((0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 5), static_order(13))
+
     def test_exact_roundtrip(self) -> None:
         source, profile, revision = fixture()
         document = decode_text(source, profile, revision)

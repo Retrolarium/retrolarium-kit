@@ -1,0 +1,14 @@
+{
+  "schema": "retrolarium.game-repositories",
+  "schema_version": 1,
+  "organization": "https://github.com/RetrolariumLab",
+  "branch": "main",
+  "games": {
+    "pacman": {"repository": "pacman_src", "descriptor": "pacman.rlj"},
+    "castle-excellent": {"repository": "castle_excellent_src", "descriptor": "castle_excellent.rlj"},
+    "doraemon": {"repository": "doraemon_src", "descriptor": "doraemon.rlj"},
+    "smb1": {"repository": "smb1_src", "descriptor": "super_mario_bros.rlj"},
+    "solomons-key": {"repository": "solomon_no_kagi_src", "descriptor": "solomons_key.rlj"},
+    "flicky": {"repository": "flicky_src", "descriptor": "flicky.rlj"}
+  }
+}

@@ -33,9 +33,6 @@ CODEC = "solomon.text.v1"
 SCHEMA = "retrolarium.solomon-text"
 VERSION = 1
 STATIC_COUNT = 18
-# Programs in ROM order; 05 is copied by BuildEndingPpuMessage, 19 bytes
-# from its own address, so it keeps its shape.
-STATIC_ORDER = (0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 5, 13)
 FIXED_PROGRAM = 5
 INITIAL_COUNT = 2
 MESSAGE_COUNT = 10
@@ -58,6 +55,14 @@ FIELDS = (
 
 class SolomonTextError(AuthoringError):
     """Screen text is invalid or exceeds the ROM regions it lives in."""
+
+
+def static_order(count: int) -> tuple[int, ...]:
+    """The programs in ROM order: 05, which BuildEndingPpuMessage copies 19
+    bytes from its own address and so keeps its shape, and the palette 13
+    come last. Solomon no Kagi has no 13-17 (the licence screen)."""
+    return (*(index for index in range(count) if index not in (FIXED_PROGRAM, 13)),
+            FIXED_PROGRAM, *((13,) if count > 13 else ()))
 
 
 @dataclass(frozen=True)
@@ -118,7 +123,10 @@ def _layout(profile: GameProfile, revision: RevisionSpec) -> dict[str, int]:
            for name in FIELDS):
         raise SolomonTextError("text resource needs its CPU addresses")
     layout = {name: parameters[name] for name in FIELDS}
-    if layout["static_pointer_high_cpu"] - layout["static_pointer_low_cpu"] != STATIC_COUNT \
+    layout["static_count"] = parameters.get("static_count", STATIC_COUNT)
+    if type(layout["static_count"]) is not int or not FIXED_PROGRAM < layout["static_count"] <= STATIC_COUNT:
+        raise SolomonTextError("text resource static_count is invalid")
+    if layout["static_pointer_high_cpu"] - layout["static_pointer_low_cpu"] != layout["static_count"] \
             or layout["static_region_end_cpu"] <= layout["static_region_cpu"] \
             or layout["ending_initial_end_cpu"] <= layout["ending_initial_cpu"] \
             or layout["ending_data_end_cpu"] <= layout["ending_data_cpu"] \
@@ -250,14 +258,15 @@ def decode_text(
     layout = _layout(profile, revision)
     prg = _source(source, revision, verify=_verify_identity).prg
 
-    lows = _read(prg, layout["static_pointer_low_cpu"], STATIC_COUNT)
-    highs = _read(prg, layout["static_pointer_high_cpu"], STATIC_COUNT)
+    count = layout["static_count"]
+    lows = _read(prg, layout["static_pointer_low_cpu"], count)
+    highs = _read(prg, layout["static_pointer_high_cpu"], count)
     pointers = [low | (high << 8) for low, high in zip(lows, highs)]
-    if sorted(range(STATIC_COUNT), key=lambda index: pointers[index]) != list(STATIC_ORDER):
+    if sorted(range(count), key=lambda index: pointers[index]) != list(static_order(count)):
         raise SolomonTextError("static PPU programs are not in the expected order")
     programs: list[dict[str, Any]] = []
     cursor = layout["static_region_cpu"]
-    for index in STATIC_ORDER:
+    for index in static_order(count):
         if pointers[index] != cursor:
             raise SolomonTextError(f"static PPU program {index:02d} does not follow the previous one")
         commands, size = _decode_program(prg, cursor, layout["static_region_end_cpu"])
@@ -327,8 +336,9 @@ def _encode(value: Mapping[str, Any], layout: Mapping[str, int]) -> dict[str, An
     capacities = _capacities(layout)
 
     programs = value.get("static_programs")
-    if not isinstance(programs, list) or len(programs) != STATIC_COUNT:
-        raise SolomonTextError(f"text needs {STATIC_COUNT} static PPU programs")
+    count = layout["static_count"]
+    if not isinstance(programs, list) or len(programs) != count:
+        raise SolomonTextError(f"text needs {count} static PPU programs")
     encoded: dict[int, bytes] = {}
     for index, program in enumerate(programs):
         if not isinstance(program, Mapping) or set(program) != {"index", "commands"} \
@@ -336,8 +346,8 @@ def _encode(value: Mapping[str, Any], layout: Mapping[str, int]) -> dict[str, An
             raise SolomonTextError("static PPU program indices differ")
         encoded[index] = _encode_program(program["commands"], f"static PPU program {index:02d}")
     static = bytearray()
-    pointers = [0] * STATIC_COUNT
-    for index in STATIC_ORDER:
+    pointers = [0] * count
+    for index in static_order(count):
         pointers[index] = layout["static_region_cpu"] + len(static)
         static += encoded[index]
     if len(static) > capacities["static_bytes"]:

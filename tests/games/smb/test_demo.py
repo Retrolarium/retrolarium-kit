@@ -7,7 +7,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.authoring import GameProfile, ResourceSpec, RevisionSpec
+from retrolarium_kit.authoring import GameProfile, PayloadSpec, ResourceSpec, RevisionSpec
 from retrolarium_kit.smb_demo import SmbDemoError, build_demo, decode_demo, parse_demo_document
 
 
@@ -38,6 +38,35 @@ def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
     return source, profile, revision
 
 
+def disk_fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
+    """A program that loads at $6000 from a named payload, as the Disk
+    System and Vs. images give it, with the demo below $8000."""
+    actions, durations, engine = 0x6346, 0x635B, 0x6371
+    program = bytearray(0x8000)
+
+    def put(address: int, payload: bytes) -> None:
+        program[address - 0x6000:address - 0x6000 + len(payload)] = payload
+
+    put(actions, bytes((0x01, 0x80)) + bytes(19))
+    put(durations, bytes((30, 10, 0)) + bytes(19))
+    put(engine + 13, b"\xBD" + (durations - 1).to_bytes(2, "little"))
+    put(engine + 21, b"\xBD" + (actions - 1).to_bytes(2, "little"))
+    source = b"VS" + bytes(30) + bytes(program)
+    payload = PayloadSpec("prg", "range", 0x8000, hashlib.sha1(bytes(program)).hexdigest(),
+                          file_offset=32, load_address=0x6000)
+    revision = RevisionSpec(
+        "vs_smb", "SMB disk probe", len(source), hashlib.sha1(source).hexdigest(),
+        hashlib.sha256(source).hexdigest(), "ines-vs", payloads=(payload,),
+    )
+    profile = GameProfile(
+        "smb1", 1, "SMB probe", "nes", ("demo",), (revision,),
+        (ResourceSpec("demo", "demo", "smb.demo-input.v1", "fixed", {
+            "actions_cpu": actions, "durations_cpu": durations, "engine_cpu": engine, "capacity": 21,
+        }, payload="prg"),),
+    )
+    return source, profile, revision
+
+
 class SmbDemoTests(unittest.TestCase):
     def test_round_trip_and_edit(self) -> None:
         source, profile, revision = fixture()
@@ -48,6 +77,17 @@ class SmbDemoTests(unittest.TestCase):
         value = document.as_dict()
         value["steps"] = value["steps"] + [{"index": 3, "frames": 255, "buttons": ["B", "LEFT"]}]
         output, _ = build_demo(source, parse_demo_document(value, profile, revision), profile, revision)
+        self.assertEqual(value, decode_demo(output, profile, revision, _verify_identity=False).as_dict())
+
+    def test_a_program_payload_is_read_and_written_where_it_lies(self) -> None:
+        source, profile, revision = disk_fixture()
+        document = decode_demo(source, profile, revision)
+        self.assertEqual([(30, ["RIGHT"]), (10, ["A"])], [(s["frames"], s["buttons"]) for s in document.steps])
+        value = document.as_dict()
+        value["steps"][1]["frames"] = 99
+        output, report = build_demo(source, parse_demo_document(value, profile, revision), profile, revision)
+        self.assertEqual(1, report["changed_bytes"])
+        self.assertEqual(99, output[32 + 0x635B - 0x6000 + 1])
         self.assertEqual(value, decode_demo(output, profile, revision, _verify_identity=False).as_dict())
 
     def test_limits(self) -> None:

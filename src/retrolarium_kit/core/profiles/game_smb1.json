@@ -90,6 +90,11 @@
       ],
       "resource_overrides": [
         {
+          "id": "demo",
+          "payload": "prg",
+          "parameters": {"actions_cpu": 33598, "durations_cpu": 33619, "engine_cpu": 33641, "capacity": 21}
+        },
+        {
           "id": "world",
           "payload": "prg",
           "parameters": {
@@ -103,7 +108,7 @@
           "parameters": {
             "stream_pool": null,
             "area_file_offset": 9571,
-            "area_size": 4439,
+            "area_size": 4441,
             "enemy_file_offset": 8203,
             "enemy_size": 1368,
             "stream_names": [
@@ -123,7 +128,7 @@
               99, 101, 89, 151, 157, 101, 89, 133,
               107, 9, 63, 21, 99, 101, 109, 49,
               145, 131, 117, 121, 43, 133, 85, 133,
-              173, 173, 141, 65, 221, 29, 123
+              173, 173, 141, 65, 221, 29, 125
             ],
             "enemy_capacities": [
               61, 27, 35, 53, 21, 58, 29, 47,
@@ -288,6 +293,11 @@
       ],
       "resource_overrides": [
         {
+          "id": "demo",
+          "payload": "prg",
+          "parameters": {"actions_cpu": 25414, "durations_cpu": 25435, "engine_cpu": 25457, "capacity": 21}
+        },
+        {
           "id": "world",
           "payload": "prg",
           "parameters": {
@@ -438,11 +448,19 @@
       ],
       "resources": [
         {
+          "id": "demo",
+          "kind": "demo",
+          "codec": "smb.demo-input.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {"actions_cpu": 50410, "durations_cpu": 50429, "engine_cpu": 50449, "capacity": 19}
+        },
+        {
           "id": "authoring-bundle",
           "kind": "resource-bundle",
           "codec": "nes.resource-bundle.v1",
           "capacity_policy": "fixed",
-          "parameters": {}
+          "parameters": {"resource_ids": ["world-normal", "levels-normal", "world-extended", "levels-extended", "background-metatiles", "area-palette-packets", "player-palettes", "player-frames", "game-screen-packets", "warp-zone-screen", "title-screen", "music", "swim-stomp-envelope", "sfx-tables", "fds-music", "character-graphics"]}
         },
         {
           "id": "world-normal",
@@ -972,11 +990,19 @@
       ],
       "resources": [
         {
+          "id": "demo",
+          "kind": "demo",
+          "codec": "smb.demo-input.v1",
+          "capacity_policy": "fixed",
+          "payload": "prg",
+          "parameters": {"actions_cpu": 50480, "durations_cpu": 50497, "engine_cpu": 50515, "capacity": 17}
+        },
+        {
           "id": "authoring-bundle",
           "kind": "resource-bundle",
           "codec": "nes.resource-bundle.v1",
           "capacity_policy": "fixed",
-          "parameters": {}
+          "parameters": {"resource_ids": ["world-normal", "levels-normal", "world-hard", "levels-hard", "background-metatiles", "area-palette-packets", "player-palettes", "player-frames", "game-screen-packets", "warp-zone-screen", "title-screen", "music", "swim-stomp-envelope", "sfx-tables", "fds-music", "character-graphics"]}
         },
         {
           "id": "world-normal",

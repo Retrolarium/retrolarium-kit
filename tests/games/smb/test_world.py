@@ -275,7 +275,7 @@ class SmbWorldTests(unittest.TestCase):
         self.assertEqual(vs_resources["levels"].payload, "chr")
         self.assertEqual(len(vs_resources["levels"].parameters["stream_names"]), 39)
         self.assertEqual(
-            sum(vs_resources["levels"].parameters["area_capacities"]), 4439
+            sum(vs_resources["levels"].parameters["area_capacities"]), 4441
         )
         self.assertEqual(
             sum(vs_resources["levels"].parameters["enemy_capacities"]), 1368
@@ -382,7 +382,7 @@ class SmbWorldTests(unittest.TestCase):
         self.assertEqual(
             list(ann_resources),
             [
-                "authoring-bundle", "world-normal", "levels-normal",
+                "demo", "authoring-bundle", "world-normal", "levels-normal",
                 "world-extended", "levels-extended", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
                 "game-screen-packets", "warp-zone-screen", "title-screen",
@@ -527,7 +527,7 @@ class SmbWorldTests(unittest.TestCase):
         self.assertEqual(
             list(smb2_resources),
             [
-                "authoring-bundle", "world-normal", "levels-normal",
+                "demo", "authoring-bundle", "world-normal", "levels-normal",
                 "world-hard", "levels-hard", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
                 "game-screen-packets", "warp-zone-screen", "title-screen",
@@ -692,7 +692,7 @@ class SmbWorldTests(unittest.TestCase):
         self.assertEqual(
             details["ann_fds"]["resources"],
             [
-                "authoring-bundle", "world-normal", "levels-normal",
+                "demo", "authoring-bundle", "world-normal", "levels-normal",
                 "world-extended", "levels-extended", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
                 "game-screen-packets", "warp-zone-screen", "title-screen",
@@ -707,7 +707,7 @@ class SmbWorldTests(unittest.TestCase):
         self.assertEqual(
             details["smb2_jp_fds"]["resources"],
             [
-                "authoring-bundle", "world-normal", "levels-normal",
+                "demo", "authoring-bundle", "world-normal", "levels-normal",
                 "world-hard", "levels-hard", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
                 "game-screen-packets", "warp-zone-screen", "title-screen",

@@ -11,6 +11,10 @@ studio's views. It is tracked in the repository; nothing it leads to is:
 - .retrolarium/<revision>/: the project generated for the studio and every
   build, trace and cache (ignored).
 
+Flicky builds through its repository's own content pipeline instead: its
+revision gets a snapshot of the repository in .retrolarium/<revision>/
+flicky-source, and the edited documents are that snapshot's workspace.
+
 Opening a revision ("prepare") checks its ROM, runs the repository's split
 with the kit's own Python when its outputs are missing (no make needed),
 creates hack/<revision> and writes the generated project the studio opens.
@@ -26,6 +30,7 @@ from pathlib import Path, PurePosixPath
 import shutil
 import subprocess
 import sys
+import tempfile
 import tomllib
 from typing import Any, Mapping
 
@@ -37,6 +42,8 @@ SCHEMA_VERSION = 1
 WORKSPACE_DIRECTORY = ".retrolarium"
 HACK_DIRECTORY = "hack"
 PLATFORMS = frozenset({"nes", "snes", "megadrive"})
+FLICKY_PROFILE = "flicky-ue.v1"
+FLICKY_REVISION = "ue"
 
 
 class GameRepositoryError(AuthoringError):
@@ -62,6 +69,7 @@ class GameDescriptor:
     revisions: tuple[Revision, ...]
     split: Mapping[str, Any] | None
     workspace: Mapping[str, Any]
+    source_mode: str = "rom"
 
     def revision(self, revision_id: str) -> Revision:
         for revision in self.revisions:
@@ -113,8 +121,13 @@ def load_descriptor(path: Path) -> GameDescriptor:
     if platform not in PLATFORMS:
         raise GameRepositoryError(f"game.platform must be one of {sorted(PLATFORMS)}")
     profile_id = _string(game.get("profile"), "game.profile")
-    profile = _profile_by_id(profile_id)
-    shas = {revision.revision_id: revision.sha256 for revision in profile.revisions}
+    if profile_id == FLICKY_PROFILE:
+        from .flicky_content import CANONICAL_SHA256
+
+        shas = {FLICKY_REVISION: CANONICAL_SHA256}
+    else:
+        profile = _profile_by_id(profile_id)
+        shas = {revision.revision_id: revision.sha256 for revision in profile.revisions}
     revisions = []
     for index, item in enumerate(raw.get("revisions") or []):
         if not isinstance(item, Mapping) or set(item) != {"id", "label", "rom"}:
@@ -139,9 +152,15 @@ def load_descriptor(path: Path) -> GameDescriptor:
     workspace = raw.get("workspace")
     if not isinstance(workspace, Mapping) or not isinstance(workspace.get("tabs"), list):
         raise GameRepositoryError("the descriptor needs [workspace] with [[workspace.tabs]]")
+    known = {revision.id for revision in revisions}
+    for tab in workspace["tabs"]:
+        only = tab.get("revisions") if isinstance(tab, Mapping) else None
+        if only is not None and (not isinstance(only, list) or not only or not set(only) <= known):
+            raise GameRepositoryError(f"workspace tab {tab.get('id')!r}: revisions must list revisions of the game")
     return GameDescriptor(path, path.parent, _string(game.get("id"), "game.id"),
                           _string(game.get("name"), "game.name"), platform, profile_id,
-                          tuple(revisions), split, workspace)
+                          tuple(revisions), split, workspace,
+                          "flicky-content" if profile_id == FLICKY_PROFILE else "rom")
 
 
 def _profile_by_id(profile_id: str):
@@ -168,9 +187,14 @@ def identify_rom(path: Path) -> list[dict[str, str]]:
     """Every packaged profile revision whose image this file is."""
     from .game_profiles import packaged_game_profiles
 
+    from .flicky_content import CANONICAL_SHA256
+
     digest = _sha256(path)
     registry = packaged_game_profiles()
     found = []
+    if digest == CANONICAL_SHA256:
+        found.append({"game": "flicky", "profile": "flicky", "revision": FLICKY_REVISION,
+                      "name": "Flicky (USA, Europe)"})
     for identifier in registry.identifiers():
         profile = registry.get(identifier)
         for revision in profile.revisions:
@@ -191,22 +215,37 @@ def _project_path(descriptor: GameDescriptor, revision: Revision) -> Path:
     return descriptor.root / WORKSPACE_DIRECTORY / revision.id / f"{descriptor.id}-{revision.id}.rlj"
 
 
-def _documents(descriptor: GameDescriptor) -> list[tuple[str, str | None]]:
+def _tabs(descriptor: GameDescriptor, revision: Revision) -> list[Mapping[str, Any]]:
+    """The views of one revision: a tab with `revisions` shows only in those."""
+    return [tab for tab in descriptor.workspace["tabs"]
+            if revision.id in tab.get("revisions", [revision.id])]
+
+
+def _documents(descriptor: GameDescriptor, revision: Revision) -> list[tuple[str, str | None]]:
     """The documents the views edit, with the profile resource each holds."""
     seen: dict[str, str | None] = {}
-    for tab in descriptor.workspace["tabs"]:
+    for tab in _tabs(descriptor, revision):
         document = tab.get("document")
         if isinstance(document, str):
             seen.setdefault(_relative(document, "workspace.tabs.document"), tab.get("resource"))
     return list(seen.items())
 
 
+def _edits(descriptor: GameDescriptor, revision: Revision) -> Path:
+    """Where a revision's edited documents live."""
+    if descriptor.source_mode == "flicky-content":
+        from .flicky_content import SOURCE_DIRECTORY
+
+        return descriptor.root / WORKSPACE_DIRECTORY / revision.id / SOURCE_DIRECTORY
+    return descriptor.root / HACK_DIRECTORY / revision.id
+
+
 def _edited(descriptor: GameDescriptor, revision: Revision) -> bool:
-    """Whether hack/<revision> differs from the documents first taken from
+    """Whether the edited documents differ from the ones first taken from
     the ROM (kept in .retrolarium/<revision>/original)."""
-    hack = descriptor.root / HACK_DIRECTORY / revision.id
+    hack = _edits(descriptor, revision)
     original = descriptor.root / WORKSPACE_DIRECTORY / revision.id / "original"
-    for document, _resource in _documents(descriptor):
+    for document, _resource in _documents(descriptor, revision):
         edited, pristine = hack / document, original / document
         if not edited.is_file():
             continue
@@ -281,8 +320,10 @@ def _toml(value: object) -> str:
 
 
 def _project_text(descriptor: GameDescriptor, revision: Revision) -> str:
-    """The generated project: the descriptor's views over hack/<revision>."""
+    """The generated project: the descriptor's views over hack/<revision>
+    (Flicky: over its snapshot's workspace)."""
     up = "../.."
+    flicky = descriptor.source_mode == "flicky-content"
     lines = [
         "# Generated by the Retrolarium Kit from " + descriptor.path.name + "; do not edit.",
         'schema = "retrolarium.project"',
@@ -293,12 +334,13 @@ def _project_text(descriptor: GameDescriptor, revision: Revision) -> str:
         f"name = {_toml(descriptor.name + ' [' + revision.label + ']')}",
         f"platform = {_toml(descriptor.platform)}",
         f"profile = {_toml(descriptor.profile)}",
-        'source_mode = "rom"',
+        f"source_mode = {_toml(descriptor.source_mode)}",
         "",
         "[source]",
-        f"rom = {_toml(up + '/' + revision.rom)}",
+        *(['manifest = "flicky-source/config/authoring/content_studios.json"'] if flicky else
+          [f"rom = {_toml(up + '/' + revision.rom)}"]),
         f"sha256 = {_toml(revision.sha256)}",
-        f"repository = {_toml(up)}",
+        *([] if flicky else [f"repository = {_toml(up)}"]),
         "",
         "[workspace]",
     ]
@@ -306,13 +348,14 @@ def _project_text(descriptor: GameDescriptor, revision: Revision) -> str:
     for key in ("layout", "startup_tab"):
         if key in workspace:
             lines.append(f"{key} = {_toml(workspace[key])}")
-    for tab in workspace["tabs"]:
+    for tab in _tabs(descriptor, revision):
         lines += ["", "[[workspace.tabs]]"]
         for key, value in tab.items():
-            if key == "resource":
+            if key in ("resource", "revisions"):
                 continue
             if key == "document":
-                value = f"{up}/{HACK_DIRECTORY}/{revision.id}/{_relative(value, 'workspace.tabs.document')}"
+                document = _relative(value, "workspace.tabs.document")
+                value = f"flicky-source/{document}" if flicky else f"{up}/{HACK_DIRECTORY}/{revision.id}/{document}"
             lines.append(f"{key} = {_toml(value)}")
     lines += ["", "[operations]", 'validate = "project.validate"', 'build = "project.build"',
               'verify = "project.verify"', 'launch = "project.launch"', ""]
@@ -340,20 +383,23 @@ def prepare_revision(descriptor: GameDescriptor, revision_id: str, *, rom: Path 
                 "message": (f"{descriptor.name} [{revision.label}] needs its ROM ({revision.rom})."
                             if status == "missing" else f"{revision.rom} is not {descriptor.name} [{revision.label}].")}
     split = _split_status(descriptor, run=True)
-    hack = descriptor.root / HACK_DIRECTORY / revision.id
+    hack = _edits(descriptor, revision)
     original = descriptor.root / WORKSPACE_DIRECTORY / revision.id / "original"
     created = []
-    for document, resource in _documents(descriptor):
-        pristine = original / document
-        if not pristine.is_file():
-            pristine.parent.mkdir(parents=True, exist_ok=True)
-            extract_game(target, pristine, resource=resource)
-        path = hack / document
-        if path.is_file():
-            continue
-        path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(pristine, path)
-        created.append(f"{HACK_DIRECTORY}/{revision.id}/{document}")
+    if descriptor.source_mode == "flicky-content":
+        created = _prepare_flicky(descriptor, revision, target, original)
+    else:
+        for document, resource in _documents(descriptor, revision):
+            pristine = original / document
+            if not pristine.is_file():
+                pristine.parent.mkdir(parents=True, exist_ok=True)
+                extract_game(target, pristine, resource=resource)
+            path = hack / document
+            if path.is_file():
+                continue
+            path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(pristine, path)
+            created.append(f"{HACK_DIRECTORY}/{revision.id}/{document}")
     project = _project_path(descriptor, revision)
     project.parent.mkdir(parents=True, exist_ok=True)
     text = _project_text(descriptor, revision)
@@ -361,6 +407,148 @@ def prepare_revision(descriptor: GameDescriptor, revision_id: str, *, rom: Path 
         project.write_text(text, encoding="utf-8", newline="\n")
     return {"status": "ready", "revision": revision.id, "label": revision.label, "project": str(project),
             "split": split, "created_documents": created}
+
+
+def reset_revision(descriptor: GameDescriptor, revision_id: str) -> dict[str, object]:
+    """Put back the documents a revision had when they were first taken
+    from its ROM, discarding its edits."""
+    revision = descriptor.revision(revision_id)
+    original = descriptor.root / WORKSPACE_DIRECTORY / revision.id / "original"
+    edits = _edits(descriptor, revision)
+    restored = []
+    for document, _resource in _documents(descriptor, revision):
+        pristine, path = original / document, edits / document
+        if not pristine.is_file():
+            raise GameRepositoryError(f"{descriptor.name} [{revision.label}] has no original of {document}; "
+                                      "open the version once first")
+        if path.is_file() and path.read_bytes() == pristine.read_bytes():
+            continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(pristine, path)
+        restored.append(document)
+    return {"status": "reset", "revision": revision.id, "label": revision.label, "restored_documents": restored}
+
+
+def _prepare_flicky(descriptor: GameDescriptor, revision: Revision, rom: Path, original: Path) -> list[str]:
+    """Import the repository into the revision's snapshot once, keeping a
+    pristine copy of its workspace documents."""
+    from .flicky_content import import_flicky_source
+
+    workspace = descriptor.root / WORKSPACE_DIRECTORY / revision.id
+    snapshot = _edits(descriptor, revision)
+    created = []
+    if not snapshot.is_dir():
+        import_flicky_source(descriptor.root, rom, workspace)
+        created = [f"{WORKSPACE_DIRECTORY}/{revision.id}/{snapshot.name}/{document}"
+                   for document, _resource in _documents(descriptor, revision)]
+    for document, _resource in _documents(descriptor, revision):
+        pristine = original / document
+        if not pristine.is_file():
+            pristine.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(snapshot / document, pristine)
+    return created
+
+
+def repository_catalog() -> Mapping[str, Any]:
+    """The game repositories the kit knows: where each game's disassembly
+    is published and the descriptor at its root."""
+    from importlib import resources
+
+    path = resources.files("retrolarium_kit").joinpath("profiles", "repositories.json")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _archive_url(catalog: Mapping[str, Any], entry: Mapping[str, Any], source: str | None) -> str:
+    template = source or os.environ.get("RETROLARIUM_GAMES_SOURCE") \
+        or "{organization}/{repository}/archive/refs/heads/{branch}.zip"
+    return template.format(organization=catalog["organization"], repository=entry["repository"],
+                           branch=catalog["branch"])
+
+
+def fetch_repository(game_id: str, games: Path, *, source: str | None = None) -> Path:
+    """Download a game's repository as an archive (no Git needed) into
+    games/<repository> and return its descriptor. `source` (or
+    $RETROLARIUM_GAMES_SOURCE) is a URL or file template with {organization},
+    {repository} and {branch}."""
+    import urllib.request
+    import zipfile
+
+    catalog = repository_catalog()
+    entry = catalog["games"].get(game_id)
+    if entry is None:
+        raise GameRepositoryError(f"the kit knows no repository for {game_id!r}")
+    target = games / entry["repository"]
+    descriptor = target / entry["descriptor"]
+    if descriptor.is_file():
+        return descriptor
+    if target.exists():
+        raise GameRepositoryError(f"{target} exists but has no {entry['descriptor']}")
+    url = _archive_url(catalog, entry, source)
+    games.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=".download-", dir=games))
+    try:
+        archive = staging / "repository.zip"
+        if Path(url).is_file():
+            shutil.copyfile(url, archive)
+        else:
+            try:
+                with urllib.request.urlopen(url, timeout=60) as response, archive.open("wb") as out:
+                    shutil.copyfileobj(response, out)
+            except OSError as exc:
+                raise GameRepositoryError(f"cannot download {url}: {exc}") from exc
+        unpacked = staging / "unpacked"
+        try:
+            with zipfile.ZipFile(archive) as bundle:
+                for name in bundle.namelist():
+                    parts = PurePosixPath(name).parts
+                    if name.startswith("/") or ".." in parts or (parts and ":" in parts[0]):
+                        raise GameRepositoryError(f"the archive holds an unsafe path: {name}")
+                bundle.extractall(unpacked)
+        except zipfile.BadZipFile as exc:
+            raise GameRepositoryError(f"{url} is not a zip archive: {exc}") from exc
+        # GitHub archives hold one folder, <repository>-<branch>.
+        entries = list(unpacked.iterdir())
+        root = entries[0] if len(entries) == 1 and entries[0].is_dir() else unpacked
+        if not (root / entry["descriptor"]).is_file():
+            raise GameRepositoryError(f"the archive has no {entry['descriptor']} at its top")
+        root.rename(target)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+    return descriptor
+
+
+def open_rom(rom: Path, games: Path, *, known: list[Path] = (), source: str | None = None) -> dict[str, object]:
+    """Everything "Open ROM" needs: identify the ROM, find its game's
+    repository (one already opened, one downloaded before, or a fresh
+    download into `games`) and prepare the revision the ROM is."""
+    rom = rom.resolve()
+    digest = _sha256(rom)
+    matches = identify_rom(rom)
+    if not matches:
+        return {"status": "unknown", "rom": str(rom)}
+    match = matches[0]
+    for path in known:
+        if not path.is_file() or not is_descriptor(path):
+            continue
+        try:
+            descriptor = load_descriptor(path)
+        except GameRepositoryError:
+            continue
+        revision = next((item for item in descriptor.revisions if item.sha256 == digest), None)
+        if revision is not None:
+            return {**prepare_revision(descriptor, revision.id, rom=rom), "descriptor": str(descriptor.path),
+                    "name": match["name"], "downloaded": False}
+    if match["game"] not in repository_catalog()["games"]:
+        return {"status": "unsupported", "game": match["game"], "name": match["name"]}
+    entry = repository_catalog()["games"][match["game"]]
+    downloaded = not (games / entry["repository"] / entry["descriptor"]).is_file()
+    descriptor = load_descriptor(fetch_repository(match["game"], games, source=source))
+    revision = next((item for item in descriptor.revisions if item.sha256 == digest), None)
+    if revision is None:
+        return {"status": "unsupported", "game": match["game"], "name": match["name"],
+                "descriptor": str(descriptor.path)}
+    return {**prepare_revision(descriptor, revision.id, rom=rom), "descriptor": str(descriptor.path),
+            "name": match["name"], "downloaded": downloaded}
 
 
 def ips_patch(original: bytes, edited: bytes) -> bytes:

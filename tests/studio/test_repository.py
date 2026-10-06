@@ -3,14 +3,17 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from retrolarium_kit.game_repository import (
-    GameRepositoryError, identify_rom, ips_patch, load_descriptor, prepare_revision, revision_statuses,
+    GameRepositoryError, fetch_repository, identify_rom, ips_patch, load_descriptor, open_rom, prepare_revision,
+    reset_revision, revision_statuses,
 )
 from retrolarium_kit.studio_project import build_studio_project, load_studio_project, verify_studio_project
 
@@ -155,6 +158,85 @@ class DescriptorTests(unittest.TestCase):
         again = prepare_revision(self.descriptor, "japan-v10")
         self.assertEqual([], again["created_documents"])
         self.assertTrue(revision_statuses(self.descriptor)["revisions"][0]["edited"])
+        # Resetting puts the ROM's documents back.
+        self.assertEqual(["resources.json"], reset_revision(self.descriptor, "japan-v10")["restored_documents"])
+        self.assertFalse(revision_statuses(self.descriptor)["revisions"][0]["edited"])
+        build_studio_project(project)
+        self.assertEqual("current", verify_studio_project(project)["status"])
+        self.assertEqual(V10.read_bytes(), (project.parent / report["artifact"]["path"]).read_bytes())
+        with self.assertRaises(GameRepositoryError):
+            reset_revision(self.descriptor, "japan-v11")
+
+    def test_open_rom_downloads_the_repository_once(self) -> None:
+        archives = self.root / "archives"
+        archives.mkdir()
+        with zipfile.ZipFile(archives / "pacman_src.zip", "w") as bundle:
+            bundle.writestr("pacman_src-main/pacman.rlj", DESCRIPTOR)
+        games = self.root / "games"
+        source = str(archives / "{repository}.zip")
+        first = open_rom(V11, games, source=source)
+        self.assertEqual(("ready", "japan-v11", True), (first["status"], first["revision"], first["downloaded"]))
+        self.assertTrue((games / "pacman_src" / "hack" / "japan-v11" / "demo.json").is_file())
+        again = open_rom(V10, games, source=source)
+        self.assertEqual(("ready", "japan-v10", False), (again["status"], again["revision"], again["downloaded"]))
+        # A descriptor already opened wins over the download folder.
+        known = open_rom(V10, self.root / "elsewhere", known=[self.root / "pacman.rlj"])
+        self.assertEqual(str(self.root / "pacman.rlj"), known["descriptor"])
+        stranger = self.root / "stranger.nes"
+        stranger.write_bytes(b"NES\x1a" + bytes(16))
+        self.assertEqual("unknown", open_rom(stranger, games)["status"])
+
+    def test_an_archive_cannot_write_outside_its_folder(self) -> None:
+        archives = self.root / "archives"
+        archives.mkdir()
+        with zipfile.ZipFile(archives / "pacman_src.zip", "w") as bundle:
+            bundle.writestr("../escape.txt", "x")
+        with self.assertRaises(GameRepositoryError):
+            fetch_repository("pacman", self.root / "games", source=str(archives / "{repository}.zip"))
+        self.assertFalse((self.root / "escape.txt").exists())
+
+    def test_a_tab_can_belong_to_some_revisions(self) -> None:
+        only_v11 = DESCRIPTOR.replace('resource = "attract-demo"', 'resource = "attract-demo"\nrevisions = ["japan-v11"]')
+        (self.root / "pacman.rlj").write_text(only_v11, encoding="utf-8")
+        descriptor = load_descriptor(self.root / "pacman.rlj")
+        ready = prepare_revision(descriptor, "japan-v10", rom=V10)
+        self.assertEqual(["hack/japan-v10/resources.json"], ready["created_documents"])
+        tabs = load_studio_project(Path(ready["project"]))["workspace"]["tabs"]
+        self.assertEqual(["maze"], [tab["id"] for tab in tabs])
+        (self.root / "pacman.rlj").write_text(only_v11.replace('["japan-v11"]', '["japan-v12"]'), encoding="utf-8")
+        with self.assertRaises(GameRepositoryError):
+            load_descriptor(self.root / "pacman.rlj")
+
+
+FLICKY = Path("D:/Projects/oranguthang/flicky_src")
+
+
+@unittest.skipUnless((FLICKY / "Flicky (UE) [!].bin").is_file() and (FLICKY / "flicky.rlj").is_file(),
+                     "the Flicky repository and ROM are not available")
+class FlickyDescriptorTests(unittest.TestCase):
+    def test_a_downloaded_repository_opens_through_its_snapshot(self) -> None:
+        listed = subprocess.run(["git", "ls-files", "-z"], cwd=FLICKY, capture_output=True, check=True).stdout
+        with tempfile.TemporaryDirectory() as directory:
+            # The repository as an archive gives it: tracked files, no .git.
+            root = Path(directory) / "flicky_src"
+            for name in filter(None, listed.decode().split("\0")):
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(FLICKY / name, root / name)
+            shutil.copyfile(FLICKY / "flicky.rlj", root / "flicky.rlj")
+            descriptor = load_descriptor(root / "flicky.rlj")
+            self.assertEqual("needs-rom", prepare_revision(descriptor, "ue")["status"])
+            ready = prepare_revision(descriptor, "ue", rom=FLICKY / "Flicky (UE) [!].bin")
+            self.assertEqual("ready", ready["status"])
+            inspection = load_studio_project(Path(ready["project"]))
+            self.assertEqual("flicky-content", inspection["project"]["source_mode"])
+            self.assertFalse(revision_statuses(descriptor)["revisions"][0]["edited"])
+            levels = root / ".retrolarium" / "ue" / "flicky-source" / "content" / "workspace" / "level" / "levels.json"
+            levels.write_text(levels.read_text(encoding="utf-8").replace("\n", "\n ", 1) + " ", encoding="utf-8")
+            self.assertFalse(revision_statuses(descriptor)["revisions"][0]["edited"])
+            value = json.loads(levels.read_text(encoding="utf-8"))
+            value["edited_by_test"] = True
+            levels.write_text(json.dumps(value), encoding="utf-8")
+            self.assertTrue(revision_statuses(descriptor)["revisions"][0]["edited"])
 
 
 if __name__ == "__main__":

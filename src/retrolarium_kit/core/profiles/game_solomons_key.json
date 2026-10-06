@@ -105,6 +105,57 @@
           "special_names_cpu": 37547
         }}
       ]
+    },
+    {
+      "id": "japan",
+      "name": "Solomon no Kagi (Japan)",
+      "size": 65552,
+      "sha1": "71d073d0e9e9be84a02db3f78d962c9d94ceea05",
+      "sha256": "b90bb344eff516863bc5278d9efba7ffd2a83a1e6cf27a6b2a9ab57ec094ae83",
+      "container": "ines",
+      "mapper": 3,
+      "playtest": {
+        "room_load_address": 36897,
+        "gameplay_address": 40640,
+        "current_room_address": 1064,
+        "start_frame": 300,
+        "ready_frames": 1000
+      },
+      "resource_overrides": [
+        {"id": "special-rooms", "parameters": {
+          "bonus_positions_prg": 6469,
+          "bonus_types_prg": 6501,
+          "seal_positions_prg": 15254,
+          "princess_positions_prg": 15270,
+          "room20_plane_prg": 15282,
+          "room30_plane_prg": 15306
+        }},
+        {"id": "ending-fade", "parameters": {"file_offset": 14708}},
+        {"id": "sprite-frames", "parameters": {"enemy_configuration_prg": 8974}},
+        {"id": "animations", "parameters": {"enemy_configuration_prg": 8974}},
+        {"id": "presentation", "parameters": {
+          "record_cpu": 52744,
+          "logo_cpu": 52899,
+          "demo_duration_cpu": 53146,
+          "demo_input_cpu": 53180,
+          "demo_code_cpu": 52180,
+          "demo_end_cpu": 53248
+        }},
+        {"id": "text", "parameters": {
+          "static_count": 13,
+          "static_pointer_high_cpu": 38037,
+          "static_region_cpu": 38050,
+          "static_region_end_cpu": 38302,
+          "static_05_reference_cpu": 47466,
+          "ending_initial_cpu": 47653,
+          "ending_initial_end_cpu": 47711,
+          "ending_initial_second_operand_cpu": 47256,
+          "ending_offsets_cpu": 47732,
+          "ending_data_cpu": 47742,
+          "ending_data_end_cpu": 47994,
+          "ending_single_address_operand_cpu": 47337
+        }}
+      ]
     }
   ],
   "resources": [
