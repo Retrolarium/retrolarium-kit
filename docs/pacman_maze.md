@@ -27,15 +27,15 @@ operations resolve it through the profile and codec registries.
 
 The authored projection is a 27-row by 22-column matrix of tile IDs `$00..$3F`.
 Each source byte stores a run of one to four tiles in its high two bits and a
-tile ID in its low six bits. Runs may not cross row boundaries. The resource
-has a fixed 416-byte arena.
+tile ID in its low six bits. Runs may not cross row boundaries. The resource has
+a fixed 416-byte arena.
 
 The document retains the extracted `tokens` alongside `tiles`. When they still
-describe the same grid, the writer emits the original token bytes exactly.
-This preserves a byte-identical zero-edit build even when several equivalent
-RLE tokenizations exist. If the grid changed, the writer greedily creates
-row-bounded runs and deterministically splits them until the same 416-byte
-arena is filled. The decoded grid is the authoring source of truth.
+describe the same grid, the writer emits the original token bytes exactly. This
+preserves a byte-identical zero-edit build even when several equivalent RLE
+tokenizations exist. If the grid changed, the writer greedily creates
+row-bounded runs and deterministically splits them until the same 416-byte arena
+is filled. The decoded grid is the authoring source of truth.
 
 ## Runtime-sensitive validation
 
@@ -53,13 +53,13 @@ Invalid documents never reach the transactional ROM writer.
 
 ## Qt consumer
 
-`level.tile-grid` plus `pacman.maze-rle.v1` selects
-`PacmanMazeEditorWidget`. It renders the maze through the CHR resource from the
-same shared document and provides 64-tile selection, complete-stroke undo,
-redo, right-click eyedropper, restore, original-change borders and semantic
-overlays for tunnels, ghost house, door, spawns and power pellets. The generated
-Studio TOML declares `maze -> graphics`, so CHR edits refresh the maze preview
-without reloading the project.
+`level.tile-grid` plus `pacman.maze-rle.v1` selects `PacmanMazeEditorWidget`. It
+renders the maze through the CHR resource from the same shared document and
+provides 64-tile selection, complete-stroke undo, redo, right-click eyedropper,
+restore, original-change borders and semantic overlays for tunnels, ghost house,
+door, spawns and power pellets. The generated Studio TOML declares
+`maze -> graphics`, so CHR edits refresh the maze preview without reloading the
+project.
 
 ## Screen representation
 
@@ -79,9 +79,9 @@ tab instead of being mixed into the screen canvas.
 into one typed resource. The profile declares every label, stable key, address,
 fixed width, glyph/code mapping, padding byte and case-folding policy. The Kit
 rejects overlapping profile ranges, altered metadata, overlong strings and
-unsupported glyphs before constructing the transactional multi-range build
-plan. Existing one-range resource reports remain backward compatible while
-this resource reports all 14 ranges explicitly.
+unsupported glyphs before constructing the transactional multi-range build plan.
+Existing one-range resource reports remain backward compatible while this
+resource reports all 14 ranges explicitly.
 
 `text.fixed` selects the reusable `NesTextEditorWidget`. It provides named
 message selection, normalized uppercase input, undo/redo, per-message restore
@@ -91,17 +91,17 @@ and atomic shared-document save without a Pac-Man branch in the factory.
 
 `pacman.palette-table.v1` retains each fixed palette table as NES master-palette
 indices. The profile names five runtime contexts: title background, attract
-background/sprites, round gameplay, intermission sprites and fruit-by-stage.
-The 32-byte attract and gameplay tables declare the four universal-background
-mirror pairs required by the PPU layout. Validation rejects divergent mirror
-values or a modified mirror contract, and an edit to either side updates both
-bytes in the shared document as one undoable action.
+background/sprites, round gameplay, intermission sprites and fruit-by-stage. The
+32-byte attract and gameplay tables declare the four universal-background mirror
+pairs required by the PPU layout. Validation rejects divergent mirror values or
+a modified mirror contract, and an edit to either side updates both bytes in the
+shared document as one undoable action.
 
 `palette.set` plus this codec selects the common `NesPaletteEditorWidget`; no
 Pac-Man-specific widget or game-ID branch is involved. The scattered
 frightened/normal color command copies are not represented yet: safely editing
-them requires a future replicated-range resource rather than pretending they
-are one contiguous palette table.
+them requires a future replicated-range resource rather than pretending they are
+one contiguous palette table.
 
 ## Actor mapping representation
 

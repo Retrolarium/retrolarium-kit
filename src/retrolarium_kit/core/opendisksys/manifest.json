@@ -5,8 +5,8 @@
   "license": "LGPL-3.0",
   "license_file": "LICENSE-LGPL-3.0.txt",
   "source": "https://github.com/RetrolariumLab/OpenDiskSysROM",
-  "commit": "9a01a59e34325ea415d80b5fce798adad82cf582",
+  "commit": "1190193d7f851c701c1aeb86d58ec5e71d17ab60",
   "image": "fds/rp2c33a-01a.bin",
   "size": 8192,
-  "sha256": "7880974e8de4a0eced564b63a03d9aca6f51f4b51bb67a7969d9cbf27548553c"
+  "sha256": "6ce74ea4e9407c8d1175a58b7af08f073fa6b9f9b54e4f4954828ae1b6872ba6"
 }

@@ -71,11 +71,47 @@ local sfx_queue = {
     noise = ram.noise_sfx_queue,
 }
 
+-- The game timer's three digits: $07F8 in the cartridge versions and the
+-- Disk System Super Mario Bros., $07EC in Super Mario Bros. 2 and All Night
+-- Nippon, which keep other state at $07F8.
+local timer_digits = tonumber(os.getenv("SMB1_PLAYTEST_TIMER") or "") or 0x07f8
+-- OperMode_Task of the running game: 3 in SMB1's engine, 4 in the later
+-- Disk System engine (Super Mario Bros. 2, All Night Nippon).
+local running_task = tonumber(os.getenv("SMB1_PLAYTEST_RUNNING_TASK") or "") or 3
+-- Worlds the later Disk System engine loads from the disk while it runs
+-- (worlds 5-8, the hard or extended worlds): the kit hands over that file as
+-- its load address and data; it goes into RAM before the area starts, the
+-- file list number ($07F7) says it is loaded, and $07FB marks hard worlds.
+local disk_file = os.getenv("SMB1_PLAYTEST_DISK_FILE") or ""
+local disk_list = tonumber(os.getenv("SMB1_PLAYTEST_DISK_LIST") or "")
+local hard_worlds = os.getenv("SMB1_PLAYTEST_HARD") == "1"
+local FILE_LIST = 0x07f7
+-- No area object starts on the entrance page: the area parser would look for
+-- one forever, so the backloading flag ($0728) is cleared once the screen
+-- routines (the task before the last two) begin.
+local empty_page = os.getenv("SMB1_PLAYTEST_EMPTY_PAGE") == "1"
+local BACKLOADING = 0x0728
+local HARD_WORLD = 0x07fb
+
+local function load_disk_file()
+    if disk_file == "" then return end
+    local file = io.open(disk_file, "rb")
+    if file == nil then error("cannot read " .. disk_file) end
+    local data = file:read("a")
+    file:close()
+    local address = data:byte(1) | (data:byte(2) << 8)
+    for i = 3, #data do
+        memory:write_u8(address + i - 3, data:byte(i))
+    end
+    if disk_list ~= nil then write(FILE_LIST, disk_list) end
+    if hard_worlds then write(HARD_WORLD, 1) end
+end
+
 local function keep_time()
     if not infinite_time then return end
-    write(0x07f8, 9)
-    write(0x07f9, 9)
-    write(0x07fa, 9)
+    write(timer_digits, 9)
+    write(timer_digits + 1, 9)
+    write(timer_digits + 2, 9)
     write(ram.timer_expired, 0)
 end
 
@@ -117,6 +153,7 @@ local phase = "boot"
 local phase_frames = 0
 
 local function begin_area()
+    load_disk_file()
     write(ram.world, world)
     write(ram.level, level)
     write(ram.area_number, 0)
@@ -157,7 +194,12 @@ local function on_frame()
     end
     if phase == "loading" then
         keep_time()
-        if read(ram.operating_mode) == 1 and read(ram.operating_task) == 3
+        if empty_page and read(ram.operating_mode) == 1
+                and read(ram.operating_task) == running_task - 2 then
+            write(BACKLOADING, 0)
+            empty_page = false
+        end
+        if read(ram.operating_mode) == 1 and read(ram.operating_task) == running_task
                 and read(ram.engine) >= 7 then
             place_player()
             phase = "running"

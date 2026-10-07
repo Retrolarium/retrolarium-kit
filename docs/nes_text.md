@@ -5,9 +5,9 @@ Status: implemented for fixed text resources and embedded screen text.
 ## Codec boundary
 
 `nes.fixed-text-fields.v1` represents a named set of fixed-width strings whose
-bytes may live in unrelated locations in an NES image. It is selected through
-a resource codec ID; neither the public game commands nor the Qt editor branch
-on a game ID.
+bytes may live in unrelated locations in an NES image. It is selected through a
+resource codec ID; neither the public game commands nor the Qt editor branch on
+a game ID.
 
 The game profile is the immutable source of layout and encoding truth. Its
 resource parameters declare:
@@ -22,9 +22,9 @@ the encoding contract and field key/label/width metadata so both Kit and GUI can
 detect incompatible or tampered documents.
 
 `nes.ppu-screen-packets.v1` may carry the same encoding contract plus ordered
-`text_fields`. Each field identifies a screen key, a screen-relative tile
-offset and a width that must fit one visible row. These fields are views over
-the screen's existing `tiles`; the resource never stores a second string value.
+`text_fields`. Each field identifies a screen key, a screen-relative tile offset
+and a width that must fit one visible row. These fields are views over the
+screen's existing `tiles`; the resource never stores a second string value.
 Field tiles must be mapped glyphs, fields cannot overlap, and edits must remain
 representable by the original PPU packet layout.
 
@@ -44,8 +44,8 @@ widget lists profile labels, displays stable keys and capacities, normalizes
 input before it enters the document, and supports undo/redo, current-message
 restore and atomic save. Multiple typed editors referencing the same resource
 document continue to share one in-memory model through `StudioEditorFactory`;
-therefore a Text edit of an embedded field updates the corresponding Screens
-tab without a competing document copy.
+therefore a Text edit of an embedded field updates the corresponding Screens tab
+without a competing document copy.
 
 ## Verification
 

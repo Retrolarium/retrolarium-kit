@@ -1,9 +1,12 @@
 -- Loop Doraemon's World 1 attract demo of a build, or record a new one.
 --
--- The boot, the title and the other worlds' demos run unthrottled and
--- muted; World 1's demo (World1_DemoEntry pointing $A6/$A7 at the stream)
--- runs at speed. DORAEMON_DEMO_READY, when set, names a file written when
--- the first World 1 demo starts.
+-- The boot and the title run unthrottled and muted; World 1's demo
+-- (World1_DemoEntry pointing $A6/$A7 at the stream) runs at speed. When it
+-- starts, the machine's state is saved; when it ends, that state comes back,
+-- so the demo plays again at once and the attract mode never moves on to
+-- the other worlds' demos, which have no stream to edit.
+-- DORAEMON_DEMO_READY, when set, names a file written when the first World 1
+-- demo starts.
 --
 -- With DORAEMON_DEMO_RECORD set, the demo follows controller one instead of
 -- the stream: each update's write of the stream's buttons to
@@ -49,6 +52,8 @@ local last_update = nil     -- frame of the demo's last update
 local ready = false
 local runs = {}             -- recorded {buttons, updates}
 local finished = false
+local LOOP_STATE = "retrolarium-doraemon-demo"
+local saved = false         -- the state at the demo's start is saved
 
 local function write_runs()
     local file = io.open(record_path, "w")
@@ -65,11 +70,24 @@ local function finish()
     machine:exit()
 end
 
+-- The demo is over: back to its start, so World 1's demo plays again
+-- instead of the other worlds'.
+local function replay()
+    if recording or not saved then return end
+    machine:load(LOOP_STATE)
+    playing = true
+    last_update = nil
+end
+
 entry_tap = memory:install_write_tap(POINTER_HIGH, POINTER_HIGH, "doraemon-demo-entry",
     function(_, value)
         if cpu.state["PC"].value == STREAM_HIGH_WRITE then
             playing = true
             last_update = nil
+            if not recording and not saved then
+                machine:save(LOOP_STATE)
+                saved = true
+            end
             if not ready and ready_path ~= nil and ready_path ~= "" then
                 local file = io.open(ready_path, "w")
                 if file ~= nil then
@@ -86,7 +104,7 @@ demo_tap = memory:install_write_tap(DEMO, DEMO, "doraemon-demo-flag",
     function(_, value)
         if value == 0 and playing then
             playing = false
-            if recording then finish() end
+            if recording then finish() else replay() end
         end
         return value
     end)
@@ -122,7 +140,7 @@ local function on_frame()
     -- a demo whose updates stop for a second is over.
     if playing and last_update ~= nil and frame - last_update > 60 then
         playing = false
-        if recording then finish() end
+        if recording then finish() else replay() end
     end
     local fast = not playing
     machine.video.throttled = not fast

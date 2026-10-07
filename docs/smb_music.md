@@ -7,13 +7,13 @@ lengths and volume envelopes in a single typed document.
 
 ## Verified profile layouts
 
-| Revision | Storage | Resource start | Selector CPU address | Size | Shared arena |
-|---|---|---:|---:|---:|---:|
-| JU | iNES image | `0x791D` | `0xF90D` | 1725 | 1352 |
-| PAL | iNES image | `0x791E` | `0xF90E` | 1724 | 1351 |
-| PC10 | iNES-PC10 image | inherited JU layout | `0xF90D` | 1725 | 1352 |
-| VS SMB | `prg` payload | `0x784B` | `0xF858` | 1915 | 1495 |
-| FDS SMB | `prg` payload | `0x790D` | `0xD90D` | 1725 | 1352 |
+| Revision | Storage         |      Resource start | Selector CPU address | Size | Shared arena |
+| -------- | --------------- | ------------------: | -------------------: | ---: | -----------: |
+| JU       | iNES image      |            `0x791D` |             `0xF90D` | 1725 |         1352 |
+| PAL      | iNES image      |            `0x791E` |             `0xF90E` | 1724 |         1351 |
+| PC10     | iNES-PC10 image | inherited JU layout |             `0xF90D` | 1725 |         1352 |
+| VS SMB   | `prg` payload   |            `0x784B` |             `0xF858` | 1915 |         1495 |
+| FDS SMB  | `prg` payload   |            `0x790D` |             `0xD90D` | 1725 |         1352 |
 
 The JU, PAL, VS and FDS resource layouts were decoded and re-encoded
 byte-identically against local open-source build artifacts. The JU and FDS
@@ -61,11 +61,11 @@ same undo history as raw-byte edits. The Studio tab advertises `edit`,
 `midi-import`, `restore`, `undo` and `wav-preview`.
 
 The Python authoring layer and Qt editor can render the currently selected
-logical song to deterministic mono 16-bit PCM or WAV and mute any combination
-of the four channels. Selector context chooses the event/area engine flags,
-the hurry-up length-table adjustment, and the castle-clear, area, water/event,
-or hardware pulse envelope. Profiles also select NTSC or PAL frame and CPU
-timing. The file-oriented operation is available without the GUI:
+logical song to deterministic mono 16-bit PCM or WAV and mute any combination of
+the four channels. Selector context chooses the event/area engine flags, the
+hurry-up length-table adjustment, and the castle-clear, area, water/event, or
+hardware pulse envelope. Profiles also select NTSC or PAL frame and CPU timing.
+The file-oriented operation is available without the GUI:
 
 ```text
 rltool audio render-smb-wav game.json --resource music --selector area_water --header water --mute noise --output water.wav
@@ -82,10 +82,10 @@ bytes only when every reader is the same APU channel; its preview reports all
 affected selectors and ground-schedule entries before apply writes a separate
 JSON document atomically.
 
-Complete-song MIDI uses channels 1, 2, 3 and 10 for square 2, square 1,
-triangle and noise respectively. Format-1 tracks are combined by MIDI channel.
-The Qt Sound editor exposes separate Analyze/Import song and Export song
-actions, and applies all changed arena bytes as one undo operation:
+Complete-song MIDI uses channels 1, 2, 3 and 10 for square 2, square 1, triangle
+and noise respectively. Format-1 tracks are combined by MIDI channel. The Qt
+Sound editor exposes separate Analyze/Import song and Export song actions, and
+applies all changed arena bytes as one undo operation:
 
 ```text
 rltool audio preview-smb-midi game.json --midi melody.mid --resource music --selector area_water --target-channel square2

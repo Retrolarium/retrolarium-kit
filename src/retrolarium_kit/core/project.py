@@ -462,11 +462,16 @@ def launch_plan(
     }
 
 
-# The Famicom Disk System BIOS as MAME names it, with the SHA-1 of each
-# dump MAME accepts (disksys.rom is the first).
+# The Famicom Disk System BIOS dumps the kit accepts, by SHA-1. MAME's fds
+# machine loads one file, rp2c33a-01a.bin, and knows only the newer dump's
+# checksum: the older dump (its other BIOS set, which the command line cannot
+# select) goes in under that name too and runs like any BIOS MAME does not
+# know.
+FDS_BIOS_FILE = "rp2c33a-01a.bin"
+FDS_BIOS_KNOWN = "57fe1bdee955bb48d357e463ccbf129496930b62"
 FDS_BIOS = {
-    "rp2c33a-01a.bin": "57fe1bdee955bb48d357e463ccbf129496930b62",
-    "rp2c33-01.bin": "af5af53f66982e749643fdf8b2acbb7d4d3ed229",
+    FDS_BIOS_KNOWN: "newer dump (rp2c33a-01a)",
+    "af5af53f66982e749643fdf8b2acbb7d4d3ed229": "older dump (rp2c33-01)",
 }
 
 
@@ -475,11 +480,10 @@ def _fds_bios_directory(mame: Path) -> Path:
 
 
 def fds_bios(mame: Path) -> Path | None:
-    """The Disk System BIOS MAME will find beside `mame`, if any."""
+    """The user's Disk System BIOS MAME will load from beside `mame`, if any."""
     directory = _fds_bios_directory(mame)
-    for name in FDS_BIOS:
-        if (directory / name).is_file():
-            return directory / name
+    if (directory / FDS_BIOS_FILE).is_file():
+        return directory / FDS_BIOS_FILE
     for archive in ("fds.zip", "fds.7z"):
         if (directory.parent / archive).is_file():
             return directory.parent / archive
@@ -493,40 +497,55 @@ OPEN_DISK_SYS_ROMS = Path(__file__).with_name("firmware") / "opendisksys"
 OPEN_DISK_SYS_START = Path(__file__).with_name("runtime") / "opendisksys_mame_start.lua"
 
 
-def _open_disk_sys_arguments(mame: Path, *, interactive: bool) -> list[str]:
-    """MAME arguments that run disk games on OpenDiskSysROM. MAME's own ROM
-    folder stays first. A run that shows MAME's window also passes a time
-    limit under five minutes, which keeps MAME's startup screens away, and a
-    script that lifts the limit and restarts the machine once."""
-    if not (OPEN_DISK_SYS_ROMS / "fds" / "rp2c33a-01a.bin").is_file():
+def _unknown_bios_arguments(*, interactive: bool) -> list[str]:
+    """For a BIOS MAME does not know the checksum of, a run that shows MAME's
+    window passes a time limit under five minutes, which keeps MAME's startup
+    screens away, and a script that lifts the limit and restarts the machine
+    once. A headless run never stops for those screens."""
+    if not interactive:
+        return []
+    return [
+        "-seconds_to_run", "299",
+        "-autoboot_delay", "0",
+        "-autoboot_script", str(OPEN_DISK_SYS_START),
+    ]
+
+
+def _disk_bios_arguments(mame: Path, *, interactive: bool) -> tuple[str, list[str]]:
+    """Which BIOS a disk game runs on, and the MAME arguments for it: the
+    user's dump when MAME has one, otherwise OpenDiskSysROM, from a ROM folder
+    after MAME's own."""
+    user = fds_bios(mame)
+    if user is not None:
+        known = user.suffix.lower() != ".bin" or hashlib.sha1(user.read_bytes()).hexdigest() == FDS_BIOS_KNOWN
+        return "user", [] if known else _unknown_bios_arguments(interactive=interactive)
+    if not (OPEN_DISK_SYS_ROMS / "fds" / FDS_BIOS_FILE).is_file():
         raise ProjectError(
             "MAME needs the Famicom Disk System BIOS to run disk games, and the "
             "kit's OpenDiskSysROM is missing. Choose your BIOS in Settings."
         )
-    arguments = ["-rompath", f"{mame.parent / 'roms'};{OPEN_DISK_SYS_ROMS}"]
-    if interactive:
-        arguments += [
-            "-seconds_to_run", "299",
-            "-autoboot_delay", "0",
-            "-autoboot_script", str(OPEN_DISK_SYS_START),
-        ]
-    return arguments
+    folders = [str(mame.parent / "roms"), str(OPEN_DISK_SYS_ROMS)]
+    if any(";" in folder for folder in folders):
+        raise ProjectError(
+            "MAME cannot use a folder with ';' in its name for the Disk System "
+            "BIOS. Move the studio to a folder without ';': " + " or ".join(folders)
+        )
+    return "opendisksys", ["-rompath", ";".join(folders), *_unknown_bios_arguments(interactive=interactive)]
 
 
 def install_fds_bios(source: Path, mame: Path) -> dict[str, Any]:
-    """Copy a Disk System BIOS dump to where MAME looks for it, under the
-    name MAME gives that dump."""
+    """Copy a Disk System BIOS dump to where MAME loads it from, under the one
+    name MAME's fds machine loads."""
     try:
         data = source.read_bytes()
     except OSError as exc:
         raise ProjectError(f"cannot read {source}: {exc}") from exc
     digest = hashlib.sha1(data).hexdigest()
-    name = next((name for name, sha1 in FDS_BIOS.items() if sha1 == digest), None)
-    if name is None:
-        raise ProjectError(f"{source.name} is not a Famicom Disk System BIOS MAME knows")
+    if digest not in FDS_BIOS:
+        raise ProjectError(f"{source.name} is not a Famicom Disk System BIOS dump the kit knows")
     directory = _fds_bios_directory(mame)
     directory.mkdir(parents=True, exist_ok=True)
-    target = directory / name
+    target = directory / FDS_BIOS_FILE
     target.write_bytes(data)
     return {"schema": "retrolarium.fds-bios", "schema_version": 1, "path": str(target), "sha1": digest}
 
@@ -543,9 +562,10 @@ def launch_image_plan(
     """Create the same strict process-spec for a direct authoring artifact.
 
     A disk game runs on the user's Disk System BIOS when MAME has one, and
-    on OpenDiskSysROM otherwise; `fds_bios` in the plan says which. On
-    OpenDiskSysROM an interactive plan already carries an autoboot script,
-    which a caller must not replace."""
+    on OpenDiskSysROM otherwise; `fds_bios` in the plan says which. With a
+    BIOS MAME does not know the checksum of, an interactive plan carries an
+    autoboot script of its own: the studio runs every -autoboot_script a plan
+    gives, in order, where MAME alone would keep only the last."""
     default_machines = {"nes": "nes", "megadrive": "genesis", "snes": "snes"}
     allowed_machines = MAME_MACHINES.get(platform)
     disk = platform == "nes" and rom.suffix.lower() == ".fds"
@@ -565,10 +585,7 @@ def launch_image_plan(
             parse_fds_side(rom.read_bytes())
         except FdsError as exc:
             raise ProjectError(f"{rom.name}: {exc}") from exc
-        bios_arguments = (
-            [] if fds_bios(mame) is not None
-            else _open_disk_sys_arguments(mame, interactive=interactive)
-        )
+        bios, bios_arguments = _disk_bios_arguments(mame, interactive=interactive)
     elif platform == "nes":
         # An arcade image may carry more after its cartridge (PlayChoice-10).
         try:
@@ -621,7 +638,7 @@ def launch_image_plan(
         },
     }
     if disk:
-        plan["fds_bios"] = "opendisksys" if bios_arguments else "user"
+        plan["fds_bios"] = bios
     return plan
 
 
