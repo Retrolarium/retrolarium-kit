@@ -1,0 +1,12 @@
+{
+  "schema": "retrolarium.firmware",
+  "schema_version": 1,
+  "name": "OpenDiskSysROM",
+  "license": "LGPL-3.0",
+  "license_file": "LICENSE-LGPL-3.0.txt",
+  "source": "https://github.com/RetrolariumLab/OpenDiskSysROM",
+  "commit": "9a01a59e34325ea415d80b5fce798adad82cf582",
+  "image": "fds/rp2c33a-01a.bin",
+  "size": 8192,
+  "sha256": "7880974e8de4a0eced564b63a03d9aca6f51f4b51bb67a7969d9cbf27548553c"
+}

@@ -14,6 +14,8 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from retrolarium_kit.project import (
+    OPEN_DISK_SYS_ROMS,
+    OPEN_DISK_SYS_START,
     ProjectError,
     build_project,
     launch_image_plan,
@@ -23,6 +25,7 @@ from retrolarium_kit.project import (
     verify_project,
 )
 from retrolarium_kit.snes_pipeline import disassemble_snes
+from test_fds import fixture as fds_fixture
 from test_snes_pointers import probe_image
 
 
@@ -136,6 +139,44 @@ class ProjectOperationTests(unittest.TestCase):
                 launch_image_plan(
                     rom, platform="nes", mame=mame, machine="genesis"
                 )
+
+    def test_disk_launch_plan_falls_back_to_open_disk_sys(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            disk = root / "edited.fds"
+            disk.write_bytes(fds_fixture())
+            mame = root / "consoles.exe"
+            mame.write_bytes(b"mame")
+
+            plan = launch_image_plan(disk, platform="nes", mame=mame)
+            arguments = plan["arguments"]
+            self.assertEqual("opendisksys", plan["fds_bios"])
+            self.assertEqual(["fds", "-flop", str(disk.resolve())], arguments[:3])
+            rompath = arguments[arguments.index("-rompath") + 1].split(";")
+            self.assertEqual([str(root / "roms"), str(OPEN_DISK_SYS_ROMS)], rompath)
+            self.assertEqual("299", arguments[arguments.index("-seconds_to_run") + 1])
+            self.assertEqual(str(OPEN_DISK_SYS_START), arguments[arguments.index("-autoboot_script") + 1])
+            self.assertTrue(OPEN_DISK_SYS_START.is_file())
+
+            headless = launch_image_plan(disk, platform="nes", mame=mame, interactive=False)
+            self.assertIn("-rompath", headless["arguments"])
+            self.assertNotIn("-seconds_to_run", headless["arguments"])
+            self.assertNotIn("-autoboot_script", headless["arguments"])
+
+            (root / "roms" / "fds").mkdir(parents=True)
+            (root / "roms" / "fds" / "rp2c33a-01a.bin").write_bytes(bytes(0x2000))
+            own = launch_image_plan(disk, platform="nes", mame=mame)
+            self.assertEqual("user", own["fds_bios"])
+            self.assertNotIn("-rompath", own["arguments"])
+            self.assertNotIn("-seconds_to_run", own["arguments"])
+
+    def test_open_disk_sys_image_matches_its_manifest(self) -> None:
+        manifest = json.loads((OPEN_DISK_SYS_ROMS / "manifest.json").read_text(encoding="utf-8"))
+        image = (OPEN_DISK_SYS_ROMS / manifest["image"]).read_bytes()
+        self.assertEqual("fds/rp2c33a-01a.bin", manifest["image"])
+        self.assertEqual(manifest["size"], len(image))
+        self.assertEqual(manifest["sha256"], digest(image))
+        self.assertTrue((OPEN_DISK_SYS_ROMS / manifest["license_file"]).is_file())
 
     def test_direct_image_smoke_retains_a_run_result(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

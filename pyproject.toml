@@ -8,6 +8,10 @@ version = "0.5.0"
 description = "Reproducible build and reverse-engineering services for Retrolarium"
 readme = "README.md"
 requires-python = ">=3.11"
+license = {text = "GPL-3.0-or-later"}
+classifiers = [
+  "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+]
 dependencies = []
 
 [project.scripts]
@@ -19,6 +23,9 @@ where = ["src"]
 [tool.setuptools.package-data]
 retrolarium_kit = [
   "flicky_sound_preview_runtime.py",
+  "firmware/opendisksys/*.json",
+  "firmware/opendisksys/*.txt",
+  "firmware/opendisksys/fds/*.bin",
   "ghidra_scripts/*.java",
   "profiles/*.json",
   "runtime/*.lua",
