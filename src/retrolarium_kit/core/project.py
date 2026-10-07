@@ -486,6 +486,33 @@ def fds_bios(mame: Path) -> Path | None:
     return None
 
 
+# OpenDiskSysROM, the free Disk System BIOS the kit carries, for players
+# without Nintendo's: a ROM folder holding it as MAME names the BIOS, and the
+# script that gets MAME past its warning about the unknown checksum.
+OPEN_DISK_SYS_ROMS = Path(__file__).with_name("firmware") / "opendisksys"
+OPEN_DISK_SYS_START = Path(__file__).with_name("runtime") / "opendisksys_mame_start.lua"
+
+
+def _open_disk_sys_arguments(mame: Path, *, interactive: bool) -> list[str]:
+    """MAME arguments that run disk games on OpenDiskSysROM. MAME's own ROM
+    folder stays first. A run that shows MAME's window also passes a time
+    limit under five minutes, which keeps MAME's startup screens away, and a
+    script that lifts the limit and restarts the machine once."""
+    if not (OPEN_DISK_SYS_ROMS / "fds" / "rp2c33a-01a.bin").is_file():
+        raise ProjectError(
+            "MAME needs the Famicom Disk System BIOS to run disk games, and the "
+            "kit's OpenDiskSysROM is missing. Choose your BIOS in Settings."
+        )
+    arguments = ["-rompath", f"{mame.parent / 'roms'};{OPEN_DISK_SYS_ROMS}"]
+    if interactive:
+        arguments += [
+            "-seconds_to_run", "299",
+            "-autoboot_delay", "0",
+            "-autoboot_script", str(OPEN_DISK_SYS_START),
+        ]
+    return arguments
+
+
 def install_fds_bios(source: Path, mame: Path) -> dict[str, Any]:
     """Copy a Disk System BIOS dump to where MAME looks for it, under the
     name MAME gives that dump."""
@@ -511,8 +538,14 @@ def launch_image_plan(
     mame: Path,
     machine: str | None = None,
     attach_window: str | None = None,
+    interactive: bool = True,
 ) -> dict[str, Any]:
-    """Create the same strict process-spec for a direct authoring artifact."""
+    """Create the same strict process-spec for a direct authoring artifact.
+
+    A disk game runs on the user's Disk System BIOS when MAME has one, and
+    on OpenDiskSysROM otherwise; `fds_bios` in the plan says which. On
+    OpenDiskSysROM an interactive plan already carries an autoboot script,
+    which a caller must not replace."""
     default_machines = {"nes": "nes", "megadrive": "genesis", "snes": "snes"}
     allowed_machines = MAME_MACHINES.get(platform)
     disk = platform == "nes" and rom.suffix.lower() == ".fds"
@@ -532,11 +565,10 @@ def launch_image_plan(
             parse_fds_side(rom.read_bytes())
         except FdsError as exc:
             raise ProjectError(f"{rom.name}: {exc}") from exc
-        if fds_bios(mame) is None:
-            raise ProjectError(
-                "MAME needs the Famicom Disk System BIOS to run disk games. "
-                "Choose it in Settings (it is usually called disksys.rom)."
-            )
+        bios_arguments = (
+            [] if fds_bios(mame) is not None
+            else _open_disk_sys_arguments(mame, interactive=interactive)
+        )
     elif platform == "nes":
         # An arcade image may carry more after its cartridge (PlayChoice-10).
         try:
@@ -571,7 +603,9 @@ def launch_image_plan(
         if re.fullmatch(r"(?:0[xX][0-9a-fA-F]+|[0-9]+)", attach_window) is None:
             raise ProjectError("attach-window must be a decimal or hexadecimal handle")
         arguments.extend(["-attach_window", attach_window])
-    return {
+    if disk:
+        arguments.extend(bios_arguments)
+    plan = {
         "schema": "retrolarium.process-spec",
         "schema_version": 1,
         "operation": "retrolarium.game.launch",
@@ -586,6 +620,9 @@ def launch_image_plan(
             "sha256": sha256_file(rom),
         },
     }
+    if disk:
+        plan["fds_bios"] = "opendisksys" if bios_arguments else "user"
+    return plan
 
 
 def launch_image_smoke(
@@ -601,7 +638,8 @@ def launch_image_smoke(
     """Run a direct authoring artifact headlessly and retain reproducible evidence."""
     if seconds <= 0 or timeout <= 0:
         raise ProjectError("seconds and timeout must be positive")
-    plan = launch_image_plan(rom, platform=platform, mame=mame, machine=machine)
+    plan = launch_image_plan(rom, platform=platform, mame=mame, machine=machine,
+                             interactive=False)
     run_root = output.resolve()
     run_root.mkdir(parents=True, exist_ok=True)
     run_directory = Path(
