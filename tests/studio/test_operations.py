@@ -8,6 +8,9 @@ from unittest.mock import patch
 
 from retrolarium_kit.studio_project import (
     StudioProjectError,
+    _fds_file_blob,
+    _fds_program_at,
+    _smb_object_pages,
     build_studio_project,
     studio_castle_point_playtest_plan,
     studio_pacman_round_playtest_plan,
@@ -338,6 +341,40 @@ class StudioOperationTests(unittest.TestCase):
                     {"channel": "noise", "value": 0x80}, plan["point"]["sfx"]
                 )
                 self.assertTrue(plan["point"]["route_matches_area"])
+                # The fixture area has no objects: page 1 has none to find.
+                self.assertEqual("1", plan["environment"]["SMB1_PLAYTEST_EMPTY_PAGE"])
+                self.assertNotIn("SMB1_PLAYTEST_TIMER", plan["environment"])
+                first_page = studio_smb_point_playtest_plan(
+                    root / "fixture.rlj", mame=mame, course_bank="levels",
+                    area="ground_1", world=1, course=1, column=5, row=8, theme="day",
+                )
+                self.assertNotIn("SMB1_PLAYTEST_EMPTY_PAGE", first_page["environment"])
+                # All Night Nippon: the later Disk System engine's timer and
+                # running task; worlds 1-4 need no file from the disk.
+                document["revision"] = "ann_fds"
+                (root / "documents/resources.json").write_text(
+                    json.dumps(document), encoding="utf-8"
+                )
+                late = studio_smb_point_playtest_plan(
+                    root / "fixture.rlj", mame=mame, course_bank="levels",
+                    area="ground_1", world=1, course=1, column=5, row=8, theme="day",
+                )
+                self.assertEqual(str(0x07EC), late["environment"]["SMB1_PLAYTEST_TIMER"])
+                self.assertEqual("5", late["environment"]["SMB1_PLAYTEST_RUNNING_TASK"])
+                self.assertNotIn("SMB1_PLAYTEST_DISK_FILE", late["environment"])
+                document["revision"] = "vs_smb"
+                (root / "documents/resources.json").write_text(
+                    json.dumps(document), encoding="utf-8"
+                )
+                with self.assertRaisesRegex(StudioProjectError, "does not work in this version"):
+                    studio_smb_point_playtest_plan(
+                        root / "fixture.rlj", mame=mame, course_bank="levels",
+                        area="ground_1", world=1, course=1, column=5, row=8, theme="day",
+                    )
+                document["revision"] = "ju"
+                (root / "documents/resources.json").write_text(
+                    json.dumps(document), encoding="utf-8"
+                )
                 with self.assertRaisesRegex(StudioProjectError, "column must be"):
                     studio_smb_point_playtest_plan(
                         root / "fixture.rlj",
@@ -364,6 +401,48 @@ class StudioOperationTests(unittest.TestCase):
                         sfx_channel="square1",
                         sfx_value=0,
                     )
+
+    def test_smb_object_pages_follow_the_area_parser(self) -> None:
+        area = {"objects": [
+            {"row": 15, "object_control": 0x26, "page_advance": False},
+            {"row": 13, "object_control": 0x02, "page_advance": False},
+            {"row": 8, "object_control": 0x72, "page_advance": False},
+            {"row": 12, "object_control": 0x01, "page_advance": True},
+            {"row": 13, "object_control": 0x41, "page_advance": False},
+        ]}
+        # A page control is not an object: page 1 is skipped over.
+        self.assertEqual({0, 2, 3}, _smb_object_pages(area))
+        self.assertEqual(set(), _smb_object_pages({}))
+
+    def test_fds_program_files_are_found_by_id_and_address(self) -> None:
+        # A main program at $C000 and an overlay loaded later over part of it.
+        files = ((0x05, 0xC000, bytes(range(256)) * 2), (0x20, 0xC100, b"\xaa" * 16))
+        side = bytearray(65_500)
+        side[0] = 1
+        side[56:58] = bytes((2, len(files)))
+        position = 58
+        for number, (identifier, address, payload) in enumerate(files):
+            header = bytearray(16)
+            header[0:3] = bytes((3, number, identifier))
+            header[3:11] = f"FILE{number:04d}".encode("ascii")
+            header[11:13] = address.to_bytes(2, "little")
+            header[13:15] = len(payload).to_bytes(2, "little")
+            side[position:position + 16] = header
+            side[position + 16] = 4
+            side[position + 17:position + 17 + len(payload)] = payload
+            position += 17 + len(payload)
+        with tempfile.TemporaryDirectory() as temporary:
+            image = Path(temporary) / "game.fds"
+            image.write_bytes(bytes(side))
+            # The program loaded at boot, not the overlay over it.
+            data, offset = _fds_program_at(image, 0xC150)
+            self.assertEqual(files[0][2], data)
+            self.assertEqual(0x150, offset)
+            self.assertEqual(b"\x00\xc1" + b"\xaa" * 16, _fds_file_blob(image, 0x20))
+            with self.assertRaisesRegex(StudioProjectError, "no program file at \\$8000"):
+                _fds_program_at(image, 0x8000)
+            with self.assertRaisesRegex(StudioProjectError, "no program file \\$40"):
+                _fds_file_blob(image, 0x40)
 
     def test_castle_point_playtest_prepares_isolated_room_preview(self) -> None:
         for revision in ("castle-excellent-japan-hsp-05", "castlequest-usa"):

@@ -18,6 +18,7 @@ from retrolarium_kit.project import (
     OPEN_DISK_SYS_START,
     ProjectError,
     build_project,
+    install_fds_bios,
     launch_image_plan,
     launch_image_smoke,
     launch_plan,
@@ -163,12 +164,46 @@ class ProjectOperationTests(unittest.TestCase):
             self.assertNotIn("-seconds_to_run", headless["arguments"])
             self.assertNotIn("-autoboot_script", headless["arguments"])
 
+            # The user's dump: one MAME knows runs as it is, any other (the
+            # older dump) gets past MAME's warning like OpenDiskSysROM.
+            dump = bytes(0x2000)
             (root / "roms" / "fds").mkdir(parents=True)
-            (root / "roms" / "fds" / "rp2c33a-01a.bin").write_bytes(bytes(0x2000))
+            (root / "roms" / "fds" / "rp2c33a-01a.bin").write_bytes(dump)
             own = launch_image_plan(disk, platform="nes", mame=mame)
             self.assertEqual("user", own["fds_bios"])
             self.assertNotIn("-rompath", own["arguments"])
-            self.assertNotIn("-seconds_to_run", own["arguments"])
+            self.assertEqual(str(OPEN_DISK_SYS_START), own["arguments"][own["arguments"].index("-autoboot_script") + 1])
+            with patch("retrolarium_kit.project.FDS_BIOS_KNOWN", hashlib.sha1(dump).hexdigest()):
+                known = launch_image_plan(disk, platform="nes", mame=mame)
+            self.assertEqual("user", known["fds_bios"])
+            self.assertNotIn("-seconds_to_run", known["arguments"])
+
+    def test_older_bios_dump_installs_under_the_name_mame_loads(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            mame = root / "consoles.exe"
+            mame.write_bytes(b"mame")
+            older = root / "disksys.rom"
+            older.write_bytes(b"older dump")
+            digest = hashlib.sha1(b"older dump").hexdigest()
+            with patch.dict("retrolarium_kit.project.FDS_BIOS", {digest: "older dump"}):
+                result = install_fds_bios(older, mame)
+            self.assertEqual(str(root / "roms" / "fds" / "rp2c33a-01a.bin"), result["path"])
+            self.assertEqual(b"older dump", (root / "roms" / "fds" / "rp2c33a-01a.bin").read_bytes())
+            older.write_bytes(b"something else")
+            with self.assertRaises(ProjectError):
+                install_fds_bios(older, mame)
+
+    def test_disk_launch_plan_refuses_a_semicolon_in_the_rom_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "a;b"
+            root.mkdir()
+            disk = root / "edited.fds"
+            disk.write_bytes(fds_fixture())
+            mame = root / "consoles.exe"
+            mame.write_bytes(b"mame")
+            with self.assertRaisesRegex(ProjectError, "';'"):
+                launch_image_plan(disk, platform="nes", mame=mame)
 
     def test_open_disk_sys_image_matches_its_manifest(self) -> None:
         manifest = json.loads((OPEN_DISK_SYS_ROMS / "manifest.json").read_text(encoding="utf-8"))

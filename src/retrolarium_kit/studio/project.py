@@ -1080,10 +1080,50 @@ def verify_studio_project(path: Path) -> dict[str, Any]:
 SOLOMON_REVISIONS = frozenset({"usa", "europe", "japan"})
 # Revisions made for 50 Hz consoles run on MAME's PAL machine.
 PAL_REVISIONS = frozenset({("smb1", "pal"), ("solomons-key", "europe")})
-# SMB revisions whose program runs the point playtest and the title demo
-# script: Japan/USA, its PlayChoice-10 copy (the same program) and Europe
-# (the same RAM and hooks).
+# SMB cartridge revisions whose program runs the point playtest script:
+# Japan/USA, its PlayChoice-10 copy (the same program) and Europe (the same
+# RAM and hooks).
 SMB_SCRIPTED_REVISIONS = frozenset({"ju", "pc10", "pal"})
+# The point playtest also runs the Disk System versions. Super Mario Bros. 2
+# and All Night Nippon are on the later Disk System engine: the timer digits
+# sit at $07EC, the running game is OperMode_Task 4 (5 in All Night Nippon,
+# which adds a task), and worlds 5-8 (file $20) and the hard / extended
+# worlds (file $40) load from the disk while the game runs; the playtest puts
+# that file in RAM the way the game's loader does and records it in the file
+# list number ($07F7).
+SMB_POINT_PLAYTEST_REVISIONS = SMB_SCRIPTED_REVISIONS | {"fds_smb", "smb2_jp_fds", "ann_fds"}
+SMB_LATE_FDS_RUNNING_TASKS = {"smb2_jp_fds": 4, "ann_fds": 5}
+SMB_LATE_FDS_HARD_WORLDS = frozenset({"world-hard", "world-extended"})
+
+
+def _fds_program_at(image_path: Path, address: int) -> tuple[bytes, int]:
+    """The program file the console loads at boot over ``address`` (the first
+    on the disk; overlays loaded later come after it), and the address's
+    offset in it."""
+    side = image_path.read_bytes()[-65500:]
+    try:
+        records = parse_fds_side(side)
+    except FdsError as exc:
+        raise StudioProjectError(f"{image_path.name}: {exc}") from exc
+    for record in records:
+        if record.file_type == 0 and record.load_address <= address < record.load_address + record.size:
+            return side[record.data_offset:record.data_offset + record.size], address - record.load_address
+    raise StudioProjectError(f"{image_path.name} has no program file at ${address:04X}")
+
+
+def _fds_file_blob(image_path: Path, file_id: int) -> bytes:
+    """A program file of a built disk image: its load address, then its data."""
+    image = image_path.read_bytes()
+    try:
+        records = parse_fds_side(image[-65500:])
+    except FdsError as exc:
+        raise StudioProjectError(f"{image_path.name}: {exc}") from exc
+    side = image[-65500:]
+    for record in records:
+        if record.file_id == file_id and record.file_type == 0:
+            return record.load_address.to_bytes(2, "little") \
+                + side[record.data_offset:record.data_offset + record.size]
+    raise StudioProjectError(f"{image_path.name} has no program file ${file_id:02X}")
 
 
 def _source_revision(inspection: Mapping[str, Any]):
@@ -1380,6 +1420,25 @@ def _smb_area_pointer(name: str) -> int:
     return (area_types.index(area_type) << 5) | area_index
 
 
+def _smb_object_pages(area: Mapping[str, Any]) -> set[int]:
+    """The pages an area object starts on, as the game's area parser counts
+    them: the page bit moves on one page, a row-13 page control (d6 clear)
+    jumps to a page, and page controls are not objects themselves."""
+    pages: set[int] = set()
+    page = 0
+    for item in area.get("objects") or []:
+        if not isinstance(item, Mapping):
+            continue
+        if item.get("page_advance"):
+            page += 1
+        control = item.get("object_control")
+        if item.get("row") == 13 and isinstance(control, int) and not control & 0x40:
+            page = control & 0x1F
+            continue
+        pages.add(page)
+    return pages
+
+
 def _bounded_integer(value: object, name: str, minimum: int, maximum: int) -> int:
     if not isinstance(value, int) or isinstance(value, bool) \
             or not minimum <= value <= maximum:
@@ -1443,10 +1502,9 @@ def studio_smb_point_playtest_plan(
     if document.get("schema") != "retrolarium.nes-resource-bundle" \
             or document.get("game") != "smb1":
         raise StudioProjectError("SMB point playtest requires an smb1 resource document")
-    if document.get("revision") not in SMB_SCRIPTED_REVISIONS:
+    if document.get("revision") not in SMB_POINT_PLAYTEST_REVISIONS:
         raise StudioProjectError(
-            "Starting inside a level works in the Japan/USA, Europe and "
-            "PlayChoice-10 versions; play this one from power-on."
+            "Starting inside a level does not work in this version; play it from power-on."
         )
     resources = document.get("resources")
     if not isinstance(resources, list):
@@ -1459,9 +1517,10 @@ def studio_smb_point_playtest_plan(
         raise StudioProjectError(f"unknown SMB course bank: {course_bank!r}")
     level_resource = level_resources[0]
     areas = level_resource.get("areas")
-    if not isinstance(areas, list) or not any(
-        isinstance(item, Mapping) and item.get("name") == area for item in areas
-    ):
+    selected_areas = [
+        item for item in areas if isinstance(item, Mapping) and item.get("name") == area
+    ] if isinstance(areas, list) else []
+    if not selected_areas:
         raise StudioProjectError(
             f"SMB area {area!r} does not belong to course bank {course_bank!r}"
         )
@@ -1562,6 +1621,23 @@ def studio_smb_point_playtest_plan(
         "SMB1_PLAYTEST_SFX_CHANNEL": sfx_channel,
         "SMB1_PLAYTEST_SFX_VALUE": str(sfx_value),
     }
+    # Entering on a later page, the game's area parser looks for an object
+    # that starts on that page and spins forever when there is none (a page
+    # control can skip pages); the script then stops it looking.
+    if column // 16 and column // 16 not in _smb_object_pages(selected_areas[0]):
+        environment["SMB1_PLAYTEST_EMPTY_PAGE"] = "1"
+    if document.get("revision") in SMB_LATE_FDS_RUNNING_TASKS:
+        environment["SMB1_PLAYTEST_TIMER"] = str(0x07EC)
+        environment["SMB1_PLAYTEST_RUNNING_TASK"] = str(SMB_LATE_FDS_RUNNING_TASKS[document["revision"]])
+        hard = world_resources[0].get("id") in SMB_LATE_FDS_HARD_WORLDS
+        if hard or world >= 5:
+            file_id, file_list = (0x40, 3) if hard else (0x20, 1)
+            blob = artifact.parent / "playtest-disk-file.bin"
+            blob.write_bytes(_fds_file_blob(artifact, file_id))
+            environment["SMB1_PLAYTEST_DISK_FILE"] = str(blob)
+            environment["SMB1_PLAYTEST_DISK_LIST"] = str(file_list)
+            if hard:
+                environment["SMB1_PLAYTEST_HARD"] = "1"
     plan = launch_image_plan(
         artifact, platform="nes", mame=executable,
         machine="nespal" if document.get("revision") == "pal" else "nes",
@@ -1810,8 +1886,14 @@ SOLOMON_DEMO_RUN_GUARD = bytes.fromhex("a90085228581")
 # SMB JU: the title demo's exit to the title screen and the RAM the demo
 # script reads and writes (the tables and the engine come from the profile).
 SMB_DEMO_HOOKS = {
-    "reset_title": 0x82C9, "saved_joypad": 0x06FC, "demo_action": 0x0717,
-    "action_timer": 0x0718, "oper_mode": 0x0770,
+    "saved_joypad": 0x06FC, "demo_action": 0x0717, "action_timer": 0x0718,
+    "oper_mode": 0x0770,
+}
+# Where each version's title goes back to the start when its demo is over;
+# the RAM above is the same in all of them.
+SMB_DEMO_RESET_TITLE = {
+    "ju": 0x82C9, "pc10": 0x82C9, "pal": 0x82C9,
+    "fds_smb": 0x62CF, "ann_fds": 0xC497, "smb2_jp_fds": 0xC4DD,
 }
 
 
@@ -1827,10 +1909,8 @@ def studio_smb_demo_plan(path: Path, *, mame: Path, record: Path | None = None) 
     revision = next(
         (item for item in profile.revisions if item.sha256 == inspection["source"]["sha256"]), None
     )
-    if revision is None or revision.revision_id not in SMB_SCRIPTED_REVISIONS:
-        raise StudioProjectError(
-            "The demo plays in MAME in the Japan/USA, Europe and PlayChoice-10 versions."
-        )
+    if revision is None or revision.revision_id not in SMB_DEMO_RESET_TITLE:
+        raise StudioProjectError("The demo does not play in MAME in this version.")
     demo = next(item for item in profile.resources_for(revision) if item.codec == "smb.demo-input.v1")
     tables = demo.parameters
     executable = mame.resolve()
@@ -1840,10 +1920,14 @@ def studio_smb_demo_plan(path: Path, *, mame: Path, record: Path | None = None) 
     if verification["status"] != "current":
         raise StudioProjectError("Studio artifact is stale; build it again before the demo")
     artifact = Path(verification["artifact"]["absolute_path"]).resolve()
-    source = artifact.read_bytes()
-    engine = 16 + tables["engine_cpu"] - 0x8000
+    if artifact.suffix.lower() == ".fds":
+        source, engine = _fds_program_at(artifact, tables["engine_cpu"])
+    else:
+        source = artifact.read_bytes()
+        engine = 16 + tables["engine_cpu"] - 0x8000
     expected = (tables["durations_cpu"] - 1).to_bytes(2, "little")
-    if source[engine:engine + 3] != b"\xae\x17\x07" or source[engine + 14:engine + 16] != expected:
+    if engine < 0 or source[engine:engine + 3] != b"\xae\x17\x07" \
+            or source[engine + 14:engine + 16] != expected:
         raise StudioProjectError("SMB build does not match the guarded demo layout")
     lua = Path(__file__).with_name("runtime") / "smb1_mame_demo.lua"
     if not lua.is_file():
@@ -1860,7 +1944,7 @@ def studio_smb_demo_plan(path: Path, *, mame: Path, record: Path | None = None) 
         ],
         "environment": {
             "SMB_DEMO_ENGINE": str(tables["engine_cpu"]),
-            "SMB_DEMO_RESET_TITLE": str(SMB_DEMO_HOOKS["reset_title"]),
+            "SMB_DEMO_RESET_TITLE": str(SMB_DEMO_RESET_TITLE[revision.revision_id]),
             "SMB_DEMO_ACTIONS": str(tables["actions_cpu"]),
             "SMB_DEMO_DURATIONS": str(tables["durations_cpu"]),
             "SMB_DEMO_CAPACITY": str(tables["capacity"]),

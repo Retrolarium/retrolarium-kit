@@ -14,6 +14,8 @@ COLUMNS = 22
 RLE_SIZE = 416
 PELLET_TILES = frozenset((0x01, 0x03, 0x09))
 POWER_PELLET_TILE = 0x01
+# The visible power pellet and its blink frame: the engine eats both as one.
+POWER_PELLET_TILES = frozenset((0x01, 0x02))
 TUNNEL_ROW = 13
 GHOST_DOOR = (11, 11)
 PACMAN_SPAWN = (20, 11)
@@ -152,17 +154,47 @@ def _passable_components(grid: Sequence[Sequence[int]]) -> list[int]:
     return sorted(sizes, reverse=True)
 
 
-def inspect_maze(value: object) -> dict[str, object]:
+def inspect_maze(
+    value: object,
+    *,
+    power_pellets: Sequence[Sequence[int]] | None = None,
+    counted: bool = False,
+) -> dict[str, object]:
+    """Check a maze against what the engine assumes.
+
+    ``counted``: the build writes the maze's pellet count into the round
+    counter, so any count from 1 to 255 works; otherwise it must stay 192.
+    ``power_pellets``: the cells the engine's blinking table draws and its
+    eaten-slot logic finds; each must hold a power pellet and no other cell
+    may. Without them only the count of four is checked."""
     grid = _grid(value, ROWS, COLUMNS)
     counts = Counter(tile for row in grid for tile in row)
     errors: list[str] = []
     warnings: list[str] = []
     pellets = sum(counts[tile] for tile in PELLET_TILES)
-    if pellets != 192:
+    if counted:
+        if not 1 <= pellets <= 255:
+            errors.append(
+                f"maze has {pellets} collectible pellets; the round counter holds 1..255"
+            )
+    elif pellets != 192:
         errors.append(
             f"maze has {pellets} collectible pellets; runtime round counter expects 192"
         )
-    if counts[POWER_PELLET_TILE] != 4:
+    if power_pellets is not None:
+        fixed = {(int(row), int(column)) for row, column in power_pellets}
+        for row, column in sorted(fixed):
+            if grid[row][column] != POWER_PELLET_TILE:
+                errors.append(
+                    f"power pellet at ({row},{column}) must stay: the blinking table draws it there"
+                )
+        for row in range(ROWS):
+            for column in range(COLUMNS):
+                if grid[row][column] in POWER_PELLET_TILES and (row, column) not in fixed:
+                    errors.append(
+                        f"power pellet at ({row},{column}) is outside the cells the blinking table draws"
+                    )
+    elif counts[POWER_PELLET_TILE] != 4:
         errors.append(
             f"maze has {counts[POWER_PELLET_TILE]} visible power pellets; marker table expects 4"
         )

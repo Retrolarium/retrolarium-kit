@@ -7,23 +7,23 @@ note table or FDS modulation program.
 
 ## Verified profile layout
 
-Both revisions load their ending-audio payload at CPU address `$C5D0`. The
-typed resource starts at payload offset `$0C00` / CPU address `$D1D0` and keeps
-the complete `$00AF`-byte range through `$D27E` as an immutable-shape arena.
+Both revisions load their ending-audio payload at CPU address `$C5D0`. The typed
+resource starts at payload offset `$0C00` / CPU address `$D1D0` and keeps the
+complete `$00AF`-byte range through `$D27E` as an immutable-shape arena.
 
-| Revision | Payload | Payload size | Resource offset | Resource size |
-|---|---|---:|---:|---:|
-| All Night Nippon SMB | `nsmdata3` | 3346 | `$0C00` | `$00AF` |
-| SMB2 Japan / Lost Levels | `sm2data3` | 3279 | `$0C00` | `$00AF` |
+| Revision                 | Payload    | Payload size | Resource offset | Resource size |
+| ------------------------ | ---------- | -----------: | --------------: | ------------: |
+| All Night Nippon SMB     | `nsmdata3` |         3346 |         `$0C00` |       `$00AF` |
+| SMB2 Japan / Lost Levels | `sm2data3` |         3279 |         `$0C00` |       `$00AF` |
 
 The common semantic spans are:
 
-| Control | Arena offset | Encoded size |
-|---|---:|---:|
-| Wave B | `$00` | 32 bytes |
-| Volume program B | `$20` | 2 two-byte steps |
-| Volume program A | `$24` | 6 two-byte steps |
-| Wave A | `$8F` | 32 bytes |
+| Control          | Arena offset |     Encoded size |
+| ---------------- | -----------: | ---------------: |
+| Wave B           |        `$00` |         32 bytes |
+| Volume program B |        `$20` | 2 two-byte steps |
+| Volume program A |        `$24` | 6 two-byte steps |
+| Wave A           |        `$8F` |         32 bytes |
 
 The addresses and bytes were checked against the ANN linker map and a native
 project assembler output, and against the corresponding SMB2 labels and
@@ -38,10 +38,10 @@ register low six bits hold the value; bit 7 selects `direct`, bit 6 selects
 `increase`, and neither bit selects `decrease`.
 
 Documents retain every byte in `arena`. Encoding copies that arena first and
-then replaces only the four declared semantic spans. Names, entry counts,
-sample ranges, step order, modes, frame ranges, bounds and overlap are checked
-against the selected profile. Unknown bytes between and after the owned spans
-are never normalized.
+then replaces only the four declared semantic spans. Names, entry counts, sample
+ranges, step order, modes, frame ranges, bounds and overlap are checked against
+the selected profile. Unknown bytes between and after the owned spans are never
+normalized.
 
 ## Studio boundary
 

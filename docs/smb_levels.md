@@ -11,10 +11,10 @@ byte-identical open `smb1_src` JU build. Area-object and enemy streams remain
 parallel named records rather than being flattened into a tilemap. No ROM or
 extracted asset is distributed with the package.
 
-| Range | File offset | Size | Typed content |
-| --- | ---: | ---: | --- |
-| Enemy streams | `0x1D80` | 1087 | enemies, entrances, page commands and flags |
-| Area streams | `0x21BF` | 3373 | headers and procedural object commands |
+| Range         | File offset | Size | Typed content                               |
+| ------------- | ----------: | ---: | ------------------------------------------- |
+| Enemy streams |    `0x1D80` | 1087 | enemies, entrances, page commands and flags |
+| Area streams  |    `0x21BF` | 3373 | headers and procedural object commands      |
 
 The profile owns stream names, order and the separate fixed capacity of every
 area/enemy pair. Both non-contiguous ranges participate in one transactional
@@ -22,9 +22,9 @@ build plan.
 
 ## Exact stream semantics
 
-An area header exposes timer, entrance, foreground/color, area style,
-background scenery and terrain controls with their native bit widths. Each
-area object exposes column, row, page-advance and the seven-bit object control.
+An area header exposes timer, entrance, foreground/color, area style, background
+scenery and terrain controls with their native bit widths. Each area object
+exposes column, row, page-advance and the seven-bit object control.
 
 Enemy records are discriminated by their native row nibble:
 
@@ -56,10 +56,9 @@ parity stage.
 
 ## Verification
 
-Synthetic tests cover explicit and implicit terminators, preserved padding,
-page positioning, invalid record kinds, capacity overflow and transactional
-edits to both ROM ranges. The real JU pipeline reports 34 levels, 1635 area
-objects and 502 enemy records. Its zero-edit Studio build has `changed_bytes =
-0`, passes project validation/verification and Qt project smoke, and retains
-SHA-256
+Synthetic tests cover explicit and implicit terminators, preserved padding, page
+positioning, invalid record kinds, capacity overflow and transactional edits to
+both ROM ranges. The real JU pipeline reports 34 levels, 1635 area objects and
+502 enemy records. Its zero-edit Studio build has `changed_bytes = 0`, passes
+project validation/verification and Qt project smoke, and retains SHA-256
 `f61548fdf1670cffefcc4f0b7bdcdd9eaba0c226e3b74f8666071496988248de`.

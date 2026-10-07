@@ -22,6 +22,13 @@ from retrolarium_kit.pacman_maze import (
 )
 
 
+ROM = Path(__file__).resolve().parents[3] / "oranguthang/pacman_src/Pac-Man (J) (V1.0) [!].nes"
+ROM = ROM if ROM.is_file() else Path("D:/Projects/oranguthang/pacman_src/Pac-Man (J) (V1.0) [!].nes")
+# The round counter's start and the two "pellets eaten" sums.
+COUNT_OFFSETS = (0xE98, 0xF31, 0x118C)
+POWER_PELLETS = ((3, 2), (3, 20), (20, 2), (20, 20))
+
+
 def valid_grid() -> list[list[int]]:
     grid = [[7 for _column in range(COLUMNS)] for _row in range(ROWS)]
     cells = [
@@ -135,6 +142,86 @@ class PacmanMazeTests(unittest.TestCase):
         raw["resources"][0]["tiles"][0][0] = 7
         with self.assertRaisesRegex(Exception, "expects 192"):
             parse_resource_document(raw, profile, revision)
+
+
+@unittest.skipUnless(ROM.is_file(), "the Pac-Man ROM is not available")
+class PacmanMazeRomTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.image = ROM.read_bytes()
+        self.profile = packaged_game_profiles().get("pacman")
+        self.revision = next(
+            item for item in self.profile.revisions if item.revision_id == "japan-v10"
+        )
+        self.raw = copy.deepcopy(
+            decode_resources(self.image, self.profile, self.revision).as_dict()
+        )
+        self.maze = next(item for item in self.raw["resources"] if item["id"] == "maze")
+
+    def build(self) -> bytes:
+        parsed = parse_resource_document(self.raw, self.profile, self.revision)
+        output, _report = build_resources(self.image, parsed, self.profile, self.revision)
+        return output
+
+    def test_the_counter_operands_hold_192(self) -> None:
+        for offset in COUNT_OFFSETS:
+            self.assertEqual(self.image[offset], 0xC0)
+        self.assertEqual(self.build(), self.image)
+
+    def test_the_round_counts_the_maze_pellets(self) -> None:
+        # Two corridor cells get pellets: the round now ends after 194.
+        added = 0
+        for row in range(ROWS):
+            for column in range(COLUMNS):
+                if added < 2 and self.maze["tiles"][row][column] == 0 \
+                        and (row, column) not in ((20, 11), (10, 11), (13, 10), (13, 11), (13, 12)):
+                    self.maze["tiles"][row][column] = 3
+                    added += 1
+        self.assertEqual(added, 2)
+        output = self.build()
+        for offset in COUNT_OFFSETS:
+            self.assertEqual(output[offset], 194)
+        self.assertEqual(
+            decode_maze_rle(output[11400:11400 + 416]),
+            tuple(tuple(row) for row in self.maze["tiles"]),
+        )
+
+    def test_power_pellets_stay_in_the_corners(self) -> None:
+        tiles = [list(row) for row in self.maze["tiles"]]
+        self.assertEqual(
+            [cell for cell in POWER_PELLETS if tiles[cell[0]][cell[1]] == 1], list(POWER_PELLETS)
+        )
+        row, column = POWER_PELLETS[0]
+        self.maze["tiles"][row][column] = 3
+        with self.assertRaisesRegex(Exception, r"power pellet at \(3,2\) must stay"):
+            self.build()
+        self.maze["tiles"][row][column] = 1
+        pellet = next(
+            (r, c) for r in range(ROWS) for c in range(COLUMNS) if self.maze["tiles"][r][c] == 3
+        )
+        self.maze["tiles"][pellet[0]][pellet[1]] = 1
+        with self.assertRaisesRegex(Exception, "outside the cells the blinking table draws"):
+            self.build()
+
+    def test_the_counter_holds_up_to_255(self) -> None:
+        for row in self.maze["tiles"]:
+            for column, tile in enumerate(row):
+                if tile in (3, 9):
+                    row[column] = 0
+        for row, column in POWER_PELLETS:
+            self.maze["tiles"][row][column] = 1
+        # Four power pellets still count: an empty corridor maze passes...
+        self.build()
+        tiles = sum(row.count(3) for row in self.maze["tiles"])
+        self.assertEqual(tiles, 0)
+        # ...and 256 pellets do not fit the counter.
+        grid = valid_grid()
+        cells = [(r, c) for r in range(ROWS) for c in range(COLUMNS) if grid[r][c] == 7]
+        for r, c in cells[:256 - 192]:
+            grid[r][c] = 3
+        errors = inspect_maze(grid, counted=True)["errors"]
+        self.assertTrue(any("holds 1..255" in error for error in errors), errors)
+        grid[cells[0][0]][cells[0][1]] = 7
+        self.assertEqual(inspect_maze(grid, counted=True)["errors"], [])
 
 
 if __name__ == "__main__":

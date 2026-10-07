@@ -1946,9 +1946,25 @@ def _parse_resource(
         payload = preserved if preserved_grid == normalized_grid else encode_maze_grid(
             raw.get("tiles"), rows=height, columns=width, token_count=tokens
         )
-        report = inspect_maze(raw.get("tiles"))
+        # The round counter's start and the two "pellets eaten" sums are
+        # immediate operands; the build writes the maze's own count there.
+        count_offsets = spec.parameters.get("pellet_count_offsets")
+        report = inspect_maze(
+            raw.get("tiles"),
+            power_pellets=spec.parameters.get("power_pellets"),
+            counted=count_offsets is not None,
+        )
         if report["errors"]:
             raise NesResourceError("invalid Pac-Man maze: " + "; ".join(report["errors"]))
+        if count_offsets is not None:
+            offset, _size = _span(spec, len(payload))
+            encoded_spans = (_EncodedSpan(offset, payload),) + tuple(
+                _EncodedSpan(
+                    _integer(item, f"{spec.resource_id}.pellet_count_offsets", minimum=0),
+                    bytes((int(report["pellets"]),)),
+                )
+                for item in count_offsets
+            )
     elif spec.codec == PACMAN_ACTOR_CODEC:
         expected_fields = {
             "id", "kind", "codec", "standard_tile_quads",
