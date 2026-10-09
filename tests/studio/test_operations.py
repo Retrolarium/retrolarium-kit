@@ -8,16 +8,18 @@ from unittest.mock import patch
 
 from retrolarium_kit.studio.project import (
     StudioProjectError,
+    build_studio_project,
+    validate_studio_project,
+    verify_studio_project,
+)
+from retrolarium_kit.studio.playtest import (
     _fds_file_blob,
     _fds_program_at,
     _smb_object_pages,
-    build_studio_project,
     studio_castle_point_playtest_plan,
     studio_pacman_round_playtest_plan,
     studio_solomon_point_playtest_plan,
     studio_smb_point_playtest_plan,
-    validate_studio_project,
-    verify_studio_project,
 )
 
 
@@ -301,10 +303,10 @@ class StudioOperationTests(unittest.TestCase):
                 "artifact": {"absolute_path": str(artifact)},
             }
             with patch(
-                "retrolarium_kit.studio.project.load_studio_project",
+                "retrolarium_kit.studio.playtest.load_studio_project",
                 return_value=state,
             ), patch(
-                "retrolarium_kit.studio.project.verify_studio_project",
+                "retrolarium_kit.studio.playtest.verify_studio_project",
                 return_value=verification,
             ):
                 plan = studio_smb_point_playtest_plan(
@@ -472,10 +474,10 @@ class StudioOperationTests(unittest.TestCase):
                     "artifact": {"absolute_path": str(artifact)},
                 }
                 with patch(
-                    "retrolarium_kit.studio.project.load_studio_project",
+                    "retrolarium_kit.studio.playtest.load_studio_project",
                     return_value=state,
                 ), patch(
-                    "retrolarium_kit.studio.project.verify_studio_project",
+                    "retrolarium_kit.studio.playtest.verify_studio_project",
                     return_value=verification,
                 ):
                     plan = studio_castle_point_playtest_plan(
@@ -508,7 +510,7 @@ class StudioOperationTests(unittest.TestCase):
                         )
 
     def test_bundle_upgrade_adds_new_profile_resources_and_keeps_edits(self) -> None:
-        from retrolarium_kit.studio import project as studio_project
+        from retrolarium_kit.studio import create as studio_create
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -524,14 +526,14 @@ class StudioOperationTests(unittest.TestCase):
                     {"id": "a", "values": [1]}, {"id": "b", "values": [2]}, {"id": "c", "values": [3]},
                 ]}), encoding="utf-8")
 
-            with patch("retrolarium_kit.studio.project.load_studio_project", return_value=state),                     patch("retrolarium_kit.studio.project._project_source", return_value=root / "base.nes"),                     patch("retrolarium_kit.games.catalog.extract_game", side_effect=extract):
-                added = studio_project._add_bundle_resources(
+            with patch("retrolarium_kit.studio.create.load_studio_project", return_value=state),                     patch("retrolarium_kit.studio.create._project_source", return_value=root / "base.nes"),                     patch("retrolarium_kit.games.catalog.extract_game", side_effect=extract):
+                added = studio_create._add_bundle_resources(
                     root / "fixture.rlj", profile="doraemon.v1", codec="nes.chr-2bpp.v1")
                 self.assertEqual(["b"], added)
                 merged = json.loads(bundle.read_text(encoding="utf-8"))
                 self.assertEqual([{"id": "a", "values": [9]}, {"id": "b", "values": [2]},
                                   {"id": "c", "values": [3]}], merged["resources"])
-                self.assertEqual([], studio_project._add_bundle_resources(
+                self.assertEqual([], studio_create._add_bundle_resources(
                     root / "fixture.rlj", profile="doraemon.v1", codec="nes.chr-2bpp.v1"))
 
     def test_pacman_round_playtest_runs_the_build_with_a_round(self) -> None:
@@ -545,9 +547,9 @@ class StudioOperationTests(unittest.TestCase):
             mame.write_bytes(b"fixture")
             verification = {"status": "current", "artifact": {"absolute_path": str(artifact)}}
             with patch(
-                "retrolarium_kit.studio.project.load_studio_project", return_value=state,
+                "retrolarium_kit.studio.playtest.load_studio_project", return_value=state,
             ), patch(
-                "retrolarium_kit.studio.project.verify_studio_project", return_value=verification,
+                "retrolarium_kit.studio.playtest.verify_studio_project", return_value=verification,
             ):
                 plan = studio_pacman_round_playtest_plan(root / "fixture.rlj", mame=mame, round=7)
                 self.assertEqual({"PACMAN_PLAYTEST_ROUND": "7"}, plan["environment"])
@@ -592,10 +594,10 @@ class StudioOperationTests(unittest.TestCase):
                     "artifact": {"absolute_path": str(artifact)},
                 }
                 with patch(
-                    "retrolarium_kit.studio.project.load_studio_project",
+                    "retrolarium_kit.studio.playtest.load_studio_project",
                     return_value=state,
                 ), patch(
-                    "retrolarium_kit.studio.project.verify_studio_project",
+                    "retrolarium_kit.studio.playtest.verify_studio_project",
                     return_value=verification,
                 ):
                     plan = studio_solomon_point_playtest_plan(

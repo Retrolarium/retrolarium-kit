@@ -25,10 +25,10 @@ from retrolarium_kit.games.flicky.content import (
 from retrolarium_core.megadrive import cartridge_checksum
 from retrolarium_kit.studio.project import (
     build_studio_project,
-    create_flicky_studio_project,
     validate_studio_project,
     verify_studio_project,
 )
+from retrolarium_kit.studio.create import create_flicky_studio_project
 
 
 def mapping_bytes(mapping: dict) -> bytes:

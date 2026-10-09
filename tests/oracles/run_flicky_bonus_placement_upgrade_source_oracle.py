@@ -16,8 +16,13 @@ from retrolarium_kit.games.flicky.content import (
     SOURCE_DIRECTORY, WORKSPACE_FILES, import_flicky_source,
 )
 from retrolarium_kit.studio.project import (
-    StudioProjectError, build_studio_project, create_flicky_studio_project,
-    upgrade_flicky_studio_project, verify_studio_project,
+    StudioProjectError,
+    build_studio_project,
+    verify_studio_project,
+)
+from retrolarium_kit.studio.create import (
+    create_flicky_studio_project,
+    upgrade_flicky_studio_project,
 )
 
 

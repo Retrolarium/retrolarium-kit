@@ -11,11 +11,9 @@ import shutil
 import tempfile
 
 from retrolarium_kit.games.flicky.content import import_flicky_source
-from retrolarium_kit.studio.project import (
-    build_studio_project,
-    create_flicky_studio_project,
-    studio_flicky_round_playtest_plan,
-)
+from retrolarium_kit.studio.project import build_studio_project
+from retrolarium_kit.studio.create import create_flicky_studio_project
+from retrolarium_kit.studio.playtest import studio_flicky_round_playtest_plan
 
 from run_flicky_round_playtest_source_oracle import (
     launch,

@@ -14,9 +14,14 @@ from retrolarium_kit.games.flicky.content import (
     CANONICAL_SHA256, WORKSPACE_FILES, import_flicky_source,
 )
 from retrolarium_kit.studio.project import (
-    build_studio_project, create_flicky_studio_project,
-    load_studio_project, studio_flicky_round_playtest_plan,
-    studio_flicky_sound_preview, verify_studio_project,
+    build_studio_project,
+    load_studio_project,
+    verify_studio_project,
+)
+from retrolarium_kit.studio.create import create_flicky_studio_project
+from retrolarium_kit.studio.playtest import (
+    studio_flicky_round_playtest_plan,
+    studio_flicky_sound_preview,
 )
 from run_flicky_round_playtest_source_oracle import launch
 

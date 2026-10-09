@@ -15,7 +15,8 @@ import tempfile
 from retrolarium_kit.games.flicky.content import (
     CANONICAL_SHA256, WORKSPACE_FILES, import_flicky_source,
 )
-from retrolarium_kit.studio.project import build_studio_project, create_flicky_studio_project
+from retrolarium_kit.studio.project import build_studio_project
+from retrolarium_kit.studio.create import create_flicky_studio_project
 
 
 def native_bytes(executable: Path, document: Path) -> tuple[list[bytes], list[bytes], tuple[int, int]]:

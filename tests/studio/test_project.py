@@ -7,16 +7,16 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from helpers import patched_manifest
 from retrolarium_kit.core.game_profiles import packaged_game_profiles
 from retrolarium_kit.studio.project import (
     FLICKY_WORKSPACE_FILES,
     StudioProjectError,
-    create_flicky_studio_project,
-    create_studio_project,
     load_studio_project,
     migrate_studio_project,
     validate_studio_project,
 )
+from retrolarium_kit.studio.create import create_flicky_studio_project, create_studio_project
 
 
 SHA256 = "a" * 64
@@ -113,7 +113,7 @@ class StudioProjectTests(unittest.TestCase):
                 document = source / relative
                 document.parent.mkdir(parents=True, exist_ok=True)
                 document.write_text("{}", encoding="utf-8")
-            with patch("retrolarium_kit.studio.project.validate_flicky_source_snapshot"):
+            with patch("retrolarium_kit.studio.create.validate_flicky_source_snapshot"):
                 project = create_flicky_studio_project(root)
             tabs = {tab["id"]: tab for tab in project["workspace"]["tabs"]}
             self.assertEqual("Sound", tabs["sound"]["title"])
@@ -285,10 +285,7 @@ class StudioProjectTests(unittest.TestCase):
             source.parent.mkdir()
             source.write_text(json.dumps(manifest()), encoding="utf-8")
             output = root / "fixture.rlj"
-            with patch(
-                "retrolarium_kit.studio.project.load_disassembly_manifest",
-                return_value=manifest(),
-            ):
+            with patched_manifest(manifest()):
                 result = create_studio_project(
                     source,
                     output,
@@ -331,10 +328,7 @@ class StudioProjectTests(unittest.TestCase):
                 encoding="utf-8",
             )
             output = root / "fixture.rlj"
-            with patch(
-                "retrolarium_kit.studio.project.load_disassembly_manifest",
-                return_value=manifest(),
-            ):
+            with patched_manifest(manifest()):
                 result = create_studio_project(
                     source,
                     output,
@@ -378,10 +372,7 @@ class StudioProjectTests(unittest.TestCase):
                 }],
             }), encoding="utf-8")
             output = root / "castle.rlj"
-            with patch(
-                "retrolarium_kit.studio.project.load_disassembly_manifest",
-                return_value=manifest(),
-            ):
+            with patched_manifest(manifest()):
                 result = create_studio_project(
                     source,
                     output,
@@ -454,10 +445,7 @@ class StudioProjectTests(unittest.TestCase):
                 "source_sha256": SHA256,
                 "frames": [{} for _ in range(28)],
             }), encoding="utf-8")
-            with patch(
-                "retrolarium_kit.studio.project.load_disassembly_manifest",
-                return_value=manifest(),
-            ):
+            with patched_manifest(manifest()):
                 result = create_studio_project(
                     source, root / "solomon.rlj",
                     project_id="solomons-key-europe",
@@ -511,10 +499,7 @@ class StudioProjectTests(unittest.TestCase):
                 "selectors": [{} for _ in range(4)],
                 "frames": [{} for _ in range(275)],
             }), encoding="utf-8")
-            with patch(
-                "retrolarium_kit.studio.project.load_disassembly_manifest",
-                return_value=manifest(),
-            ):
+            with patched_manifest(manifest()):
                 modern = create_studio_project(
                     source, root / "solomon-modern.rlj",
                     project_id="solomons-key-europe",
@@ -579,10 +564,7 @@ class StudioProjectTests(unittest.TestCase):
                     {"id": "music", "kind": "audio", "codec": "castle.mml-music.v1"},
                 ],
             }), encoding="utf-8")
-            with patch(
-                "retrolarium_kit.studio.project.load_disassembly_manifest",
-                return_value=manifest(),
-            ):
+            with patched_manifest(manifest()):
                 result = create_studio_project(
                     source,
                     root / "castle.rlj",
@@ -640,10 +622,7 @@ class StudioProjectTests(unittest.TestCase):
                 encoding="utf-8",
             )
             output = root / "fixture.rlj"
-            with patch(
-                "retrolarium_kit.studio.project.load_disassembly_manifest",
-                return_value=manifest(),
-            ):
+            with patched_manifest(manifest()):
                 result = create_studio_project(
                     source,
                     output,
@@ -686,10 +665,7 @@ class StudioProjectTests(unittest.TestCase):
                      "codec": "smb.apu-envelope.v1"},
                 ],
             }), encoding="utf-8")
-            with patch(
-                "retrolarium_kit.studio.project.load_disassembly_manifest",
-                return_value=manifest(),
-            ):
+            with patched_manifest(manifest()):
                 result = create_studio_project(
                     source, root / "smb.rlj", project_id="smb",
                     name="SMB", profile="smb1.v1", resource_document=resources,
@@ -748,10 +724,7 @@ class StudioProjectTests(unittest.TestCase):
             resource_value = json.loads(resources.read_text(encoding="utf-8"))
             resource_value["revision"] = "pal"
             resources.write_text(json.dumps(resource_value), encoding="utf-8")
-            with patch(
-                "retrolarium_kit.studio.project.load_disassembly_manifest",
-                return_value=manifest(),
-            ):
+            with patched_manifest(manifest()):
                 pal_result = create_studio_project(
                     source, root / "smb-pal.rlj", project_id="smb-pal",
                     name="SMB PAL", profile="smb1.v1", resource_document=resources,
@@ -784,10 +757,7 @@ class StudioProjectTests(unittest.TestCase):
                     },
                 ],
             }), encoding="utf-8")
-            with patch(
-                "retrolarium_kit.studio.project.load_disassembly_manifest",
-                return_value=manifest(),
-            ):
+            with patched_manifest(manifest()):
                 result = create_studio_project(
                     source, root / "ann.rlj", project_id="ann",
                     name="ANN", profile="smb1.v1", resource_document=resources,
@@ -822,10 +792,7 @@ class StudioProjectTests(unittest.TestCase):
                      "codec": "fds.synthesis.v1"},
                 ],
             }), encoding="utf-8")
-            with patch(
-                "retrolarium_kit.studio.project.load_disassembly_manifest",
-                return_value=manifest(),
-            ):
+            with patched_manifest(manifest()):
                 result = create_studio_project(
                     source, root / "ann.rlj", project_id="ann",
                     name="ANN", profile="smb1.v1",
@@ -875,10 +842,7 @@ class StudioProjectTests(unittest.TestCase):
                     "source_sha256": SHA256,
                     "resources": resources,
                 }), encoding="utf-8")
-                with self.subTest(revision=revision_id), patch(
-                    "retrolarium_kit.studio.project.load_disassembly_manifest",
-                    return_value=manifest(),
-                ):
+                with self.subTest(revision=revision_id), patched_manifest(manifest()):
                     result = create_studio_project(
                         source, root / f"{revision_id}.rlj",
                         project_id=revision_id, name=revision.name,
@@ -923,10 +887,7 @@ class StudioProjectTests(unittest.TestCase):
                     "text_fields": [{"key": "title"}],
                 }],
             }), encoding="utf-8")
-            with patch(
-                "retrolarium_kit.studio.project.load_disassembly_manifest",
-                return_value=manifest(),
-            ):
+            with patched_manifest(manifest()):
                 result = create_studio_project(
                     source, root / "screen-text.rlj",
                     project_id="screen-text", name="Screen text",
