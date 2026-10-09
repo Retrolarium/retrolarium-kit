@@ -15,7 +15,7 @@ import subprocess
 import sys
 import tempfile
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 from retrolarium_kit.games.flicky.content import import_flicky_source  # noqa: E402
 from retrolarium_kit.studio.create import create_flicky_studio_project
 
@@ -30,7 +30,7 @@ def main() -> int:
     parser.add_argument("--native-factory", type=Path,
                         help="also open the copied .rlj through the Studio editor factory")
     args = parser.parse_args()
-    scratch = Path(__file__).resolve().parents[1] / "build"
+    scratch = Path(__file__).resolve().parents[2] / "build"
     scratch.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="flicky-scene-gate-", dir=scratch) as name:
         return compare(Path(name), args)

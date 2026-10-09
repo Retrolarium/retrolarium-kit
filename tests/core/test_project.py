@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import patch
 
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from retrolarium_kit.core.project import (
     OPEN_DISK_SYS_ROMS,
@@ -25,7 +25,7 @@ from retrolarium_kit.core.project import (
     launch_project_smoke,
     verify_project,
 )
-from test_fds import fixture as fds_fixture
+from helpers import fds_side as fds_fixture
 
 
 def digest(payload: bytes) -> str:

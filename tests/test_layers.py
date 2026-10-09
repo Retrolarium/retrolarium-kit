@@ -41,7 +41,7 @@ def imports() -> list[tuple[tuple[str, ...], tuple[str, ...], int]]:
 class LayerTests(unittest.TestCase):
     def test_the_kit_does_not_import_the_disassembler(self) -> None:
         offenders = [f"{'/'.join(module)}:{line}" for module, target, line in imports()
-                     if target[0] == "retrolarium_disasm"]
+                     if target[0] == "retrolarium_disassembler"]
         self.assertEqual([], offenders)
 
     def test_layers_import_downwards(self) -> None:

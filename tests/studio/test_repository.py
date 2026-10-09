@@ -7,13 +7,15 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 import zipfile
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
+from retrolarium_kit.studio import repository
 from retrolarium_kit.studio.repository import (
-    GameRepositoryError, fetch_repository, identify_rom, ips_patch, load_descriptor, open_rom, prepare_revision,
-    reset_revision, revision_statuses,
+    GameRepositoryError, check_repository, fetch_repository, identify_rom, ips_patch, load_descriptor, open_rom, prepare_revision,
+    profile_views, reset_revision, revision_statuses,
 )
 from retrolarium_kit.studio.project import build_studio_project, load_studio_project, verify_studio_project
 from helpers import game_repository
@@ -59,27 +61,6 @@ id = "japan-v11"
 label = "Japan · v1.1"
 rom = "pacman11.nes"
 
-[workspace]
-layout = "auto"
-
-[[workspace.tabs]]
-id = "maze"
-title = "Maze"
-kind = "level.tile-grid"
-group = "content"
-document = "resources.json"
-codec = "pacman.maze-rle.v1"
-capabilities = ["paint", "undo"]
-
-[[workspace.tabs]]
-id = "demo"
-title = "Demo"
-kind = "pacman.demo"
-group = "content"
-document = "demo.json"
-resource = "attract-demo"
-codec = "pacman.demo@1"
-capabilities = ["edit", "undo"]
 """
 
 
@@ -196,16 +177,44 @@ class DescriptorTests(unittest.TestCase):
             fetch_repository("pacman", self.root / "games", source=str(archives / "{repository}.zip"))
         self.assertFalse((self.root / "escape.txt").exists())
 
-    def test_a_tab_can_belong_to_some_revisions(self) -> None:
-        only_v11 = DESCRIPTOR.replace('resource = "attract-demo"', 'resource = "attract-demo"\nrevisions = ["japan-v11"]')
-        (self.root / "pacman.rlj").write_text(only_v11, encoding="utf-8")
-        descriptor = load_descriptor(self.root / "pacman.rlj")
+    def test_a_view_can_belong_to_some_revisions(self) -> None:
+        views = profile_views("pacman.v1")
+        only_v11 = {**views, "tabs": [
+            {**tab, "revisions": ["japan-v11"]} if tab["id"] == "demo" else tab for tab in views["tabs"]
+        ]}
+        with mock.patch.object(repository, "profile_views", return_value=only_v11):
+            descriptor = load_descriptor(self.root / "pacman.rlj")
         ready = prepare_revision(descriptor, "japan-v10", rom=V10)
         self.assertEqual(["hack/japan-v10/resources.json"], ready["created_documents"])
         tabs = load_studio_project(Path(ready["project"]))["workspace"]["tabs"]
-        self.assertEqual(["maze"], [tab["id"] for tab in tabs])
-        (self.root / "pacman.rlj").write_text(only_v11.replace('["japan-v11"]', '["japan-v12"]'), encoding="utf-8")
-        with self.assertRaises(GameRepositoryError):
+        self.assertNotIn("demo", [tab["id"] for tab in tabs])
+        only_v12 = {**views, "tabs": [{**views["tabs"][0], "revisions": ["japan-v12"]}]}
+        with mock.patch.object(repository, "profile_views", return_value=only_v12), \
+                self.assertRaises(GameRepositoryError):
+            load_descriptor(self.root / "pacman.rlj")
+
+    def test_check_builds_every_revision_in_a_copy(self) -> None:
+        shutil.copyfile(V10, self.root / "pacman10.nes")
+        shutil.copyfile(V11, self.root / "pacman11.nes")
+        report = check_repository(self.descriptor)
+        self.assertEqual("ok", report["status"])
+        self.assertEqual([("japan-v10", "ok"), ("japan-v11", "ok")],
+                         [(entry["revision"], entry["status"]) for entry in report["revisions"]])
+        # The check leaves the user's folders alone: it never made them here.
+        self.assertFalse((self.root / "hack").exists())
+        self.assertFalse((self.root / ".retrolarium").exists())
+        (self.root / "pacman11.nes").unlink()
+        report = check_repository(self.descriptor)
+        self.assertEqual("failed", report["status"])
+        self.assertEqual("ok", report["revisions"][0]["status"])
+        self.assertIn("needs its ROM", report["revisions"][1]["reason"])
+        only = check_repository(self.descriptor, ["japan-v10"])
+        self.assertEqual(("ok", 1), (only["status"], len(only["revisions"])))
+
+    def test_views_come_from_the_kit_not_the_descriptor(self) -> None:
+        self.assertEqual("maze", self.descriptor.workspace["startup_tab"])
+        (self.root / "pacman.rlj").write_text(DESCRIPTOR + '\n[workspace]\nlayout = "auto"\n', encoding="utf-8")
+        with self.assertRaisesRegex(GameRepositoryError, "views come from the kit"):
             load_descriptor(self.root / "pacman.rlj")
 
 

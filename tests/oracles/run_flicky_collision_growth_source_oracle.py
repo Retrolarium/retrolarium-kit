@@ -42,7 +42,7 @@ def main() -> int:
         args.native_writer.resolve())
 
     original_rom = args.rom.read_bytes()
-    scratch = Path(__file__).resolve().parents[1] / "build"
+    scratch = Path(__file__).resolve().parents[2] / "build"
     scratch.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="flicky-collision-growth-",
                                      dir=scratch) as name:

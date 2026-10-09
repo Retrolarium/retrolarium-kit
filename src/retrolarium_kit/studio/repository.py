@@ -1,9 +1,11 @@
 """A game repository's descriptor: the .rlj at the root of a disassembly.
 
-The descriptor (schema "retrolarium.game") tells the studio everything about
-the game: the kit profile, the revisions the repository builds (each with
-the ROM file it expects at the root), the repository's asset split and the
-studio's views. It is tracked in the repository; nothing it leads to is:
+The descriptor (schema "retrolarium.game") names the game and its kit
+profile, the revisions the repository builds (each with the ROM file it
+expects at the root) and the repository's asset split. The studio's views
+are the kit's, one set per profile (studio/views/<profile>.toml), so the
+repositories do not each carry a copy. The descriptor is tracked in the
+repository; nothing it leads to is:
 
 - the ROM copies at the root (the repository ignores them already);
 - hack/<revision>/: the documents the studio edits, created from the ROM the
@@ -33,6 +35,7 @@ import sys
 import tempfile
 import tomllib
 from typing import Any, Mapping
+from importlib import resources
 
 from retrolarium_kit.core.authoring import AuthoringError
 
@@ -99,6 +102,18 @@ def _command(value: object, context: str) -> list[str]:
     return list(value)
 
 
+def profile_views(profile_id: str) -> Mapping[str, Any]:
+    """The studio views of a profile: its [workspace] with its tabs."""
+    view_file = resources.files("retrolarium_kit.studio") / "views" / f"{profile_id}.toml"
+    try:
+        workspace = tomllib.loads(view_file.read_text(encoding="utf-8")).get("workspace")
+    except FileNotFoundError:
+        raise GameRepositoryError(f"the kit has no studio views for the {profile_id} profile") from None
+    if not isinstance(workspace, Mapping) or not isinstance(workspace.get("tabs"), list):
+        raise GameRepositoryError(f"the {profile_id} views need [workspace] with [[workspace.tabs]]")
+    return workspace
+
+
 def is_descriptor(path: Path) -> bool:
     try:
         return tomllib.loads(path.read_text(encoding="utf-8")).get("schema") == SCHEMA
@@ -149,14 +164,15 @@ def load_descriptor(path: Path) -> GameDescriptor:
         _command(split["command"], "split.command")
         if "check" in split:
             _command(split["check"], "split.check")
-    workspace = raw.get("workspace")
-    if not isinstance(workspace, Mapping) or not isinstance(workspace.get("tabs"), list):
-        raise GameRepositoryError("the descriptor needs [workspace] with [[workspace.tabs]]")
-    known = {revision.id for revision in revisions}
+    if "workspace" in raw:
+        raise GameRepositoryError(
+            f"{path.name}: the studio views come from the kit now; remove [workspace] from the descriptor"
+        )
+    workspace = profile_views(profile_id)
     for tab in workspace["tabs"]:
         only = tab.get("revisions") if isinstance(tab, Mapping) else None
-        if only is not None and (not isinstance(only, list) or not only or not set(only) <= known):
-            raise GameRepositoryError(f"workspace tab {tab.get('id')!r}: revisions must list revisions of the game")
+        if only is not None and (not isinstance(only, list) or not only or not set(only) <= set(shas)):
+            raise GameRepositoryError(f"{profile_id} view {tab.get('id')!r}: revisions must list revisions of the profile")
     return GameDescriptor(path, path.parent, _string(game.get("id"), "game.id"),
                           _string(game.get("name"), "game.name"), platform, profile_id,
                           tuple(revisions), split, workspace,
@@ -427,6 +443,73 @@ def reset_revision(descriptor: GameDescriptor, revision_id: str) -> dict[str, ob
         shutil.copyfile(pristine, path)
         restored.append(document)
     return {"status": "reset", "revision": revision.id, "label": revision.label, "restored_documents": restored}
+
+
+# What a repository's own files are when it is copied for a check: Git's
+# list in a checkout, else everything but what the studio and builds make.
+_UNTRACKED = frozenset({".git", WORKSPACE_DIRECTORY, HACK_DIRECTORY, "build", "__pycache__"})
+
+
+def _repository_files(root: Path) -> list[str]:
+    if (root / ".git").exists():
+        result = subprocess.run(["git", "ls-files", "-z", "--cached"], cwd=root,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if result.returncode:
+            raise GameRepositoryError(f"cannot list the files of {root}: {result.stderr.decode(errors='replace')}")
+        return [os.fsdecode(raw) for raw in result.stdout.split(b"\0") if raw]
+    return sorted(path.relative_to(root).as_posix() for path in root.rglob("*")
+                  if path.is_file() and not _UNTRACKED & set(path.relative_to(root).parts))
+
+
+def check_repository(descriptor: GameDescriptor, revision_ids: list[str] | None = None, *,
+                     flicky_level_writer: Path | None = None) -> dict[str, object]:
+    """Prove that the kit opens every revision of a repository and gives its
+    ROM back unchanged: in a throwaway copy of the repository, each revision
+    is prepared from its ROM, validated, built with no edits and compared
+    byte for byte with that ROM. The user's hack/ and .retrolarium/ are
+    neither read nor written."""
+    from retrolarium_kit.studio.project import build_studio_project, validate_studio_project
+
+    chosen = [descriptor.revision(revision_id) for revision_id in revision_ids] \
+        if revision_ids else list(descriptor.revisions)
+    results = []
+    with tempfile.TemporaryDirectory(prefix="rltool-check-") as directory:
+        copy = Path(directory) / descriptor.root.name
+        for name in _repository_files(descriptor.root):
+            source = descriptor.root / name
+            if source.is_file():
+                (copy / name).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source, copy / name)
+        for revision in descriptor.revisions:
+            rom = descriptor.root / revision.rom
+            if rom.is_file():
+                shutil.copyfile(rom, copy / revision.rom)
+        shadow = load_descriptor(copy / descriptor.path.name)
+        for revision in chosen:
+            entry: dict[str, object] = {"revision": revision.id, "label": revision.label}
+            results.append(entry)
+            try:
+                ready = prepare_revision(shadow, revision.id)
+                if ready["status"] != "ready":
+                    entry.update(status="failed", reason=ready.get("message", ready["status"]))
+                    continue
+                project = Path(str(ready["project"]))
+                validate_studio_project(project)
+                report = build_studio_project(
+                    project, flicky_level_writer=flicky_level_writer
+                    if shadow.source_mode == "flicky-content" else None)
+            except ValueError as exc:  # every kit refusal is a ValueError
+                entry.update(status="failed", reason=str(exc))
+                continue
+            built = (project.parent / report["artifact"]["path"]).read_bytes()
+            original = (copy / revision.rom).read_bytes()
+            if built != original:
+                entry.update(status="failed", reason="a build with no edits differs from the ROM")
+                continue
+            entry.update(status="ok", documents=len(_documents(shadow, revision)), size=len(built))
+    failed = [entry["revision"] for entry in results if entry["status"] != "ok"]
+    return {"schema": "retrolarium.game-check", "game": {"id": descriptor.id, "name": descriptor.name},
+            "profile": descriptor.profile, "status": "failed" if failed else "ok", "revisions": results}
 
 
 def _prepare_flicky(descriptor: GameDescriptor, revision: Revision, rom: Path, original: Path) -> list[str]:

@@ -93,7 +93,7 @@ def main() -> int:
     parser.add_argument("--native-writer", type=Path, required=True)
     parser.add_argument("--native-editor", type=Path, required=True)
     args = parser.parse_args()
-    scratch = Path(__file__).resolve().parents[1] / "build"
+    scratch = Path(__file__).resolve().parents[2] / "build"
     scratch.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="flicky-native-codec-", dir=scratch) as name:
         project = Path(name)
@@ -153,7 +153,7 @@ def main() -> int:
         no_writer_environment["PATH"] = str(Path(sys.executable).parent)
         missing_writer = subprocess.run([
             sys.executable,
-            str(Path(__file__).resolve().parents[1] / "rltool.py"),
+            str(Path(__file__).resolve().parents[2] / "rltool.py"),
             "studio", "build", str(project / "flicky-ue.rlj"),
         ], cwd=project, env=no_writer_environment,
             capture_output=True, text=True)
@@ -162,7 +162,7 @@ def main() -> int:
             "Kit silently fell back to the Python level writer"
         zero_cli = subprocess.run([
             sys.executable,
-            str(Path(__file__).resolve().parents[1] / "rltool.py"),
+            str(Path(__file__).resolve().parents[2] / "rltool.py"),
             "studio", "build", str(project / "flicky-ue.rlj"),
             "--flicky-level-writer", str(args.native_writer.resolve()),
         ], cwd=project, env=cli_environment, capture_output=True, text=True,

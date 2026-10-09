@@ -10,8 +10,8 @@ import tempfile
 from typing import Any, Sequence
 
 from retrolarium_kit.core.authoring import AuthoringError, GameProfile, Registry, RevisionSpec
-from retrolarium_kit.games.castle.rooms import (
-    CastleLevelDocument,
+from retrolarium_kit.games.castle_excellent.rooms import (
+    CastleExcellentLevelDocument,
     LEVEL_DOCUMENT_SCHEMA,
     build_levels,
     decode_levels,
@@ -81,21 +81,21 @@ from retrolarium_kit.games.solomon.presentation import (
     decode_presentation as decode_solomon_presentation,
     parse_presentation_document as parse_solomon_presentation_document,
 )
-from retrolarium_kit.games.castle.screens import (
-    CODEC as CASTLE_SCREENS_CODEC,
-    SCHEMA as CASTLE_SCREENS_SCHEMA,
-    CastleScreensDocument,
-    build_screens as build_castle_screens,
-    decode_screens as decode_castle_screens,
-    parse_screens_document as parse_castle_screens_document,
+from retrolarium_kit.games.castle_excellent.screens import (
+    CODEC as CASTLE_EXCELLENT_SCREENS_CODEC,
+    SCHEMA as CASTLE_EXCELLENT_SCREENS_SCHEMA,
+    CastleExcellentScreensDocument,
+    build_screens as build_castle_excellent_screens,
+    decode_screens as decode_castle_excellent_screens,
+    parse_screens_document as parse_castle_excellent_screens_document,
 )
-from retrolarium_kit.games.castle.demo import (
-    CODEC as CASTLE_DEMO_CODEC,
-    SCHEMA as CASTLE_DEMO_SCHEMA,
-    CastleDemoDocument,
-    build_demo as build_castle_demo,
-    decode_demo as decode_castle_demo,
-    parse_demo_document as parse_castle_demo_document,
+from retrolarium_kit.games.castle_excellent.demo import (
+    CODEC as CASTLE_EXCELLENT_DEMO_CODEC,
+    SCHEMA as CASTLE_EXCELLENT_DEMO_SCHEMA,
+    CastleExcellentDemoDocument,
+    build_demo as build_castle_excellent_demo,
+    decode_demo as decode_castle_excellent_demo,
+    parse_demo_document as parse_castle_excellent_demo_document,
 )
 from retrolarium_kit.games.doraemon.demo import (
     CODEC as DORAEMON_DEMO_CODEC,
@@ -154,28 +154,28 @@ def _profiles(custom_profile: Path | None) -> tuple[GameProfile, ...]:
     return tuple(registry.get(identifier) for identifier in registry.identifiers())
 
 
-class _CastleAuthoringAdapter:
+class _CastleExcellentAuthoringAdapter:
     def decode(
         self, payload: bytes, profile: GameProfile, revision: RevisionSpec
-    ) -> CastleLevelDocument:
+    ) -> CastleExcellentLevelDocument:
         return decode_levels(payload, profile, revision)
 
     def parse(
         self, document: object, profile: GameProfile, revision: RevisionSpec
-    ) -> CastleLevelDocument:
+    ) -> CastleExcellentLevelDocument:
         return parse_level_document(document, profile, revision)
 
     def build(
         self,
         payload: bytes,
-        document: CastleLevelDocument,
+        document: CastleExcellentLevelDocument,
         profile: GameProfile,
         revision: RevisionSpec,
     ) -> tuple[bytes, dict[str, object]]:
         return build_levels(payload, document, profile, revision)
 
     @staticmethod
-    def details(document: CastleLevelDocument) -> dict[str, int]:
+    def details(document: CastleExcellentLevelDocument) -> dict[str, int]:
         return {
             "rooms": len(document.rooms),
             "objects": sum(len(room) for room in document.objects),
@@ -422,29 +422,29 @@ class _SmbDemoAuthoringAdapter:
     document_schema = SMB_DEMO_SCHEMA
 
 
-class _CastleDemoAuthoringAdapter:
+class _CastleExcellentDemoAuthoringAdapter:
     def decode(
         self, payload: bytes, profile: GameProfile, revision: RevisionSpec
-    ) -> CastleDemoDocument:
-        return decode_castle_demo(payload, profile, revision)
+    ) -> CastleExcellentDemoDocument:
+        return decode_castle_excellent_demo(payload, profile, revision)
 
     def parse(
         self, document: object, profile: GameProfile, revision: RevisionSpec
-    ) -> CastleDemoDocument:
-        return parse_castle_demo_document(document, profile, revision)
+    ) -> CastleExcellentDemoDocument:
+        return parse_castle_excellent_demo_document(document, profile, revision)
 
     def build(
-        self, payload: bytes, document: CastleDemoDocument,
+        self, payload: bytes, document: CastleExcellentDemoDocument,
         profile: GameProfile, revision: RevisionSpec,
     ) -> tuple[bytes, dict[str, object]]:
-        return build_castle_demo(payload, document, profile, revision)
+        return build_castle_excellent_demo(payload, document, profile, revision)
 
     @staticmethod
-    def details(document: CastleDemoDocument) -> dict[str, int]:
+    def details(document: CastleExcellentDemoDocument) -> dict[str, int]:
         return {"steps": len(document.steps)}
 
     resource_id = "title-demo"
-    document_schema = CASTLE_DEMO_SCHEMA
+    document_schema = CASTLE_EXCELLENT_DEMO_SCHEMA
 
 
 class _DoraemonDemoAuthoringAdapter:
@@ -547,29 +547,29 @@ class _PacmanDemoAuthoringAdapter:
     document_schema = PACMAN_DEMO_SCHEMA
 
 
-class _CastleScreensAuthoringAdapter:
+class _CastleExcellentScreensAuthoringAdapter:
     def decode(
         self, payload: bytes, profile: GameProfile, revision: RevisionSpec
-    ) -> CastleScreensDocument:
-        return decode_castle_screens(payload, profile, revision)
+    ) -> CastleExcellentScreensDocument:
+        return decode_castle_excellent_screens(payload, profile, revision)
 
     def parse(
         self, document: object, profile: GameProfile, revision: RevisionSpec
-    ) -> CastleScreensDocument:
-        return parse_castle_screens_document(document, profile, revision)
+    ) -> CastleExcellentScreensDocument:
+        return parse_castle_excellent_screens_document(document, profile, revision)
 
     def build(
-        self, payload: bytes, document: CastleScreensDocument,
+        self, payload: bytes, document: CastleExcellentScreensDocument,
         profile: GameProfile, revision: RevisionSpec,
     ) -> tuple[bytes, dict[str, object]]:
-        return build_castle_screens(payload, document, profile, revision)
+        return build_castle_excellent_screens(payload, document, profile, revision)
 
     @staticmethod
-    def details(document: CastleScreensDocument) -> dict[str, int]:
+    def details(document: CastleExcellentScreensDocument) -> dict[str, int]:
         return {"screens": len(document.screens)}
 
     resource_id = "screens"
-    document_schema = CASTLE_SCREENS_SCHEMA
+    document_schema = CASTLE_EXCELLENT_SCREENS_SCHEMA
 
 
 class _SolomonTextAuthoringAdapter:
@@ -602,7 +602,7 @@ class _SolomonTextAuthoringAdapter:
 
 def authoring_adapters() -> Registry[object]:
     registry: Registry[object] = Registry("authoring adapter")
-    registry.register("castle.prefix-rooms.v1", _CastleAuthoringAdapter())
+    registry.register("castle-excellent.prefix-rooms.v1", _CastleExcellentAuthoringAdapter())
     registry.register(NES_RESOURCE_ADAPTER_CODEC, _NesResourceAuthoringAdapter())
     registry.register(SOLOMON_BLOCK_CODEC, _SolomonRoomAuthoringAdapter())
     registry.register(SOLOMON_ROOM_ART_CODEC, _SolomonRoomArtAuthoringAdapter())
@@ -614,8 +614,8 @@ def authoring_adapters() -> Registry[object]:
     )
     registry.register(SOLOMON_TEXT_CODEC, _SolomonTextAuthoringAdapter())
     registry.register(SMB_DEMO_CODEC, _SmbDemoAuthoringAdapter())
-    registry.register(CASTLE_DEMO_CODEC, _CastleDemoAuthoringAdapter())
-    registry.register(CASTLE_SCREENS_CODEC, _CastleScreensAuthoringAdapter())
+    registry.register(CASTLE_EXCELLENT_DEMO_CODEC, _CastleExcellentDemoAuthoringAdapter())
+    registry.register(CASTLE_EXCELLENT_SCREENS_CODEC, _CastleExcellentScreensAuthoringAdapter())
     registry.register(PACMAN_DEMO_CODEC, _PacmanDemoAuthoringAdapter())
     registry.register(DORAEMON_TEXT_CODEC, _DoraemonTextAuthoringAdapter())
     registry.register(DORAEMON_MUSIC_CODEC, _DoraemonMusicAuthoringAdapter())

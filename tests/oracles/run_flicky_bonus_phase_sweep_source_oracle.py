@@ -64,7 +64,7 @@ def main() -> int:
         args.diagnostics_dir.mkdir(parents=True, exist_ok=True)
 
     os.environ["RETROLARIUM_FLICKY_LEVEL_WRITER"] = str(args.native_writer.resolve())
-    scratch = Path(__file__).resolve().parents[1] / "build"
+    scratch = Path(__file__).resolve().parents[2] / "build"
     scratch.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="flicky-bonus-sweep-", dir=scratch) as name:
         root = Path(name)

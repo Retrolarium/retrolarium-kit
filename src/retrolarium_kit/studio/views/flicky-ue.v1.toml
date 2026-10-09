@@ -1,16 +1,7 @@
-schema = "retrolarium.project"
-schema_version = 1
-
-[project]
-id = "flicky-ue"
-name = "Flicky (UE)"
-platform = "megadrive"
-profile = "flicky-ue.v1"
-source_mode = "flicky-content"
-
-[source]
-manifest = "flicky-source/config/authoring/content_studios.json"
-sha256 = "4df1a91e08376ae773a6eb8e5abe310f94ca39d8f81583b91a9477fedcb68c11"
+# Retrolarium Studio views for the flicky-ue.v1 profile (Flicky).
+# The kit writes these into every project it prepares from a game
+# repository's descriptor; documents are relative to hack/<revision>/
+# (Flicky: to its source snapshot).
 
 [workspace]
 layout = "two-row"
@@ -22,7 +13,7 @@ title = "Levels"
 kind = "flicky.levels"
 group = "content"
 codec = "flicky.levels.v1"
-document = "flicky-source/content/workspace/level/levels.json"
+document = "content/workspace/level/levels.json"
 capabilities = ["paint", "edit", "preview", "playtest", "navigate", "undo", "restore"]
 depends_on = ["graphics", "semantics", "animations"]
 
@@ -32,16 +23,26 @@ title = "Graphics"
 kind = "flicky.graphics"
 group = "assets"
 codec = "flicky.graphics.v1"
-document = "flicky-source/content/workspace/graphics/graphics.json"
+document = "content/workspace/graphics/graphics.json"
 capabilities = ["paint", "navigate", "undo", "restore"]
+depends_on = ["semantics"]
 
 [[workspace.tabs]]
 id = "semantics"
-title = "Palettes & Text"
+title = "Palettes"
 kind = "flicky.semantics"
 group = "assets"
 codec = "flicky.semantics.v1"
-document = "flicky-source/content/workspace/graphics/semantics.json"
+document = "content/workspace/graphics/semantics.json"
+capabilities = ["edit", "navigate", "undo", "restore"]
+
+[[workspace.tabs]]
+id = "text"
+title = "Text"
+kind = "flicky.semantics"
+group = "content"
+document = "content/workspace/graphics/semantics.json"
+codec = "flicky.semantics.v1"
 capabilities = ["edit", "navigate", "undo", "restore"]
 
 [[workspace.tabs]]
@@ -50,7 +51,7 @@ title = "Animations"
 kind = "flicky.animations"
 group = "assets"
 codec = "flicky.animations.v1"
-document = "flicky-source/content/workspace/graphics/sequences.json"
+document = "content/workspace/graphics/sequences.json"
 capabilities = ["edit", "navigate", "undo", "restore"]
 
 [[workspace.tabs]]
@@ -59,11 +60,5 @@ title = "Music & Sound"
 kind = "flicky.sound"
 group = "content"
 codec = "flicky.sound.v1"
-document = "flicky-source/content/workspace/sound/z80_sound_data.asm"
+document = "content/workspace/sound/z80_sound_data.asm"
 capabilities = ["edit", "preview", "navigate", "undo", "restore"]
-
-[operations]
-validate = "project.validate"
-build = "project.build"
-verify = "project.verify"
-launch = "project.launch"

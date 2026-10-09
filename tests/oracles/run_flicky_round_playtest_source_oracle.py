@@ -357,7 +357,7 @@ def main() -> int:
                                  for round_number in args.audit_rounds):
         parser.error("--audit-rounds values must be in 1..48")
     os.environ["RETROLARIUM_FLICKY_LEVEL_WRITER"] = str(args.native_writer.resolve())
-    scratch = Path(__file__).resolve().parents[1] / "build"
+    scratch = Path(__file__).resolve().parents[2] / "build"
     scratch.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="flicky-round-gate-", dir=scratch) as name:
         root = Path(name)

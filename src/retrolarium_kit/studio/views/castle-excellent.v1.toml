@@ -1,0 +1,111 @@
+# Retrolarium Studio views for the castle-excellent.v1 profile (Castle Excellent / Castlequest).
+# The kit writes these into every project it prepares from a game
+# repository's descriptor; documents are relative to hack/<revision>/
+
+[workspace]
+layout = "auto"
+startup_tab = "rooms"
+
+[[workspace.tabs]]
+id = "rooms"
+title = "Rooms & Objects"
+kind = "castle-excellent.rooms"
+group = "content"
+document = "levels.json"
+resource = "levels"
+codec = "castle-excellent.prefix-rooms@1"
+capabilities = ["edit", "preview", "playtest", "restore", "undo"]
+depends_on = ["room-cells", "graphics", "palettes"]
+
+[[workspace.tabs]]
+id = "music-sounds"
+title = "Music & Sounds"
+kind = "castle-excellent.mml-music"
+group = "content"
+document = "graphics.json"
+resource = "resource-bundle"
+codec = "castle-excellent.mml-music.v1"
+capabilities = ["edit", "piano-roll", "wav-preview", "restore", "undo"]
+
+[[workspace.tabs]]
+id = "sfx-parameters"
+title = "SFX Parameters"
+kind = "data.fixed-byte-records"
+group = "content"
+document = "graphics.json"
+resource = "resource-bundle"
+codec = "castle-excellent.sfx-parameters.v1"
+capabilities = ["edit", "restore", "undo"]
+
+[[workspace.tabs]]
+id = "screens-text"
+title = "Screens & Text"
+kind = "data.fixed-byte-records"
+group = "content"
+document = "graphics.json"
+resource = "resource-bundle"
+codec = "castle-excellent.sub-command-text.v1"
+capabilities = ["edit", "restore", "undo"]
+
+[[workspace.tabs]]
+id = "graphics"
+title = "Graphics"
+kind = "graphics.tile-set"
+group = "assets"
+document = "graphics.json"
+resource = "resource-bundle"
+codec = "nes.chr-2bpp.v1"
+capabilities = ["pixel-paint", "restore", "undo"]
+depends_on = ["palettes"]
+
+[[workspace.tabs]]
+id = "room-cells"
+title = "Room Cells"
+kind = "castle-excellent.room-cells"
+group = "assets"
+document = "graphics.json"
+resource = "resource-bundle"
+codec = "castle-excellent.room-cell-visuals.v1"
+capabilities = ["edit", "preview", "restore", "undo"]
+depends_on = ["graphics", "palettes"]
+
+[[workspace.tabs]]
+id = "palettes"
+title = "Palettes"
+kind = "palette.set"
+group = "assets"
+document = "graphics.json"
+resource = "resource-bundle"
+codec = "nes.palette-table.v1"
+capabilities = ["paint", "preview", "undo"]
+
+[[workspace.tabs]]
+id = "animations"
+title = "Animations & Mappings"
+kind = "castle-excellent.metasprites"
+group = "assets"
+document = "graphics.json"
+resource = "resource-bundle"
+codec = "castle-excellent.metasprite-descriptors.v1"
+capabilities = ["edit", "preview", "restore", "undo"]
+depends_on = ["graphics", "palettes"]
+
+[[workspace.tabs]]
+id = "demo"
+title = "Demo"
+kind = "castle-excellent.demo"
+group = "content"
+document = "demo.json"
+resource = "title-demo"
+codec = "castle-excellent.demo@1"
+capabilities = ["edit", "preview", "restore", "undo"]
+
+[[workspace.tabs]]
+id = "screens"
+title = "Screens"
+kind = "castle-excellent.screens"
+group = "content"
+document = "screens.json"
+resource = "screens"
+codec = "castle-excellent.screens@1"
+capabilities = ["edit", "preview", "restore", "undo"]

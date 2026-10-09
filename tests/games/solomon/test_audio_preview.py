@@ -8,7 +8,7 @@ import unittest
 import wave
 
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from retrolarium_kit.core.authoring import AuthoringError
 from retrolarium_kit.games.solomon.audio_preview import render_solomon_wav, trace_effect

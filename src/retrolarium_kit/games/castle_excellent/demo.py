@@ -22,8 +22,8 @@ from retrolarium_kit.core.authoring import (
 from retrolarium_core.ines import parse_ines
 
 
-CODEC = "castle.title-demo.v1"
-SCHEMA = "retrolarium.castle-demo"
+CODEC = "castle-excellent.title-demo.v1"
+SCHEMA = "retrolarium.castle-excellent-demo"
 VERSION = 1
 TERMINATOR = 0xFF
 COMMAND_FRAMES = 12
@@ -33,12 +33,12 @@ BUTTON_BITS = (
 FIELDS = ("script_cpu", "init_cpu", "reader_cpu", "capacity")
 
 
-class CastleDemoError(AuthoringError):
+class CastleExcellentDemoError(AuthoringError):
     """A demo document is invalid or does not fit the game's script."""
 
 
 @dataclass(frozen=True)
-class CastleDemoDocument:
+class CastleExcellentDemoDocument:
     game_id: str
     revision_id: str
     source_sha256: str
@@ -63,28 +63,28 @@ def _layout(profile: GameProfile, revision: RevisionSpec) -> dict[str, int]:
         resource for resource in profile.resources_for(revision) if resource.codec == CODEC
     ]
     if len(resources) != 1:
-        raise CastleDemoError("Castle profile needs one title demo resource")
+        raise CastleExcellentDemoError("Castle Excellent profile needs one title demo resource")
     parameters = resources[0].parameters
     if any(type(parameters.get(name)) is not int for name in FIELDS):
-        raise CastleDemoError("title demo resource needs its addresses and capacity")
+        raise CastleExcellentDemoError("title demo resource needs its addresses and capacity")
     layout = {name: parameters[name] for name in FIELDS}
     if not 1 <= layout["capacity"] <= 255:
-        raise CastleDemoError("title demo capacity is outside 1-255")
+        raise CastleExcellentDemoError("title demo capacity is outside 1-255")
     return layout
 
 
 def _source(source: bytes, revision: RevisionSpec, *, verify: bool = True):
     if verify and hashlib.sha256(source).hexdigest() != revision.sha256:
-        raise CastleDemoError("demo source identity mismatch")
+        raise CastleExcellentDemoError("demo source identity mismatch")
     image = parse_ines(source)
     if len(image.prg) != 0x8000:
-        raise CastleDemoError("Castle demo needs 32 KiB PRG")
+        raise CastleExcellentDemoError("Castle Excellent demo needs 32 KiB PRG")
     return image
 
 
 def _read(prg: bytes, address: int, count: int) -> bytes:
     if not 0x8000 <= address <= 0x10000 - count:
-        raise CastleDemoError("demo range escapes PRG")
+        raise CastleExcellentDemoError("demo range escapes PRG")
     return prg[address - 0x8000:address - 0x8000 + count]
 
 
@@ -94,7 +94,7 @@ def _check_engine(prg: bytes, layout: Mapping[str, int]) -> None:
     # INC $FF / LDA $FF / CMP #12.
     if _read(prg, layout["init_cpu"], 8) != bytes((0xA9, script & 0xFF, 0x85, 0xFD, 0xA9, script >> 8, 0x85, 0xFE)) \
             or _read(prg, layout["reader_cpu"], 6) != bytes((0xE6, 0xFF, 0xA5, 0xFF, 0xC9, COMMAND_FRAMES)):
-        raise CastleDemoError("the demo engine reads another script than the profile names")
+        raise CastleExcellentDemoError("the demo engine reads another script than the profile names")
 
 
 def _mask(buttons: list[str]) -> int:
@@ -104,17 +104,17 @@ def _mask(buttons: list[str]) -> int:
 def decode_demo(
     source: bytes, profile: GameProfile, revision: RevisionSpec,
     *, _verify_identity: bool = True,
-) -> CastleDemoDocument:
+) -> CastleExcellentDemoDocument:
     layout = _layout(profile, revision)
     prg = _source(source, revision, verify=_verify_identity).prg
     _check_engine(prg, layout)
     script = _read(prg, layout["script_cpu"], layout["capacity"] + 1)
     if TERMINATOR not in script:
-        raise CastleDemoError("the demo script runs past its capacity")
+        raise CastleExcellentDemoError("the demo script runs past its capacity")
     commands = script[:script.index(TERMINATOR)]
     known = sum(bit for bit, _name in BUTTON_BITS)
     if not commands or any(command & ~known for command in commands):
-        raise CastleDemoError("the demo script holds commands the editor cannot name")
+        raise CastleExcellentDemoError("the demo script holds commands the editor cannot name")
     steps: list[dict[str, Any]] = []
     for command in commands:
         names = [name for bit, name in BUTTON_BITS if command & bit]
@@ -122,7 +122,7 @@ def decode_demo(
             steps[-1]["commands"] += 1
         else:
             steps.append({"index": len(steps), "commands": 1, "buttons": names})
-    result = CastleDemoDocument(profile.game_id, revision.revision_id, revision.sha256, layout, tuple(steps))
+    result = CastleExcellentDemoDocument(profile.game_id, revision.revision_id, revision.sha256, layout, tuple(steps))
     _encode(result.as_dict(), layout)
     return result
 
@@ -130,43 +130,43 @@ def decode_demo(
 def _encode(value: Mapping[str, Any], layout: Mapping[str, int]) -> bytes:
     """The script's commands and its terminator."""
     if value.get("layout") != dict(layout):
-        raise CastleDemoError("demo layout differs from profile")
+        raise CastleExcellentDemoError("demo layout differs from profile")
     steps = value.get("steps")
     capacity = layout["capacity"]
     if not isinstance(steps, list) or not steps:
-        raise CastleDemoError("the demo needs at least one step")
+        raise CastleExcellentDemoError("the demo needs at least one step")
     names = [name for _bit, name in BUTTON_BITS]
     script = bytearray()
     for index, step in enumerate(steps):
         if not isinstance(step, Mapping) or set(step) != {"index", "commands", "buttons"} \
                 or step["index"] != index:
-            raise CastleDemoError("demo step fields or indices differ")
+            raise CastleExcellentDemoError("demo step fields or indices differ")
         commands = step["commands"]
         if type(commands) is not int or not 1 <= commands <= capacity:
-            raise CastleDemoError(f"demo step {index + 1} holds 1-{capacity} commands")
+            raise CastleExcellentDemoError(f"demo step {index + 1} holds 1-{capacity} commands")
         buttons = step["buttons"]
         if not isinstance(buttons, list) or buttons != [name for name in names if name in buttons]:
-            raise CastleDemoError("demo buttons are unknown or unordered")
+            raise CastleExcellentDemoError("demo buttons are unknown or unordered")
         script += bytes((_mask(buttons),)) * commands
     if len(script) > capacity:
-        raise CastleDemoError(f"the demo holds {capacity} commands of 12 frames; this one has {len(script)}")
+        raise CastleExcellentDemoError(f"the demo holds {capacity} commands of 12 frames; this one has {len(script)}")
     return bytes(script) + bytes((TERMINATOR,))
 
 
-def parse_demo_document(value: object, profile: GameProfile, revision: RevisionSpec) -> CastleDemoDocument:
+def parse_demo_document(value: object, profile: GameProfile, revision: RevisionSpec) -> CastleExcellentDemoDocument:
     layout = _layout(profile, revision)
     if not isinstance(value, Mapping) or set(value) != {
         "schema", "schema_version", "game", "revision", "source_sha256", "layout", "steps",
     }:
-        raise CastleDemoError("demo document fields differ")
+        raise CastleExcellentDemoError("demo document fields differ")
     for key, expected in (
         ("schema", SCHEMA), ("schema_version", VERSION), ("game", profile.game_id),
         ("revision", revision.revision_id), ("source_sha256", revision.sha256),
     ):
         if value[key] != expected:
-            raise CastleDemoError(f"demo {key} differs from profile")
+            raise CastleExcellentDemoError(f"demo {key} differs from profile")
     _encode(value, layout)
-    return CastleDemoDocument(
+    return CastleExcellentDemoDocument(
         profile.game_id, revision.revision_id, revision.sha256, layout,
         tuple({"index": s["index"], "commands": s["commands"], "buttons": list(s["buttons"])}
               for s in value["steps"]),
@@ -174,7 +174,7 @@ def parse_demo_document(value: object, profile: GameProfile, revision: RevisionS
 
 
 def build_demo(
-    source: bytes, document: CastleDemoDocument, profile: GameProfile, revision: RevisionSpec,
+    source: bytes, document: CastleExcellentDemoDocument, profile: GameProfile, revision: RevisionSpec,
 ) -> tuple[bytes, dict[str, object]]:
     image = _source(source, revision)
     layout = _layout(profile, revision)
@@ -193,9 +193,9 @@ def build_demo(
     # Steps of equal buttons side by side decode as one; the commands match.
     rebuilt = decode_demo(output, profile, revision, _verify_identity=False)
     if _encode(rebuilt.as_dict(), layout) != script:
-        raise CastleDemoError("rebuilt demo does not decode to document")
+        raise CastleExcellentDemoError("rebuilt demo does not decode to document")
     return output, {
-        "schema": "retrolarium.castle-demo-build", "schema_version": 1,
+        "schema": "retrolarium.castle-excellent-demo-build", "schema_version": 1,
         "game": profile.game_id, "revision": revision.revision_id,
         "source_sha256": revision.sha256,
         "output_sha256": hashlib.sha256(output).hexdigest(),

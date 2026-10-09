@@ -7,7 +7,7 @@ and proven through exact rebuild, a real edit and MAME.
 
 Castle Excellent exercises compressed variable-size rooms, pointer repacking and
 coupled object/state tables. A second adapter is required to prove that the
-public authoring operations and `GameProfile` are not Castle-specific.
+public authoring operations and `GameProfile` are not Castle Excellent-specific.
 
 `nes.resource-bundle.v1` covers independently located, fixed-capacity NES
 resources. Its first profile is HonkeyPong, an MIT-licensed mapper-0 game built
@@ -47,9 +47,9 @@ requires the exact ordered resource set, game/revision/source identities,
 geometry, lengths and value ranges from the selected profile.
 
 The adapter creates one provenance-bearing `Change` per resource and composes
-them through the same common `BuildPlan` used by Castle. The source ROM remains
-immutable. The build report records total changed bytes and per-resource file
-offset, size and changed-byte count.
+them through the same common `BuildPlan` used by Castle Excellent. The source
+ROM remains immutable. The build report records total changed bytes and
+per-resource file offset, size and changed-byte count.
 
 Palette resources may replace a contiguous `file_offset`/`size` range with
 `replicated_file_offsets`. The latter contains one non-empty offset list per
@@ -86,14 +86,15 @@ MAME NES run with exit code zero and a hashed screenshot. Generated documents,
 ROMs, logs and screenshots remain ignored.
 
 The fixed-resource adapter also supports structured visual and animation codecs
-used by the SMB and Castle profiles:
+used by the SMB and Castle Excellent profiles:
 
 - `nes.metatile-2x2.v1` stores named groups of fixed four-tile records and a CHR
   tile base. Record order is preserved exactly for lossless rebuilding;
-- `castle.room-cell-visuals.v1` stores the 100 horizontal left/right tile pairs
-  and their two-bit palette choices. The palette value is written back to
-  Castle's replicated attribute bytes (`00`, `55`, `AA`, `FF`), while the room
-  renderer preserves the engine's attribute-retaining cell semantics;
+- `castle-excellent.room-cell-visuals.v1` stores the 100 horizontal left/right
+  tile pairs and their two-bit palette choices. The palette value is written
+  back to Castle Excellent's replicated attribute bytes (`00`, `55`, `AA`,
+  `FF`), while the room renderer preserves the engine's attribute-retaining cell
+  semantics;
 - `nes.ppu-palette-packets.v1` stores named fixed-capacity PPU command packets,
   including address, orientation/repeat flags, NES color values and the
   profile's Day/Night universal background colors;

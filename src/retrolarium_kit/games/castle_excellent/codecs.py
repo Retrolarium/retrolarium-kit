@@ -6,10 +6,10 @@ from __future__ import annotations
 from typing import Any, Mapping, Sequence
 
 from retrolarium_kit.core.authoring import AuthoringError, ResourceSpec
-from retrolarium_kit.games.castle.mml import (
-    CODEC as CASTLE_MML_MUSIC_CODEC,
-    decode_music as decode_castle_mml_music,
-    encode_music as encode_castle_mml_music,
+from retrolarium_kit.games.castle_excellent.mml import (
+    CODEC as CASTLE_EXCELLENT_MML_MUSIC_CODEC,
+    decode_music as decode_castle_excellent_mml_music,
+    encode_music as encode_castle_excellent_mml_music,
 )
 from retrolarium_kit.platform.nes.resources import (
     Encoded,
@@ -23,12 +23,12 @@ from retrolarium_kit.platform.nes.resources import (
     register_counters,
 )
 
-CASTLE_ROOM_CELL_CODEC = "castle.room-cell-visuals.v1"
-CASTLE_METASPRITE_CODEC = "castle.metasprite-descriptors.v1"
-CASTLE_SUB_COMMAND_TEXT_CODEC = "castle.sub-command-text.v1"
-CASTLE_SFX_PARAMETERS_CODEC = "castle.sfx-parameters.v1"
-CASTLE_FIXED_RECORD_CODECS = (
-    CASTLE_SUB_COMMAND_TEXT_CODEC, CASTLE_SFX_PARAMETERS_CODEC
+CASTLE_EXCELLENT_ROOM_CELL_CODEC = "castle-excellent.room-cell-visuals.v1"
+CASTLE_EXCELLENT_METASPRITE_CODEC = "castle-excellent.metasprite-descriptors.v1"
+CASTLE_EXCELLENT_SUB_COMMAND_TEXT_CODEC = "castle-excellent.sub-command-text.v1"
+CASTLE_EXCELLENT_SFX_PARAMETERS_CODEC = "castle-excellent.sfx-parameters.v1"
+CASTLE_EXCELLENT_FIXED_RECORD_CODECS = (
+    CASTLE_EXCELLENT_SUB_COMMAND_TEXT_CODEC, CASTLE_EXCELLENT_SFX_PARAMETERS_CODEC
 )
 
 
@@ -261,7 +261,7 @@ def _parse_fixed_records(raw: dict[str, Any], spec: ResourceSpec) -> Encoded:
 
 def _decode_mml_music(image: bytes, resource: ResourceSpec) -> dict[str, object]:
     try:
-        decoded = decode_castle_mml_music(image, resource.parameters)
+        decoded = decode_castle_excellent_mml_music(image, resource.parameters)
     except AuthoringError as exc:
         raise NesResourceError(str(exc)) from exc
     return {
@@ -283,7 +283,7 @@ def _parse_mml_music(raw: dict[str, Any], spec: ResourceSpec) -> Encoded:
     try:
         encoded_spans = tuple(
             _EncodedSpan(offset, replacement)
-            for offset, replacement in encode_castle_mml_music(
+            for offset, replacement in encode_castle_excellent_mml_music(
                 {
                     key: raw.get(key)
                     for key in expected_fields - {"id", "kind", "codec"}
@@ -301,23 +301,23 @@ def _counters(resources: Sequence[Mapping[str, Any]]) -> dict[str, int]:
         return [item for item in resources if item.get("codec") in codecs]
 
     return {
-        "room_cells": sum(len(item.get("records", [])) for item in of(CASTLE_ROOM_CELL_CODEC)),
+        "room_cells": sum(len(item.get("records", [])) for item in of(CASTLE_EXCELLENT_ROOM_CELL_CODEC)),
         "metasprite_descriptors": sum(
-            len(item.get("descriptors", [])) for item in of(CASTLE_METASPRITE_CODEC)),
+            len(item.get("descriptors", [])) for item in of(CASTLE_EXCELLENT_METASPRITE_CODEC)),
         "fixed_byte_records": sum(
-            len(item.get("records", [])) for item in of(*CASTLE_FIXED_RECORD_CODECS)),
+            len(item.get("records", [])) for item in of(*CASTLE_EXCELLENT_FIXED_RECORD_CODECS)),
         "fixed_byte_values": sum(
             len(record.get("values", []))
-            for item in of(*CASTLE_FIXED_RECORD_CODECS) for record in item.get("records", [])),
-        "castle_music_tracks": sum(len(item.get("track_sets", [])) for item in of(CASTLE_MML_MUSIC_CODEC)),
-        "castle_mml_streams": sum(len(item.get("streams", [])) for item in of(CASTLE_MML_MUSIC_CODEC)),
-        "castle_mml_used_bytes": sum(int(item.get("used_bytes", 0)) for item in of(CASTLE_MML_MUSIC_CODEC)),
+            for item in of(*CASTLE_EXCELLENT_FIXED_RECORD_CODECS) for record in item.get("records", [])),
+        "castle_excellent_music_tracks": sum(len(item.get("track_sets", [])) for item in of(CASTLE_EXCELLENT_MML_MUSIC_CODEC)),
+        "castle_excellent_mml_streams": sum(len(item.get("streams", [])) for item in of(CASTLE_EXCELLENT_MML_MUSIC_CODEC)),
+        "castle_excellent_mml_used_bytes": sum(int(item.get("used_bytes", 0)) for item in of(CASTLE_EXCELLENT_MML_MUSIC_CODEC)),
     }
 
 
-register(NesCodec(CASTLE_ROOM_CELL_CODEC, decode=_decode_room_cell, parse=_parse_room_cell))
-register(NesCodec(CASTLE_METASPRITE_CODEC, decode=_decode_metasprite, parse=_parse_metasprite))
-register(NesCodec(CASTLE_SUB_COMMAND_TEXT_CODEC, decode=_decode_fixed_records, parse=_parse_fixed_records))
-register(NesCodec(CASTLE_SFX_PARAMETERS_CODEC, decode=_decode_fixed_records, parse=_parse_fixed_records))
-register(NesCodec(CASTLE_MML_MUSIC_CODEC, decode=_decode_mml_music, parse=_parse_mml_music))
+register(NesCodec(CASTLE_EXCELLENT_ROOM_CELL_CODEC, decode=_decode_room_cell, parse=_parse_room_cell))
+register(NesCodec(CASTLE_EXCELLENT_METASPRITE_CODEC, decode=_decode_metasprite, parse=_parse_metasprite))
+register(NesCodec(CASTLE_EXCELLENT_SUB_COMMAND_TEXT_CODEC, decode=_decode_fixed_records, parse=_parse_fixed_records))
+register(NesCodec(CASTLE_EXCELLENT_SFX_PARAMETERS_CODEC, decode=_decode_fixed_records, parse=_parse_fixed_records))
+register(NesCodec(CASTLE_EXCELLENT_MML_MUSIC_CODEC, decode=_decode_mml_music, parse=_parse_mml_music))
 register_counters(_counters)

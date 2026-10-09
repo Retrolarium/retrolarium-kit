@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import patch
 
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from retrolarium_kit.core.authoring import (
     AuthoringError,
@@ -193,7 +193,7 @@ def write_profile(path: Path, profile: GameProfile) -> None:
 
 
 class NesResourceTests(unittest.TestCase):
-    def test_castle_fixed_text_and_sfx_records_round_trip(self) -> None:
+    def test_castle_excellent_fixed_text_and_sfx_records_round_trip(self) -> None:
         source = bytearray(fixture_image())
         source[0x200:0x20A] = bytes(range(10))
         source[0x220:0x228] = bytes(range(0x20, 0x28))
@@ -205,7 +205,7 @@ class NesResourceTests(unittest.TestCase):
             sha256=hashlib.sha256(image).hexdigest(),
         )
         text = ResourceSpec(
-            "sub-command-text", "text", "castle.sub-command-text.v1", "fixed", {
+            "sub-command-text", "text", "castle-excellent.sub-command-text.v1", "fixed", {
                 "file_offset": 0x200,
                 "size": 10,
                 "record_names": ["title", "load"],
@@ -214,7 +214,7 @@ class NesResourceTests(unittest.TestCase):
         )
         sfx = ResourceSpec(
             "sfx-parameters", "audio-parameter",
-            "castle.sfx-parameters.v1", "fixed", {
+            "castle-excellent.sfx-parameters.v1", "fixed", {
                 "file_offset": 0x220,
                 "size": 8,
                 "record_names": ["triangle", "noise"],
@@ -256,7 +256,7 @@ class NesResourceTests(unittest.TestCase):
         with self.assertRaisesRegex(NesResourceError, "must contain 6 bytes"):
             parse_resource_document(invalid, profile, revision)
 
-    def test_castle_metasprites_round_trip_tile_and_oam_attributes(self) -> None:
+    def test_castle_excellent_metasprites_round_trip_tile_and_oam_attributes(self) -> None:
         source = bytearray(fixture_image())
         source[0x180:0x188] = bytes((0x10, 0x00, 0x12, 0x40,
                                              0x14, 0x81, 0x16, 0xC3))
@@ -269,7 +269,7 @@ class NesResourceTests(unittest.TestCase):
         )
         metasprites = ResourceSpec(
             "metasprite-descriptors", "animation",
-            "castle.metasprite-descriptors.v1", "fixed", {
+            "castle-excellent.metasprite-descriptors.v1", "fixed", {
                 "file_offset": 0x180,
                 "size": 8,
                 "descriptor_count": 4,
@@ -305,7 +305,7 @@ class NesResourceTests(unittest.TestCase):
         self.assertEqual(rebuilt[0x184:0x186], bytes((0x2A, 0xC2)))
         self.assertEqual(report["changed_bytes"], 2)
 
-    def test_castle_room_cells_round_trip_and_edit_three_rom_tables(self) -> None:
+    def test_castle_excellent_room_cells_round_trip_and_edit_three_rom_tables(self) -> None:
         source = bytearray(fixture_image())
         source[0x100:0x104] = bytes((1, 2, 3, 4))
         source[0x110:0x114] = bytes((5, 6, 7, 8))
@@ -318,7 +318,7 @@ class NesResourceTests(unittest.TestCase):
             sha256=hashlib.sha256(image).hexdigest(),
         )
         room_cells = ResourceSpec(
-            "room-cell-visuals", "metatile", "castle.room-cell-visuals.v1",
+            "room-cell-visuals", "metatile", "castle-excellent.room-cell-visuals.v1",
             "fixed", {
                 "cell_count": 4,
                 "left_file_offset": 0x100,
@@ -377,7 +377,7 @@ class NesResourceTests(unittest.TestCase):
             base,
             resources=(
                 ResourceSpec(
-                    "rooms", "room-collection", "castle.prefix-rooms.v1", "fixed"
+                    "rooms", "room-collection", "castle-excellent.prefix-rooms.v1", "fixed"
                 ),
                 marker,
                 *base.resources[1:],

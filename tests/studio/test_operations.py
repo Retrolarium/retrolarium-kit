@@ -16,7 +16,7 @@ from retrolarium_kit.studio.playtest import (
     _fds_file_blob,
     _fds_program_at,
     _smb_object_pages,
-    studio_castle_point_playtest_plan,
+    studio_castle_excellent_point_playtest_plan,
     studio_pacman_round_playtest_plan,
     studio_solomon_point_playtest_plan,
     studio_smb_point_playtest_plan,
@@ -198,16 +198,16 @@ class StudioOperationTests(unittest.TestCase):
             state = self.prepare(root)
             rooms = root / "documents/rooms.json"
             rooms.write_text(
-                '{"schema":"retrolarium.castle-levels"}', encoding="utf-8"
+                '{"schema":"retrolarium.castle-excellent-levels"}', encoding="utf-8"
             )
             state["workspace"]["tabs"].insert(0, {
                 "id": "rooms",
                 "title": "Rooms",
-                "kind": "castle.rooms",
+                "kind": "castle-excellent.rooms",
                 "group": "content",
                 "document": "documents/rooms.json",
                 "document_path": str(rooms.resolve()),
-                "codec": "castle.prefix-rooms@1",
+                "codec": "castle-excellent.prefix-rooms@1",
                 "capabilities": ["edit"],
                 "depends_on": [],
                 "enabled": True,
@@ -446,17 +446,17 @@ class StudioOperationTests(unittest.TestCase):
             with self.assertRaisesRegex(StudioProjectError, "no program file \\$40"):
                 _fds_file_blob(image, 0x40)
 
-    def test_castle_point_playtest_prepares_isolated_room_preview(self) -> None:
+    def test_castle_excellent_point_playtest_prepares_isolated_room_preview(self) -> None:
         for revision in ("castle-excellent-japan-hsp-05", "castlequest-usa"):
             with self.subTest(revision=revision), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 state = self.prepare(root)
                 state["project"]["profile"] = "castle-excellent.v1"
                 tab = state["workspace"]["tabs"][0]
-                tab["codec"] = "castle.prefix-rooms@1"
+                tab["codec"] = "castle-excellent.prefix-rooms@1"
                 tab["capabilities"] = ["edit", "playtest"]
                 (root / "documents/resources.json").write_text(json.dumps({
-                    "schema": "retrolarium.castle-levels",
+                    "schema": "retrolarium.castle-excellent-levels",
                     "schema_version": 1,
                     "game": "castle-excellent",
                     "revision": revision,
@@ -480,7 +480,7 @@ class StudioOperationTests(unittest.TestCase):
                     "retrolarium_kit.studio.playtest.verify_studio_project",
                     return_value=verification,
                 ):
-                    plan = studio_castle_point_playtest_plan(
+                    plan = studio_castle_excellent_point_playtest_plan(
                         root / "fixture.rlj", mame=mame, room=42, x=312, y=156,
                     )
                     preview = Path(plan["arguments"][2])
@@ -488,24 +488,24 @@ class StudioOperationTests(unittest.TestCase):
                     expected[0x22c2] = 42
                     self.assertEqual(bytes(expected), preview.read_bytes())
                     self.assertEqual(bytes(source), artifact.read_bytes())
-                    self.assertEqual("42", plan["environment"]["CASTLE_PLAYTEST_ROOM"])
-                    self.assertEqual("312", plan["environment"]["CASTLE_PLAYTEST_X"])
-                    self.assertEqual("156", plan["environment"]["CASTLE_PLAYTEST_Y"])
-                    self.assertEqual("retrolarium.studio.castle-point-playtest",
+                    self.assertEqual("42", plan["environment"]["CASTLE_EXCELLENT_PLAYTEST_ROOM"])
+                    self.assertEqual("312", plan["environment"]["CASTLE_EXCELLENT_PLAYTEST_X"])
+                    self.assertEqual("156", plan["environment"]["CASTLE_EXCELLENT_PLAYTEST_Y"])
+                    self.assertEqual("retrolarium.studio.castle-excellent-point-playtest",
                                      plan["operation"])
                     self.assertTrue(Path(plan["arguments"][-1]).is_file())
                     with self.assertRaisesRegex(StudioProjectError, "room must be"):
-                        studio_castle_point_playtest_plan(
+                        studio_castle_excellent_point_playtest_plan(
                             root / "fixture.rlj", mame=mame, room=101, x=0, y=0,
                         )
                     with self.assertRaisesRegex(StudioProjectError, "x must be"):
-                        studio_castle_point_playtest_plan(
+                        studio_castle_excellent_point_playtest_plan(
                             root / "fixture.rlj", mame=mame, room=1, x=320, y=0,
                         )
                     source[0x22c3] = 0
                     artifact.write_bytes(source)
                     with self.assertRaisesRegex(StudioProjectError, "guarded"):
-                        studio_castle_point_playtest_plan(
+                        studio_castle_excellent_point_playtest_plan(
                             root / "fixture.rlj", mame=mame, room=1, x=0, y=0,
                         )
 

@@ -7,9 +7,10 @@ import sys
 import unittest
 
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "retrolarium-core" / "python"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "retrolarium-core" / "python"))
 
+from helpers import fds_side as fixture
 from retrolarium_core.fds import (
     FdsError,
     fds_payload,
@@ -28,29 +29,6 @@ from retrolarium_kit.platform.nes.resources import (
     decode_resources,
     parse_resource_document,
 )
-
-
-def fixture() -> bytes:
-    image = bytearray(65_500)
-    image[0] = 1
-    image[56:58] = bytes((2, 2))
-    position = 58
-    for number, identifier, name, address, payload in (
-        (0, 3, b"SMMAIN3 ", 0x6000, b"AB"),
-        (1, 4, b"SMMAIN4 ", 0xA000, b"CDE"),
-    ):
-        header = bytearray(16)
-        header[0:3] = bytes((3, number, identifier))
-        header[3:11] = name
-        header[11:13] = address.to_bytes(2, "little")
-        header[13:15] = len(payload).to_bytes(2, "little")
-        image[position:position + 16] = header
-        position += 16
-        image[position] = 4
-        position += 1
-        image[position:position + len(payload)] = payload
-        position += len(payload)
-    return bytes(image)
 
 
 class FdsTests(unittest.TestCase):

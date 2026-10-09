@@ -21,8 +21,8 @@ from retrolarium_kit.core.authoring import (
 from retrolarium_core.ines import parse_ines
 
 
-CODEC = "castle.screens.v1"
-SCHEMA = "retrolarium.castle-screens"
+CODEC = "castle-excellent.screens.v1"
+SCHEMA = "retrolarium.castle-excellent-screens"
 VERSION = 1
 TILES = 960
 ATTRIBUTES = 64
@@ -30,12 +30,12 @@ PAGE = 256
 FIELDS = ("chr_file_offset", "pages", "page_names", "chr_banks", "game_over_cpu", "game_over_length")
 
 
-class CastleScreensError(AuthoringError):
+class CastleExcellentScreensError(AuthoringError):
     """A screens document is invalid or does not fit the game's pages."""
 
 
 @dataclass(frozen=True)
-class CastleScreensDocument:
+class CastleExcellentScreensDocument:
     game_id: str
     revision_id: str
     source_sha256: str
@@ -61,23 +61,23 @@ class CastleScreensDocument:
 def _layout(profile: GameProfile, revision: RevisionSpec) -> dict[str, Any]:
     resources = [r for r in profile.resources_for(revision) if r.codec == CODEC]
     if len(resources) != 1:
-        raise CastleScreensError("Castle profile needs one screens resource")
+        raise CastleExcellentScreensError("Castle Excellent profile needs one screens resource")
     parameters = resources[0].parameters
     if any(name not in parameters for name in FIELDS):
-        raise CastleScreensError("screens resource needs its pages and message")
+        raise CastleExcellentScreensError("screens resource needs its pages and message")
     layout = {name: parameters[name] for name in FIELDS}
     counts = {len(layout["pages"]), len(layout["page_names"]), len(layout["chr_banks"])}
     if len(counts) != 1 or not 1 <= layout["game_over_length"] <= 32:
-        raise CastleScreensError("screens resource lists differ")
+        raise CastleExcellentScreensError("screens resource lists differ")
     return layout
 
 
 def _source(source: bytes, revision: RevisionSpec, *, verify: bool = True):
     if verify and hashlib.sha256(source).hexdigest() != revision.sha256:
-        raise CastleScreensError("screens source identity mismatch")
+        raise CastleExcellentScreensError("screens source identity mismatch")
     image = parse_ines(source)
     if len(image.prg) != 0x8000:
-        raise CastleScreensError("Castle screens need 32 KiB PRG")
+        raise CastleExcellentScreensError("Castle Excellent screens need 32 KiB PRG")
     return image
 
 
@@ -92,7 +92,7 @@ def _spans(layout: Mapping[str, Any], base: int) -> list[tuple[str, int, int]]:
 def decode_screens(
     source: bytes, profile: GameProfile, revision: RevisionSpec,
     *, _verify_identity: bool = True,
-) -> CastleScreensDocument:
+) -> CastleExcellentScreensDocument:
     layout = _layout(profile, revision)
     image = _source(source, revision, verify=_verify_identity)
     base = len(image.header) + len(image.trainer)
@@ -102,54 +102,54 @@ def decode_screens(
             spans, layout["page_names"], layout["pages"], layout["chr_banks"]):
         payload = source[offset:offset + size]
         if len(payload) != size:
-            raise CastleScreensError(f"{field} exceeds the source image")
+            raise CastleExcellentScreensError(f"{field} exceeds the source image")
         screens.append({"id": name, "page": page, "chr_bank": bank,
                         "tiles": list(payload[:TILES]), "attributes": list(payload[TILES:])})
     _field, offset, size = spans[-1]
     message = source[offset:offset + size]
     if source[offset + size] != 0:
-        raise CastleScreensError("the GAME OVER message is not where the profile says")
-    return CastleScreensDocument(profile.game_id, revision.revision_id, revision.sha256, layout,
+        raise CastleExcellentScreensError("the GAME OVER message is not where the profile says")
+    return CastleExcellentScreensDocument(profile.game_id, revision.revision_id, revision.sha256, layout,
                                  tuple(screens), tuple(message))
 
 
 def _bytes(values: object, count: int, name: str, *, nonzero: bool = False) -> bytes:
     if not isinstance(values, list) or len(values) != count or any(
             type(v) is not int or not (1 if nonzero else 0) <= v <= 255 for v in values):
-        raise CastleScreensError(f"{name} needs {count} byte values" + (" (no zero)" if nonzero else ""))
+        raise CastleExcellentScreensError(f"{name} needs {count} byte values" + (" (no zero)" if nonzero else ""))
     return bytes(values)
 
 
-def parse_screens_document(value: object, profile: GameProfile, revision: RevisionSpec) -> CastleScreensDocument:
+def parse_screens_document(value: object, profile: GameProfile, revision: RevisionSpec) -> CastleExcellentScreensDocument:
     layout = _layout(profile, revision)
     if not isinstance(value, Mapping) or set(value) != {
         "schema", "schema_version", "game", "revision", "source_sha256", "layout", "screens", "game_over",
     }:
-        raise CastleScreensError("screens document fields differ")
+        raise CastleExcellentScreensError("screens document fields differ")
     for key, expected in (
         ("schema", SCHEMA), ("schema_version", VERSION), ("game", profile.game_id),
         ("revision", revision.revision_id), ("source_sha256", revision.sha256), ("layout", layout),
     ):
         if value[key] != expected:
-            raise CastleScreensError(f"screens {key} differs from profile")
+            raise CastleExcellentScreensError(f"screens {key} differs from profile")
     screens = value["screens"]
     if not isinstance(screens, list) or len(screens) != len(layout["pages"]):
-        raise CastleScreensError("screens document lists another number of screens")
+        raise CastleExcellentScreensError("screens document lists another number of screens")
     parsed = []
     for screen, name, page, bank in zip(screens, layout["page_names"], layout["pages"], layout["chr_banks"]):
         if not isinstance(screen, Mapping) or set(screen) != {"id", "page", "chr_bank", "tiles", "attributes"} \
                 or screen["id"] != name or screen["page"] != page or screen["chr_bank"] != bank:
-            raise CastleScreensError(f"screen {name} fields or identity differ")
+            raise CastleExcellentScreensError(f"screen {name} fields or identity differ")
         parsed.append({"id": name, "page": page, "chr_bank": bank,
                        "tiles": list(_bytes(screen["tiles"], TILES, f"{name} tiles")),
                        "attributes": list(_bytes(screen["attributes"], ATTRIBUTES, f"{name} attributes"))})
     message = _bytes(value["game_over"], layout["game_over_length"], "game_over", nonzero=True)
-    return CastleScreensDocument(profile.game_id, revision.revision_id, revision.sha256, layout,
+    return CastleExcellentScreensDocument(profile.game_id, revision.revision_id, revision.sha256, layout,
                                  tuple(parsed), tuple(message))
 
 
 def build_screens(
-    source: bytes, document: CastleScreensDocument, profile: GameProfile, revision: RevisionSpec,
+    source: bytes, document: CastleExcellentScreensDocument, profile: GameProfile, revision: RevisionSpec,
 ) -> tuple[bytes, dict[str, object]]:
     image = _source(source, revision)
     checked = parse_screens_document(document.as_dict(), profile, revision)
@@ -163,9 +163,9 @@ def build_screens(
                                   payload, Provenance(revision.sha256, "screens", field)))
     output = BuildPlan(revision.sha256, ChangeSet(tuple(changes))).apply(source) if changes else source
     if decode_screens(output, profile, revision, _verify_identity=False).as_dict() != checked.as_dict():
-        raise CastleScreensError("rebuilt screens do not decode to document")
+        raise CastleExcellentScreensError("rebuilt screens do not decode to document")
     return output, {
-        "schema": "retrolarium.castle-screens-build", "schema_version": 1,
+        "schema": "retrolarium.castle-excellent-screens-build", "schema_version": 1,
         "game": profile.game_id, "revision": revision.revision_id,
         "source_sha256": revision.sha256,
         "output_sha256": hashlib.sha256(output).hexdigest(),

@@ -1,0 +1,102 @@
+# Retrolarium Studio views for the doraemon.v1 profile (Doraemon).
+# The kit writes these into every project it prepares from a game
+# repository's descriptor; documents are relative to hack/<revision>/
+
+[workspace]
+layout = "auto"
+startup_tab = "levels"
+
+[[workspace.tabs]]
+id = "levels"
+title = "Levels"
+kind = "doraemon.levels"
+group = "content"
+document = "resources.json"
+resource = "resource-bundle"
+codec = "doraemon.hierarchy.v1"
+capabilities = ["paint", "eyedropper", "preview", "restore", "undo"]
+depends_on = ["graphics", "palettes"]
+
+[[workspace.tabs]]
+id = "world2-screens"
+title = "World 2 Screens"
+kind = "doraemon.world2-screens"
+group = "content"
+document = "resources.json"
+resource = "resource-bundle"
+codec = "doraemon.world2-screens.v1"
+capabilities = ["paint", "eyedropper", "preview", "restore", "undo"]
+depends_on = ["world2-metatiles", "graphics", "palettes"]
+
+[[workspace.tabs]]
+id = "world2-routes"
+title = "World 2 Routes"
+kind = "doraemon.world2-routes"
+group = "content"
+document = "resources.json"
+resource = "resource-bundle"
+codec = "doraemon.world2-stage.v1"
+capabilities = ["paint", "eyedropper", "preview", "restore", "undo"]
+depends_on = ["world2-screens", "world2-metatiles", "graphics", "palettes"]
+
+[[workspace.tabs]]
+id = "graphics"
+title = "Graphics"
+kind = "graphics.tile-set"
+group = "assets"
+document = "resources.json"
+resource = "resource-bundle"
+codec = "nes.chr-2bpp.v1"
+capabilities = ["pixel-paint", "restore", "undo"]
+depends_on = ["palettes"]
+
+[[workspace.tabs]]
+id = "world2-metatiles"
+title = "World 2 Metatiles"
+kind = "doraemon.world2-metatiles"
+group = "assets"
+document = "resources.json"
+resource = "resource-bundle"
+codec = "doraemon.world2-metatiles.v1"
+capabilities = ["edit", "preview", "restore", "undo"]
+depends_on = ["graphics", "palettes"]
+
+[[workspace.tabs]]
+id = "palettes"
+title = "Palettes"
+kind = "palette.set"
+group = "assets"
+document = "resources.json"
+resource = "resource-bundle"
+codec = "nes.palette-table.v1"
+capabilities = ["paint", "preview", "undo"]
+
+[[workspace.tabs]]
+id = "text"
+title = "Text"
+kind = "doraemon.text"
+group = "content"
+document = "text.json"
+resource = "text"
+codec = "doraemon.text@1"
+capabilities = ["edit", "preview", "restore", "undo"]
+
+[[workspace.tabs]]
+id = "sound"
+title = "Sound"
+kind = "doraemon.music"
+group = "content"
+document = "music.json"
+resource = "music"
+codec = "doraemon.music@1"
+capabilities = ["edit", "preview", "restore", "undo"]
+
+[[workspace.tabs]]
+id = "demo"
+title = "Demo"
+kind = "doraemon.demo"
+group = "content"
+document = "demo.json"
+resource = "demo"
+codec = "doraemon.demo@1"
+capabilities = ["edit", "preview", "restore", "undo"]

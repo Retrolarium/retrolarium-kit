@@ -9,7 +9,7 @@ import sys
 import zlib
 
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from retrolarium_kit.games.doraemon.world2.stage import decode_stage, encode_stage
 from retrolarium_kit.games.doraemon.world2.branches import (

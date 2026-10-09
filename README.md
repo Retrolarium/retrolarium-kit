@@ -21,13 +21,15 @@ src/retrolarium_kit/
               OpenDiskSys (opendisksys/), MIDI
   platform/   console codecs: nes/ (the resource bundle, CHR, palettes,
               nametables, text, PPU packets, metatiles, APU effects) and fds/
-  games/      a package per game: smb, pacman, castle, solomon, flicky,
+  games/      a package per game: smb, pacman, castle_excellent, solomon, flicky,
               doraemon; catalog.py dispatches profile operations to them and
               nes_codecs.py registers their NES codecs with the platform
   studio/     the .rlj project (project.py), create.py, playtest.py, demo.py,
               audio.py, repository.py and the MAME Lua scripts (runtime/)
   schemas/    JSON schemas of the published documents
-tests/        python -m unittest discover -s tests
+tests/        python -m unittest discover -s tests: games/<game>/,
+              platforms/{nes,fds}/, core/, studio/, cli/ like the package;
+              oracles/ holds manual MAME checks run one by one
 tools/        maintenance scripts (OpenDiskSys update, SMB demo MIDI)
 docs/         authoring contracts
 ```
@@ -70,12 +72,12 @@ Super Mario Bros. 1, and Pac-Man. It recognizes the exact supported revision,
 creates a full disassembly and typed resource bundle in a temporary sibling
 directory, writes the configured Studio project, and by default builds and
 verifies its first artifact. The requested output directory appears only after
-the whole workflow succeeds. For a previously edited Castle levels JSON, pass
-`--legacy-castle-levels path\to\old-levels.json` to `rldisasm preset`; the Kit
-validates it against the selected ROM and copies it into the new multi-document
-Studio before building. The original JSON and ROM are never changed. Use
-`--no-build` only for diagnostics; the GUI always requests the complete verified
-workflow.
+the whole workflow succeeds. For a previously edited Castle Excellent levels
+JSON, pass `--legacy-castle-excellent-levels path\to\old-levels.json` to
+`rldisasm preset`; the Kit validates it against the selected ROM and copies it
+into the new multi-document Studio before building. The original JSON and ROM
+are never changed. Use `--no-build` only for diagnostics; the GUI always
+requests the complete verified workflow.
 
 `inspect` emits the versioned normalized JSON projection consumed by the Qt
 application. Project references must be portable forward-slash paths beneath the
@@ -84,9 +86,9 @@ and dependency cycles are rejected. Operation values are registered identifiers
 rather than executable command strings. The resource document is optional; a
 recognized `retrolarium.nes-resource-bundle` materializes ordered Screens,
 Graphics, Palettes and Code & Analysis tabs with their actual codecs and
-capabilities. A recognized `retrolarium.castle-levels` document creates a Rooms
-& Objects tab backed by the same fixed-arena writer. Omitting the resource
-document creates the minimal Code-only workspace.
+capabilities. A recognized `retrolarium.castle-excellent-levels` document
+creates a Rooms & Objects tab backed by the same fixed-arena writer. Omitting
+the resource document creates the minimal Code-only workspace.
 
 `studio build` first rebuilds the generated source and requires its normal exact
 verification to pass. It then applies the current typed authoring document
@@ -96,6 +98,29 @@ artifact whenever the TOML project, a referenced document or the output image
 has changed. `launch-plan` accepts only a current artifact and returns the same
 allowlisted MAME process specification used by the Qt shell; `studio launch`
 provides the bounded headless form for automation.
+
+## Game repositories
+
+A game's disassembly repository opens through the `<game>.rlj` descriptor at its
+root (schema `retrolarium.game`): the game, its kit profile, the revisions the
+repository builds with the ROM file each expects, and the asset split if the
+build needs one. The descriptor carries nothing else. The studio views of a
+profile are the kit's (`studio/views/<profile>.toml`), so every repository of a
+game shares them instead of keeping a copy.
+
+```powershell
+rltool studio revisions path\to\game.rlj
+rltool studio prepare path\to\game.rlj --revision <id> [--rom path\to\rom]
+rltool studio reset path\to\game.rlj --revision <id>
+rltool studio check path\to\game.rlj [--revision <id>]
+```
+
+`prepare` keeps edits in `hack/<revision>/` and writes the generated project and
+builds into `.retrolarium/<revision>/`; the repository ignores both. `check` is
+what a repository's `make studio-check` runs: in a throwaway copy of the
+repository it prepares every revision from its ROM, validates it, builds it with
+no edits and compares the result with that ROM byte for byte. It needs every
+revision's ROM at the root and never touches the user's folders.
 
 ## Bundled compiler suites
 
@@ -146,16 +171,16 @@ may also write a machine-readable capacity/diff report.
 rltool game profiles
 rltool game inspect "Castle Excellent (J).nes"
 rltool game extract "Castle Excellent (J).nes" `
-  --output build/castle/levels.json
-rltool game validate "Castle Excellent (J).nes" build/castle/levels.json
-rltool game build "Castle Excellent (J).nes" build/castle/levels.json `
-  --output build/castle/edited.nes `
-  --report build/castle/build-report.json
-rltool game launch-plan "Castle Excellent (J).nes" build/castle/edited.nes `
+  --output build/castle_excellent/levels.json
+rltool game validate "Castle Excellent (J).nes" build/castle_excellent/levels.json
+rltool game build "Castle Excellent (J).nes" build/castle_excellent/levels.json `
+  --output build/castle_excellent/edited.nes `
+  --report build/castle_excellent/build-report.json
+rltool game launch-plan "Castle Excellent (J).nes" build/castle_excellent/edited.nes `
   --mame path/to/mame.exe
-rltool game launch "Castle Excellent (J).nes" build/castle/edited.nes `
+rltool game launch "Castle Excellent (J).nes" build/castle_excellent/edited.nes `
   --mame path/to/mame.exe `
-  --output build/castle/mame-runs --seconds 2
+  --output build/castle_excellent/mame-runs --seconds 2
 ```
 
 Game/revision identities, resource codecs, addresses, arenas and capacity rules
@@ -166,13 +191,13 @@ stream, object count/state offsets and mutable-cell state offsets as one
 transactional `BuildPlan`. Zero-edit builds of both known revisions are
 byte-identical.
 
-The extracted document also contains a profile-bound `castle.room-rendering.v1`
-snapshot: CHR bank 0, the 32-byte gameplay palette, 100 left/right cell-tile
-mappings, the native attribute tables, the 61-entry encoded-to-runtime object
-type table and the representative metasprite descriptors. Schema v1 keeps this
-payload read-only and verifies it against the source image during build, while
-allowing Qt to render exact background and 8×16 sprite pixels without reopening
-or interpreting the ROM itself.
+The extracted document also contains a profile-bound
+`castle-excellent.room-rendering.v1` snapshot: CHR bank 0, the 32-byte gameplay
+palette, 100 left/right cell-tile mappings, the native attribute tables, the
+61-entry encoded-to-runtime object type table and the representative metasprite
+descriptors. Schema v1 keeps this payload read-only and verifies it against the
+source image during build, while allowing Qt to render exact background and 8×16
+sprite pixels without reopening or interpreting the ROM itself.
 
 `game launch-plan` produces the same allowlisted `retrolarium.process-spec`
 consumed by the Qt shell. `game launch` is its bounded headless verification
@@ -187,13 +212,13 @@ dock.
 
 The generic Python layer (`Address`, `AddressRange`, `BinaryReader`,
 `BinaryWriter`, `GameProfile`, `ResourceSpec`, `ResourceDocument`, `ChangeSet`,
-`BuildPlan` and `Registry`) is game-independent. The Castle adapter is selected
-by codec id rather than game-specific CLI branching.
+`BuildPlan` and `Registry`) is game-independent. The Castle Excellent adapter is
+selected by codec id rather than game-specific CLI branching.
 
 Retrolarium Studio calls the same commands with explicit `QProcess` arguments.
-Its Castle editor works on rooms, cells and objects with native CHR and palette
-previews; it delegates all codec and capacity validation back to this package
-and plays the edited ROM through the same launch plan.
+Its Castle Excellent editor works on rooms, cells and objects with native CHR
+and palette previews; it delegates all codec and capacity validation back to
+this package and plays the edited ROM through the same launch plan.
 
 ## Open HonkeyPong NES resources
 
@@ -212,8 +237,7 @@ rltool game build ../retrolarium-disassembler/fixtures/nes/bin/HonkeyPong.nes `
   build/honkeypong/resources.json --output build/honkeypong/edited.nes
 ```
 
-See
-[`Retrolarium_NES_Resource_Authoring_Contract.md`](docs/Retrolarium_NES_Resource_Authoring_Contract.md).
+See [`nes_resources.md`](docs/nes_resources.md).
 
 ## Pac-Man maze authoring
 
@@ -238,7 +262,7 @@ intentionally deferred until the bundle supports replicated ranges.
 `pacman.actor-mapping.v1` round-trips the original 624-byte table as 64 standard
 and 13 alternate four-quadrant frames, validates OAM attribute bits and keeps
 the shared 16x16 offset layout read-only. See
-[`Retrolarium_Pacman_Maze_Authoring_Contract.md`](docs/Retrolarium_Pacman_Maze_Authoring_Contract.md).
+[`pacman_maze.md`](docs/pacman_maze.md).
 
 The title logo reuses `nes.nametable.v1` as a tile-only 23x6 region. Both
 verified revisions rebuild exactly, and the common Screens editor disables its
@@ -246,7 +270,7 @@ palette brush when a region has no attribute bytes. The addressed PPU packets,
 HUD/intermission regions are not bundled yet. `nes.fixed-text-fields.v1`
 projects 14 disjoint title, attract and pause ranges into one Text resource; the
 profile owns the glyph map, case folding, labels, widths and addresses. See
-[`Retrolarium_NES_Text_Authoring_Contract.md`](docs/Retrolarium_NES_Text_Authoring_Contract.md).
+[`nes_text.md`](docs/nes_text.md).
 
 ## Super Mario Bros. authoring
 
@@ -259,11 +283,10 @@ envelope, and the complete CHR bank. The generated Studio workspace owns World,
 Levels, Screens, Music & Sounds, Text, Graphics, Metatiles, Palettes, Player
 Frames and Code & Analysis tabs. These editors share undo/redo, restore and
 atomic save. The zero-edit disassemble/extract/build/verify path is
-byte-identical. See
-[`Retrolarium_SMB_World_Authoring_Contract.md`](docs/Retrolarium_SMB_World_Authoring_Contract.md).
-ANN and SMB2 Japan additionally expose their ending-bank FDS waveforms and
-volume programs through a dedicated `audio.synthesis` Studio tab; see
-[`Retrolarium_FDS_Synthesis_Authoring_Contract.md`](docs/Retrolarium_FDS_Synthesis_Authoring_Contract.md).
+byte-identical. See [`smb_world.md`](docs/smb_world.md). ANN and SMB2 Japan
+additionally expose their ending-bank FDS waveforms and volume programs through
+a dedicated `audio.synthesis` Studio tab; see
+[`fds_synthesis.md`](docs/fds_synthesis.md).
 
 ## Other commands
 

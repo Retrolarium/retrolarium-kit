@@ -11,7 +11,7 @@ An effect key names the game and the request:
 
 - ``smb:square1:N`` / ``smb:square2:N`` / ``smb:noise:N``: the bit value N
   written to that sound queue ($FF, $FE, $FD) before SoundEngine runs.
-- ``castle:N``: Castle Excellent's start routine N (1-5), then
+- ``castle-excellent:N``: Castle Excellent's start routine N (1-5), then
   UpdateSoundEffects every frame.
 - ``doraemon:D:N``: request N queued through driver D's QueueEffect (World 1,
   World 2, World 3, shell banks 0-3), then its UpdateEffects every frame.
@@ -359,8 +359,8 @@ SMB_QUEUES = {"square1": 0xFF, "square2": 0xFE, "noise": 0xFD}
 SMB_OPER_MODE = 0x0770
 # SoundEngine: LDA OperMode / BNE SndOn / STA SND_MASTERCTRL_REG / RTS.
 SMB_ENGINE_SIGNATURE = bytes((0xAD, 0x70, 0x07, 0xD0, 0x04, 0x8D, 0x15, 0x40, 0x60))
-CASTLE_STARTS = (0xC20D, 0xC233, 0xC272, 0xC29A, 0xC2BD)
-CASTLE_UPDATE = 0xC2F9
+CASTLE_EXCELLENT_STARTS = (0xC20D, 0xC233, 0xC272, 0xC29A, 0xC2BD)
+CASTLE_EXCELLENT_UPDATE = 0xC2F9
 # Doraemon's four bank-local drivers: QueueEffect, UpdateEffects, requests.
 DORAEMON_DRIVERS = ((0xE3BC, 0xE3CD, 26), (0xA87A, 0xA88B, 15), (0xBEB4, 0xBEC5, 26), (0x982A, 0x983B, 26))
 
@@ -392,12 +392,12 @@ def effect_plan(key: str, prg: bytes) -> EffectPlan:
             raise SoundEffectError("SoundEngine was not found in this Super Mario Bros. image")
         return EffectPlan(0, (Action("poke", SMB_OPER_MODE, 1), Action("poke", SMB_QUEUES[channel], bit)),
                           (0x8000 + at,), True)
-    if game == "castle":
-        (index,) = _key_parts(key, "castle", 2)
+    if game == "castle-excellent":
+        (index,) = _key_parts(key, "castle-excellent", 2)
         number = _number(index, key)
-        if not 1 <= number <= len(CASTLE_STARTS):
+        if not 1 <= number <= len(CASTLE_EXCELLENT_STARTS):
             raise SoundEffectError(f"unknown sound effect {key!r}")
-        return EffectPlan(0, (Action("call", CASTLE_STARTS[number - 1]),), (CASTLE_UPDATE,), False)
+        return EffectPlan(0, (Action("call", CASTLE_EXCELLENT_STARTS[number - 1]),), (CASTLE_EXCELLENT_UPDATE,), False)
     if game == "doraemon":
         driver_text, request_text = _key_parts(key, "doraemon", 3)
         driver = _number(driver_text, key)
