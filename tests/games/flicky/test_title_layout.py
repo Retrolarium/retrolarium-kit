@@ -8,6 +8,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from helpers import game_repository
 from retrolarium_kit.games.flicky.title_layout import (
     SOURCE, export_title_layout, stage_title_layout, validate_title_layout,
 )
@@ -15,7 +16,7 @@ from retrolarium_kit.games.flicky.title_layout import (
 
 # The Flicky reconstruction is not part of the repository; the test runs
 # where it sits beside this checkout.
-FLICKY = Path("D:/Projects/oranguthang/flicky_src")
+FLICKY = game_repository("flicky_src")
 
 
 @unittest.skipUnless((FLICKY / "src" / SOURCE).is_file(), "the Flicky source is not available")

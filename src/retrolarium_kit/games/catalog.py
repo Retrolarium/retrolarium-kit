@@ -749,7 +749,10 @@ def _load_json(path: Path) -> dict[str, Any]:
     return value
 
 
-def _atomic_write(path: Path, payload: bytes) -> None:
+def _atomic_write(path: Path, payload: bytes, *, durable: bool = True) -> None:
+    """Replace path with payload in one step. durable also flushes it to the
+    disk first; a built image skips that (the next build makes it again, and
+    the flush costs most of a second on Windows)."""
     path = path.resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
@@ -759,8 +762,9 @@ def _atomic_write(path: Path, payload: bytes) -> None:
     try:
         with os.fdopen(descriptor, "wb") as stream:
             stream.write(payload)
-            stream.flush()
-            os.fsync(stream.fileno())
+            if durable:
+                stream.flush()
+                os.fsync(stream.fileno())
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
@@ -907,7 +911,7 @@ def build_game(
     adapter = _adapter_for_document(value, profile, revision)
     document = adapter.parse(value, profile, revision)
     rebuilt, report = adapter.build(payload, document, profile, revision)
-    _atomic_write(output, rebuilt)
+    _atomic_write(output, rebuilt, durable=False)
     result = {
         **report,
         "output": str(output.resolve()),
@@ -969,7 +973,7 @@ def build_game_documents(
             "resource": adapter.resource_id,
             "build": report,
         })
-    _atomic_write(output, bytes(merged))
+    _atomic_write(output, bytes(merged), durable=False)
     result: dict[str, object] = {
         "schema": "retrolarium.composed-game-build",
         "schema_version": 1,

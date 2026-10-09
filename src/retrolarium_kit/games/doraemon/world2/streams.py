@@ -182,10 +182,16 @@ def _placement(left: _Chunk, right: _Chunk) -> tuple[int, int]:
         if left.roles[position:position + len(right.roles)] == right.roles:
             return len(right.data), position
         start = position + 1
-    for overlap in range(min(len(left.data), len(right.data)), 0, -1):
-        if (left.data[-overlap:] == right.data[:overlap]
-                and left.roles[-overlap:] == right.roles[:overlap]):
-            return overlap, len(left.data) - overlap
+    # The longest suffix of left that starts right: only positions holding
+    # right's first byte can begin one, scanned from the longest overlap.
+    if right.data:
+        first = right.data[:1]
+        position = left.data.find(first, max(0, len(left.data) - len(right.data)))
+        while position >= 0:
+            if (right.data.startswith(left.data[position:])
+                    and right.roles.startswith(left.roles[position:])):
+                return len(left.data) - position, position
+            position = left.data.find(first, position + 1)
     return 0, len(left.data)
 
 

@@ -11,12 +11,12 @@ from retrolarium_kit.games.doraemon.demo import (
     DoraemonDemoError, build_demo, capacity, decode_demo, parse_demo_document,
 )
 from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from helpers import game_repository
 
 
 # The cartridge image is not part of the repository; the test runs where the
 # disassembly sits beside this checkout.
-ROM = Path(__file__).resolve().parents[3] / "oranguthang/doraemon_src/Doraemon (J) (PRG0) [!].nes"
-ROM = ROM if ROM.is_file() else Path("D:/Projects/oranguthang/doraemon_src/Doraemon (J) (PRG0) [!].nes")
+ROM = game_repository("doraemon_src") / "Doraemon (J) (PRG0) [!].nes"
 STREAM = 16 + 0xFCBF - 0x8000
 
 

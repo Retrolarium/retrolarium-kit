@@ -63,7 +63,7 @@ def main() -> int:
     enigma = importlib.import_module("formats.enigma_dec")
     encoder = importlib.import_module("formats.enigma_enc")
 
-    scratch = Path(__file__).resolve().parents[2] / "build"
+    scratch = Path(__file__).resolve().parents[1] / "build"
     scratch.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="flicky-sega-screen-gate-", dir=scratch) as name:
         project = Path(name)

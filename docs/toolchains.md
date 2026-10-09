@@ -8,8 +8,8 @@ use materializes them from package data into a writable cache and checks every
 size and SHA-256 before returning a command path. There is no implicit network
 access and no fallback to an uncontrolled `PATH` executable.
 
-The initial release is deliberately smaller than the complete historical
-`D:\Projects\oranguthang` inventory:
+The initial release is deliberately smaller than the full set of toolchains the
+game disassemblies have used over time:
 
 | Suite       | Component    | Identity                 | Windows x86-64 | Linux x86-64 |
 | ----------- | ------------ | ------------------------ | -------------: | -----------: |
@@ -52,12 +52,12 @@ assembler.
   `e26d8aa8c43e285bac5e3b7df3be1adae515994f`.
 
 The authoritative machine-readable record is
-`retrolarium-kit/src/retrolarium_kit/core/toolchains/manifest.json`. It records
-package paths, installed paths, sizes, hashes, licenses, corresponding source
-revisions, donor repository commits and supported hosts. In particular, AS comes
-from the `s1_improvements` import commits `10e77929...` (Windows) and
-`1ce386fc...` (Linux); p2bin records its separate per-host import commits, while
-the cc65 pair is traced to the initial Castle Excellent reconstruction commit.
+`src/retrolarium_kit/core/toolchains/manifest.json`. It records package paths,
+installed paths, sizes, hashes, licenses, corresponding source revisions, donor
+repository commits and supported hosts. In particular, AS comes from the
+`s1_improvements` import commits `10e77929...` (Windows) and `1ce386fc...`
+(Linux); p2bin records its separate per-host import commits, while the cc65 pair
+is traced to the initial Castle Excellent reconstruction commit.
 
 ## API and cache boundary
 

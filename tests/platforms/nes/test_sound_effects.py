@@ -6,6 +6,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from helpers import game_repository
 from retrolarium_kit.games.smb.sfx_tables import source_tables
 from retrolarium_kit.platform.nes.sound_effects import (
     Apu, Bus, Cpu6502, SoundEffectError, Table, effect_plan, play,
@@ -84,10 +85,9 @@ class ApuTests(unittest.TestCase):
         self.assertFalse(apu.channel_state()[0][0])
 
 
-ROOT = Path("D:/Projects/oranguthang")
-SMB = ROOT / "smb1_src/Super Mario Bros. (JU) [!].nes"
-CASTLE = ROOT / "castle_excellent_src/Castle Excellent (J).nes"
-DORAEMON = ROOT / "doraemon_src/Doraemon (J) (PRG0) [!].nes"
+SMB = game_repository("smb1_src") / "Super Mario Bros. (JU) [!].nes"
+CASTLE = game_repository("castle_excellent_src") / "Castle Excellent (J).nes"
+DORAEMON = game_repository("doraemon_src") / "Doraemon (J) (PRG0) [!].nes"
 
 
 def _notes(result: dict, channel: str) -> list[tuple[int, int, int]]:

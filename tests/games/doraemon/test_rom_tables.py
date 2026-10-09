@@ -12,12 +12,12 @@ from retrolarium_kit.games.doraemon.objects import (
     encode_placements, encode_registry, encode_schedule,
 )
 from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from helpers import game_repository
 
 
 # The cartridge image is not part of the repository; the test runs where the
 # disassembly sits beside this checkout.
-ROM = Path(__file__).resolve().parents[3] / "oranguthang/doraemon_src/Doraemon (J) (PRG0) [!].nes"
-ROM = ROM if ROM.is_file() else Path("D:/Projects/oranguthang/doraemon_src/Doraemon (J) (PRG0) [!].nes")
+ROM = game_repository("doraemon_src") / "Doraemon (J) (PRG0) [!].nes"
 
 
 @unittest.skipUnless(ROM.is_file(), "the Doraemon ROM is not available")

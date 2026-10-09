@@ -87,3 +87,22 @@ def patched_manifest(value):
         stack.enter_context(patch(
             f"retrolarium_kit.studio.{module}.load_disassembly_manifest", return_value=value))
     return stack
+
+
+def game_repository(name: str) -> Path:
+    """A game disassembly (smb1_src, ...) for the tests that read its data.
+
+    RETROLARIUM_GAME_SOURCES names the folder holding them; otherwise an
+    oranguthang folder beside one of the folders above the kit is used. The
+    path may not exist: the tests that need it skip.
+    """
+    import os
+
+    configured = os.environ.get("RETROLARIUM_GAME_SOURCES")
+    if configured:
+        return Path(configured) / name
+    for folder in Path(__file__).resolve().parents[1:]:
+        candidate = folder.parent / "oranguthang"
+        if candidate.is_dir():
+            return candidate / name
+    return Path(__file__).resolve().parents[1] / "oranguthang-not-found" / name

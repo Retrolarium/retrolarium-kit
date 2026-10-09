@@ -16,6 +16,7 @@ from retrolarium_kit.studio.repository import (
     reset_revision, revision_statuses,
 )
 from retrolarium_kit.studio.project import build_studio_project, load_studio_project, verify_studio_project
+from helpers import game_repository
 
 
 def apply_ips(original: bytes, patch: bytes) -> bytes:
@@ -35,7 +36,7 @@ def apply_ips(original: bytes, patch: bytes) -> bytes:
 
 # The ROMs are not part of the repository; the descriptor tests run where
 # the Pac-Man disassembly sits beside this checkout.
-PACMAN = Path("D:/Projects/oranguthang/pacman_src")
+PACMAN = game_repository("pacman_src")
 V10 = PACMAN / "Pac-Man (J) (V1.0) [!].nes"
 V11 = PACMAN / "Pac-Man (J) (V1.1) [!].nes"
 
@@ -208,7 +209,7 @@ class DescriptorTests(unittest.TestCase):
             load_descriptor(self.root / "pacman.rlj")
 
 
-FLICKY = Path("D:/Projects/oranguthang/flicky_src")
+FLICKY = game_repository("flicky_src")
 
 
 @unittest.skipUnless((FLICKY / "Flicky (UE) [!].bin").is_file() and (FLICKY / "flicky.rlj").is_file(),

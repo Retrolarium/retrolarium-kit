@@ -873,9 +873,8 @@ def build_studio_project(
         temporary = Path(temporary_name)
         try:
             with os.fdopen(descriptor, "wb") as stream:
+                # A built image: the next build makes it again, so no fsync.
                 stream.write(base_artifact.read_bytes())
-                stream.flush()
-                os.fsync(stream.fileno())
             os.replace(temporary, output)
         finally:
             temporary.unlink(missing_ok=True)
@@ -936,9 +935,8 @@ def _expand_solomon_build(
         temporary = Path(temporary_name)
         try:
             with os.fdopen(descriptor, "wb") as stream:
+                # A built image: the next build makes it again, so no fsync.
                 stream.write(expanded)
-                stream.flush()
-                os.fsync(stream.fileno())
             os.replace(temporary, output)
         finally:
             temporary.unlink(missing_ok=True)

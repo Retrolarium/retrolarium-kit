@@ -8,11 +8,12 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from retrolarium_kit.games.catalog import build_game, extract_game
+from helpers import game_repository
 
 
 # The ROM is not part of the repository; the test runs where the Solomon's
 # Key disassembly sits beside this checkout.
-JAPAN = Path("D:/Projects/oranguthang/solomon_no_kagi_src/Solomon no Kagi (J).nes")
+JAPAN = game_repository("solomon_no_kagi_src") / "Solomon no Kagi (J).nes"
 RESOURCES = ("levels", "room-art", "animations", "audio", "presentation", "text", "resource-bundle")
 
 

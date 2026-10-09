@@ -13,11 +13,12 @@ from retrolarium_kit.platform.nes.resources import (
     decode_resources,
 )
 from retrolarium_kit.games.smb.sfx_tables import SmbSfxTableError, encode
+from helpers import game_repository
 
 
 # The images are not part of the repository; the test runs where the
 # disassembly sits beside this checkout.
-ROMS = Path("D:/Projects/oranguthang/smb1_src")
+ROMS = game_repository("smb1_src")
 
 
 def _images() -> dict[str, bytes]:

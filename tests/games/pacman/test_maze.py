@@ -9,6 +9,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from helpers import game_repository
 from retrolarium_kit.core.authoring import GameProfile, ResourceSpec, RevisionSpec
 from retrolarium_kit.core.game_profiles import packaged_game_profiles
 from retrolarium_kit.platform.nes.resources import build_resources, decode_resources, parse_resource_document
@@ -22,8 +23,7 @@ from retrolarium_kit.games.pacman.maze import (
 )
 
 
-ROM = Path(__file__).resolve().parents[3] / "oranguthang/pacman_src/Pac-Man (J) (V1.0) [!].nes"
-ROM = ROM if ROM.is_file() else Path("D:/Projects/oranguthang/pacman_src/Pac-Man (J) (V1.0) [!].nes")
+ROM = game_repository("pacman_src") / "Pac-Man (J) (V1.0) [!].nes"
 # The round counter's start and the two "pellets eaten" sums.
 COUNT_OFFSETS = (0xE98, 0xF31, 0x118C)
 POWER_PELLETS = ((3, 2), (3, 20), (20, 2), (20, 20))
