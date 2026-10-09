@@ -6,10 +6,13 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.studio.project import (
-    DORAEMON_UNDERGROUND_WRITES, DORAEMON_WORLD1_START_WRITES, DORAEMON_WORLD3_START_WRITES,
-    StudioProjectError, _doraemon_playtest_point,
+from retrolarium_kit.studio.playtest import (
+    DORAEMON_UNDERGROUND_WRITES,
+    DORAEMON_WORLD1_START_WRITES,
+    DORAEMON_WORLD3_START_WRITES,
+    _doraemon_playtest_point,
 )
+from retrolarium_kit.studio.project import StudioProjectError
 
 # World1_UndergroundRoomCameraProfiles: camera X, camera Y, axis limit and
 # axis start of the nine rooms (data/world1/underground_rooms.json).
