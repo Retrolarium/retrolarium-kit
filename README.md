@@ -7,9 +7,35 @@ every supported game (extract, validate, rebuild), the bundled assemblers that
 build a disassembly without Docker, and the MAME launch plans the Studio runs.
 
 Disassembling a ROM is the job of
-[Retrolarium Disassembler](../retrolarium-disassembler/README.md) (`rldisasm`);
-the kit builds, verifies and launches the projects it produces
+[Retrolarium Disassembler](https://github.com/Retrolarium/retrolarium-disassembler)
+(`rldisasm`); the kit builds, verifies and launches the projects it produces
 (`rltool project ...`). Both build on `retrolarium-core`.
+
+## Layout
+
+```text
+src/retrolarium_kit/
+  cli/        rltool: a module per command group; commands import what they run
+  core/       game profiles (profiles/), authoring primitives, the generated-
+              project runner with its bundled assemblers (toolchains/) and
+              OpenDiskSys (opendisksys/), MIDI
+  platform/   console codecs: nes/ (the resource bundle, CHR, palettes,
+              nametables, text, PPU packets, metatiles, APU effects) and fds/
+  games/      a package per game: smb, pacman, castle, solomon, flicky,
+              doraemon; catalog.py dispatches profile operations to them and
+              nes_codecs.py registers their NES codecs with the platform
+  studio/     the .rlj project (project.py), create.py, playtest.py, demo.py,
+              audio.py, repository.py and the MAME Lua scripts (runtime/)
+  schemas/    JSON schemas of the published documents
+tests/        python -m unittest discover -s tests
+tools/        maintenance scripts (OpenDiskSys update, SMB demo MIDI)
+docs/         authoring contracts
+```
+
+Layers import downwards only: core, platform, games, studio, cli. A game never
+imports another game, and the platform reaches game codecs only through the
+registry (`tests/test_layers.py` checks all of it). The kit does not import the
+disassembler.
 
 ## Studio project contract
 
@@ -36,16 +62,16 @@ rltool studio validate path\to\game.rlj
 rltool studio build path\to\game.rlj
 rltool studio verify path\to\game.rlj
 rltool studio launch-plan path\to\game.rlj `
-  --mame mame_testing\mame\consoles.exe
+  --mame path\to\mame.exe
 ```
 
-`studio preset` is the normal entry point for Castle Excellent / Castlequest,
+`rldisasm preset` is the normal entry point for Castle Excellent / Castlequest,
 Super Mario Bros. 1, and Pac-Man. It recognizes the exact supported revision,
 creates a full disassembly and typed resource bundle in a temporary sibling
 directory, writes the configured Studio project, and by default builds and
 verifies its first artifact. The requested output directory appears only after
 the whole workflow succeeds. For a previously edited Castle levels JSON, pass
-`--legacy-castle-levels path\to\old-levels.json` to `studio preset`; the Kit
+`--legacy-castle-levels path\to\old-levels.json` to `rldisasm preset`; the Kit
 validates it against the selected ROM and copies it into the new multi-document
 Studio before building. The original JSON and ROM are never changed. Use
 `--no-build` only for diagnostics; the GUI always requests the complete verified
@@ -126,9 +152,9 @@ rltool game build "Castle Excellent (J).nes" build/castle/levels.json `
   --output build/castle/edited.nes `
   --report build/castle/build-report.json
 rltool game launch-plan "Castle Excellent (J).nes" build/castle/edited.nes `
-  --mame mame_testing/mame/consoles.exe
+  --mame path/to/mame.exe
 rltool game launch "Castle Excellent (J).nes" build/castle/edited.nes `
-  --mame mame_testing/mame/consoles.exe `
+  --mame path/to/mame.exe `
   --output build/castle/mame-runs --seconds 2
 ```
 
@@ -162,16 +188,12 @@ dock.
 The generic Python layer (`Address`, `AddressRange`, `BinaryReader`,
 `BinaryWriter`, `GameProfile`, `ResourceSpec`, `ResourceDocument`, `ChangeSet`,
 `BuildPlan` and `Registry`) is game-independent. The Castle adapter is selected
-by codec id rather than game-specific CLI branching. See
-[`Retrolarium_Castle_Integration_Contract.md`](../retrolarium/docs/Retrolarium_Castle_Integration_Contract.md).
+by codec id rather than game-specific CLI branching.
 
-The Qt 5.15 consumer calls the same commands with explicit `QProcess` arguments.
-Its first editor presents Castle rooms/cells/objects with undo/redo, native
-CHR/palette cell previews, full-room metasprite composition, a navigable 10×10
-native overview and atomic document saves; it intentionally delegates all codec
-and capacity validation back to this package. After a successful build, the Game
-menu can request a launch plan and start the edited ROM in the explicitly
-selected MAME.
+Retrolarium Studio calls the same commands with explicit `QProcess` arguments.
+Its Castle editor works on rooms, cells and objects with native CHR and palette
+previews; it delegates all codec and capacity validation back to this package
+and plays the edited ROM through the same launch plan.
 
 ## Open HonkeyPong NES resources
 
@@ -183,10 +205,10 @@ zero-edit exact rebuilds, edited builds and the common MAME launch path without
 a HonkeyPong-specific CLI branch.
 
 ```powershell
-rltool game inspect retrolarium-disassembler/fixtures/nes/bin/HonkeyPong.nes
-rltool game extract retrolarium-disassembler/fixtures/nes/bin/HonkeyPong.nes `
+rltool game inspect ../retrolarium-disassembler/fixtures/nes/bin/HonkeyPong.nes
+rltool game extract ../retrolarium-disassembler/fixtures/nes/bin/HonkeyPong.nes `
   --output build/honkeypong/resources.json
-rltool game build retrolarium-disassembler/fixtures/nes/bin/HonkeyPong.nes `
+rltool game build ../retrolarium-disassembler/fixtures/nes/bin/HonkeyPong.nes `
   build/honkeypong/resources.json --output build/honkeypong/edited.nes
 ```
 
@@ -246,16 +268,16 @@ volume programs through a dedicated `audio.synthesis` Studio tab; see
 ## Other commands
 
 ```powershell
-python retrolarium-kit/rltool.py project validate `
+python rltool.py project validate `
   build/game-disassembly/manifest.json
-python retrolarium-kit/rltool.py project build `
+python rltool.py project build `
   build/game-disassembly/manifest.json
-python retrolarium-kit/rltool.py project verify `
+python rltool.py project verify `
   build/game-disassembly/manifest.json
-python retrolarium-kit/rltool.py project launch `
+python rltool.py project launch `
   build/game-disassembly/manifest.json `
-  --mame mame_testing/mame/consoles.exe --seconds 2
-python -m unittest discover -s retrolarium-kit/tests
+  --mame path/to/mame.exe --seconds 2
+python -m unittest discover -s tests
 ```
 
 Generated NES/SNES projects use the bundled `ca65-ld65-v1` recipe, and Mega
@@ -263,18 +285,17 @@ Drive projects use `asl-p2bin-v1`. `project build` therefore needs neither
 Docker nor a local compiler directory; pass `--container IMAGE` only when an
 explicit compatibility build is wanted.
 
-Build or install this distribution from its folder:
+Build or install the kit from a checkout of this repository:
 
 ```powershell
-python -m pip install ./retrolarium-kit
+python -m pip install .
 rltool --version
 
-uv build --wheel --out-dir build/dist ./retrolarium-kit
+uv build --wheel --out-dir build/dist .
 ```
 
-An editable development install uses
-`python -m pip install -e ./retrolarium-kit`. All forms expose the `rltool`
-entry point.
+An editable development install uses `python -m pip install -e .`. All forms
+expose the `rltool` entry point.
 
 ## License
 

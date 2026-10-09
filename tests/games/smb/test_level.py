@@ -28,6 +28,7 @@ from retrolarium_kit.platform.nes.resources import (
 )
 from retrolarium_kit.games.smb.level import decode_levels, encode_levels, positioned_area_objects, positioned_enemy_records
 from retrolarium_kit.games.smb.level_render import object_width, render_level_scene
+from helpers import game_repository
 
 
 PARAMETERS = {
@@ -443,10 +444,10 @@ class SmbLevelTests(unittest.TestCase):
         self.assertEqual(scene.enemies[0]["x"], 38)
 
     def test_ju_golden_corpus_matches_all_34_python_scenes(self) -> None:
-        fixture_path = (
-            Path(__file__).resolve().parents[2]
-            / "retrolarium" / "tests" / "fixtures" / "smb1_ju_level_scenes.json"
-        )
+        fixture_path = (game_repository("smb1_src") / "tests" / "retrolarium"
+                        / "smb1_ju_level_scenes.json")
+        if not fixture_path.is_file():
+            self.skipTest(f"no SMB1 corpus at {fixture_path}")
         fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
         self.assertEqual(fixture["schema"], "retrolarium.smb-level-scene-golden")
         self.assertEqual(fixture["schema_version"], 1)

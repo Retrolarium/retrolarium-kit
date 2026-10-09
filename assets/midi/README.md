@@ -9,16 +9,16 @@ The composition and MIDI file are dedicated to the public domain under
 file with:
 
 ```powershell
-$env:PYTHONPATH = "retrolarium-kit/src"
-python retrolarium-kit/tools/generate_smb_demo_midi.py `
-  retrolarium-kit/assets/midi/smb-ground-demo.mid
+$env:PYTHONPATH = "src"
+python tools/generate_smb_demo_midi.py `
+  assets/midi/smb-ground-demo.mid
 ```
 
 To install the loop into an extracted SMB1 resource document and route every
 ground-music schedule entry to it, run:
 
 ```powershell
-$env:PYTHONPATH = "retrolarium-kit/src"
-python retrolarium-kit/tools/apply_smb_ground_demo.py `
+$env:PYTHONPATH = "src"
+python tools/apply_smb_ground_demo.py `
   path/to/retrolarium/documents/resources.json
 ```

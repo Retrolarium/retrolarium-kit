@@ -93,7 +93,7 @@ def main() -> int:
     parser.add_argument("--native-writer", type=Path, required=True)
     parser.add_argument("--native-editor", type=Path, required=True)
     args = parser.parse_args()
-    scratch = Path(__file__).resolve().parents[2] / "build"
+    scratch = Path(__file__).resolve().parents[1] / "build"
     scratch.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="flicky-native-codec-", dir=scratch) as name:
         project = Path(name)

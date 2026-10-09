@@ -29,7 +29,7 @@ def main() -> int:
     parser.add_argument("--rom", type=Path, required=True)
     parser.add_argument("--native-sound-editor", type=Path, required=True)
     args = parser.parse_args()
-    scratch = Path(__file__).resolve().parents[2] / "build"
+    scratch = Path(__file__).resolve().parents[1] / "build"
     scratch.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="flicky-audio-gate-", dir=scratch) as name:
         root = Path(name)

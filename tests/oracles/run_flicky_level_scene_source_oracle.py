@@ -30,7 +30,7 @@ def main() -> int:
     parser.add_argument("--native-factory", type=Path,
                         help="also open the copied .rlj through the Studio editor factory")
     args = parser.parse_args()
-    scratch = Path(__file__).resolve().parents[2] / "build"
+    scratch = Path(__file__).resolve().parents[1] / "build"
     scratch.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="flicky-scene-gate-", dir=scratch) as name:
         return compare(Path(name), args)

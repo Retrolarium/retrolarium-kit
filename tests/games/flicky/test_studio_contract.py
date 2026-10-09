@@ -20,8 +20,8 @@ FIXTURE = (Path(__file__).resolve().parents[2] / "retrolarium-core" / "tests"
 class FlickyStudioContractTests(unittest.TestCase):
     def test_cli_uses_explicit_source_and_project_root(self) -> None:
         output = StringIO()
-        with patch("retrolarium_kit.cli.import_flicky_source") as importing, \
-                patch("retrolarium_kit.cli.create_flicky_studio_project",
+        with patch("retrolarium_kit.games.flicky.content.import_flicky_source") as importing, \
+                patch("retrolarium_kit.studio.create.create_flicky_studio_project",
                       return_value={"schema": "inspection"}) as creating, \
                 redirect_stdout(output):
             status = cli_main(["studio", "flicky-create", "original.bin",
@@ -50,7 +50,7 @@ class FlickyStudioContractTests(unittest.TestCase):
 
     def test_round_playtest_cli_forwards_one_based_round(self) -> None:
         output = StringIO()
-        with patch("retrolarium_kit.cli.studio_flicky_round_playtest_plan",
+        with patch("retrolarium_kit.studio.playtest.studio_flicky_round_playtest_plan",
                    return_value={"operation": "flicky-round"}) as planning, \
                 redirect_stdout(output):
             status = cli_main([
@@ -65,7 +65,7 @@ class FlickyStudioContractTests(unittest.TestCase):
 
     def test_sound_preview_cli_forwards_header_and_mixer(self) -> None:
         output = StringIO()
-        with patch("retrolarium_kit.cli.studio_flicky_sound_preview",
+        with patch("retrolarium_kit.studio.playtest.studio_flicky_sound_preview",
                    return_value={"status": "rendered"}) as rendering, \
                 redirect_stdout(output):
             status = cli_main([
@@ -122,7 +122,7 @@ class FlickyStudioContractTests(unittest.TestCase):
 
     def test_flicky_upgrade_cli_forwards_project(self) -> None:
         output = StringIO()
-        with patch("retrolarium_kit.cli.upgrade_flicky_studio_project",
+        with patch("retrolarium_kit.studio.create.upgrade_flicky_studio_project",
                    return_value={"status": "upgraded"}) as upgrading, \
                 redirect_stdout(output):
             status = cli_main(["studio", "flicky-upgrade", "flicky-ue.rlj"])

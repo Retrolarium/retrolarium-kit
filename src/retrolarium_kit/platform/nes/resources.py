@@ -15,6 +15,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import importlib
+import json
+import operator
 from typing import Any, Callable, Mapping, Sequence
 
 from retrolarium_kit.core.authoring import (
@@ -457,6 +459,14 @@ def _matrix(
     *,
     maximum: int = 0xFF,
 ) -> tuple[tuple[int, ...], ...]:
+    # A well-formed matrix is checked row by row in C; anything else takes the
+    # cell-by-cell path, which names the first bad cell.
+    if (type(value) is list and len(value) == rows
+            and all(type(row) is list and len(row) == columns
+                    and set(map(type, row)) == _INTEGER_TYPE
+                    and min(row) >= 0 and max(row) <= maximum
+                    for row in value)):
+        return tuple(map(tuple, value))
     if not isinstance(value, list) or len(value) != rows:
         raise NesResourceError(f"{name} must contain {rows} rows")
     result = []
@@ -474,22 +484,27 @@ def _matrix(
     return tuple(result)
 
 
+_INTEGER_TYPE = {int}
+# A CHR pixel row as two bit planes: each plane byte read as the binary
+# number its pixels' low (high) bits spell.
+_LOW_PLANE = bytes.maketrans(bytes(range(4)), b"0101")
+_HIGH_PLANE = bytes.maketrans(bytes(range(4)), b"0011")
+# One plane byte as eight pixel values (the high plane already doubled).
+_LOW_PIXELS = tuple(tuple((value >> (7 - x)) & 1 for x in range(8)) for value in range(256))
+_HIGH_PIXELS = tuple(tuple(((value >> (7 - x)) & 1) << 1 for x in range(8)) for value in range(256))
+
+
 def decode_chr_2bpp(payload: bytes) -> tuple[tuple[tuple[int, ...], ...], ...]:
     if len(payload) % 16:
         raise NesResourceError("CHR 2bpp payload size must be divisible by 16")
     tiles = []
     for start in range(0, len(payload), 16):
-        tile = payload[start : start + 16]
-        rows = []
-        for y in range(8):
-            rows.append(
-                tuple(
-                    ((tile[y] >> (7 - x)) & 1)
-                    | (((tile[y + 8] >> (7 - x)) & 1) << 1)
-                    for x in range(8)
-                )
-            )
-        tiles.append(tuple(rows))
+        low = payload[start:start + 8]
+        high = payload[start + 8:start + 16]
+        tiles.append(tuple(
+            tuple(map(operator.add, _LOW_PIXELS[low[y]], _HIGH_PIXELS[high[y]]))
+            for y in range(8)
+        ))
     return tuple(tiles)
 
 
@@ -507,14 +522,9 @@ def encode_chr_2bpp(
             f"tiles[{tile_index}]",
             maximum=3,
         )
-        low = bytearray(8)
-        high = bytearray(8)
-        for y, row in enumerate(matrix):
-            for x, pixel in enumerate(row):
-                low[y] |= (pixel & 1) << (7 - x)
-                high[y] |= ((pixel >> 1) & 1) << (7 - x)
-        output.extend(low)
-        output.extend(high)
+        rows = [bytes(row) for row in matrix]
+        output.extend(int(row.translate(_LOW_PLANE), 2) for row in rows)
+        output.extend(int(row.translate(_HIGH_PLANE), 2) for row in rows)
     return bytes(output)
 
 
@@ -1029,6 +1039,26 @@ def decode_resources(
     )
 
 
+# Parsing a resource depends only on its document entry and its profile entry,
+# and one Studio build parses each document up to three times (validation,
+# the build's check, the encode). Encoded spans are kept by content for the
+# life of the process.
+_PARSED: dict[tuple[str, str, str], tuple[_EncodedSpan, ...]] = {}
+_PARSED_LIMIT = 4096
+
+
+def _parse_key(raw: dict[str, Any], spec: ResourceSpec) -> tuple[str, str, str] | None:
+    try:
+        return (
+            spec.resource_id,
+            json.dumps(raw, sort_keys=True, separators=(",", ":")),
+            json.dumps([spec.codec, spec.kind, spec.parameters], sort_keys=True,
+                       separators=(",", ":"), default=repr),
+        )
+    except (TypeError, ValueError):
+        return None
+
+
 def _parse_resource(
     raw: object, spec: ResourceSpec
 ) -> tuple[Mapping[str, object], tuple[_EncodedSpan, ...]]:
@@ -1038,6 +1068,10 @@ def _parse_resource(
         raise NesResourceError(f"resource {spec.resource_id} identity differs from profile")
     if raw.get("kind") != spec.kind:
         raise NesResourceError(f"resource {spec.resource_id} kind differs from profile")
+    key = _parse_key(raw, spec)
+    cached = _PARSED.get(key) if key is not None else None
+    if cached is not None:
+        return raw, cached
     expected_fields, payload, encoded_spans = _codec(spec.codec).parse(raw, spec)
     if set(raw) != expected_fields:
         raise NesResourceError(
@@ -1046,6 +1080,10 @@ def _parse_resource(
     if encoded_spans is None:
         offset, _size = _span(spec, len(payload))
         encoded_spans = (_EncodedSpan(offset, payload),)
+    if key is not None:
+        if len(_PARSED) >= _PARSED_LIMIT:
+            _PARSED.clear()
+        _PARSED[key] = encoded_spans
     return raw, encoded_spans
 
 
