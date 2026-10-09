@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.nes_sound_effects import (
+from retrolarium_kit.platform.nes.sound_effects import (
     Apu, Bus, Cpu6502, SoundEffectError, Table, effect_plan, play, source_tables,
 )
 

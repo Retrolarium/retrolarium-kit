@@ -34,7 +34,7 @@ import tempfile
 import tomllib
 from typing import Any, Mapping
 
-from .authoring import AuthoringError
+from retrolarium_kit.core.authoring import AuthoringError
 
 
 SCHEMA = "retrolarium.game"
@@ -122,7 +122,7 @@ def load_descriptor(path: Path) -> GameDescriptor:
         raise GameRepositoryError(f"game.platform must be one of {sorted(PLATFORMS)}")
     profile_id = _string(game.get("profile"), "game.profile")
     if profile_id == FLICKY_PROFILE:
-        from .flicky_content import CANONICAL_SHA256
+        from retrolarium_kit.games.flicky.content import CANONICAL_SHA256
 
         shas = {FLICKY_REVISION: CANONICAL_SHA256}
     else:
@@ -165,7 +165,7 @@ def load_descriptor(path: Path) -> GameDescriptor:
 
 def _profile_by_id(profile_id: str):
     """The packaged game profile a descriptor names ("pacman.v1")."""
-    from .game_profiles import packaged_game_profiles
+    from retrolarium_kit.core.game_profiles import packaged_game_profiles
 
     registry = packaged_game_profiles()
     for identifier in registry.identifiers():
@@ -185,9 +185,9 @@ def _sha256(path: Path) -> str:
 
 def identify_rom(path: Path) -> list[dict[str, str]]:
     """Every packaged profile revision whose image this file is."""
-    from .game_profiles import packaged_game_profiles
+    from retrolarium_kit.core.game_profiles import packaged_game_profiles
 
-    from .flicky_content import CANONICAL_SHA256
+    from retrolarium_kit.games.flicky.content import CANONICAL_SHA256
 
     digest = _sha256(path)
     registry = packaged_game_profiles()
@@ -234,7 +234,7 @@ def _documents(descriptor: GameDescriptor, revision: Revision) -> list[tuple[str
 def _edits(descriptor: GameDescriptor, revision: Revision) -> Path:
     """Where a revision's edited documents live."""
     if descriptor.source_mode == "flicky-content":
-        from .flicky_content import SOURCE_DIRECTORY
+        from retrolarium_kit.games.flicky.content import SOURCE_DIRECTORY
 
         return descriptor.root / WORKSPACE_DIRECTORY / revision.id / SOURCE_DIRECTORY
     return descriptor.root / HACK_DIRECTORY / revision.id
@@ -364,7 +364,7 @@ def _project_text(descriptor: GameDescriptor, revision: Revision) -> str:
 
 def prepare_revision(descriptor: GameDescriptor, revision_id: str, *, rom: Path | None = None) -> dict[str, object]:
     """Make one revision ready to open and return its generated project."""
-    from .games import extract_game
+    from retrolarium_kit.games.catalog import extract_game
 
     revision = descriptor.revision(revision_id)
     target = descriptor.root / revision.rom
@@ -432,7 +432,7 @@ def reset_revision(descriptor: GameDescriptor, revision_id: str) -> dict[str, ob
 def _prepare_flicky(descriptor: GameDescriptor, revision: Revision, rom: Path, original: Path) -> list[str]:
     """Import the repository into the revision's snapshot once, keeping a
     pristine copy of its workspace documents."""
-    from .flicky_content import import_flicky_source
+    from retrolarium_kit.games.flicky.content import import_flicky_source
 
     workspace = descriptor.root / WORKSPACE_DIRECTORY / revision.id
     snapshot = _edits(descriptor, revision)
@@ -454,7 +454,7 @@ def repository_catalog() -> Mapping[str, Any]:
     is published and the descriptor at its root."""
     from importlib import resources
 
-    path = resources.files("retrolarium_kit").joinpath("profiles", "repositories.json")
+    path = resources.files("retrolarium_kit.core").joinpath("profiles", "repositories.json")
     return json.loads(path.read_text(encoding="utf-8"))
 
 

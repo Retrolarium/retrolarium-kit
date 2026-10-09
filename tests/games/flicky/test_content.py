@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from retrolarium_kit.flicky_content import (
+from retrolarium_kit.games.flicky.content import (
     CANONICAL_SIZE,
     FlickyContentError,
     import_flicky_source,

@@ -8,7 +8,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.pacman_actor import (
+from retrolarium_kit.games.pacman.actor import (
     ALTERNATE_FRAMES,
     ENCODED_SIZE,
     STANDARD_FRAMES,

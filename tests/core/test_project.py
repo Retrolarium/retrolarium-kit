@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.project import (
+from retrolarium_kit.core.project import (
     OPEN_DISK_SYS_ROMS,
     OPEN_DISK_SYS_START,
     ProjectError,
@@ -25,9 +25,7 @@ from retrolarium_kit.project import (
     launch_project_smoke,
     verify_project,
 )
-from retrolarium_kit.snes_pipeline import disassemble_snes
 from test_fds import fixture as fds_fixture
-from test_snes_pointers import probe_image
 
 
 def digest(payload: bytes) -> str:
@@ -173,7 +171,7 @@ class ProjectOperationTests(unittest.TestCase):
             self.assertEqual("user", own["fds_bios"])
             self.assertNotIn("-rompath", own["arguments"])
             self.assertEqual(str(OPEN_DISK_SYS_START), own["arguments"][own["arguments"].index("-autoboot_script") + 1])
-            with patch("retrolarium_kit.project.FDS_BIOS_KNOWN", hashlib.sha1(dump).hexdigest()):
+            with patch("retrolarium_kit.core.project.FDS_BIOS_KNOWN", hashlib.sha1(dump).hexdigest()):
                 known = launch_image_plan(disk, platform="nes", mame=mame)
             self.assertEqual("user", known["fds_bios"])
             self.assertNotIn("-seconds_to_run", known["arguments"])
@@ -186,7 +184,7 @@ class ProjectOperationTests(unittest.TestCase):
             older = root / "disksys.rom"
             older.write_bytes(b"older dump")
             digest = hashlib.sha1(b"older dump").hexdigest()
-            with patch.dict("retrolarium_kit.project.FDS_BIOS", {digest: "older dump"}):
+            with patch.dict("retrolarium_kit.core.project.FDS_BIOS", {digest: "older dump"}):
                 result = install_fds_bios(older, mame)
             self.assertEqual(str(root / "roms" / "fds" / "rp2c33a-01a.bin"), result["path"])
             self.assertEqual(b"older dump", (root / "roms" / "fds" / "rp2c33a-01a.bin").read_bytes())
@@ -224,7 +222,7 @@ class ProjectOperationTests(unittest.TestCase):
             mame.write_bytes(b"mame")
             completed = subprocess.CompletedProcess([], 0, "out", "err")
             with patch(
-                "retrolarium_kit.project.subprocess.run", return_value=completed
+                "retrolarium_kit.core.project.subprocess.run", return_value=completed
             ) as run:
                 result = launch_image_smoke(
                     rom,
@@ -239,51 +237,6 @@ class ProjectOperationTests(unittest.TestCase):
             self.assertTrue(
                 (Path(result["run_directory"]) / "run-result.json").is_file()
             )
-
-    @unittest.skipUnless(os.name == "nt", "bundled PE smoke runs on Windows")
-    def test_bundled_runner_builds_generated_snes_without_docker(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            rom = root / "probe.sfc"
-            rom.write_bytes(probe_image("lorom").container_data)
-            project = root / "project"
-            disassemble_snes(rom, project)
-
-            result = build_project(
-                project / "retrolarium-project.json",
-                toolchain_cache=root / "toolchains",
-            )
-
-            self.assertEqual("retrolarium-kit", result["runner"]["kind"])
-            self.assertEqual("ca65-ld65-v1", result["runner"]["recipe"])
-            rebuilt = project / "generated/build/rebuilt.sfc"
-            self.assertEqual(rom.read_bytes(), rebuilt.read_bytes())
-            self.assertEqual(
-                "exact",
-                verify_project(project / "retrolarium-project.json")["status"],
-            )
-
-    def test_snes_launch_plan_uses_declared_machine_and_explicit_argv(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            rom = root / "probe.sfc"
-            rom.write_bytes(probe_image("lorom").container_data)
-            project = root / "project"
-            disassemble_snes(rom, project)
-            rebuilt = project / "generated/build/rebuilt.sfc"
-            rebuilt.parent.mkdir(parents=True, exist_ok=True)
-            rebuilt.write_bytes(rom.read_bytes())
-            mame = root / "consoles.exe"
-            mame.write_bytes(b"mame")
-            plan = launch_plan(
-                project / "retrolarium-project.json",
-                mame=mame,
-                machine="snespal",
-            )
-            self.assertEqual("snes", plan["platform"])
-            self.assertEqual("snespal", plan["arguments"][0])
-            self.assertEqual("-cart", plan["arguments"][1])
-            self.assertEqual(str(rebuilt), plan["arguments"][2])
 
     def test_launch_plan_is_explicit_argv_and_restricts_machine(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -310,7 +263,7 @@ class ProjectOperationTests(unittest.TestCase):
             mame.write_bytes(b"mame")
             completed = subprocess.CompletedProcess([], 0, "out", "err")
             with patch(
-                "retrolarium_kit.project.subprocess.run", return_value=completed
+                "retrolarium_kit.core.project.subprocess.run", return_value=completed
             ) as run:
                 result = launch_project_smoke(
                     manifest,
@@ -334,7 +287,7 @@ class ProjectOperationTests(unittest.TestCase):
                 [str(mame)], 1, output=b"partial output", stderr=b"partial error"
             )
             with patch(
-                "retrolarium_kit.project.subprocess.run", side_effect=timeout
+                "retrolarium_kit.core.project.subprocess.run", side_effect=timeout
             ):
                 result = launch_project_smoke(
                     manifest,
@@ -367,7 +320,7 @@ class ProjectOperationTests(unittest.TestCase):
                 "Fatal error: Required files are missing, the machine cannot be run.\n",
             )
             with patch(
-                "retrolarium_kit.project.subprocess.run", return_value=completed
+                "retrolarium_kit.core.project.subprocess.run", return_value=completed
             ):
                 result = launch_project_smoke(
                     manifest,
@@ -393,7 +346,7 @@ class ProjectOperationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             manifest = write_project(Path(directory))
             completed = subprocess.CompletedProcess([], 0)
-            with patch("retrolarium_kit.project.subprocess.run", return_value=completed) as run:
+            with patch("retrolarium_kit.core.project.subprocess.run", return_value=completed) as run:
                 result = build_project(manifest)
 
             command = run.call_args.args[0]

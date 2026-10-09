@@ -15,11 +15,11 @@ import subprocess
 import sys
 import tempfile
 
-from retrolarium_kit.flicky_content import (
+from retrolarium_kit.games.flicky.content import (
     CANONICAL_SHA256, SOURCE_DIRECTORY, WORKSPACE_FILES, import_flicky_source,
 )
-from retrolarium_kit.megadrive import cartridge_checksum
-from retrolarium_kit.studio_project import (
+from retrolarium_core.megadrive import cartridge_checksum
+from retrolarium_kit.studio.project import (
     StudioProjectError, build_studio_project, create_flicky_studio_project,
 )
 
@@ -29,7 +29,7 @@ def asset(document: dict, identifier: str) -> dict:
 
 
 def capture_sega_screen(mame: Path, rom: Path, prefix: Path) -> Path:
-    probe = (Path(__file__).resolve().parents[1] / "src/retrolarium_kit/runtime"
+    probe = (Path(__file__).resolve().parents[1] / "src/retrolarium_kit/studio/runtime"
              / "flicky_mame_sega_screen_probe.lua")
     environment = os.environ.copy()
     environment["FLICKY_SEGA_SCREEN_PREFIX"] = str(prefix.resolve())

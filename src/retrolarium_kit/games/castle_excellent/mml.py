@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import Mapping
 
-from .authoring import AuthoringError
+from retrolarium_kit.core.authoring import AuthoringError
 
 
 CODEC = "castle.mml-music.v1"

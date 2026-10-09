@@ -9,12 +9,12 @@ from pathlib import Path
 import subprocess
 import tempfile
 
-from retrolarium_kit.flicky_bonus_placement import validate_bonus_placements
-from retrolarium_kit.flicky_content import (
+from retrolarium_kit.games.flicky.bonus_placement import validate_bonus_placements
+from retrolarium_kit.games.flicky.content import (
     CANONICAL_SHA256, SOURCE_DIRECTORY, WORKSPACE_FILES,
     build_flicky_source_snapshot, import_flicky_source,
 )
-from retrolarium_kit.studio_project import (
+from retrolarium_kit.studio.project import (
     build_studio_project, create_flicky_studio_project,
 )
 from run_flicky_bonus_motion_mame_source_oracle import run_mame

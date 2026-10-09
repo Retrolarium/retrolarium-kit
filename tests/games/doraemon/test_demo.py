@@ -7,10 +7,10 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.doraemon_demo import (
+from retrolarium_kit.games.doraemon.demo import (
     DoraemonDemoError, build_demo, capacity, decode_demo, parse_demo_document,
 )
-from retrolarium_kit.game_profiles import packaged_game_profiles
+from retrolarium_kit.core.game_profiles import packaged_game_profiles
 
 
 # The cartridge image is not part of the repository; the test runs where the

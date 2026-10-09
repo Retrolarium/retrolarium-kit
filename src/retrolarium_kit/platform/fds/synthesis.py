@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Mapping
 
-from .authoring import AuthoringError, stable_identifier
+from retrolarium_kit.core.authoring import AuthoringError, stable_identifier
 
 
 CODEC = "fds.synthesis.v1"

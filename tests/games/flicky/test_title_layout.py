@@ -8,7 +8,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.flicky_title_layout import (
+from retrolarium_kit.games.flicky.title_layout import (
     SOURCE, export_title_layout, stage_title_layout, validate_title_layout,
 )
 

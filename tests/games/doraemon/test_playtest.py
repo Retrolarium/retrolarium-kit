@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.studio_project import (
+from retrolarium_kit.studio.project import (
     DORAEMON_UNDERGROUND_WRITES, DORAEMON_WORLD1_START_WRITES, DORAEMON_WORLD3_START_WRITES,
     StudioProjectError, _doraemon_playtest_point,
 )

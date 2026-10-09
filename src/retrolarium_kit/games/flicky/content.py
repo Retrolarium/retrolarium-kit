@@ -17,13 +17,13 @@ import subprocess
 import sys
 import tempfile
 
-from .megadrive import stamp_cartridge_checksum
-from .flicky_bonus_motion import export_bonus_motion, validate_bonus_motion
-from .flicky_demo import export_attract_demos, validate_attract_demos
-from .flicky_bonus_placement import (
+from retrolarium_core.megadrive import stamp_cartridge_checksum
+from retrolarium_kit.games.flicky.bonus_motion import export_bonus_motion, validate_bonus_motion
+from retrolarium_kit.games.flicky.demo import export_attract_demos, validate_attract_demos
+from retrolarium_kit.games.flicky.bonus_placement import (
     export_bonus_placements, validate_bonus_placements,
 )
-from .flicky_title_layout import export_title_layout, validate_title_layout
+from retrolarium_kit.games.flicky.title_layout import export_title_layout, validate_title_layout
 
 
 CANONICAL_SHA256 = "4df1a91e08376ae773a6eb8e5abe310f94ca39d8f81583b91a9477fedcb68c11"
@@ -286,7 +286,7 @@ def build_flicky_source_snapshot(
     writer = Path(selected_writer).resolve()
     if not writer.is_file():
         raise FlickyContentError(f"native Flicky level writer is missing: {writer}")
-    _run([sys.executable, str(Path(__file__).with_name("flicky_native_build.py")),
+    _run([sys.executable, str(Path(__file__).with_name("native_build.py")),
           "--source", str(source), "--writer", str(writer),
           "--as-bin", str(as_bin), "--p2bin", str(p2bin)], source, env=env)
     built = source / "build/content/flicky.bin"

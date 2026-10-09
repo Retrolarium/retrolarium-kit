@@ -11,12 +11,12 @@ import subprocess
 import tempfile
 from typing import Any
 
-from .build_toolchains import ResolvedToolchain, materialize_build_toolchain
-from .contracts import artifact_path, load_disassembly_manifest
-from .fds import FdsError, parse_fds_side
-from .ines import InesError, load_ines, parse_ines_prefix
-from .megadrive import load_megadrive
-from .snes import load_snes
+from retrolarium_kit.core.build_toolchains import ResolvedToolchain, materialize_build_toolchain
+from retrolarium_core.contracts import artifact_path, load_disassembly_manifest
+from retrolarium_core.fds import FdsError, parse_fds_side
+from retrolarium_core.ines import InesError, load_ines, parse_ines_prefix
+from retrolarium_core.megadrive import load_megadrive
+from retrolarium_core.snes import load_snes
 
 
 class ProjectError(RuntimeError):
@@ -493,8 +493,10 @@ def fds_bios(mame: Path) -> Path | None:
 # OpenDiskSysROM, the free Disk System BIOS the kit carries, for players
 # without Nintendo's: a ROM folder holding it as MAME names the BIOS, and the
 # script that gets MAME past its warning about the unknown checksum.
-OPEN_DISK_SYS_ROMS = Path(__file__).with_name("firmware") / "opendisksys"
-OPEN_DISK_SYS_START = Path(__file__).with_name("runtime") / "opendisksys_mame_start.lua"
+# OpenDiskSys: the open FDS BIOS replacement, as a MAME ROM folder, and the
+# Lua script that starts a disk with it.
+OPEN_DISK_SYS_ROMS = Path(__file__).with_name("opendisksys")
+OPEN_DISK_SYS_START = OPEN_DISK_SYS_ROMS / "mame_start.lua"
 
 
 def _unknown_bios_arguments(*, interactive: bool) -> list[str]:

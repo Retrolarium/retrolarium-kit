@@ -10,22 +10,22 @@ import struct
 import tempfile
 import unittest
 
-from retrolarium_kit.audio_operations import (
+from retrolarium_kit.studio.audio import (
     export_smb_document_midi,
     import_smb_midi_into_document,
     preview_smb_midi_import,
     render_smb_document_wav,
 )
-from retrolarium_kit.authoring import GameProfile, ResourceSpec, RevisionSpec
+from retrolarium_kit.core.authoring import GameProfile, ResourceSpec, RevisionSpec
 from retrolarium_kit.cli import main as cli_main
-from retrolarium_kit.game_profiles import packaged_game_profiles
-from retrolarium_kit.nes_resources import (
+from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from retrolarium_kit.platform.nes.resources import (
     build_resources,
     decode_resources,
     inspection_details,
 )
-from retrolarium_kit.midi import parse_midi
-from retrolarium_kit.smb_apu import (
+from retrolarium_kit.core.midi import parse_midi
+from retrolarium_kit.games.smb.apu import (
     SmbApuError,
     apply_midi_channel_commands,
     decode_channel_byte,

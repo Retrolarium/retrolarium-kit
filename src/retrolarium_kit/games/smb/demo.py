@@ -14,12 +14,12 @@ from dataclasses import dataclass
 import hashlib
 from typing import Any, Callable, Mapping
 
-from .authoring import (
+from retrolarium_kit.core.authoring import (
     Address, AddressRange, AuthoringError, BuildPlan, Change, ChangeSet,
     GameProfile, Provenance, RevisionSpec,
 )
-from .fds import FdsError, fds_payload, fds_payload_ranges
-from .ines import parse_ines, parse_ines_prefix
+from retrolarium_core.fds import FdsError, fds_payload, fds_payload_ranges
+from retrolarium_core.ines import parse_ines, parse_ines_prefix
 
 
 CODEC = "smb.demo-input.v1"

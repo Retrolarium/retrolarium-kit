@@ -9,11 +9,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .doraemon_world2_branches import encode_branches
-from .doraemon_world2_chapters import encode_chapters
-from .doraemon_world2_projection import project_screen
-from .doraemon_world2_stage import encode_stage
-from .doraemon_world2_streams import encode_screens
+from retrolarium_kit.games.doraemon.world2.branches import encode_branches
+from retrolarium_kit.games.doraemon.world2.chapters import encode_chapters
+from retrolarium_kit.games.doraemon.world2.projection import project_screen
+from retrolarium_kit.games.doraemon.world2.stage import encode_stage
+from retrolarium_kit.games.doraemon.world2.streams import encode_screens
 
 
 ROUTE_NAMES = ("Part 1", "Part 2", "Part 2A", "Part 2B", "Part 3")

@@ -7,12 +7,12 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.game_profiles import packaged_game_profiles
-from retrolarium_kit.nes_resources import (
+from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from retrolarium_kit.platform.nes.resources import (
     NesResourceBundleDocument, NesResourceError, _decode_profile_resource, _resource_specs, build_resources,
     decode_resources,
 )
-from retrolarium_kit.smb_sfx_tables import SmbSfxTableError, encode
+from retrolarium_kit.games.smb.sfx_tables import SmbSfxTableError, encode
 
 
 # The images are not part of the repository; the test runs where the

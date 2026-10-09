@@ -14,7 +14,7 @@ from typing import Any
 import wave
 
 
-from . import doraemon_audio_streams as audio_streams
+from retrolarium_kit.games.doraemon import audio_streams
 
 
 NTSC_FRAME_RATE = 60.0988

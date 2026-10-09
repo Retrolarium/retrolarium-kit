@@ -10,7 +10,7 @@ import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.games import build_game, extract_game, inspect_game
+from retrolarium_kit.games.catalog import build_game, extract_game, inspect_game
 
 
 def check(rom: Path, revision: str, oracle: object, contract: dict) -> None:

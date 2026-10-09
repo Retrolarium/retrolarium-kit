@@ -12,7 +12,7 @@ import zlib
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.doraemon_hierarchy import decode_hierarchy, encode_hierarchy
+from retrolarium_kit.games.doraemon.hierarchy import decode_hierarchy, encode_hierarchy
 
 
 EXPECTED = {

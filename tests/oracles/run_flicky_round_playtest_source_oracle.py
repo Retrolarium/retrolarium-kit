@@ -18,9 +18,9 @@ import struct
 import sys
 import tempfile
 
-from retrolarium_kit.flicky_content import WORKSPACE_FILES, import_flicky_source
-from retrolarium_kit.megadrive import cartridge_checksum
-from retrolarium_kit.studio_project import (
+from retrolarium_kit.games.flicky.content import WORKSPACE_FILES, import_flicky_source
+from retrolarium_core.megadrive import cartridge_checksum
+from retrolarium_kit.studio.project import (
     StudioProjectError,
     build_studio_project,
     create_flicky_studio_project,

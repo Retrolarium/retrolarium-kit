@@ -9,8 +9,8 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.game_profiles import packaged_game_profiles
-from retrolarium_kit.solomon_presentation import (
+from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from retrolarium_kit.games.solomon.presentation import (
     build_presentation, decode_presentation, parse_presentation_document,
 )
 

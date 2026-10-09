@@ -7,10 +7,10 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.authoring import GameProfile, ResourceSpec, RevisionSpec
-from retrolarium_kit.game_profiles import packaged_game_profiles
-from retrolarium_kit.games import authoring_adapters
-from retrolarium_kit.solomon_animations import (
+from retrolarium_kit.core.authoring import GameProfile, ResourceSpec, RevisionSpec
+from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from retrolarium_kit.games.catalog import authoring_adapters
+from retrolarium_kit.games.solomon.animations import (
     DEFINITION_SIZE, FRAME_COUNT, GROUP_COUNTS, GROUP_OFFSETS, POINTER_COUNT,
     SELECTOR_OFFSETS, SolomonAnimationError, animation_frame_for_action,
     build_animations,

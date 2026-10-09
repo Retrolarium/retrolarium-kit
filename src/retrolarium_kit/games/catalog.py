@@ -9,21 +9,21 @@ import re
 import tempfile
 from typing import Any, Sequence
 
-from .authoring import AuthoringError, GameProfile, Registry, RevisionSpec
-from .castle import (
+from retrolarium_kit.core.authoring import AuthoringError, GameProfile, Registry, RevisionSpec
+from retrolarium_kit.games.castle.rooms import (
     CastleLevelDocument,
     LEVEL_DOCUMENT_SCHEMA,
     build_levels,
     decode_levels,
     parse_level_document,
 )
-from .game_profiles import (
+from retrolarium_kit.core.game_profiles import (
     load_game_profile,
     packaged_game_profiles,
     recognize_revision,
 )
-from .ines import load_ines
-from .nes_resources import (
+from retrolarium_core.ines import load_ines
+from retrolarium_kit.platform.nes.resources import (
     ADAPTER_CODEC as NES_RESOURCE_ADAPTER_CODEC,
     DOCUMENT_SCHEMA as NES_RESOURCE_DOCUMENT_SCHEMA,
     NesResourceBundleDocument,
@@ -32,8 +32,8 @@ from .nes_resources import (
     inspection_details as nes_resource_details,
     parse_resource_document,
 )
-from .project import launch_image_plan, launch_image_smoke
-from .solomon import (
+from retrolarium_kit.core.project import launch_image_plan, launch_image_smoke
+from retrolarium_kit.games.solomon.rooms import (
     BLOCK_CODEC as SOLOMON_BLOCK_CODEC,
     DOCUMENT_SCHEMA as SOLOMON_ROOM_DOCUMENT_SCHEMA,
     SolomonRoomDocument,
@@ -41,7 +41,7 @@ from .solomon import (
     decode_rooms as decode_solomon_rooms,
     parse_room_document as parse_solomon_room_document,
 )
-from .solomon_room_art import (
+from retrolarium_kit.games.solomon.room_art import (
     CODEC as SOLOMON_ROOM_ART_CODEC,
     SCHEMA as SOLOMON_ROOM_ART_SCHEMA,
     SolomonRoomArtDocument,
@@ -49,7 +49,7 @@ from .solomon_room_art import (
     decode_room_art,
     parse_room_art_document,
 )
-from .solomon_sprite_frames import (
+from retrolarium_kit.games.solomon.sprite_frames import (
     CODEC as SOLOMON_SPRITE_FRAME_CODEC,
     SCHEMA as SOLOMON_SPRITE_FRAME_SCHEMA,
     SolomonSpriteFrameDocument,
@@ -57,7 +57,7 @@ from .solomon_sprite_frames import (
     decode_sprite_frames,
     parse_sprite_frame_document,
 )
-from .solomon_animations import (
+from retrolarium_kit.games.solomon.animations import (
     CODEC as SOLOMON_ANIMATION_CODEC,
     SCHEMA as SOLOMON_ANIMATION_SCHEMA,
     SolomonAnimationDocument,
@@ -65,7 +65,7 @@ from .solomon_animations import (
     decode_animations,
     parse_animation_document,
 )
-from .solomon_audio import (
+from retrolarium_kit.games.solomon.audio import (
     CODEC as SOLOMON_AUDIO_CODEC,
     SCHEMA as SOLOMON_AUDIO_SCHEMA,
     SolomonAudioDocument,
@@ -73,7 +73,7 @@ from .solomon_audio import (
     decode_audio as decode_solomon_audio,
     parse_audio_document as parse_solomon_audio_document,
 )
-from .solomon_presentation import (
+from retrolarium_kit.games.solomon.presentation import (
     CODEC as SOLOMON_PRESENTATION_CODEC,
     SCHEMA as SOLOMON_PRESENTATION_SCHEMA,
     SolomonPresentationDocument,
@@ -81,7 +81,7 @@ from .solomon_presentation import (
     decode_presentation as decode_solomon_presentation,
     parse_presentation_document as parse_solomon_presentation_document,
 )
-from .castle_screens import (
+from retrolarium_kit.games.castle.screens import (
     CODEC as CASTLE_SCREENS_CODEC,
     SCHEMA as CASTLE_SCREENS_SCHEMA,
     CastleScreensDocument,
@@ -89,7 +89,7 @@ from .castle_screens import (
     decode_screens as decode_castle_screens,
     parse_screens_document as parse_castle_screens_document,
 )
-from .castle_demo import (
+from retrolarium_kit.games.castle.demo import (
     CODEC as CASTLE_DEMO_CODEC,
     SCHEMA as CASTLE_DEMO_SCHEMA,
     CastleDemoDocument,
@@ -97,7 +97,7 @@ from .castle_demo import (
     decode_demo as decode_castle_demo,
     parse_demo_document as parse_castle_demo_document,
 )
-from .doraemon_demo import (
+from retrolarium_kit.games.doraemon.demo import (
     CODEC as DORAEMON_DEMO_CODEC,
     SCHEMA as DORAEMON_DEMO_SCHEMA,
     DoraemonDemoDocument,
@@ -105,7 +105,7 @@ from .doraemon_demo import (
     decode_demo as decode_doraemon_demo,
     parse_demo_document as parse_doraemon_demo_document,
 )
-from .doraemon_music import (
+from retrolarium_kit.games.doraemon.music import (
     CODEC as DORAEMON_MUSIC_CODEC,
     SCHEMA as DORAEMON_MUSIC_SCHEMA,
     DoraemonMusicDocument,
@@ -113,7 +113,7 @@ from .doraemon_music import (
     decode_music as decode_doraemon_music,
     parse_music_document as parse_doraemon_music_document,
 )
-from .doraemon_text import (
+from retrolarium_kit.games.doraemon.text import (
     CODEC as DORAEMON_TEXT_CODEC,
     SCHEMA as DORAEMON_TEXT_SCHEMA,
     DoraemonTextDocument,
@@ -121,7 +121,7 @@ from .doraemon_text import (
     decode_text as decode_doraemon_text,
     parse_text_document as parse_doraemon_text_document,
 )
-from .pacman_demo import (
+from retrolarium_kit.games.pacman.demo import (
     CODEC as PACMAN_DEMO_CODEC,
     SCHEMA as PACMAN_DEMO_SCHEMA,
     PacmanDemoDocument,
@@ -129,7 +129,7 @@ from .pacman_demo import (
     decode_demo as decode_pacman_demo,
     parse_demo_document as parse_pacman_demo_document,
 )
-from .smb_demo import (
+from retrolarium_kit.games.smb.demo import (
     CODEC as SMB_DEMO_CODEC,
     SCHEMA as SMB_DEMO_SCHEMA,
     SmbDemoDocument,
@@ -137,7 +137,7 @@ from .smb_demo import (
     decode_demo as decode_smb_demo,
     parse_demo_document as parse_smb_demo_document,
 )
-from .solomon_text import (
+from retrolarium_kit.games.solomon.text import (
     CODEC as SOLOMON_TEXT_CODEC,
     SCHEMA as SOLOMON_TEXT_SCHEMA,
     SolomonTextDocument,

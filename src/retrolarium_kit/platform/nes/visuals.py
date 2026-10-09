@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Mapping
 
-from .authoring import AuthoringError
+from retrolarium_kit.core.authoring import AuthoringError
 
 
 METATILE_CODEC = "nes.metatile-2x2.v1"

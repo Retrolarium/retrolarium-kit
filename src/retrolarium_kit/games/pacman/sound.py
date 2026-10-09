@@ -9,8 +9,8 @@ import struct
 import wave
 from typing import Mapping
 
-from .authoring import AuthoringError
-from .midi import MidiError, parse_midi, tick_seconds
+from retrolarium_kit.core.authoring import AuthoringError
+from retrolarium_kit.core.midi import MidiError, parse_midi, tick_seconds
 
 
 CODEC = "pacman.sound-streams.v1"

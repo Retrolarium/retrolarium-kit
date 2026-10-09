@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import hashlib
 from typing import Any, Mapping, Sequence
 
-from .authoring import (
+from retrolarium_kit.core.authoring import (
     Address,
     AddressRange,
     AuthoringError,
@@ -20,35 +20,35 @@ from .authoring import (
     RevisionSpec,
     stable_identifier,
 )
-from .castle_mml import (
+from retrolarium_kit.games.castle.mml import (
     CODEC as CASTLE_MML_MUSIC_CODEC,
     decode_music as decode_castle_mml_music,
     encode_music as encode_castle_mml_music,
 )
-from .fds import FdsError, fds_payload, fds_payload_ranges, parse_fds_side
-from .fds_synthesis import (
+from retrolarium_core.fds import FdsError, fds_payload, fds_payload_ranges, parse_fds_side
+from retrolarium_kit.platform.fds.synthesis import (
     CODEC as FDS_SYNTHESIS_CODEC,
     decode_synthesis as decode_fds_synthesis,
     encode_synthesis as encode_fds_synthesis,
 )
-from .fds_music import (
+from retrolarium_kit.platform.fds.music import (
     CODEC as FDS_MUSIC_CODEC,
     decode_music as decode_fds_music,
     encode_music as encode_fds_music,
 )
-from .ines import parse_ines, parse_ines_prefix
-from .doraemon_hierarchy import (
+from retrolarium_core.ines import parse_ines, parse_ines_prefix
+from retrolarium_kit.games.doraemon.hierarchy import (
     CODEC as DORAEMON_HIERARCHY_CODEC,
     decode_hierarchy as decode_doraemon_hierarchy,
     encode_hierarchy as encode_doraemon_hierarchy,
     payload_size as doraemon_hierarchy_size,
 )
-from .doraemon_palettes import (
+from retrolarium_kit.games.doraemon.palettes import (
     ROOM_SELECTOR_CODEC as DORAEMON_ROOM_SELECTOR_CODEC,
     decode_room_selectors as decode_doraemon_room_selectors,
     encode_room_selectors as encode_doraemon_room_selectors,
 )
-from .doraemon_objects import (
+from retrolarium_kit.games.doraemon.objects import (
     DESCRIPTORS_CODEC as DORAEMON_DESCRIPTORS_CODEC,
     ENEMY_PROPERTIES_CODEC as DORAEMON_ENEMY_PROPERTIES_CODEC,
     PLACEMENTS_CODEC as DORAEMON_PLACEMENTS_CODEC,
@@ -68,7 +68,7 @@ from .doraemon_objects import (
     encode_enemy_properties as encode_doraemon_enemy_properties,
     encode_placements as encode_doraemon_placements,
 )
-from .doraemon_metasprites import (
+from retrolarium_kit.games.doraemon.metasprites import (
     VARIABLE_CODEC as DORAEMON_METASPRITE_CODEC,
     WORLD2_ATTRIBUTES as DORAEMON_WORLD2_METASPRITE_ATTRIBUTES,
     WORLD2_CODEC as DORAEMON_WORLD2_METASPRITE_CODEC,
@@ -81,105 +81,105 @@ from .doraemon_metasprites import (
     decode_oam_stream as decode_doraemon_oam_stream,
     encode_oam_stream as encode_doraemon_oam_stream,
 )
-from .doraemon_world2_metatiles import (
+from retrolarium_kit.games.doraemon.world2.metatiles import (
     CODEC as DORAEMON_WORLD2_METATILE_CODEC,
     COLLISION_SIZE as DORAEMON_WORLD2_COLLISION_SIZE,
     VISUAL_SIZE as DORAEMON_WORLD2_VISUAL_SIZE,
     decode_metatiles as decode_doraemon_world2_metatiles,
     encode_metatiles as encode_doraemon_world2_metatiles,
 )
-from .doraemon_world2_streams import (
+from retrolarium_kit.games.doraemon.world2.streams import (
     CODEC as DORAEMON_WORLD2_SCREEN_CODEC,
     PAYLOAD_SIZE as DORAEMON_WORLD2_SCREEN_SIZE,
     decode_screens as decode_doraemon_world2_screens,
     encode_screens as encode_doraemon_world2_screens,
 )
-from .doraemon_world2_stage import (
+from retrolarium_kit.games.doraemon.world2.stage import (
     CODEC as DORAEMON_WORLD2_STAGE_CODEC,
     SEQUENCE_SIZE as DORAEMON_WORLD2_STAGE_SEQUENCE_SIZE,
     START_SIZE as DORAEMON_WORLD2_STAGE_START_SIZE,
     decode_stage as decode_doraemon_world2_stage,
     encode_stage as encode_doraemon_world2_stage,
 )
-from .doraemon_world2_branches import (
+from retrolarium_kit.games.doraemon.world2.branches import (
     CODEC as DORAEMON_WORLD2_BRANCH_CODEC,
     PAYLOAD_SIZE as DORAEMON_WORLD2_BRANCH_SIZE,
     decode_branches as decode_doraemon_world2_branches,
     encode_branches as encode_doraemon_world2_branches,
 )
-from .doraemon_world2_chapters import (
+from retrolarium_kit.games.doraemon.world2.chapters import (
     CODEC as DORAEMON_WORLD2_CHAPTER_CODEC,
     PAYLOAD_SIZE as DORAEMON_WORLD2_CHAPTER_SIZE,
     decode_chapters as decode_doraemon_world2_chapters,
     encode_chapters as encode_doraemon_world2_chapters,
 )
-from .pacman_maze import (
+from retrolarium_kit.games.pacman.maze import (
     CODEC as PACMAN_MAZE_CODEC,
     decode_maze_rle,
     encode_maze_grid,
     inspect_maze,
 )
-from .pacman_actor import (
+from retrolarium_kit.games.pacman.actor import (
     CODEC as PACMAN_ACTOR_CODEC,
     decode_actor_mapping,
     encode_actor_mapping,
 )
-from .pacman_sound import (
+from retrolarium_kit.games.pacman.sound import (
     CODEC as PACMAN_SOUND_CODEC,
     decode_sound_bundle,
     encode_sound_bundle,
     encode_stream as encode_sound_stream,
 )
-from .pacman_screen import (
+from retrolarium_kit.games.pacman.screen import (
     CODEC as PACMAN_SCREEN_CODEC,
     decode_screen_collection,
     encode_screen_collection,
 )
-from .nes_text import (
+from retrolarium_kit.platform.nes.text import (
     CODEC as FIXED_TEXT_CODEC,
     decode_text_fields,
     encode_text_fields,
 )
-from .nes_screen_packets import (
+from retrolarium_kit.platform.nes.screen_packets import (
     CODEC as PPU_SCREEN_PACKET_CODEC,
     decode_screen_packets,
     encode_screen_packets,
 )
-from .smb_world import (
+from retrolarium_kit.games.smb.world import (
     CODEC as SMB_WORLD_CODEC,
     decode_world as decode_smb_world,
     encode_world as encode_smb_world,
 )
-from .smb_level import (
+from retrolarium_kit.games.smb.level import (
     CODEC as SMB_LEVEL_CODEC,
     decode_levels as decode_smb_levels,
     encode_level_pointers as encode_smb_level_pointers,
     encode_levels as encode_smb_levels,
     stream_pool as smb_level_stream_pool,
 )
-from .smb_player_frames import (
+from retrolarium_kit.games.smb.player_frames import (
     CODEC as SMB_PLAYER_FRAME_CODEC,
     ENCODED_SIZE as SMB_PLAYER_FRAME_SIZE,
     decode_player_frames,
     encode_player_frames,
 )
-from .smb_apu import (
+from retrolarium_kit.games.smb.apu import (
     CODEC as SMB_APU_CODEC,
     decode_music as decode_smb_music,
     encode_music as encode_smb_music,
     parse_layout as parse_smb_apu_layout,
 )
-from .smb_apu_envelope import (
+from retrolarium_kit.games.smb.apu_envelope import (
     CODEC as SMB_APU_ENVELOPE_CODEC,
     decode_envelope as decode_smb_apu_envelope,
     encode_envelope as encode_smb_apu_envelope,
 )
-from .smb_sfx_tables import (
+from retrolarium_kit.games.smb.sfx_tables import (
     CODEC as SMB_SFX_TABLES_CODEC,
     decode as decode_smb_sfx_tables,
     encode as encode_smb_sfx_tables,
 )
-from .nes_visuals import (
+from retrolarium_kit.platform.nes.visuals import (
     METATILE_CODEC,
     PALETTE_PACKET_CODEC,
     decode_metatiles,

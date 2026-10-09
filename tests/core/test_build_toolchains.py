@@ -10,7 +10,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.build_toolchains import (
+from retrolarium_kit.core.build_toolchains import (
     BuildToolchainError,
     load_build_toolchain_manifest,
     materialize_build_toolchain,

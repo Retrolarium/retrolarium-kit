@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.authoring import (
+from retrolarium_kit.core.authoring import (
     AuthoringError,
     GameProfile,
     PayloadSpec,
@@ -21,23 +21,23 @@ from retrolarium_kit.authoring import (
     ResourceSpec,
     RevisionSpec,
 )
-from retrolarium_kit.game_profiles import packaged_game_profiles
-import retrolarium_kit.games as games_module
-from retrolarium_kit.games import (
+from retrolarium_kit.core.game_profiles import packaged_game_profiles
+import retrolarium_kit.games.catalog as games_module
+from retrolarium_kit.games.catalog import (
     build_game,
     build_game_documents,
     extract_game,
     inspect_game,
     validate_game,
 )
-from retrolarium_kit.nes_resources import (
+from retrolarium_kit.platform.nes.resources import (
     NesResourceError,
     build_resources,
     decode_resources,
     inspection_details,
     parse_resource_document,
 )
-from retrolarium_kit.smb_player_frames import FRAME_COUNT, TILES_PER_FRAME
+from retrolarium_kit.games.smb.player_frames import FRAME_COUNT, TILES_PER_FRAME
 
 
 def fixture_image() -> bytes:

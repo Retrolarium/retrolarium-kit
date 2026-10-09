@@ -10,7 +10,7 @@ from dataclasses import dataclass
 import hashlib
 from typing import Mapping
 
-from .authoring import (
+from retrolarium_kit.core.authoring import (
     Address,
     AddressRange,
     AuthoringError,
@@ -22,13 +22,13 @@ from .authoring import (
     ResourceSpec,
     RevisionSpec,
 )
-from .solomon_expansion import (
+from retrolarium_kit.games.solomon.expansion import (
     expand_image,
     mirror_set_capacity,
     mirror_set_changes,
 )
-from .ines import parse_ines
-from .solomon_streams import (
+from retrolarium_core.ines import parse_ines
+from retrolarium_kit.games.solomon.streams import (
     EnemyStream,
     ItemStream,
     decode_enemy_stream,
@@ -38,7 +38,7 @@ from .solomon_streams import (
     parse_enemy_stream,
     parse_item_stream,
 )
-from .solomon_special import (
+from retrolarium_kit.games.solomon.special import (
     MirrorEnemySet,
     MirrorSchedule,
     SPECIAL_SIZES,

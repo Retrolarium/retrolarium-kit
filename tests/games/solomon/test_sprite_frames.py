@@ -8,8 +8,8 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.authoring import GameProfile, ResourceSpec, RevisionSpec
-from retrolarium_kit.solomon_sprite_frames import (
+from retrolarium_kit.core.authoring import GameProfile, ResourceSpec, RevisionSpec
+from retrolarium_kit.games.solomon.sprite_frames import (
     SolomonSpriteFrameError, build_sprite_frames, decode_sprite_frames,
     parse_sprite_frame_document,
 )

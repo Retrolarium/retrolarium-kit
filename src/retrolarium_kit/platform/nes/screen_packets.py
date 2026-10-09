@@ -6,8 +6,8 @@ from dataclasses import dataclass
 import re
 from typing import Mapping
 
-from .authoring import AuthoringError
-from .nes_text import TextEncoding, decode_text, parse_encoding
+from retrolarium_kit.core.authoring import AuthoringError
+from retrolarium_kit.platform.nes.text import TextEncoding, decode_text, parse_encoding
 
 
 CODEC = "nes.ppu-screen-packets.v1"

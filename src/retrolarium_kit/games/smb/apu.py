@@ -10,8 +10,8 @@ import struct
 from typing import Mapping
 import wave
 
-from .authoring import AuthoringError
-from .midi import MidiError, parse_midi, parse_midi_channel, tick_seconds
+from retrolarium_kit.core.authoring import AuthoringError
+from retrolarium_kit.core.midi import MidiError, parse_midi, parse_midi_channel, tick_seconds
 
 
 CODEC = "smb.apu-music.v1"

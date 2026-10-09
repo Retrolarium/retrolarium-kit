@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from retrolarium_kit.studio_project import (
+from retrolarium_kit.studio.project import (
     StudioProjectError,
     _fds_file_blob,
     _fds_program_at,
@@ -102,10 +102,10 @@ class StudioOperationTests(unittest.TestCase):
                 "status": "valid",
             }
             with patch(
-                "retrolarium_kit.studio_project.load_studio_project",
+                "retrolarium_kit.studio.project.load_studio_project",
                 return_value=state,
             ), patch(
-                "retrolarium_kit.studio_project.validate_game_document_for_revision",
+                "retrolarium_kit.studio.project.validate_game_document_for_revision",
                 return_value=semantic,
             ) as validate:
                 result = validate_studio_project(root / "fixture.rlj")
@@ -130,27 +130,27 @@ class StudioOperationTests(unittest.TestCase):
 
             patches = (
                 patch(
-                    "retrolarium_kit.studio_project.load_studio_project",
+                    "retrolarium_kit.studio.project.load_studio_project",
                     return_value=state,
                 ),
                 patch(
-                    "retrolarium_kit.studio_project.validate_game_document_for_revision",
+                    "retrolarium_kit.studio.project.validate_game_document_for_revision",
                     return_value={"status": "valid"},
                 ),
                 patch(
-                    "retrolarium_kit.studio_project.build_project",
+                    "retrolarium_kit.studio.project.build_project",
                     return_value={"artifact": {"path": "generated/base.nes"}},
                 ),
                 patch(
-                    "retrolarium_kit.studio_project.verify_project",
+                    "retrolarium_kit.studio.project.verify_project",
                     return_value={"status": "exact"},
                 ),
                 patch(
-                    "retrolarium_kit.studio_project.build_game",
+                    "retrolarium_kit.studio.project.build_game",
                     side_effect=authoring_build,
                 ),
                 patch(
-                    "retrolarium_kit.studio_project.load_disassembly_manifest",
+                    "retrolarium_kit.studio.project.load_disassembly_manifest",
                     return_value={"input": {"size": len(ines_image())}},
                 ),
             )
@@ -175,16 +175,16 @@ class StudioOperationTests(unittest.TestCase):
                 '{"schema":"unknown"}\n', encoding="utf-8"
             )
             with patch(
-                "retrolarium_kit.studio_project.load_studio_project",
+                "retrolarium_kit.studio.project.load_studio_project",
                 return_value=state,
             ), patch(
-                "retrolarium_kit.studio_project.validate_studio_project",
+                "retrolarium_kit.studio.project.validate_studio_project",
                 return_value={"status": "valid"},
             ), patch(
-                "retrolarium_kit.studio_project.build_project",
+                "retrolarium_kit.studio.project.build_project",
                 return_value={"artifact": {"path": "generated/base.nes"}},
             ), patch(
-                "retrolarium_kit.studio_project.verify_project",
+                "retrolarium_kit.studio.project.verify_project",
                 return_value={"status": "exact"},
             ):
                 with self.assertRaisesRegex(StudioProjectError, "no registered writer"):
@@ -220,19 +220,19 @@ class StudioOperationTests(unittest.TestCase):
                 }
 
             with patch(
-                "retrolarium_kit.studio_project.load_studio_project",
+                "retrolarium_kit.studio.project.load_studio_project",
                 return_value=state,
             ), patch(
-                "retrolarium_kit.studio_project.validate_game_document_for_revision",
+                "retrolarium_kit.studio.project.validate_game_document_for_revision",
                 return_value={"status": "valid"},
             ), patch(
-                "retrolarium_kit.studio_project.build_project",
+                "retrolarium_kit.studio.project.build_project",
                 return_value={"artifact": {"path": "generated/base.nes"}},
             ), patch(
-                "retrolarium_kit.studio_project.verify_project",
+                "retrolarium_kit.studio.project.verify_project",
                 return_value={"status": "exact"},
             ), patch(
-                "retrolarium_kit.studio_project.build_game_documents",
+                "retrolarium_kit.studio.project.build_game_documents",
                 side_effect=composed,
             ) as build_documents:
                 result = build_studio_project(root / "fixture.rlj")
@@ -301,10 +301,10 @@ class StudioOperationTests(unittest.TestCase):
                 "artifact": {"absolute_path": str(artifact)},
             }
             with patch(
-                "retrolarium_kit.studio_project.load_studio_project",
+                "retrolarium_kit.studio.project.load_studio_project",
                 return_value=state,
             ), patch(
-                "retrolarium_kit.studio_project.verify_studio_project",
+                "retrolarium_kit.studio.project.verify_studio_project",
                 return_value=verification,
             ):
                 plan = studio_smb_point_playtest_plan(
@@ -472,10 +472,10 @@ class StudioOperationTests(unittest.TestCase):
                     "artifact": {"absolute_path": str(artifact)},
                 }
                 with patch(
-                    "retrolarium_kit.studio_project.load_studio_project",
+                    "retrolarium_kit.studio.project.load_studio_project",
                     return_value=state,
                 ), patch(
-                    "retrolarium_kit.studio_project.verify_studio_project",
+                    "retrolarium_kit.studio.project.verify_studio_project",
                     return_value=verification,
                 ):
                     plan = studio_castle_point_playtest_plan(
@@ -508,7 +508,7 @@ class StudioOperationTests(unittest.TestCase):
                         )
 
     def test_bundle_upgrade_adds_new_profile_resources_and_keeps_edits(self) -> None:
-        from retrolarium_kit import studio_project
+        from retrolarium_kit.studio import project as studio_project
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -524,7 +524,7 @@ class StudioOperationTests(unittest.TestCase):
                     {"id": "a", "values": [1]}, {"id": "b", "values": [2]}, {"id": "c", "values": [3]},
                 ]}), encoding="utf-8")
 
-            with patch("retrolarium_kit.studio_project.load_studio_project", return_value=state),                     patch("retrolarium_kit.studio_project._project_source", return_value=root / "base.nes"),                     patch("retrolarium_kit.games.extract_game", side_effect=extract):
+            with patch("retrolarium_kit.studio.project.load_studio_project", return_value=state),                     patch("retrolarium_kit.studio.project._project_source", return_value=root / "base.nes"),                     patch("retrolarium_kit.games.catalog.extract_game", side_effect=extract):
                 added = studio_project._add_bundle_resources(
                     root / "fixture.rlj", profile="doraemon.v1", codec="nes.chr-2bpp.v1")
                 self.assertEqual(["b"], added)
@@ -545,9 +545,9 @@ class StudioOperationTests(unittest.TestCase):
             mame.write_bytes(b"fixture")
             verification = {"status": "current", "artifact": {"absolute_path": str(artifact)}}
             with patch(
-                "retrolarium_kit.studio_project.load_studio_project", return_value=state,
+                "retrolarium_kit.studio.project.load_studio_project", return_value=state,
             ), patch(
-                "retrolarium_kit.studio_project.verify_studio_project", return_value=verification,
+                "retrolarium_kit.studio.project.verify_studio_project", return_value=verification,
             ):
                 plan = studio_pacman_round_playtest_plan(root / "fixture.rlj", mame=mame, round=7)
                 self.assertEqual({"PACMAN_PLAYTEST_ROUND": "7"}, plan["environment"])
@@ -592,10 +592,10 @@ class StudioOperationTests(unittest.TestCase):
                     "artifact": {"absolute_path": str(artifact)},
                 }
                 with patch(
-                    "retrolarium_kit.studio_project.load_studio_project",
+                    "retrolarium_kit.studio.project.load_studio_project",
                     return_value=state,
                 ), patch(
-                    "retrolarium_kit.studio_project.verify_studio_project",
+                    "retrolarium_kit.studio.project.verify_studio_project",
                     return_value=verification,
                 ):
                     plan = studio_solomon_point_playtest_plan(

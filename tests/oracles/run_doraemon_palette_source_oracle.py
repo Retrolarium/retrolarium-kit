@@ -11,7 +11,7 @@ import zlib
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.doraemon_palettes import decode_room_selectors, encode_room_selectors
+from retrolarium_kit.games.doraemon.palettes import decode_room_selectors, encode_room_selectors
 
 
 def check_payload(label: str, payload: bytes, size: int, crc: str) -> None:

@@ -4,19 +4,19 @@ import copy
 import hashlib
 import unittest
 
-from retrolarium_kit.authoring import (
+from retrolarium_kit.core.authoring import (
     GameProfile,
     PayloadSpec,
     ResourceSpec,
     RevisionSpec,
 )
-from retrolarium_kit.fds import fds_payload
-from retrolarium_kit.fds_synthesis import (
+from retrolarium_core.fds import fds_payload
+from retrolarium_kit.platform.fds.synthesis import (
     FdsSynthesisError,
     decode_synthesis,
     encode_synthesis,
 )
-from retrolarium_kit.nes_resources import (
+from retrolarium_kit.platform.nes.resources import (
     build_resources,
     decode_resources,
     parse_resource_document,

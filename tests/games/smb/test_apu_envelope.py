@@ -4,9 +4,9 @@ import copy
 import hashlib
 import unittest
 
-from retrolarium_kit.authoring import GameProfile, ResourceSpec, RevisionSpec
-from retrolarium_kit.nes_resources import build_resources, decode_resources
-from retrolarium_kit.smb_apu_envelope import (
+from retrolarium_kit.core.authoring import GameProfile, ResourceSpec, RevisionSpec
+from retrolarium_kit.platform.nes.resources import build_resources, decode_resources
+from retrolarium_kit.games.smb.apu_envelope import (
     SmbApuEnvelopeError,
     decode_envelope,
     encode_envelope,

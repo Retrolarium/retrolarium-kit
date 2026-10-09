@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from retrolarium_kit.flicky_bonus_motion import (
+from retrolarium_kit.games.flicky.bonus_motion import (
     BONUS_SOURCE, TABLE_SPECS, export_bonus_motion,
     stage_bonus_motion, validate_bonus_motion,
 )

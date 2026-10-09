@@ -15,14 +15,14 @@ import hashlib
 from pathlib import Path
 from typing import Any, Mapping
 
-from .authoring import (
+from retrolarium_kit.core.authoring import (
     Address, AddressRange, AuthoringError, BuildPlan, Change, ChangeSet,
     GameProfile, Provenance, RevisionSpec,
 )
-from . import doraemon_audio_streams as streams
-from . import doraemon_sound_synth as synth
-from .doraemon_track_catalog import track_identity
-from .ines import parse_ines
+from retrolarium_kit.games.doraemon import audio_streams as streams
+from retrolarium_kit.games.doraemon import sound_synth as synth
+from retrolarium_kit.games.doraemon.track_catalog import track_identity
+from retrolarium_core.ines import parse_ines
 
 
 CODEC = "doraemon.music-streams.v1"

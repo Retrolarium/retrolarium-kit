@@ -11,19 +11,19 @@ import zlib
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.doraemon_world2_stage import decode_stage, encode_stage
-from retrolarium_kit.doraemon_world2_branches import (
+from retrolarium_kit.games.doraemon.world2.stage import decode_stage, encode_stage
+from retrolarium_kit.games.doraemon.world2.branches import (
     CONDITION_NAMES, decode_branches, encode_branches,
 )
-from retrolarium_kit.doraemon_world2_chapters import (
+from retrolarium_kit.games.doraemon.world2.chapters import (
     decode_chapters, encode_chapters,
 )
-from retrolarium_kit.doraemon_world2_routes import (
+from retrolarium_kit.games.doraemon.world2.routes import (
     ROUTE_NAMES, build_routes, paint_route_cell,
 )
-from retrolarium_kit.doraemon_world2_projection import project_screen
-from retrolarium_kit.doraemon_world2_streams import decode_screens, encode_screens
-from retrolarium_kit.game_profiles import packaged_game_profiles
+from retrolarium_kit.games.doraemon.world2.projection import project_screen
+from retrolarium_kit.games.doraemon.world2.streams import decode_screens, encode_screens
+from retrolarium_kit.core.game_profiles import packaged_game_profiles
 
 
 def main() -> int:

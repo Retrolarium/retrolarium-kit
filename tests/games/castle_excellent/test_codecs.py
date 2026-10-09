@@ -11,13 +11,13 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.authoring import (
+from retrolarium_kit.core.authoring import (
     AuthoringError,
     GameProfile,
     ResourceSpec,
     RevisionSpec,
 )
-from retrolarium_kit.castle import (
+from retrolarium_kit.games.castle.rooms import (
     CastleError,
     PrefixEntry,
     build_levels,
@@ -26,8 +26,8 @@ from retrolarium_kit.castle import (
     parse_level_document,
     validate_prefix_codebook,
 )
-from retrolarium_kit.game_profiles import packaged_game_profiles
-from retrolarium_kit.games import (
+from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from retrolarium_kit.games.catalog import (
     build_game,
     build_game_documents,
     extract_game,

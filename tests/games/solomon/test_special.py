@@ -7,7 +7,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.solomon_special import (
+from retrolarium_kit.games.solomon.special import (
     SEAL_ROOMS,
     SPECIAL_SIZES,
     SolomonSpecialError,

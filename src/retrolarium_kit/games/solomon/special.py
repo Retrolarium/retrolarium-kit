@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Mapping
 
-from .authoring import AuthoringError
-from .solomon_streams import Position, decode_position, parse_position
+from retrolarium_kit.core.authoring import AuthoringError
+from retrolarium_kit.games.solomon.streams import Position, decode_position, parse_position
 
 
 class SolomonSpecialError(AuthoringError):

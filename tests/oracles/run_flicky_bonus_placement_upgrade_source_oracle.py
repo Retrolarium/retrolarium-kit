@@ -11,11 +11,11 @@ import shutil
 import subprocess
 import tempfile
 
-from retrolarium_kit.flicky_bonus_placement import export_bonus_placements
-from retrolarium_kit.flicky_content import (
+from retrolarium_kit.games.flicky.bonus_placement import export_bonus_placements
+from retrolarium_kit.games.flicky.content import (
     SOURCE_DIRECTORY, WORKSPACE_FILES, import_flicky_source,
 )
-from retrolarium_kit.studio_project import (
+from retrolarium_kit.studio.project import (
     StudioProjectError, build_studio_project, create_flicky_studio_project,
     upgrade_flicky_studio_project, verify_studio_project,
 )

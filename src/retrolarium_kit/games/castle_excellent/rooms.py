@@ -11,7 +11,7 @@ from dataclasses import dataclass, replace
 import hashlib
 from typing import Any, Mapping, Sequence
 
-from .authoring import (
+from retrolarium_kit.core.authoring import (
     Address,
     AddressRange,
     AuthoringError,
@@ -24,7 +24,7 @@ from .authoring import (
     ResourceSpec,
     RevisionSpec,
 )
-from .ines import InesImage, parse_ines
+from retrolarium_core.ines import InesImage, parse_ines
 
 
 LEVEL_DOCUMENT_SCHEMA = "retrolarium.castle-levels"

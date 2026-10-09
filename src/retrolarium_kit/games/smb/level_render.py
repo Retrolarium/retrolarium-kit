@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Mapping, Sequence
 
-from .smb_level import AREA_TYPES, positioned_area_objects, positioned_enemy_records
+from retrolarium_kit.games.smb.level import AREA_TYPES, positioned_area_objects, positioned_enemy_records
 
 
 BACKGROUND_SCENERY_OFFSETS = (0x00, 0x30, 0x60)

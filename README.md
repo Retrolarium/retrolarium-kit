@@ -1,31 +1,15 @@
 # Retrolarium Kit
 
 Retrolarium Kit is the independently installable, non-GUI command-line layer
-used by the Retrolarium application and automation. It has no Qt dependency. The
-NES pipeline turns a profiled iNES image into a complete ca65 project, rebuilds
-it and can prove that the result is byte-identical. Mapper profiles describe the
-physical-to-logical projections used for independent bank analysis and source
-emission.
+behind Retrolarium Studio. It has no Qt dependency. It owns the hand-editable
+`.rlj` Studio project, the declarative game profiles, the resource codecs of
+every supported game (extract, validate, rebuild), the bundled assemblers that
+build a disassembly without Docker, and the MAME launch plans the Studio runs.
 
-The Mega Drive pipeline parses cartridge headers and checksums, analyzes the
-68000 and statically recovered Z80 payloads as independent Ghidra Programs,
-emits a complete modular ASM68K project, and proves an exact rebuild. Stable
-symbols, big-endian/relative pointer candidates and cross-CPU copy evidence are
-published through a versioned project manifest.
-
-The SNES pipeline now reaches the same integration boundary. Its versioned image
-component parses plain LoROM/HiROM containers, optional copier headers, mirrored
-checksums, native/emulation vectors and ROM/WRAM/SRAM bus windows. A
-project-owned ca65 probe builds the same W65C816 state and pointer cases as both
-LoROM and HiROM. Statically proven APU uploads are extracted and analyzed as
-independent SPC700 Programs; ExROM layouts and enhancement chips are rejected in
-v1.
-
-The generated source is deliberately conservative: Ghidra-recognized official
-6502 instructions become assembly, accepted pointer tables and interrupt vectors
-become symbolic entries, and every unclassified or unsupported byte remains
-explicit `.byte` data. The iNES header, trainer and CHR payload are separate
-binary assets. A whole-ROM `.incbin` fallback is never used.
+Disassembling a ROM is the job of
+[Retrolarium Disassembler](../retrolarium-disassembler/README.md) (`rldisasm`);
+the kit builds, verifies and launches the projects it produces
+(`rltool project ...`). Both build on `retrolarium-core`.
 
 ## Studio project contract
 
@@ -41,7 +25,7 @@ immediate preview invalidation; hand-edited projects may change these edges, and
 the Kit rejects missing nodes, disabled dependencies and cycles.
 
 ```powershell
-rltool studio preset path\to\recognized-game.nes `
+rldisasm preset path\to\recognized-game.nes `
   --output build\game-studio
 rltool studio create path\to\manifest.json `
   --output path\to\game.rlj `
@@ -87,26 +71,6 @@ has changed. `launch-plan` accepts only a current artifact and returns the same
 allowlisted MAME process specification used by the Qt shell; `studio launch`
 provides the bounded headless form for automation.
 
-## Current NES boundary
-
-- iNES 1.0 containers;
-- inspect/projection profiles for mapper 0 (NROM), 3 (CNROM) and 66
-  (GNROM/GxROM);
-- independent headless analysis of every canonical PRG bank through generated
-  mapper-0 views, with bank-qualified neutral instruction facts;
-- exact disassembly and rebuild for mapper 0, 3 and 66;
-- headless Ghidra 12.1.3 plus GhidraNes v20260531;
-- complete physical PRG coverage and overlap checks;
-- stable technical labels for functions and control-flow targets;
-- explainable `u16le` and adjacent split-low/high pointer candidates;
-- conservative pointer promotion with evidence, contradictions and overlap
-  checks;
-- exact ca65/ld65 rebuild verification in the fixture Docker image.
-
-NES 2.0 and unprofiled mappers are rejected explicitly. Overlapping PRG windows
-are analyzed independently and emitted as ordered ca65 segments with
-bank-qualified symbols.
-
 ## Bundled compiler suites
 
 Installing the wheel now installs the pinned compilers used by the first NES and
@@ -126,7 +90,7 @@ Python build integrations should use the public API instead of locating a
 repository-local `bin/` directory:
 
 ```python
-from retrolarium_kit.build_toolchains import materialize_build_toolchain
+from retrolarium_kit.core.build_toolchains import materialize_build_toolchain
 
 nes = materialize_build_toolchain("nes")
 ca65 = nes.command("ca65")
@@ -219,341 +183,15 @@ zero-edit exact rebuilds, edited builds and the common MAME launch path without
 a HonkeyPong-specific CLI branch.
 
 ```powershell
-rltool game inspect retrolarium_kit/fixtures/nes/bin/HonkeyPong.nes
-rltool game extract retrolarium_kit/fixtures/nes/bin/HonkeyPong.nes `
+rltool game inspect retrolarium-disassembler/fixtures/nes/bin/HonkeyPong.nes
+rltool game extract retrolarium-disassembler/fixtures/nes/bin/HonkeyPong.nes `
   --output build/honkeypong/resources.json
-rltool game build retrolarium_kit/fixtures/nes/bin/HonkeyPong.nes `
+rltool game build retrolarium-disassembler/fixtures/nes/bin/HonkeyPong.nes `
   build/honkeypong/resources.json --output build/honkeypong/edited.nes
 ```
 
 See
 [`Retrolarium_NES_Resource_Authoring_Contract.md`](docs/Retrolarium_NES_Resource_Authoring_Contract.md).
-
-## Quick start
-
-Run the source-checkout launcher from the repository root. Python 3.11+, Java 21
-and Docker are required for the complete verified path.
-
-```powershell
-python retrolarium_kit/fixtures/scripts/build_fixtures.py toolchain nes
-python retrolarium_kit/fixtures/scripts/build_fixtures.py build `
-  nes.honkeypong nes.rhde nes.cnrom_probe nes.gnrom_probe
-python retrolarium_kit/rltool.py ghidra install
-python retrolarium_kit/rltool.py nes disassemble `
-  retrolarium_kit/fixtures/nes/bin/HonkeyPong.nes `
-  --output retrolarium_kit/build/honkey-disassembly
-python retrolarium_kit/rltool.py project build `
-  retrolarium_kit/build/honkey-disassembly/manifest.json
-python retrolarium_kit/rltool.py project verify `
-  retrolarium_kit/build/honkey-disassembly/manifest.json
-```
-
-`ghidra install` downloads the versions recorded in
-`src/retrolarium_kit/toolchains/disassembly.lock.json`, verifies the archive
-sizes and SHA-256 values, rejects unsafe ZIP members and installs into the
-ignored `retrolarium_kit/.tools/` directory. An existing compatible install can
-be selected with `--ghidra-home` or `RETROLARIUM_GHIDRA_HOME`. The same command
-installs the pinned MIT W65C816 and SPC700 languages as `Retrolarium65816` and
-`RetrolariumSPC700`, compiles them with Ghidra's SLEIGH compiler and preserves
-their upstream licenses; it does not install the upstream SNES cartridge loader.
-
-### Mega Drive / Genesis
-
-```powershell
-python retrolarium_kit/fixtures/scripts/build_fixtures.py toolchain megadrive
-python retrolarium_kit/fixtures/scripts/build_fixtures.py build `
-  megadrive.dualcpu_probe megadrive.5stars megadrive.dragons_castle `
-  megadrive.miniplanets
-python retrolarium_kit/rltool.py megadrive disassemble `
-  retrolarium_kit/fixtures/megadrive/bin/megadrive-dualcpu-probe.bin `
-  --output retrolarium_kit/build/megadrive-disassembly
-python retrolarium_kit/rltool.py project build `
-  retrolarium_kit/build/megadrive-disassembly/retrolarium-project.json
-python retrolarium_kit/rltool.py project verify `
-  retrolarium_kit/build/megadrive-disassembly/retrolarium-project.json
-python retrolarium_kit/rltool.py project launch `
-  retrolarium_kit/build/megadrive-disassembly/retrolarium-project.json `
-  --mame mame_testing/mame/consoles.exe --machine genesis --seconds 2
-```
-
-Mega Drive source is emitted below `generated/src/`, with `main.s` as the
-address-ordered translation-unit index, `.s` files for the 68000, `data/` for
-binary inputs, and technical work-RAM/hardware definitions under `src/memory/`.
-Proven Z80 uploads also produce rebuildable `src/sound/z80/programNN.asm` units;
-`project build` assembles them before the 68000 ROM. ROM-derived instructions
-with supported operand forms are emitted as mnemonics; the remaining recognized
-instructions retain their original bytes and disassembly comments.
-`project verify` checks the rebuilt ROM against the input byte for byte.
-Generated `loc_`, `sub_`, `tbl_`, and `off_` symbols use IDA-style lower-case
-prefixes. Long `$FF` padding runs use `org` and are counted separately as
-`padding_bytes` in the project coverage report. Technical references whose
-targets fall inside such a run are suppressed, so immediate constants mistaken
-for data addresses cannot split one padding range into artificial tables.
-Unclassified ROM spans of at least 256 bytes are emitted as `data/opaque-*.bin`
-files when they contain no analyzed instructions, accepted pointer tables,
-existing assets, or internal technical symbols. A later analysis result
-automatically splits an opaque include when it finds code or structure inside
-it.
-
-The Mega Drive analysis builds its complete decoder seed plan in Python. The
-first pass validates cartridge vectors, ROM-to-RAM code-copy loops, PC-indexed
-`bra.s`/`bra.w` and dense `bra.w` dispatch tables, and counted RAM trampoline
-builders. It then runs a Python abstract interpreter over the known 68000
-control-flow graph. The interpreter propagates constants, small value sets,
-ranges, registers, flags, and selected memory writes, then feeds proven indirect
-branch targets back to Ghidra for decoding. Analysis repeats until no new
-targets, inline-data bounds, decode requests or instruction repairs are found. A
-32-pass safety limit fails the operation instead of emitting a partially applied
-seed plan. `analysis/m68k/abstract-analysis.json` records each seed's kind,
-confidence, and evidence together with reached states, indirect edges, widening
-points, unresolved jumps, RAM handler candidates, and packed orphan candidates.
-`analysis/m68k/python-seeds.txt` is the decoder entry-point plan. Speculative
-decode requests and canonical boundary repairs have separate plans and never
-become independent roots. The Ghidra pre-script labels cartridge vectors and
-applies the seed plan; it does not discover targets. Packed orphan recovery only
-considers short gaps between known instructions after a terminal flow, rejects
-existing data/read targets, and requires either a compact gap or a return opcode
-before known code resumes. After convergence, the Kit retains backend-decoded
-instructions only when they are reachable from a cartridge vector, direct call,
-proven decoder seed, proven indirect target, or an accepted structural code-use
-hypothesis. A backend function label alone is insufficient. This removes
-isolated instruction-shaped data without using reference source. The discarded
-addresses are recorded in `analysis/m68k/abstract-analysis.json`. The bounded
-probe and repair protocols, their protections and audit files are documented in
-[Mega Drive unused-code analysis](docs/Mega_Drive_Unused_Code.md). The
-interpreter updates `X/N/Z/V/C` for modeled move, logical, arithmetic, compare,
-test, and bit-test operations. It records each conditional branch as true,
-false, or unknown in the abstract report while retaining both CFG edges; known
-flags therefore add evidence without hiding alternate game states.
-
-Generic pointer scans are advisory until code or data references the table
-start. Unreferenced sequences whose values merely happen to land on instruction
-starts remain `candidate` entries in `analysis/pointers.json` and are emitted as
-raw data. Schema-proven structures such as cartridge vectors and counted RAM
-trampoline tables can be accepted without that reference. Referenced `u32be`
-arrays are also accepted as data-pointer tables when code reads them with an
-indexed `move.l` and every entry points forward beyond the table. References to
-aligned addresses inside one scanned run split it into the separate tables
-actually selected by the program. Numeric longword tables whose values precede
-the table remain candidates.
-
-Counted animation layouts are recovered through their complete data path. The
-analysis requires a proven ROM-to-work-RAM copy loop, the shared animation
-reader that indexes a longword sequence table and then reads a sign-extended
-word at `2(sequence,index)`, and a root stored into the same object field. Each
-sequence header supplies its entry count, so the emitter can write every frame
-as `dc.w target-copy_source` even though one runtime update reads only one
-frame. This schema also follows animation roots selected by an outer indexed
-longword table.
-
-The standard Mega Drive startup stream is recovered as a mixed-width structure
-when the loader addresses it through `a5`, consumes the canonical `movem`
-fields, copies the VDP, Z80, CRAM, VSRAM and PSG portions with the matching
-counted loops, and branches to the byte immediately after the block. The emitter
-writes its scalar fields as `dc.w`/`dc.l`, uses generated hardware symbols for
-the five device addresses, and preserves the embedded byte streams as `dc.b`.
-
-Calls whose handler consumes variable-length inline operands, such as a software
-floating-point runtime reached by `JSR` followed by an op word and optional
-immediates, are proven per call site by a partial 68000 emulator. ROM bytes are
-concrete, registers and RAM are unknown with per-bit tracking of data registers,
-the stack is symbolic, and both successors of an unknown condition are explored
-with context-sensitive joins. A site is accepted only when every explored return
-lands on one even address at most 32 bytes after the call; the operands become
-data and the continuation a decoder seed. Direct flow from each continuation is
-walked in the same pass, so a chain of such calls resolves without one decoder
-pass per call.
-
-Compiler switches that double a long index (`ADD.L Dn,Dn`,
-`MOVE.W (T,PC,Dn.L),Dn`, `JMP (T,PC,Dn.W)`) are recovered as
-`megadrive.s16be.target-table_base` tables. Ghidra's element references from the
-inferred index no longer split such tables, and backend switch flows of both
-PC-relative and `MOVEA.W`/`ADDA.L`/`JMP (An)` word tables are bounded by the
-structural table when decoded code starts right after it, so over-read entries
-cannot become trusted code. Speculative packed-gap decoding treats an address
-loaded by `MOVEA.L #addr,An` or `LEA addr.l,An` as data when memory is read
-through that register, locally or in a direct callee; stored or jumped-through
-pointers may be callbacks and are not counted. `LEA d16(PC),An` naming the
-instruction right after an unconditional branch, whose callee jumps through the
-same register, is a hand-made return address and seeds that continuation. Packed
-orphan entries skip longword alignment padding or a NUL-terminated literal only
-when a `LINK` or `MOVEM.L ...,-(SP)` prologue follows.
-
-The Z80 analysis follows word dispatch tables when executable code loads their
-address into HL, calls a recognized A-indexed word lookup through RST, and jumps
-through HL. A preceding `sub` bounds the selector range. The analyzer marks the
-words as data and seeds their targets in Ghidra, repeating this pass when a
-newly decoded handler reveals another table. Each table and its evidence are
-recorded in `analysis/z80/programNN/dispatch-tables.json`. On the Flicky ROM,
-this recovers the 4-entry sound-command table and the adjacent 32- and 8-entry
-coordination tables.
-
-For an independent Flicky source benchmark, run this after disassembly:
-
-```powershell
-python retrolarium_kit/tools/source_benchmark.py `
-  --reference path\to\flicky_src `
-  --generated retrolarium_kit/build/megadrive-disassembly/generated `
-  --output retrolarium_kit/build/flicky-benchmark `
-  --minimum-m68k-instruction-match 99 `
-  --minimum-m68k-precision 99 `
-  --minimum-m68k-f1 99 `
-  --minimum-m68k-source-match 99 `
-  --minimum-z80-instruction-match 99 `
-  --minimum-z80-precision 99 `
-  --minimum-z80-f1 99 `
-  --minimum-z80-source-match 97
-```
-
-This creates flattened `reference/main.s` and `generated/main.s`, source maps,
-and `comparison.json`. When the reference AS listing exists, the report compares
-68000 instruction addresses and encodings. If the reference Z80 driver listing
-is available at `comparison/reference/z80_driver.lst`, it also compares Z80
-instruction addresses and full instruction bytes. Run `project build` before
-this command: the benchmark reads its 68000 and Z80 assembler listings to count
-instructions actually written as mnemonics. The processor-specific minimum flags
-enforce separate 68000 and Z80 targets. The legacy `--minimum-instruction-match`
-and `--minimum-source-match` flags apply one threshold to both processors. The
-benchmark reads the reference only after the ROM pipeline completes; no
-reference source or symbols enter generation.
-
-The instruction comparison records recall, precision, and F1 independently.
-Precision counts speculative instruction starts that are absent from the
-reference as false positives, so broader code recovery cannot improve the gate
-by decoding arbitrary data.
-
-In the current Flicky benchmark, the 68000 instruction analysis matches
-5707/5707 reference instructions; the Z80 analysis matches 1679/1683 (99.76%
-recall, 99.29% precision). The generated Z80 source emits 1646/1683 reference
-instructions as mnemonics (97.8%). The assembled ROM is byte exact.
-
-For additional independent games, see the
-[Sonic Retro reference corpus](docs/sonic-reference-corpus.md).
-`tools/prepare_sonic_references.py` exports unified assembly units, preserves
-build profiles, and verifies them against upstream builds and original ROMs. The
-references are evaluation inputs only; they never seed the ROM analyzer.
-
-The [Sonic disassembly benchmark](docs/sonic-disassembly-baseline.md) runs
-ROM-only analysis against those verified references, measures opcode recall and
-precision, verifies exact rebuilds, and produces differences-only HTML.
-
-For side-by-side editing, export the two ROM-aligned reference files after
-disassembly:
-
-```powershell
-python retrolarium_kit/tools/export_flicky_reference.py `
-  --reference path\to\flicky_src `
-  --generated path\to\flicky_src_kit_test\project\generated
-```
-
-This writes `rom-000200.reference.s` and `rom-010000.reference.s` beside the
-generated `rom-*.s` files. They concatenate the matching source modules from
-`flicky_src/src/main.s`; the first starts at `Sys_ErrorTrap` ($000200), after
-the cartridge vectors and header. These comparison files are not assembled.
-
-For a standalone address-aligned HTML view, build both projects and run:
-
-```powershell
-python retrolarium_kit/tools/flicky_html_diff.py `
-  --reference path\to\flicky_src `
-  --generated path\to\flicky_src_kit_test\project\generated `
-  --output path\to\flicky_src_kit_test\comparison\flicky-source-diff.html
-```
-
-Add `--differences-only` and choose a separate output file to generate a compact
-report containing only structural data differences, raw instruction fallbacks,
-and source lines present on one side of the comparison.
-
-The page places lines from both assembler listings side by side at their ROM
-addresses, with filters for source differences and instructions still emitted as
-`dc.b`. Instructions with the same mnemonic and encoded bytes are treated as
-equal even when their labels, symbolic operands, or size spelling differ.
-Reference data rows covered by an exact generated `binclude` are also treated as
-equal; reference instructions inside such a span remain visible as missing
-analysis. It requires the rebuilt ROM to match the reference byte for byte.
-
-For an actionable text and JSON report of the same build, run:
-
-```powershell
-python retrolarium_kit/tools/flicky_diff_report.py `
-  --reference path\to\flicky_src `
-  --generated path\to\flicky_src_kit_test\project\generated `
-  --output path\to\flicky_src_kit_test\comparison
-```
-
-`flicky-diff.md` groups the remaining raw instruction fallbacks by mnemonic;
-`flicky-diff.json` records every mismatch with its ROM address, both source
-lines, bytes, and Ghidra fact. It separates missing analysis from unsupported
-emission and differences limited to names or formatting.
-
-To turn the source differences into contiguous regions for heuristic work, run:
-
-```powershell
-python retrolarium_kit/tools/flicky_discrepancy_groups.py `
-  --reference path\to\flicky_src `
-  --generated path\to\flicky_src_kit_test\project\generated `
-  --output path\to\flicky_src_kit_test\comparison
-```
-
-The command writes `flicky-discrepancy-groups.md` and JSON. It removes line
-wrapping noise and classifies every differing ROM interval as text, word or long
-data, an opaque or missing binary include, a false pointer table, false code, or
-padding. It also groups consecutive missed and extra Z80 instructions. Each M68K
-group links to the matching row in the HTML report.
-
-### SNES / Super Famicom foundation
-
-```powershell
-python retrolarium_kit/fixtures/scripts/build_fixtures.py build `
-  snes.lorom_probe snes.hirom_probe
-python retrolarium_kit/rltool.py snes inspect `
-  retrolarium_kit/fixtures/snes/bin/snes-lorom-probe.sfc
-python retrolarium_kit/rltool.py snes analyze `
-  retrolarium_kit/fixtures/snes/bin/snes-lorom-probe.sfc `
-  --output retrolarium_kit/build/snes-lorom-analysis
-python retrolarium_kit/rltool.py snes disassemble `
-  retrolarium_kit/fixtures/snes/bin/snes-lorom-probe.sfc `
-  --output retrolarium_kit/build/snes-lorom-disassembly
-python retrolarium_kit/rltool.py project build `
-  retrolarium_kit/build/snes-lorom-disassembly/retrolarium-project.json
-python retrolarium_kit/rltool.py project verify `
-  retrolarium_kit/build/snes-lorom-disassembly/retrolarium-project.json
-```
-
-Inspection and independent state-aware W65C816 decoding are available. Full
-analysis writes evidence-bearing pointer, stable-symbol and cross-CPU reports.
-The modular ca65 emitter has exact rebuild proof for both synthetic mappings and
-two open-game holdouts. The strict project schema, Qt 5.15 importer and common
-build/verify/MAME operations are complete. The required `spc700.rom` is
-hash-pinned under `mame_testing/roms` and installed into a local MAME checkout
-by `mame_testing/install-required-roms.ps1`. See
-[`Retrolarium_SNES_Container_Contract.md`](docs/Retrolarium_SNES_Container_Contract.md)
-and
-[`Retrolarium_SNES_Integration_Contract.md`](docs/Retrolarium_SNES_Integration_Contract.md).
-
-The output directory contains:
-
-```text
-analysis/instructions.json              merged bank-qualified neutral facts
-analysis/pointers.json                  candidates, evidence and schema registry
-analysis/banks/bankNN/analysis-input.nes exact analysis projection
-analysis/banks/bankNN/instructions.tsv  backend facts for one PRG bank
-analysis/banks/bankNN/program.json      backend metadata for one PRG bank
-analysis/banks/bankNN/headless.log      reproducible analysis log
-generated/main.asm                      container and asset assembly
-generated/src/prg.asm                   single-bank full-coverage PRG source
-generated/src/prg-bankNN.asm            multi-bank full-coverage PRG sources
-generated/assets/                       header, optional trainer and CHR
-generated/linker.cfg                    exact ordered memory layout
-generated/Makefile                      ca65/ld65 rebuild recipe
-generated/emission.json                 source coverage statistics
-generated/symbols.json                  bank-qualified integration symbols
-generated/build/rebuilt.nes             rebuilt image after project build
-manifest.json                           input, backend, coverage and verification result
-```
-
-All of these are reproducible build artifacts and should stay below an ignored
-`build/` directory.
 
 ## Pac-Man maze authoring
 
@@ -608,24 +246,16 @@ volume programs through a dedicated `audio.synthesis` Studio tab; see
 ## Other commands
 
 ```powershell
-python retrolarium_kit/rltool.py nes inspect game.nes
-python retrolarium_kit/rltool.py nes analyze game.nes `
-  --output retrolarium_kit/build/game-analysis
-python retrolarium_kit/rltool.py project validate `
-  retrolarium_kit/build/game-disassembly/manifest.json
-python retrolarium_kit/rltool.py project build `
-  retrolarium_kit/build/game-disassembly/manifest.json
-python retrolarium_kit/rltool.py project verify `
-  retrolarium_kit/build/game-disassembly/manifest.json
-python retrolarium_kit/rltool.py project launch `
-  retrolarium_kit/build/game-disassembly/manifest.json `
+python retrolarium-kit/rltool.py project validate `
+  build/game-disassembly/manifest.json
+python retrolarium-kit/rltool.py project build `
+  build/game-disassembly/manifest.json
+python retrolarium-kit/rltool.py project verify `
+  build/game-disassembly/manifest.json
+python retrolarium-kit/rltool.py project launch `
+  build/game-disassembly/manifest.json `
   --mame mame_testing/mame/consoles.exe --seconds 2
-python retrolarium_kit/rltool.py ghidra status
-python retrolarium_kit/rltool.py verify original.nes rebuilt.nes
-python retrolarium_kit/rltool.py benchmark pointers `
-  retrolarium_kit/build/honkey-disassembly/analysis/pointers.json `
-  retrolarium_kit/fixtures/oracles/nes.honkeypong.pointer-tables.json
-python -m unittest discover retrolarium_kit/tests -v
+python -m unittest discover -s retrolarium-kit/tests
 ```
 
 Generated NES/SNES projects use the bundled `ca65-ld65-v1` recipe, and Mega
@@ -633,49 +263,18 @@ Drive projects use `asl-p2bin-v1`. `project build` therefore needs neither
 Docker nor a local compiler directory; pass `--container IMAGE` only when an
 explicit compatibility build is wanted.
 
-`nes analyze` writes one isolated `banks/bankNN/` workspace per canonical PRG
-projection plus a merged `instructions.json`. Every instruction and flow has an
-explicit bank context, while `physical_offset` remains unique across the source
-ROM. For mappers not understood by GhidraNes directly, the workspace records the
-exact generated mapper-0 analysis input and its SHA-256.
-
-Build or install this distribution directly from its repository-root package
-directory:
+Build or install this distribution from its folder:
 
 ```powershell
-python -m pip install ./retrolarium_kit
+python -m pip install ./retrolarium-kit
 rltool --version
 
-uv build --wheel --out-dir retrolarium_kit/build/dist ./retrolarium_kit
+uv build --wheel --out-dir build/dist ./retrolarium-kit
 ```
 
 An editable development install uses
-`python -m pip install -e ./retrolarium_kit`. All three forms expose the
-`rltool` entry point. Installing the separate `retrolarium` GUI distribution
-also resolves this package as its declared dependency.
-
-The versioned manifest contract consumed by the Retrolarium application is
-documented in
-[`Retrolarium_NES_Integration_Contract.md`](docs/Retrolarium_NES_Integration_Contract.md).
-The corresponding dual-CPU contract is
-[`Retrolarium_MegaDrive_Integration_Contract.md`](docs/Retrolarium_MegaDrive_Integration_Contract.md).
-
-## Trust boundary
-
-The ROM is immutable input. Ghidra is an analysis backend, not the source of
-truth: its exported facts must map to the original PRG bytes without overlap.
-The emitter owns every physical byte exactly once, and the final verifier
-compares both size and content. Difficult control flow, such as a branch into
-the interior of another decoded instruction, is preserved with a relocatable
-relative expression and recorded as a diagnostic.
-
-Oracle metadata is never an analyzer input. The separate benchmark command first
-checks that the report and oracle name the same ROM hash, then measures accepted
-table ranges and decoded targets. The current HonkeyPong development baseline
-has precision 1.0 and recall 1.0 across four tables. Besides compact monotonic
-tables, it exercises two generic evidence patterns: pointer fields in a record
-reached from an accepted table, and two interleaved monotonic lanes. RHDE
-remains a source-isolated holdout and retains exact rebuild verification.
+`python -m pip install -e ./retrolarium-kit`. All forms expose the `rltool`
+entry point.
 
 ## License
 
@@ -684,4 +283,4 @@ the terms of the GNU General Public License as published by the Free Software
 Foundation, either version 3 of the License, or (at your option) any later
 version (`GPL-3.0-or-later`, text in `LICENSE`). It comes without any warranty.
 The bundled toolchains keep their own licenses
-(`src/retrolarium_kit/_toolchains/licenses`).
+(`src/retrolarium_kit/core/toolchains/licenses`).
