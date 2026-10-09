@@ -15,9 +15,12 @@ from retrolarium_kit.games.flicky.content import (
 )
 from retrolarium_core.megadrive import cartridge_checksum
 from retrolarium_kit.studio.project import (
-    StudioProjectError, build_studio_project, create_flicky_studio_project,
-    studio_flicky_round_playtest_plan, verify_studio_project,
+    StudioProjectError,
+    build_studio_project,
+    verify_studio_project,
 )
+from retrolarium_kit.studio.create import create_flicky_studio_project
+from retrolarium_kit.studio.playtest import studio_flicky_round_playtest_plan
 from run_flicky_level_tiles_mame_source_oracle import changed_pixels
 from run_flicky_palette_mame_source_oracle import render_native
 from run_flicky_round_playtest_source_oracle import launch

@@ -12,10 +12,9 @@ import sys
 import tempfile
 
 from retrolarium_kit.games.flicky.content import WORKSPACE_FILES, import_flicky_source
-from retrolarium_kit.studio.project import (
-    StudioProjectError, create_flicky_studio_project,
-    studio_flicky_sound_preview,
-)
+from retrolarium_kit.studio.project import StudioProjectError
+from retrolarium_kit.studio.create import create_flicky_studio_project
+from retrolarium_kit.studio.playtest import studio_flicky_sound_preview
 
 
 def main() -> int:

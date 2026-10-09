@@ -74,3 +74,16 @@ def cartridge(
     if copier_header:
         container = bytes([0x5A] * 0x200) + container
     return container
+
+
+def patched_manifest(value):
+    """Stand in for the disassembly manifest a Studio project names, where the
+    project is created (studio.create) and where it is loaded (studio.project)."""
+    from contextlib import ExitStack
+    from unittest.mock import patch
+
+    stack = ExitStack()
+    for module in ("create", "project"):
+        stack.enter_context(patch(
+            f"retrolarium_kit.studio.{module}.load_disassembly_manifest", return_value=value))
+    return stack

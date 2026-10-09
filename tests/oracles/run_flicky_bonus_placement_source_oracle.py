@@ -14,9 +14,8 @@ from retrolarium_kit.games.flicky.content import (
     CANONICAL_SHA256, SOURCE_DIRECTORY, WORKSPACE_FILES,
     build_flicky_source_snapshot, import_flicky_source,
 )
-from retrolarium_kit.studio.project import (
-    build_studio_project, create_flicky_studio_project,
-)
+from retrolarium_kit.studio.project import build_studio_project
+from retrolarium_kit.studio.create import create_flicky_studio_project
 from run_flicky_bonus_motion_mame_source_oracle import run_mame
 
 
