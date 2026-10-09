@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 from typing import Mapping, Sequence
 
-from .authoring import AuthoringError
+from retrolarium_kit.core.authoring import AuthoringError
 
 
 CODEC = "pacman.screen-collection.v1"

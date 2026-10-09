@@ -16,8 +16,8 @@ import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.games import build_game, extract_game, inspect_game, validate_game
-from retrolarium_kit.authoring import AuthoringError
+from retrolarium_kit.games.catalog import build_game, extract_game, inspect_game, validate_game
+from retrolarium_kit.core.authoring import AuthoringError
 
 
 REGIONS = {"usa": 0x602C, "europe": 0x5FAC}

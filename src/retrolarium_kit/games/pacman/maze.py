@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter, deque
 from typing import Sequence
 
-from .authoring import AuthoringError
+from retrolarium_kit.core.authoring import AuthoringError
 
 
 CODEC = "pacman.maze-rle.v1"

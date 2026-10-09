@@ -6,11 +6,11 @@ from dataclasses import dataclass
 import hashlib
 from typing import Mapping
 
-from .authoring import (
+from retrolarium_kit.core.authoring import (
     Address, AddressRange, AuthoringError, BuildPlan, Change, ChangeSet,
     GameProfile, Provenance, ResourceSpec, RevisionSpec,
 )
-from .ines import parse_ines
+from retrolarium_core.ines import parse_ines
 
 
 CODEC = "solomon.sprite-frames.v1"

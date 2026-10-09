@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.castle_audio_preview import CastleAudioError, music_resource, render_wav, track_lanes
+from retrolarium_kit.games.castle.audio_preview import CastleAudioError, music_resource, render_wav, track_lanes
 
 
 def music(streams: list[dict[str, object]], pointers: list[str | None]) -> dict[str, object]:

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .authoring import AuthoringError
+from retrolarium_kit.core.authoring import AuthoringError
 
 
 CODEC = "doraemon.world2-stage.v1"

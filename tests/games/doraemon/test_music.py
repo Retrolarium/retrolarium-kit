@@ -6,12 +6,13 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "retrolarium-core" / "python"))
 
-from retrolarium_kit.doraemon_music import (
+from retrolarium_kit.games.doraemon.music import (
     DoraemonMusicError, build_music, decode_music, parse_music_document, trace_track,
 )
-from retrolarium_kit.game_profiles import packaged_game_profiles
-from retrolarium_kit.ines import parse_ines
+from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from retrolarium_core.ines import parse_ines
 
 
 # The cartridge image is not part of the repository; the test runs where the

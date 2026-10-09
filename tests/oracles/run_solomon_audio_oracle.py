@@ -8,10 +8,11 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "retrolarium-core" / "python"))
 
-from retrolarium_kit.game_profiles import packaged_game_profiles
-from retrolarium_kit.ines import parse_ines
-from retrolarium_kit.solomon_audio import (
+from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from retrolarium_core.ines import parse_ines
+from retrolarium_kit.games.solomon.audio import (
     build_audio, decode_audio, parse_audio_document,
 )
 

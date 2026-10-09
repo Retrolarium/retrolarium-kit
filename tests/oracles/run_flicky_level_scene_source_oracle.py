@@ -16,8 +16,8 @@ import sys
 import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from retrolarium_kit.flicky_content import import_flicky_source  # noqa: E402
-from retrolarium_kit.studio_project import create_flicky_studio_project  # noqa: E402
+from retrolarium_kit.games.flicky.content import import_flicky_source  # noqa: E402
+from retrolarium_kit.studio.project import create_flicky_studio_project  # noqa: E402
 
 
 def main() -> int:

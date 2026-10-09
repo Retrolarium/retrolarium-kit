@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import re
 from typing import Mapping
 
-from .authoring import AuthoringError
+from retrolarium_kit.core.authoring import AuthoringError
 
 
 CODEC = "nes.fixed-text-fields.v1"

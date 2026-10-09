@@ -7,7 +7,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.games import build_game, extract_game
+from retrolarium_kit.games.catalog import build_game, extract_game
 
 
 # The ROM is not part of the repository; the test runs where the Solomon's

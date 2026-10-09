@@ -7,7 +7,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.flicky_demo import (
+from retrolarium_kit.games.flicky.demo import (
     DEMO_SOURCE, encode_steps, export_attract_demos, stage_attract_demos,
     validate_attract_demos,
 )

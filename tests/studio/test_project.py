@@ -7,8 +7,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from retrolarium_kit.game_profiles import packaged_game_profiles
-from retrolarium_kit.studio_project import (
+from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from retrolarium_kit.studio.project import (
     FLICKY_WORKSPACE_FILES,
     StudioProjectError,
     create_flicky_studio_project,
@@ -92,7 +92,7 @@ capabilities = ["pixel-paint"]'''
 class StudioProjectTests(unittest.TestCase):
     def load(self, path: Path) -> dict[str, object]:
         with patch(
-            "retrolarium_kit.studio_project.load_disassembly_manifest",
+            "retrolarium_kit.studio.project.load_disassembly_manifest",
             return_value=manifest(),
         ):
             return load_studio_project(path)
@@ -113,7 +113,7 @@ class StudioProjectTests(unittest.TestCase):
                 document = source / relative
                 document.parent.mkdir(parents=True, exist_ok=True)
                 document.write_text("{}", encoding="utf-8")
-            with patch("retrolarium_kit.studio_project.validate_flicky_source_snapshot"):
+            with patch("retrolarium_kit.studio.project.validate_flicky_source_snapshot"):
                 project = create_flicky_studio_project(root)
             tabs = {tab["id"]: tab for tab in project["workspace"]["tabs"]}
             self.assertEqual("Sound", tabs["sound"]["title"])
@@ -198,7 +198,7 @@ class StudioProjectTests(unittest.TestCase):
             shutil.copytree(original, relocated)
             relocated_project = relocated / project.name
             with patch(
-                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                "retrolarium_kit.studio.project.load_disassembly_manifest",
                 return_value=manifest(),
             ):
                 inspection = load_studio_project(relocated_project)
@@ -236,7 +236,7 @@ class StudioProjectTests(unittest.TestCase):
             ).replace("\n", "\r\n")
             project.write_bytes(legacy.encode("utf-8"))
             with patch(
-                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                "retrolarium_kit.studio.project.load_disassembly_manifest",
                 return_value=manifest(),
             ):
                 result = migrate_studio_project(project)
@@ -256,7 +256,7 @@ class StudioProjectTests(unittest.TestCase):
             )
             project.write_text(legacy, encoding="utf-8")
             with patch(
-                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                "retrolarium_kit.studio.project.load_disassembly_manifest",
                 return_value=manifest(),
             ):
                 migrate_studio_project(project)
@@ -271,7 +271,7 @@ class StudioProjectTests(unittest.TestCase):
             disabled = GRAPHICS_TAB + "\nenabled = false"
             project = write_project(Path(temporary), f"{LEVELS_TAB}\n\n{disabled}")
             with patch(
-                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                "retrolarium_kit.studio.project.load_disassembly_manifest",
                 return_value=manifest(),
             ):
                 result = validate_studio_project(project)
@@ -286,7 +286,7 @@ class StudioProjectTests(unittest.TestCase):
             source.write_text(json.dumps(manifest()), encoding="utf-8")
             output = root / "fixture.rlj"
             with patch(
-                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                "retrolarium_kit.studio.project.load_disassembly_manifest",
                 return_value=manifest(),
             ):
                 result = create_studio_project(
@@ -332,7 +332,7 @@ class StudioProjectTests(unittest.TestCase):
             )
             output = root / "fixture.rlj"
             with patch(
-                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                "retrolarium_kit.studio.project.load_disassembly_manifest",
                 return_value=manifest(),
             ):
                 result = create_studio_project(
@@ -379,7 +379,7 @@ class StudioProjectTests(unittest.TestCase):
             }), encoding="utf-8")
             output = root / "castle.rlj"
             with patch(
-                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                "retrolarium_kit.studio.project.load_disassembly_manifest",
                 return_value=manifest(),
             ):
                 result = create_studio_project(
@@ -455,7 +455,7 @@ class StudioProjectTests(unittest.TestCase):
                 "frames": [{} for _ in range(28)],
             }), encoding="utf-8")
             with patch(
-                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                "retrolarium_kit.studio.project.load_disassembly_manifest",
                 return_value=manifest(),
             ):
                 result = create_studio_project(
@@ -512,7 +512,7 @@ class StudioProjectTests(unittest.TestCase):
                 "frames": [{} for _ in range(275)],
             }), encoding="utf-8")
             with patch(
-                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                "retrolarium_kit.studio.project.load_disassembly_manifest",
                 return_value=manifest(),
             ):
                 modern = create_studio_project(
@@ -580,7 +580,7 @@ class StudioProjectTests(unittest.TestCase):
                 ],
             }), encoding="utf-8")
             with patch(
-                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                "retrolarium_kit.studio.project.load_disassembly_manifest",
                 return_value=manifest(),
             ):
                 result = create_studio_project(
@@ -641,7 +641,7 @@ class StudioProjectTests(unittest.TestCase):
             )
             output = root / "fixture.rlj"
             with patch(
-                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                "retrolarium_kit.studio.project.load_disassembly_manifest",
                 return_value=manifest(),
             ):
                 result = create_studio_project(
@@ -687,7 +687,7 @@ class StudioProjectTests(unittest.TestCase):
                 ],
             }), encoding="utf-8")
             with patch(
-                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                "retrolarium_kit.studio.project.load_disassembly_manifest",
                 return_value=manifest(),
             ):
                 result = create_studio_project(
@@ -749,7 +749,7 @@ class StudioProjectTests(unittest.TestCase):
             resource_value["revision"] = "pal"
             resources.write_text(json.dumps(resource_value), encoding="utf-8")
             with patch(
-                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                "retrolarium_kit.studio.project.load_disassembly_manifest",
                 return_value=manifest(),
             ):
                 pal_result = create_studio_project(
@@ -785,7 +785,7 @@ class StudioProjectTests(unittest.TestCase):
                 ],
             }), encoding="utf-8")
             with patch(
-                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                "retrolarium_kit.studio.project.load_disassembly_manifest",
                 return_value=manifest(),
             ):
                 result = create_studio_project(
@@ -823,7 +823,7 @@ class StudioProjectTests(unittest.TestCase):
                 ],
             }), encoding="utf-8")
             with patch(
-                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                "retrolarium_kit.studio.project.load_disassembly_manifest",
                 return_value=manifest(),
             ):
                 result = create_studio_project(
@@ -876,7 +876,7 @@ class StudioProjectTests(unittest.TestCase):
                     "resources": resources,
                 }), encoding="utf-8")
                 with self.subTest(revision=revision_id), patch(
-                    "retrolarium_kit.studio_project.load_disassembly_manifest",
+                    "retrolarium_kit.studio.project.load_disassembly_manifest",
                     return_value=manifest(),
                 ):
                     result = create_studio_project(
@@ -924,7 +924,7 @@ class StudioProjectTests(unittest.TestCase):
                 }],
             }), encoding="utf-8")
             with patch(
-                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                "retrolarium_kit.studio.project.load_disassembly_manifest",
                 return_value=manifest(),
             ):
                 result = create_studio_project(

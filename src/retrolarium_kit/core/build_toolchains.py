@@ -13,12 +13,13 @@ from importlib import resources
 import json
 import os
 from pathlib import Path
-import platform
 import shutil
 import stat
 import tempfile
 from types import MappingProxyType
 from typing import Any, Mapping
+
+from retrolarium_core.host import normalize_host
 
 
 MANIFEST_NAME = "manifest.json"
@@ -66,7 +67,7 @@ class ResolvedToolchain:
 
 
 def _package_root():
-    return resources.files("retrolarium_kit").joinpath("_toolchains")
+    return resources.files("retrolarium_kit.core").joinpath("toolchains")
 
 
 def _mapping(value: object, name: str) -> dict[str, Any]:
@@ -133,29 +134,6 @@ def load_build_toolchain_manifest() -> dict[str, Any]:
                     f"suite {suite_id} references unknown component {member!r}"
                 )
     return manifest
-
-
-def normalize_host(system: str | None = None, machine: str | None = None) -> str:
-    """Map Python host names to stable manifest host identifiers."""
-    system_name = (system or platform.system()).lower()
-    machine_name = (machine or platform.machine()).lower()
-    architecture = {
-        "amd64": "x86_64",
-        "x86_64": "x86_64",
-        "x64": "x86_64",
-        "aarch64": "aarch64",
-        "arm64": "aarch64",
-        "i386": "x86",
-        "i686": "x86",
-        "x86": "x86",
-    }.get(machine_name, machine_name)
-    operating_system = {
-        "windows": "windows",
-        "linux": "linux",
-        "darwin": "macos",
-        "freebsd": "freebsd",
-    }.get(system_name, system_name)
-    return f"{operating_system}-{architecture}"
 
 
 def default_cache_root() -> Path:

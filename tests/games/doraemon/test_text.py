@@ -7,8 +7,8 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.authoring import GameProfile, ResourceSpec, RevisionSpec
-from retrolarium_kit.doraemon_text import DoraemonTextError, build_text, decode_text, parse_text_document
+from retrolarium_kit.core.authoring import GameProfile, ResourceSpec, RevisionSpec
+from retrolarium_kit.games.doraemon.text import DoraemonTextError, build_text, decode_text, parse_text_document
 
 
 MANIFEST = {

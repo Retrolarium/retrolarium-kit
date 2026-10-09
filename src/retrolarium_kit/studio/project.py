@@ -14,14 +14,14 @@ import tempfile
 import tomllib
 from typing import Any, Sequence
 
-from .contracts import ContractError, load_disassembly_manifest
-from .games import (
+from retrolarium_core.contracts import ContractError, load_disassembly_manifest
+from retrolarium_kit.games.catalog import (
     build_game,
     build_game_documents,
     validate_game_document_for_revision,
 )
-from .game_profiles import packaged_game_profiles
-from .flicky_content import (
+from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from retrolarium_kit.games.flicky.content import (
     CANONICAL_SHA256 as FLICKY_SHA256,
     ROM_NAME as FLICKY_ROM_NAME,
     SNAPSHOT_RECORD as FLICKY_SNAPSHOT_RECORD,
@@ -31,17 +31,17 @@ from .flicky_content import (
     validate_flicky_source_snapshot,
     FlickyContentError,
 )
-from .flicky_bonus_placement import (
+from retrolarium_kit.games.flicky.bonus_placement import (
     export_bonus_placements, validate_bonus_placements,
 )
-from .flicky_title_layout import (
+from retrolarium_kit.games.flicky.title_layout import (
     export_title_layout, validate_title_layout,
 )
-from .flicky_demo import export_attract_demos, validate_attract_demos
-from .fds import FdsError, parse_fds_side
-from .ines import InesError, load_ines, parse_ines_prefix
-from .megadrive import load_megadrive
-from .project import (
+from retrolarium_kit.games.flicky.demo import export_attract_demos, validate_attract_demos
+from retrolarium_core.fds import FdsError, parse_fds_side
+from retrolarium_core.ines import InesError, load_ines, parse_ines_prefix
+from retrolarium_core.megadrive import load_megadrive
+from retrolarium_kit.core.project import (
     build_project,
     launch_image_plan,
     launch_image_smoke,
@@ -49,7 +49,7 @@ from .project import (
     verify_project,
     write_document,
 )
-from .snes import load_snes
+from retrolarium_core.snes import load_snes
 
 
 class StudioProjectError(ValueError):
@@ -931,8 +931,8 @@ def _expand_solomon_build(
 ) -> dict[str, Any] | None:
     """Rewrite a Solomon's Key build in the expanded mapper-66 layout when its
     rooms document asks for it (solomon_expansion)."""
-    from .games import _read_image
-    from .solomon import expand_room_build, parse_room_document
+    from retrolarium_kit.games.catalog import _read_image
+    from retrolarium_kit.games.solomon.rooms import expand_room_build, parse_room_document
 
     for document_path in documents:
         try:
@@ -1353,8 +1353,8 @@ def studio_flicky_sound_preview(
     with tempfile.TemporaryDirectory(prefix=".flicky-sound-", dir=output_dir) as name:
         temporary = Path(name)
         command = [
-            sys.executable, str(Path(__file__).with_name(
-                "flicky_sound_preview_runtime.py")), header,
+            sys.executable, str(Path(__file__).resolve().parents[1] / "games" / "flicky"
+                / "sound_preview_runtime.py"), header,
             "--workspace", str(document),
             "--vgm", str(temporary / "preview.vgm"),
             "--wav", str(temporary / "preview.wav"),
@@ -2289,7 +2289,7 @@ def studio_doraemon_demo_plan(path: Path, *, mame: Path, record: Path | None = N
     """Loop World 1's attract demo of the current Doraemon build in MAME, or
     record a new one from the player's controller into ``record``."""
 
-    from .doraemon_demo import CODEC as DEMO_CODEC, capacity
+    from retrolarium_kit.games.doraemon.demo import CODEC as DEMO_CODEC, capacity
 
     inspection = load_studio_project(path)
     _require_declared_operation(inspection, "launch")
@@ -2553,7 +2553,7 @@ def _add_bundle_resources(path: Path, *, profile: str, codec: str) -> list[str]:
     """Give a project's resource bundle the resources newer kits add to its
     profile, decoded from the project's own source; edited resources stay."""
 
-    from .games import extract_game
+    from retrolarium_kit.games.catalog import extract_game
 
     project_file = path.resolve()
     inspection = load_studio_project(project_file)
@@ -2597,7 +2597,7 @@ def _add_document_tab(
     """Extract one more document from a project's own source and give it a
     tab, unless the project has one with that codec already."""
 
-    from .games import extract_game
+    from retrolarium_kit.games.catalog import extract_game
 
     project_file = path.resolve()
     inspection = load_studio_project(project_file)

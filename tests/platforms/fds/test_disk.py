@@ -8,21 +8,22 @@ import unittest
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "retrolarium-core" / "python"))
 
-from retrolarium_kit.fds import (
+from retrolarium_core.fds import (
     FdsError,
     fds_payload,
     fds_payload_ranges,
     parse_fds_side,
     replace_fds_payload,
 )
-from retrolarium_kit.authoring import (
+from retrolarium_kit.core.authoring import (
     GameProfile,
     PayloadSpec,
     ResourceSpec,
     RevisionSpec,
 )
-from retrolarium_kit.nes_resources import (
+from retrolarium_kit.platform.nes.resources import (
     build_resources,
     decode_resources,
     parse_resource_document,

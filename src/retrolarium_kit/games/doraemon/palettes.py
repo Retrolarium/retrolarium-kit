@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .authoring import AuthoringError
+from retrolarium_kit.core.authoring import AuthoringError
 
 
 ROOM_SELECTOR_CODEC = "doraemon.room-palette-selectors.v1"

@@ -28,7 +28,7 @@ import struct
 from typing import Callable
 import wave
 
-from .authoring import AuthoringError
+from retrolarium_kit.core.authoring import AuthoringError
 
 
 class SoundEffectError(AuthoringError):
@@ -454,9 +454,9 @@ def source_tables(source: bytes) -> tuple[Table, ...]:
     (smb.sfx-tables.v1), at their CPU addresses in the 32 KiB window."""
     import hashlib
 
-    from .game_profiles import packaged_game_profiles
-    from .nes_resources import _resource_payload, _resource_specs
-    from .smb_sfx_tables import CODEC, table_specs
+    from retrolarium_kit.core.game_profiles import packaged_game_profiles
+    from retrolarium_kit.platform.nes.resources import _resource_payload, _resource_specs
+    from retrolarium_kit.games.smb.sfx_tables import CODEC, table_specs
 
     sha = hashlib.sha256(source).hexdigest()
     registry = packaged_game_profiles()

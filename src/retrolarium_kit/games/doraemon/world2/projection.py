@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .doraemon_world2_streams import (
+from retrolarium_kit.games.doraemon.world2.streams import (
     PADDING, POINTER_SIZE, REGION_ADDRESS, SPAWN_BASE, _validate_screens,
     DoraemonWorld2StreamError,
 )

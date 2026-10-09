@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 import tempfile
 
-from retrolarium_kit.audio_operations import import_smb_midi_into_document
+from retrolarium_kit.studio.audio import import_smb_midi_into_document
 
 
 DEFAULT_MIDI = (

@@ -13,8 +13,8 @@ import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.games import extract_game, inspect_game
-from retrolarium_kit.studio_project import (
+from retrolarium_kit.games.catalog import extract_game, inspect_game
+from retrolarium_kit.studio.project import (
     build_studio_project, create_studio_project,
     studio_solomon_point_playtest_plan, verify_studio_project,
 )

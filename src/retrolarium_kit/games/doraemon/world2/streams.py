@@ -13,7 +13,7 @@ from functools import lru_cache
 import heapq
 from typing import Any
 
-from .authoring import AuthoringError
+from retrolarium_kit.core.authoring import AuthoringError
 
 
 CODEC = "doraemon.world2-screens.v1"

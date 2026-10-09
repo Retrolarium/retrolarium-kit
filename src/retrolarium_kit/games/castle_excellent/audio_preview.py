@@ -20,8 +20,8 @@ import struct
 from typing import Any, Mapping
 import wave
 
-from .authoring import AuthoringError
-from .castle_mml import CODEC
+from retrolarium_kit.core.authoring import AuthoringError
+from retrolarium_kit.games.castle.mml import CODEC
 
 
 NTSC_FRAME_RATE = 60.0988

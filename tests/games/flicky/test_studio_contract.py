@@ -9,12 +9,12 @@ import unittest
 from unittest.mock import patch
 
 from retrolarium_kit.cli import main as cli_main
-from retrolarium_kit.studio_project import (
+from retrolarium_kit.studio.project import (
     StudioProjectError, load_studio_project, upgrade_flicky_studio_project,
 )
 
 
-FIXTURE = (Path(__file__).resolve().parents[2] / "retrolarium_core" / "tests"
+FIXTURE = (Path(__file__).resolve().parents[2] / "retrolarium-core" / "tests"
            / "fixtures" / "studio_projects")
 
 

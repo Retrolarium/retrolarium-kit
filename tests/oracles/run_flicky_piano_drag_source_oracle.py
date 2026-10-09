@@ -12,13 +12,13 @@ from pathlib import Path
 import subprocess
 import tempfile
 
-from retrolarium_kit.flicky_content import (
+from retrolarium_kit.games.flicky.content import (
     CANONICAL_SHA256,
     SOURCE_DIRECTORY,
     WORKSPACE_FILES,
     import_flicky_source,
 )
-from retrolarium_kit.studio_project import (
+from retrolarium_kit.studio.project import (
     build_studio_project,
     create_flicky_studio_project,
     verify_studio_project,

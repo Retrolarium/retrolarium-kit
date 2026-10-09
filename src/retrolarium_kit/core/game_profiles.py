@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Any, Iterable
 
-from .authoring import (
+from retrolarium_kit.core.authoring import (
     AuthoringError,
     GameProfile,
     PayloadSpec,
@@ -198,7 +198,7 @@ def load_game_profile(path: Path) -> GameProfile:
 
 def packaged_game_profiles() -> Registry[GameProfile]:
     registry: Registry[GameProfile] = Registry("game profile")
-    profile_root = resources.files("retrolarium_kit").joinpath("profiles")
+    profile_root = resources.files("retrolarium_kit.core").joinpath("profiles")
     for item in sorted(profile_root.iterdir(), key=lambda value: value.name):
         if not item.name.startswith("game_") or not item.name.endswith(".json"):
             continue

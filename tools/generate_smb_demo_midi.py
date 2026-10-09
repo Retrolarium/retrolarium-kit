@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from retrolarium_kit.midi import MidiNote, encode_midi_channels
+from retrolarium_kit.core.midi import MidiNote, encode_midi_channels
 
 
 DIVISION = 960

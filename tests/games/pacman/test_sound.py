@@ -11,7 +11,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.pacman_sound import (
+from retrolarium_kit.games.pacman.sound import (
     PacmanSoundError,
     decode_sound_bundle,
     encode_sound_bundle,
@@ -21,15 +21,15 @@ from retrolarium_kit.pacman_sound import (
     sound_byte_to_midi,
     sound_summary,
 )
-from retrolarium_kit.authoring import GameProfile, ResourceSpec, RevisionSpec
-from retrolarium_kit.audio_operations import (
+from retrolarium_kit.core.authoring import GameProfile, ResourceSpec, RevisionSpec
+from retrolarium_kit.studio.audio import (
     export_document_midi,
     import_midi_into_document,
     preview_midi_import,
     render_document_wav,
 )
-from retrolarium_kit.midi import parse_midi
-from retrolarium_kit.nes_resources import (
+from retrolarium_kit.core.midi import parse_midi
+from retrolarium_kit.platform.nes.resources import (
     build_resources,
     decode_resources,
     inspection_details,

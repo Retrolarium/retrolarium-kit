@@ -10,8 +10,8 @@ from pathlib import Path
 import shutil
 import tempfile
 
-from retrolarium_kit.flicky_content import import_flicky_source
-from retrolarium_kit.studio_project import (
+from retrolarium_kit.games.flicky.content import import_flicky_source
+from retrolarium_kit.studio.project import (
     build_studio_project,
     create_flicky_studio_project,
     studio_flicky_round_playtest_plan,

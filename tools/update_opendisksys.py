@@ -5,9 +5,9 @@
 
 The kit plays Famicom Disk System games on OpenDiskSysROM when the user has
 not installed Nintendo's BIOS. This assembles the checkout's freedisksys.asm
-with asm6f, copies the image to firmware/opendisksys/fds/rp2c33a-01a.bin (the
+with asm6f, copies the image to core/opendisksys/fds/rp2c33a-01a.bin (the
 name MAME's fds set gives the BIOS) with the project's license, and records
-the source commit and the image's digest in firmware/opendisksys/manifest.json.
+the source commit and the image's digest in core/opendisksys/manifest.json.
 The checkout must be clean, so the commit names exactly what was built.
 """
 
@@ -22,7 +22,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-FIRMWARE = Path(__file__).resolve().parents[1] / "src" / "retrolarium_kit" / "firmware" / "opendisksys"
+FIRMWARE = Path(__file__).resolve().parents[1] / "src" / "retrolarium_kit" / "core" / "opendisksys"
 REPOSITORY = "https://github.com/RetrolariumLab/OpenDiskSysROM"
 IMAGE_SIZE = 0x2000
 

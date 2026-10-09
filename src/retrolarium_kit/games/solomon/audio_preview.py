@@ -17,7 +17,7 @@ import struct
 import wave
 from typing import Any
 
-from .authoring import AuthoringError
+from retrolarium_kit.core.authoring import AuthoringError
 
 
 SAMPLE_RATE = 44_100

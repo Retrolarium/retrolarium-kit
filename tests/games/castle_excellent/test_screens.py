@@ -7,8 +7,8 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.authoring import GameProfile, ResourceSpec, RevisionSpec
-from retrolarium_kit.castle_screens import CastleScreensError, build_screens, decode_screens, parse_screens_document
+from retrolarium_kit.core.authoring import GameProfile, ResourceSpec, RevisionSpec
+from retrolarium_kit.games.castle.screens import CastleScreensError, build_screens, decode_screens, parse_screens_document
 
 
 def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:

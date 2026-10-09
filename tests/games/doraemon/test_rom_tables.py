@@ -6,12 +6,12 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.doraemon_metasprites import WORLD2_CODEC, decode_world2
-from retrolarium_kit.doraemon_objects import (
+from retrolarium_kit.games.doraemon.metasprites import WORLD2_CODEC, decode_world2
+from retrolarium_kit.games.doraemon.objects import (
     DoraemonObjectError, decode_descriptors, decode_placements, decode_registry, decode_schedule,
     encode_placements, encode_registry, encode_schedule,
 )
-from retrolarium_kit.game_profiles import packaged_game_profiles
+from retrolarium_kit.core.game_profiles import packaged_game_profiles
 
 
 # The cartridge image is not part of the repository; the test runs where the

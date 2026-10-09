@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "retrolarium-kit"
 version = "0.5.0"
-description = "Reproducible build and reverse-engineering services for Retrolarium"
+description = "Game resource codecs, project builds and Studio services for Retrolarium"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "GPL-3.0-or-later"}
 classifiers = [
   "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
 ]
-dependencies = []
+dependencies = ["retrolarium-core"]
 
 [project.scripts]
 rltool = "retrolarium_kit.cli:main"
@@ -21,21 +21,19 @@ rltool = "retrolarium_kit.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-retrolarium_kit = [
-  "flicky_sound_preview_runtime.py",
-  "firmware/opendisksys/*.json",
-  "firmware/opendisksys/*.txt",
-  "firmware/opendisksys/fds/*.bin",
-  "ghidra_scripts/*.java",
+"retrolarium_kit.core" = [
+  "opendisksys/*.json",
+  "opendisksys/*.lua",
+  "opendisksys/*.txt",
+  "opendisksys/fds/*.bin",
   "profiles/*.json",
-  "runtime/*.lua",
-  "schemas/*.json",
-  "toolchains/*.json",
-  "_toolchains/manifest.json",
-  "_toolchains/licenses/*.txt",
-  "_toolchains/payloads/*/*/*",
-  "_toolchains/sources/*",
+  "toolchains/manifest.json",
+  "toolchains/licenses/*.txt",
+  "toolchains/payloads/*/*/*",
+  "toolchains/sources/*",
 ]
+"retrolarium_kit.studio" = ["runtime/*.lua"]
+retrolarium_kit = ["schemas/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

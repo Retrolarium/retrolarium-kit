@@ -12,60 +12,60 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.game_profiles import packaged_game_profiles
-from retrolarium_kit.doraemon_hierarchy import (
+from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from retrolarium_kit.games.doraemon.hierarchy import (
     DoraemonHierarchyError,
     decode_hierarchy,
     encode_hierarchy,
     payload_size,
 )
-from retrolarium_kit.doraemon_palettes import (
+from retrolarium_kit.games.doraemon.palettes import (
     DoraemonPaletteError,
     decode_room_selectors,
     encode_room_selectors,
 )
-from retrolarium_kit.doraemon_world2_metatiles import (
+from retrolarium_kit.games.doraemon.world2.metatiles import (
     DoraemonWorld2MetatileError,
     decode_metatiles as decode_world2_metatiles,
     encode_metatiles as encode_world2_metatiles,
 )
-from retrolarium_kit.doraemon_world2_streams import (
+from retrolarium_kit.games.doraemon.world2.streams import (
     DoraemonWorld2StreamError,
     decode_screens as decode_world2_screens,
     encode_screens as encode_world2_screens,
 )
-from retrolarium_kit.doraemon_world2_stage import (
+from retrolarium_kit.games.doraemon.world2.stage import (
     DoraemonWorld2StageError,
     decode_stage as decode_world2_stage,
     encode_stage as encode_world2_stage,
     token_command,
 )
-from retrolarium_kit.doraemon_world2_branches import (
+from retrolarium_kit.games.doraemon.world2.branches import (
     DoraemonWorld2BranchError,
     decode_branches as decode_world2_branches,
     encode_branches as encode_world2_branches,
 )
-from retrolarium_kit.doraemon_world2_chapters import (
+from retrolarium_kit.games.doraemon.world2.chapters import (
     DoraemonWorld2ChapterError,
     decode_chapters as decode_world2_chapters,
     encode_chapters as encode_world2_chapters,
 )
-from retrolarium_kit.doraemon_world2_projection import project_screen
-from retrolarium_kit.doraemon_world2_routes import (
+from retrolarium_kit.games.doraemon.world2.projection import project_screen
+from retrolarium_kit.games.doraemon.world2.routes import (
     Placement, Route, paint_route_cell,
 )
-from retrolarium_kit.nes_resources import (
+from retrolarium_kit.platform.nes.resources import (
     build_resources,
     decode_resources,
     parse_resource_document,
 )
-from retrolarium_kit.doraemon_metasprites import (
+from retrolarium_kit.games.doraemon.metasprites import (
     DoraemonMetaspriteError,
     decode_variable as decode_doraemon_metasprites,
     decode_world2 as decode_doraemon_world2_metasprites,
     encode_variable as encode_doraemon_metasprites,
 )
-from retrolarium_kit.studio_project import create_studio_project
+from retrolarium_kit.studio.project import create_studio_project
 
 
 HELP_SPRITE_STREAMS = ((100064, 89), (100153, 57), (100210, 105))
@@ -571,7 +571,7 @@ class DoraemonProfileTests(unittest.TestCase):
             parse_resource_document(resource_document, self.profile, revision)
             document_path.write_text(json.dumps(resource_document), encoding="utf-8")
             with patch(
-                "retrolarium_kit.studio_project.load_disassembly_manifest",
+                "retrolarium_kit.studio.project.load_disassembly_manifest",
                 return_value={
                     "schema": "retrolarium.nes.disassembly",
                     "schema_version": 1,

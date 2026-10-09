@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Mapping
 
-from .authoring import AuthoringError
+from retrolarium_kit.core.authoring import AuthoringError
 
 
 CODEC = "smb.player-frames.v1"

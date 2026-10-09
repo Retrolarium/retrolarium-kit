@@ -11,9 +11,9 @@ from pathlib import Path
 import tempfile
 from typing import Any, Mapping
 
-from .authoring import AuthoringError, GameProfile, ResourceSpec, RevisionSpec
-from .game_profiles import load_game_profile, packaged_game_profiles
-from .pacman_sound import (
+from retrolarium_kit.core.authoring import AuthoringError, GameProfile, ResourceSpec, RevisionSpec
+from retrolarium_kit.core.game_profiles import load_game_profile, packaged_game_profiles
+from retrolarium_kit.games.pacman.sound import (
     CODEC,
     NTSC_FRAME_RATE as PACMAN_NTSC_FRAME_RATE,
     encode_sound_bundle,
@@ -22,8 +22,8 @@ from .pacman_sound import (
     sound_byte_to_midi,
     sound_summary,
 )
-from .midi import MidiNote, encode_midi, encode_midi_channels
-from .smb_apu import (
+from retrolarium_kit.core.midi import MidiNote, encode_midi, encode_midi_channels
+from retrolarium_kit.games.smb.apu import (
     CODEC as SMB_APU_CODEC,
     NTSC_CPU_FREQUENCY,
     NTSC_FRAME_RATE,

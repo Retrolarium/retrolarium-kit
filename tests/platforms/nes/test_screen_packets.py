@@ -9,14 +9,14 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.authoring import GameProfile, ResourceSpec, RevisionSpec
-from retrolarium_kit.nes_resources import (
+from retrolarium_kit.core.authoring import GameProfile, ResourceSpec, RevisionSpec
+from retrolarium_kit.platform.nes.resources import (
     build_resources,
     decode_resources,
     inspection_details,
     parse_resource_document,
 )
-from retrolarium_kit.nes_screen_packets import (
+from retrolarium_kit.platform.nes.screen_packets import (
     decode_screen_packets,
     encode_screen_packets,
 )

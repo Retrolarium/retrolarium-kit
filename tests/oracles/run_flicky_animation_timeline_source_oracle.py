@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import tempfile
 
-from retrolarium_kit.flicky_content import WORKSPACE_FILES, import_flicky_source
+from retrolarium_kit.games.flicky.content import WORKSPACE_FILES, import_flicky_source
 
 
 def table_words(source: str, label: str) -> list[int] | None:

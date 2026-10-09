@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from retrolarium_kit.castle_mml import (
+from retrolarium_kit.games.castle.mml import (
     CastleMmlError,
     decode_music,
     encode_music,

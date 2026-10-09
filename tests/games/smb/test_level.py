@@ -9,24 +9,25 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "retrolarium-core" / "python"))
 
-from retrolarium_kit.authoring import (
+from retrolarium_kit.core.authoring import (
     AuthoringError,
     GameProfile,
     PayloadSpec,
     ResourceSpec,
     RevisionSpec,
 )
-from retrolarium_kit.fds import fds_payload
-from retrolarium_kit.game_profiles import packaged_game_profiles
-from retrolarium_kit.nes_resources import (
+from retrolarium_core.fds import fds_payload
+from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from retrolarium_kit.platform.nes.resources import (
     NesResourceError,
     build_resources,
     decode_resources,
     parse_resource_document,
 )
-from retrolarium_kit.smb_level import decode_levels, encode_levels, positioned_area_objects, positioned_enemy_records
-from retrolarium_kit.smb_level_render import object_width, render_level_scene
+from retrolarium_kit.games.smb.level import decode_levels, encode_levels, positioned_area_objects, positioned_enemy_records
+from retrolarium_kit.games.smb.level_render import object_width, render_level_scene
 
 
 PARAMETERS = {

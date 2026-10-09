@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Mapping
 
-from .authoring import AuthoringError, stable_identifier
-from .fds_synthesis import decode_synthesis, encode_synthesis
+from retrolarium_kit.core.authoring import AuthoringError, stable_identifier
+from retrolarium_kit.platform.fds.synthesis import decode_synthesis, encode_synthesis
 
 
 CODEC = "fds.music.v1"

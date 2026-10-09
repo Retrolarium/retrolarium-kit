@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import unittest
 
-from retrolarium_kit.smb_player_frames import (
+from retrolarium_kit.games.smb.player_frames import (
     ENCODED_SIZE,
     FRAME_COUNT,
     FRAME_NAMES,
