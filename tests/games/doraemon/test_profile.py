@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from helpers import patched_manifest
 from retrolarium_kit.core.game_profiles import packaged_game_profiles
 from retrolarium_kit.games.doraemon.hierarchy import (
     DoraemonHierarchyError,
@@ -65,7 +66,7 @@ from retrolarium_kit.games.doraemon.metasprites import (
     decode_world2 as decode_doraemon_world2_metasprites,
     encode_variable as encode_doraemon_metasprites,
 )
-from retrolarium_kit.studio.project import create_studio_project
+from retrolarium_kit.studio.create import create_studio_project
 
 
 HELP_SPRITE_STREAMS = ((100064, 89), (100153, 57), (100210, 105))
@@ -570,14 +571,11 @@ class DoraemonProfileTests(unittest.TestCase):
             }
             parse_resource_document(resource_document, self.profile, revision)
             document_path.write_text(json.dumps(resource_document), encoding="utf-8")
-            with patch(
-                "retrolarium_kit.studio.project.load_disassembly_manifest",
-                return_value={
-                    "schema": "retrolarium.nes.disassembly",
-                    "schema_version": 1,
-                    "input": {"sha256": revision.sha256, "size": revision.size},
-                },
-            ):
+            with patched_manifest({
+                "schema": "retrolarium.nes.disassembly",
+                "schema_version": 1,
+                "input": {"sha256": revision.sha256, "size": revision.size},
+            }):
                 inspection = create_studio_project(
                     manifest_path, root / "doraemon.rlj",
                     project_id="doraemon", name="Doraemon",
