@@ -73,3 +73,35 @@ def encode(value: Any, parameters: Mapping[str, Any]) -> list[tuple[int, bytes]]
                 raise SmbSfxTableError(f"sfx table {name}[{i}] is a period table offset and must be even")
         spans.append((offset, bytes(values)))
     return spans
+
+
+def source_tables(source: bytes) -> tuple["Table", ...]:
+    """The effect tables a packaged profile declares for this image
+    (smb.sfx-tables.v1), at their CPU addresses in the 32 KiB window."""
+    import hashlib
+
+    from retrolarium_kit.core.game_profiles import packaged_game_profiles
+    from retrolarium_kit.platform.nes.resources import _resource_payload, _resource_specs
+    from retrolarium_kit.platform.nes.sound_effects import Table
+
+    sha = hashlib.sha256(source).hexdigest()
+    registry = packaged_game_profiles()
+    for identifier in registry.identifiers():
+        profile = registry.get(identifier)
+        for revision in profile.revisions:
+            if revision.sha256 != sha:
+                continue
+            result = []
+            for spec in _resource_specs(profile, revision):
+                if spec.codec != CODEC:
+                    continue
+                payload = _resource_payload(profile, revision, spec)
+                # An iNES image's PRG follows its 16-byte header.
+                base = 0x8000 - 16 if payload is None else payload.load_address
+                if base is None:
+                    continue
+                for name, offset, size, kind in table_specs(spec.parameters):
+                    if 0x8000 <= base + offset and base + offset + size <= 0x10000:
+                        result.append(Table(name, base + offset, size, kind))
+            return tuple(result)
+    return ()
