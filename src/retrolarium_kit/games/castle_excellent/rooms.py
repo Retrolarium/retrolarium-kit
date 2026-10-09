@@ -27,13 +27,13 @@ from retrolarium_kit.core.authoring import (
 from retrolarium_core.ines import InesImage, parse_ines
 
 
-LEVEL_DOCUMENT_SCHEMA = "retrolarium.castle-levels"
+LEVEL_DOCUMENT_SCHEMA = "retrolarium.castle-excellent-levels"
 LEVEL_DOCUMENT_VERSION = 1
-ROOM_RENDERING_CODEC = "castle.room-rendering.v1"
+ROOM_RENDERING_CODEC = "castle-excellent.room-rendering.v1"
 
 
-class CastleError(AuthoringError):
-    """Castle profile or level content is invalid."""
+class CastleExcellentError(AuthoringError):
+    """Castle Excellent profile or level content is invalid."""
 
 
 @dataclass(frozen=True)
@@ -72,7 +72,7 @@ class ObjectRecord:
 
 
 @dataclass(frozen=True)
-class CastleObjectPreview:
+class CastleExcellentObjectPreview:
     runtime_type: int
     descriptor_offset: int
     x_offsets: bytes
@@ -86,7 +86,7 @@ class CastleObjectPreview:
 
 
 @dataclass(frozen=True)
-class CastleRenderingData:
+class CastleExcellentRenderingData:
     chr_bank: int
     chr_2bpp: bytes
     room_palette: bytes
@@ -98,7 +98,7 @@ class CastleRenderingData:
     attribute_preserving_cells: bytes
     runtime_object_types: bytes
     metasprite_descriptors: bytes
-    object_previews: tuple[CastleObjectPreview, ...]
+    object_previews: tuple[CastleExcellentObjectPreview, ...]
 
     def as_dict(self) -> dict[str, object]:
         result: dict[str, object] = {
@@ -123,7 +123,7 @@ class CastleRenderingData:
 
 
 @dataclass(frozen=True)
-class CastleLevelDocument:
+class CastleExcellentLevelDocument:
     game_id: str
     revision_id: str
     source_sha256: str
@@ -131,7 +131,7 @@ class CastleLevelDocument:
     height: int
     rooms: tuple[Room, ...]
     objects: tuple[tuple[ObjectRecord, ...], ...]
-    rendering: CastleRenderingData | None = None
+    rendering: CastleExcellentRenderingData | None = None
 
     def as_dict(self) -> dict[str, object]:
         result: dict[str, object] = {
@@ -165,19 +165,19 @@ class CastleLevelDocument:
 
 def _integer(value: object, name: str, *, minimum: int = 0) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
-        raise CastleError(f"{name} must be an integer >= {minimum}")
+        raise CastleExcellentError(f"{name} must be an integer >= {minimum}")
     return value
 
 
 def _sequence(value: object, name: str) -> list[Any]:
     if not isinstance(value, list):
-        raise CastleError(f"{name} must be an array")
+        raise CastleExcellentError(f"{name} must be an array")
     return value
 
 
 def _mapping(value: object, name: str) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
-        raise CastleError(f"{name} must be an object")
+        raise CastleExcellentError(f"{name} must be an object")
     return value
 
 
@@ -186,7 +186,7 @@ def _resource(
 ) -> ResourceSpec:
     resource = profile.resource(resource_id, revision)
     if resource.codec != codec or resource.capacity_policy != "fixed":
-        raise CastleError(
+        raise CastleExcellentError(
             f"resource {resource_id!r} does not use required fixed codec {codec}"
         )
     return resource
@@ -202,10 +202,10 @@ def _optional_resource(
     if not matches:
         return None
     if len(matches) != 1:
-        raise CastleError(f"duplicate resource {resource_id!r} in {profile.game_id}")
+        raise CastleExcellentError(f"duplicate resource {resource_id!r} in {profile.game_id}")
     resource = matches[0]
     if resource.codec != codec or resource.capacity_policy != "fixed":
-        raise CastleError(
+        raise CastleExcellentError(
             f"resource {resource_id!r} does not use required fixed codec {codec}"
         )
     return resource
@@ -213,7 +213,7 @@ def _optional_resource(
 
 def _cpu_offset(address: int) -> int:
     if not 0x8000 <= address <= 0xFFFF:
-        raise CastleError(f"CPU address is outside fixed 32 KiB PRG: 0x{address:X}")
+        raise CastleExcellentError(f"CPU address is outside fixed 32 KiB PRG: 0x{address:X}")
     return address - 0x8000
 
 
@@ -241,7 +241,7 @@ def _rendering_configuration(resource: ResourceSpec) -> tuple[Any, ...]:
         )
     ]
     if any(value > 0xFF for value in preserving_values):
-        raise CastleError("room-rendering preserving cell must fit a byte")
+        raise CastleExcellentError("room-rendering preserving cell must fit a byte")
     preserving = bytes(preserving_values)
     object_keys = (
         "runtime_object_types_cpu", "runtime_object_type_count",
@@ -259,7 +259,7 @@ def _rendering_configuration(resource: ResourceSpec) -> tuple[Any, ...]:
     descriptors_size = (_integer(parameters.get("metasprite_descriptors_size"),
         "room-rendering.metasprite_descriptors_size", minimum=1)
         if has_object_rendering else 0)
-    previews: list[CastleObjectPreview] = []
+    previews: list[CastleExcellentObjectPreview] = []
     preview_types: set[int] = set()
     raw_previews = (_sequence(parameters.get("object_previews"),
         "room-rendering.object_previews") if has_object_rendering else [])
@@ -272,16 +272,16 @@ def _rendering_configuration(resource: ResourceSpec) -> tuple[Any, ...]:
         offsets = _document_bytes(item.get("x_offsets"),
             f"room-rendering.object_previews[{index}].x_offsets", None)
         if runtime_type > 0xFF:
-            raise CastleError("room-rendering object preview type must fit a byte")
+            raise CastleExcellentError("room-rendering object preview type must fit a byte")
         if not 1 <= len(offsets) <= 4:
-            raise CastleError("room-rendering object preview needs 1..4 x offsets")
+            raise CastleExcellentError("room-rendering object preview needs 1..4 x offsets")
         descriptor_offset = descriptor_cpu - descriptors_cpu
         if descriptor_offset < 0 or descriptor_offset + len(offsets) * 2 > descriptors_size:
-            raise CastleError("room-rendering object preview escapes descriptor range")
+            raise CastleExcellentError("room-rendering object preview escapes descriptor range")
         if runtime_type in preview_types:
-            raise CastleError("room-rendering object preview runtime types must be unique")
+            raise CastleExcellentError("room-rendering object preview runtime types must be unique")
         preview_types.add(runtime_type)
-        previews.append(CastleObjectPreview(runtime_type, descriptor_offset, offsets))
+        previews.append(CastleExcellentObjectPreview(runtime_type, descriptor_offset, offsets))
     values = (
         _integer(parameters.get("chr_bank"), "room-rendering.chr_bank"),
         _integer(parameters.get("chr_size"), "room-rendering.chr_size", minimum=1),
@@ -300,12 +300,12 @@ def _rendering_configuration(resource: ResourceSpec) -> tuple[Any, ...]:
             or values[9] != 16 or values[11] != 4 \
             or (has_object_rendering and runtime_type_count != 61) \
             or (has_object_rendering and descriptors_size != 406):
-        raise CastleError("room-rendering layout has unsupported v1 dimensions")
+        raise CastleExcellentError("room-rendering layout has unsupported v1 dimensions")
     return (*values, preserving, runtime_types_cpu, runtime_type_count,
         descriptors_cpu, descriptors_size, tuple(previews))
 
 
-def _decode_rendering(image: InesImage, resource: ResourceSpec) -> CastleRenderingData:
+def _decode_rendering(image: InesImage, resource: ResourceSpec) -> CastleExcellentRenderingData:
     (
         chr_bank, chr_size, palette_cpu, palette_size, left_cpu, right_cpu,
         attributes_cpu, cell_count, initial_cpu, initial_size, masks_cpu,
@@ -315,9 +315,9 @@ def _decode_rendering(image: InesImage, resource: ResourceSpec) -> CastleRenderi
     chr_start = chr_bank * 0x2000
     chr_payload = image.chr[chr_start:chr_start + chr_size]
     if len(chr_payload) != chr_size:
-        raise CastleError("Castle room-rendering CHR bank is unavailable")
-    reader = BinaryReader(image.prg, "Castle PRG")
-    rendering = CastleRenderingData(
+        raise CastleExcellentError("Castle Excellent room-rendering CHR bank is unavailable")
+    reader = BinaryReader(image.prg, "Castle Excellent PRG")
+    rendering = CastleExcellentRenderingData(
         chr_bank,
         chr_payload,
         reader.read(_cpu_offset(palette_cpu), palette_size),
@@ -334,24 +334,24 @@ def _decode_rendering(image: InesImage, resource: ResourceSpec) -> CastleRenderi
         previews,
     )
     if rendering.attribute_masks != bytes((0x03, 0x0C, 0x30, 0xC0)):
-        raise CastleError("Castle room-rendering attribute masks are unsupported")
+        raise CastleExcellentError("Castle Excellent room-rendering attribute masks are unsupported")
     return rendering
 
 
 def _document_bytes(value: object, name: str, size: int | None) -> bytes:
     items = _sequence(value, name)
     if size is not None and len(items) != size:
-        raise CastleError(f"{name} must contain {size} bytes")
+        raise CastleExcellentError(f"{name} must contain {size} bytes")
     result = [_integer(item, f"{name} byte") for item in items]
     if any(item > 0xFF for item in result):
-        raise CastleError(f"{name} values must fit bytes")
+        raise CastleExcellentError(f"{name} values must fit bytes")
     return bytes(result)
 
 
-def _parse_rendering(value: object) -> CastleRenderingData:
+def _parse_rendering(value: object) -> CastleExcellentRenderingData:
     item = _mapping(value, "level document rendering")
     if item.get("codec") != ROOM_RENDERING_CODEC:
-        raise CastleError("level document rendering codec is unsupported")
+        raise CastleExcellentError("level document rendering codec is unsupported")
     has_object_rendering = any(name in item for name in (
         "runtime_object_types", "metasprite_descriptors", "object_previews"))
     descriptors = (
@@ -359,7 +359,7 @@ def _parse_rendering(value: object) -> CastleRenderingData:
             "level document rendering.metasprite_descriptors", 406)
         if has_object_rendering else b""
     )
-    previews: list[CastleObjectPreview] = []
+    previews: list[CastleExcellentObjectPreview] = []
     preview_types: set[int] = set()
     raw_previews = (_sequence(item.get("object_previews"),
         "level document rendering.object_previews") if has_object_rendering else [])
@@ -373,14 +373,14 @@ def _parse_rendering(value: object) -> CastleRenderingData:
         offsets = _document_bytes(preview.get("x_offsets"),
             f"level document rendering.object_previews[{index}].x_offsets", None)
         if runtime_type > 0xFF or not 1 <= len(offsets) <= 4:
-            raise CastleError("level document rendering object preview is invalid")
+            raise CastleExcellentError("level document rendering object preview is invalid")
         if descriptor_offset + len(offsets) * 2 > len(descriptors):
-            raise CastleError("level document rendering object preview escapes descriptors")
+            raise CastleExcellentError("level document rendering object preview escapes descriptors")
         if runtime_type in preview_types:
-            raise CastleError("level document rendering object preview types must be unique")
+            raise CastleExcellentError("level document rendering object preview types must be unique")
         preview_types.add(runtime_type)
-        previews.append(CastleObjectPreview(runtime_type, descriptor_offset, offsets))
-    return CastleRenderingData(
+        previews.append(CastleExcellentObjectPreview(runtime_type, descriptor_offset, offsets))
+    return CastleExcellentRenderingData(
         _integer(item.get("chr_bank"), "level document rendering.chr_bank"),
         _document_bytes(item.get("chr_2bpp"), "level document rendering.chr_2bpp", 0x2000),
         _document_bytes(item.get("room_palette"), "level document rendering.room_palette", 32),
@@ -400,7 +400,7 @@ def _parse_rendering(value: object) -> CastleRenderingData:
 
 
 def parse_prefix_codebook(prg: bytes, cpu_address: int) -> tuple[PrefixEntry, ...]:
-    reader = BinaryReader(prg, "Castle PRG")
+    reader = BinaryReader(prg, "Castle Excellent PRG")
     cursor = _cpu_offset(cpu_address)
     entries: list[PrefixEntry] = []
     while cursor < len(reader):
@@ -415,35 +415,35 @@ def parse_prefix_codebook(prg: bytes, cpu_address: int) -> tuple[PrefixEntry, ..
             if value == 0:
                 break
             if value not in (ord("0"), ord("1")):
-                raise CastleError(
+                raise CastleExcellentError(
                     f"invalid prefix code byte 0x{value:02X} at PRG 0x{cursor - 1:X}"
                 )
             bits.append(value)
         else:
-            raise CastleError("unterminated Castle prefix-code entry")
+            raise CastleExcellentError("unterminated Castle Excellent prefix-code entry")
         if not bits:
-            raise CastleError(f"empty prefix code for symbol 0x{symbol:02X}")
+            raise CastleExcellentError(f"empty prefix code for symbol 0x{symbol:02X}")
         entries.append(PrefixEntry(symbol, bits.decode("ascii")))
     else:
-        raise CastleError("Castle prefix-code sentinel was not found")
+        raise CastleExcellentError("Castle Excellent prefix-code sentinel was not found")
     validate_prefix_codebook(entries)
     return tuple(entries)
 
 
 def validate_prefix_codebook(entries: Sequence[PrefixEntry]) -> None:
     if not entries:
-        raise CastleError("Castle prefix codebook is empty")
+        raise CastleExcellentError("Castle Excellent prefix codebook is empty")
     symbols: set[int] = set()
     codes: list[str] = []
     for entry in entries:
         if not 0 <= entry.symbol <= 0xFE:
-            raise CastleError("prefix symbol must fit a non-sentinel byte")
+            raise CastleExcellentError("prefix symbol must fit a non-sentinel byte")
         if entry.symbol in symbols:
-            raise CastleError(f"duplicate prefix symbol 0x{entry.symbol:02X}")
+            raise CastleExcellentError(f"duplicate prefix symbol 0x{entry.symbol:02X}")
         if not entry.bits or set(entry.bits) - {"0", "1"}:
-            raise CastleError(f"invalid prefix code {entry.bits!r}")
+            raise CastleExcellentError(f"invalid prefix code {entry.bits!r}")
         if any(entry.bits.startswith(code) or code.startswith(entry.bits) for code in codes):
-            raise CastleError(f"codebook is not prefix-free at {entry.bits!r}")
+            raise CastleExcellentError(f"codebook is not prefix-free at {entry.bits!r}")
         symbols.add(entry.symbol)
         codes.append(entry.bits)
 
@@ -472,8 +472,8 @@ def decode_prefix_stream(
                 if len(result) == output_size:
                     return bytes(result), consumed
             elif current not in prefixes:
-                raise CastleError(f"prefix stream has no code matching bit {consumed}")
-    raise CastleError(
+                raise CastleExcellentError(f"prefix stream has no code matching bit {consumed}")
+    raise CastleExcellentError(
         f"truncated prefix stream after {len(result)} of {output_size} cells"
     )
 
@@ -486,11 +486,11 @@ def encode_prefix_stream(
     bit_parts = []
     for cell in cells:
         if not isinstance(cell, int) or isinstance(cell, bool) or not 0 <= cell <= 0xFF:
-            raise CastleError("room cell must be a byte")
+            raise CastleExcellentError("room cell must be a byte")
         try:
             bit_parts.append(encoding[cell])
         except KeyError as exc:
-            raise CastleError(f"room cell 0x{cell:02X} has no prefix code") from exc
+            raise CastleExcellentError(f"room cell 0x{cell:02X} has no prefix code") from exc
     bits = "".join(bit_parts)
     padding = (-len(bits)) % 8
     bits += "1" * padding
@@ -528,45 +528,45 @@ def _room_configuration(resource: ResourceSpec) -> tuple[int, int, int, int, int
             or arena.end <= arena.start
             or arena.end > 0x2000
         ):
-            raise CastleError(f"rooms.arenas[{index}] has invalid bounds")
+            raise CastleExcellentError(f"rooms.arenas[{index}] has invalid bounds")
         arenas.append(arena)
     if not arenas:
-        raise CastleError("rooms need at least one arena")
+        raise CastleExcellentError("rooms need at least one arena")
     expected = 0
     banks: set[int] = set()
     for arena in arenas:
         if arena.first_room != expected:
-            raise CastleError("room arenas must cover rooms contiguously")
+            raise CastleExcellentError("room arenas must cover rooms contiguously")
         if arena.bank in banks:
-            raise CastleError("room arenas must use distinct CHR banks")
+            raise CastleExcellentError("room arenas must use distinct CHR banks")
         expected = arena.last_room
         banks.add(arena.bank)
     if expected != count:
-        raise CastleError("room arenas do not cover the configured room count")
+        raise CastleExcellentError("room arenas do not cover the configured room count")
     return count, width, height, codebook_cpu, pointers_cpu, tuple(arenas)
 
 
 def _decode_rooms(image: InesImage, resource: ResourceSpec) -> tuple[tuple[Room, ...], tuple[PrefixEntry, ...]]:
     count, width, height, codebook_cpu, pointers_cpu, arenas = _room_configuration(resource)
     if len(image.prg) != 0x8000:
-        raise CastleError("Castle room codec requires a 32 KiB PRG")
+        raise CastleExcellentError("Castle Excellent room codec requires a 32 KiB PRG")
     codebook = parse_prefix_codebook(image.prg, codebook_cpu)
-    prg_reader = BinaryReader(image.prg, "Castle PRG")
+    prg_reader = BinaryReader(image.prg, "Castle Excellent PRG")
     pointer_start = _cpu_offset(pointers_cpu)
     prg_reader.read(pointer_start, count * 2)
     fill = _integer(resource.parameters.get("fill_byte", 0xFF), "rooms.fill_byte")
     if fill > 0xFF:
-        raise CastleError("rooms.fill_byte must fit a byte")
+        raise CastleExcellentError("rooms.fill_byte must fit a byte")
     rooms: list[Room] = []
     for arena in arenas:
         if (arena.bank + 1) * 0x2000 > len(image.chr):
-            raise CastleError(f"CHR bank {arena.bank} is absent")
+            raise CastleExcellentError(f"CHR bank {arena.bank} is absent")
         cursor = arena.start
         bank_payload = image.chr[arena.bank * 0x2000:(arena.bank + 1) * 0x2000]
         for room_index in range(arena.first_room, arena.last_room):
             offset = prg_reader.u16le(pointer_start + room_index * 2)
             if offset != cursor:
-                raise CastleError(
+                raise CastleExcellentError(
                     f"room {room_index + 1} starts at CHR {arena.bank}:0x{offset:X}, "
                     f"expected 0x{cursor:X}"
                 )
@@ -577,17 +577,17 @@ def _decode_rooms(image: InesImage, resource: ResourceSpec) -> tuple[tuple[Room,
             physical = bank_payload[offset:offset + encoded_size]
             encoded, _padding = encode_prefix_stream(cells, codebook)
             if physical != encoded:
-                raise CastleError(f"room {room_index + 1} is not byte-exact")
+                raise CastleExcellentError(f"room {room_index + 1} is not byte-exact")
             cursor += encoded_size
             if cursor > arena.end:
-                raise CastleError(f"room {room_index + 1} overflows its CHR arena")
+                raise CastleExcellentError(f"room {room_index + 1} overflows its CHR arena")
             rows = tuple(
                 tuple(cells[row * width:(row + 1) * width])
                 for row in range(height)
             )
             rooms.append(Room(room_index + 1, rows, arena.bank, offset, encoded_size))
         if any(value != fill for value in bank_payload[cursor:arena.end]):
-            raise CastleError(f"unused CHR arena bytes in bank {arena.bank} are not filled")
+            raise CastleExcellentError(f"unused CHR arena bytes in bank {arena.bank} are not filled")
     return tuple(rooms), codebook
 
 
@@ -612,44 +612,44 @@ def _decode_objects(image: InesImage, resource: ResourceSpec) -> tuple[tuple[Obj
     start = _cpu_offset(stream_cpu)
     end = _cpu_offset(stream_end_cpu)
     if start >= end or end > len(image.prg):
-        raise CastleError("object stream has invalid PRG bounds")
-    reader = BinaryReader(image.prg, "Castle PRG")
+        raise CastleExcellentError("object stream has invalid PRG bounds")
+    reader = BinaryReader(image.prg, "Castle Excellent PRG")
     cursor = start
     rooms: list[tuple[ObjectRecord, ...]] = []
     for room_index in range(count):
         records: list[ObjectRecord] = []
         while cursor < end and reader.u8(cursor) != 0xFF:
             if len(records) >= maximum:
-                raise CastleError(
+                raise CastleExcellentError(
                     f"room {room_index + 1} exceeds {maximum} static objects"
                 )
             if cursor + 3 > end:
-                raise CastleError(f"room {room_index + 1} has a truncated object record")
+                raise CastleExcellentError(f"room {room_index + 1} has a truncated object record")
             encoded_type, x, y = reader.read(cursor, 3)
             if encoded_type >= type_count:
-                raise CastleError(
+                raise CastleExcellentError(
                     f"room {room_index + 1} object type 0x{encoded_type:02X} is invalid"
                 )
             if x >= width or y >= height:
-                raise CastleError(f"room {room_index + 1} object is outside its grid")
+                raise CastleExcellentError(f"room {room_index + 1} object is outside its grid")
             records.append(ObjectRecord(encoded_type, x, y))
             cursor += 3
         if cursor >= end:
-            raise CastleError(f"room {room_index + 1} object list is unterminated")
+            raise CastleExcellentError(f"room {room_index + 1} object list is unterminated")
         cursor += 1
         rooms.append(tuple(records))
     fill = _integer(resource.parameters.get("fill_byte", 0xFF), "objects.fill_byte")
     if fill > 0xFF or any(value != fill for value in image.prg[cursor:end]):
-        raise CastleError("unused object-stream bytes are not filled")
+        raise CastleExcellentError("unused object-stream bytes are not filled")
 
     counts = reader.read(_cpu_offset(counts_cpu), count)
     expected_counts = bytes(len(room) for room in rooms)
     if counts != expected_counts:
-        raise CastleError("object count table disagrees with the object stream")
+        raise CastleExcellentError("object count table disagrees with the object stream")
     expected_offsets = _state_offsets(rooms, state_capacity, "object")
     actual_offsets = reader.read(_cpu_offset(offsets_cpu), count + 1)
     if actual_offsets != expected_offsets:
-        raise CastleError("object state-offset table disagrees with the object stream")
+        raise CastleExcellentError("object state-offset table disagrees with the object stream")
     return tuple(rooms)
 
 
@@ -660,7 +660,7 @@ def _state_offsets(
     for room in rooms:
         offsets.append(offsets[-1] + (len(room) + 7) // 8)
     if offsets[-1] > capacity or offsets[-1] > 0xFF:
-        raise CastleError(
+        raise CastleExcellentError(
             f"{kind} state needs {offsets[-1]} bytes, capacity is {capacity}"
         )
     return bytes(offsets)
@@ -685,7 +685,7 @@ def _mutable_offsets(
         _integer(value, "mutable-cell-state persistent value") for value in values
     }
     if any(value > 0xFF for value in persistent):
-        raise CastleError("mutable-cell-state values must fit bytes")
+        raise CastleExcellentError("mutable-cell-state values must fit bytes")
     offsets = [0]
     for index, room in enumerate(rooms):
         count = sum(cell in persistent for row in room.cells for cell in row)
@@ -694,7 +694,7 @@ def _mutable_offsets(
             width = max(width, final_minimum)
         offsets.append(offsets[-1] + width)
     if offsets[-1] > capacity or offsets[-1] > 0xFF:
-        raise CastleError(
+        raise CastleExcellentError(
             f"mutable-cell state needs {offsets[-1]} bytes, capacity is {capacity}"
         )
     return bytes(offsets)
@@ -702,18 +702,18 @@ def _mutable_offsets(
 
 def decode_levels(
     payload: bytes, profile: GameProfile, revision: RevisionSpec
-) -> CastleLevelDocument:
+) -> CastleExcellentLevelDocument:
     if hashlib.sha256(payload).hexdigest() != revision.sha256:
-        raise CastleError("input image does not match the selected revision")
+        raise CastleExcellentError("input image does not match the selected revision")
     image = parse_ines(payload)
     if image.mapper != revision.mapper:
-        raise CastleError(
+        raise CastleExcellentError(
             f"input mapper {image.mapper} does not match revision mapper {revision.mapper}"
         )
-    rooms_resource = _resource(profile, revision, "rooms", "castle.prefix-rooms.v1")
-    objects_resource = _resource(profile, revision, "objects", "castle.object-stream.v1")
+    rooms_resource = _resource(profile, revision, "rooms", "castle-excellent.prefix-rooms.v1")
+    objects_resource = _resource(profile, revision, "objects", "castle-excellent.object-stream.v1")
     mutable_resource = _resource(
-        profile, revision, "mutable-cell-state", "castle.mutable-cell-state.v1"
+        profile, revision, "mutable-cell-state", "castle-excellent.mutable-cell-state.v1"
     )
     rendering_resource = _optional_resource(
         profile, revision, "room-rendering", ROOM_RENDERING_CODEC
@@ -721,19 +721,19 @@ def decode_levels(
     rooms, _codebook = _decode_rooms(image, rooms_resource)
     objects = _decode_objects(image, objects_resource)
     if len(rooms) != len(objects):
-        raise CastleError("room and object counts differ")
+        raise CastleExcellentError("room and object counts differ")
     mutable_parameters = mutable_resource.parameters
     mutable_cpu = _integer(
         mutable_parameters.get("state_offsets_cpu"),
         "mutable-cell-state.state_offsets_cpu",
     )
     expected_mutable = _mutable_offsets(rooms, mutable_resource)
-    actual_mutable = BinaryReader(image.prg, "Castle PRG").read(
+    actual_mutable = BinaryReader(image.prg, "Castle Excellent PRG").read(
         _cpu_offset(mutable_cpu), len(rooms) + 1
     )
     if actual_mutable != expected_mutable:
-        raise CastleError("mutable-cell state-offset table disagrees with rooms")
-    return CastleLevelDocument(
+        raise CastleExcellentError("mutable-cell state-offset table disagrees with rooms")
+    return CastleExcellentLevelDocument(
         game_id=profile.game_id,
         revision_id=revision.revision_id,
         source_sha256=revision.sha256,
@@ -750,7 +750,7 @@ def decode_levels(
 
 def parse_level_document(
     document: object, profile: GameProfile, revision: RevisionSpec
-) -> CastleLevelDocument:
+) -> CastleExcellentLevelDocument:
     value = _mapping(document, "level document")
     expected_header = {
         "schema": LEVEL_DOCUMENT_SCHEMA,
@@ -761,17 +761,17 @@ def parse_level_document(
     }
     for field, expected in expected_header.items():
         if value.get(field) != expected:
-            raise CastleError(f"level document {field} must be {expected!r}")
-    rooms_resource = _resource(profile, revision, "rooms", "castle.prefix-rooms.v1")
-    objects_resource = _resource(profile, revision, "objects", "castle.object-stream.v1")
+            raise CastleExcellentError(f"level document {field} must be {expected!r}")
+    rooms_resource = _resource(profile, revision, "rooms", "castle-excellent.prefix-rooms.v1")
+    objects_resource = _resource(profile, revision, "objects", "castle-excellent.object-stream.v1")
     count, width, height, _codebook, _pointers, _arenas = _room_configuration(
         rooms_resource
     )
     if value.get("width") != width or value.get("height") != height:
-        raise CastleError("level document geometry disagrees with the profile")
+        raise CastleExcellentError("level document geometry disagrees with the profile")
     room_values = _sequence(value.get("rooms"), "level document rooms")
     if len(room_values) != count:
-        raise CastleError(f"level document must contain {count} rooms")
+        raise CastleExcellentError(f"level document must contain {count} rooms")
     _, _, _, _, _, _, _, _, type_count, maximum = _object_configuration(
         objects_resource
     )
@@ -780,15 +780,15 @@ def parse_level_document(
     for index, raw_room in enumerate(room_values):
         item = _mapping(raw_room, f"rooms[{index}]")
         if item.get("number") != index + 1:
-            raise CastleError(f"room {index + 1} has an invalid number")
+            raise CastleExcellentError(f"room {index + 1} has an invalid number")
         row_values = _sequence(item.get("cells"), f"rooms[{index}].cells")
         if len(row_values) != height:
-            raise CastleError(f"room {index + 1} must have {height} rows")
+            raise CastleExcellentError(f"room {index + 1} must have {height} rows")
         rows: list[tuple[int, ...]] = []
         for row_index, raw_row in enumerate(row_values):
             cells = _sequence(raw_row, f"rooms[{index}].cells[{row_index}]")
             if len(cells) != width:
-                raise CastleError(
+                raise CastleExcellentError(
                     f"room {index + 1} row {row_index + 1} must have {width} cells"
                 )
             checked = tuple(
@@ -796,27 +796,27 @@ def parse_level_document(
                 for cell in cells
             )
             if any(cell > 0xFF for cell in checked):
-                raise CastleError(f"room {index + 1} cells must fit bytes")
+                raise CastleExcellentError(f"room {index + 1} cells must fit bytes")
             rows.append(checked)
         object_values = _sequence(item.get("objects"), f"rooms[{index}].objects")
         if len(object_values) > maximum:
-            raise CastleError(f"room {index + 1} has too many static objects")
+            raise CastleExcellentError(f"room {index + 1} has too many static objects")
         records = []
         for object_index, raw_record in enumerate(object_values):
             record = _mapping(
                 raw_record, f"rooms[{index}].objects[{object_index}]"
             )
             if set(record) != {"encoded_type", "x", "y"}:
-                raise CastleError(f"room {index + 1} object has invalid fields")
+                raise CastleExcellentError(f"room {index + 1} object has invalid fields")
             encoded_type = _integer(record.get("encoded_type"), "encoded_type")
             x = _integer(record.get("x"), "object x")
             y = _integer(record.get("y"), "object y")
             if encoded_type >= type_count or x >= width or y >= height:
-                raise CastleError(f"room {index + 1} object is outside profile limits")
+                raise CastleExcellentError(f"room {index + 1} object is outside profile limits")
             records.append(ObjectRecord(encoded_type, x, y))
         rooms.append(Room(index + 1, tuple(rows), 0, 0, 0))
         objects.append(tuple(records))
-    return CastleLevelDocument(
+    return CastleExcellentLevelDocument(
         profile.game_id,
         revision.revision_id,
         revision.sha256,
@@ -846,29 +846,29 @@ def _change(
 
 def build_levels(
     source: bytes,
-    document: CastleLevelDocument,
+    document: CastleExcellentLevelDocument,
     profile: GameProfile,
     revision: RevisionSpec,
 ) -> tuple[bytes, dict[str, object]]:
     if document.game_id != profile.game_id or document.revision_id != revision.revision_id:
-        raise CastleError("level document profile identity mismatch")
+        raise CastleExcellentError("level document profile identity mismatch")
     if document.source_sha256 != revision.sha256:
-        raise CastleError("level document source identity mismatch")
+        raise CastleExcellentError("level document source identity mismatch")
     source_sha256 = hashlib.sha256(source).hexdigest()
     if source_sha256 != revision.sha256:
-        raise CastleError("build source does not match the selected revision")
+        raise CastleExcellentError("build source does not match the selected revision")
     image = parse_ines(source)
-    rooms_resource = _resource(profile, revision, "rooms", "castle.prefix-rooms.v1")
-    objects_resource = _resource(profile, revision, "objects", "castle.object-stream.v1")
+    rooms_resource = _resource(profile, revision, "rooms", "castle-excellent.prefix-rooms.v1")
+    objects_resource = _resource(profile, revision, "objects", "castle-excellent.object-stream.v1")
     mutable_resource = _resource(
-        profile, revision, "mutable-cell-state", "castle.mutable-cell-state.v1"
+        profile, revision, "mutable-cell-state", "castle-excellent.mutable-cell-state.v1"
     )
     rendering_resource = _optional_resource(
         profile, revision, "room-rendering", ROOM_RENDERING_CODEC
     )
     if document.rendering is not None:
         if rendering_resource is None:
-            raise CastleError("level document rendering data has no profile resource")
+            raise CastleExcellentError("level document rendering data has no profile resource")
         expected_rendering = _decode_rendering(image, rendering_resource)
         if not document.rendering.runtime_object_types \
                 and not document.rendering.metasprite_descriptors \
@@ -877,14 +877,14 @@ def build_levels(
                 runtime_object_types=b"", metasprite_descriptors=b"",
                 object_previews=())
         if document.rendering != expected_rendering:
-            raise CastleError(
+            raise CastleExcellentError(
                 "level document rendering data is read-only in schema version 1"
             )
     count, width, height, codebook_cpu, pointers_cpu, arenas = _room_configuration(
         rooms_resource
     )
     if len(document.rooms) != count or len(document.objects) != count:
-        raise CastleError("level document count disagrees with the profile")
+        raise CastleExcellentError("level document count disagrees with the profile")
     codebook = parse_prefix_codebook(image.prg, codebook_cpu)
     pointers = bytearray(count * 2)
     changes: list[Change] = []
@@ -892,7 +892,7 @@ def build_levels(
     room_index = 0
     room_fill = _integer(rooms_resource.parameters.get("fill_byte", 0xFF), "rooms.fill_byte")
     if room_fill > 0xFF:
-        raise CastleError("rooms.fill_byte must fit a byte")
+        raise CastleExcellentError("rooms.fill_byte must fit a byte")
     for arena in arenas:
         arena_payload = bytearray((room_fill,)) * arena.capacity
         cursor = arena.start
@@ -900,10 +900,10 @@ def build_levels(
             room = document.rooms[room_index]
             flat = tuple(cell for row in room.cells for cell in row)
             if len(room.cells) != height or any(len(row) != width for row in room.cells):
-                raise CastleError(f"room {room_index + 1} geometry is invalid")
+                raise CastleExcellentError(f"room {room_index + 1} geometry is invalid")
             encoded, _padding = encode_prefix_stream(flat, codebook)
             if cursor + len(encoded) > arena.end:
-                raise CastleError(
+                raise CastleExcellentError(
                     f"room {room_index + 1} overflows CHR bank {arena.bank} arena"
                 )
             pointers[room_index * 2:room_index * 2 + 2] = cursor.to_bytes(2, "little")
@@ -939,11 +939,11 @@ def build_levels(
 
     object_count, object_width, object_height, stream_cpu, stream_end_cpu, counts_cpu, object_offsets_cpu, state_capacity, type_count, maximum = _object_configuration(objects_resource)
     if (object_count, object_width, object_height) != (count, width, height):
-        raise CastleError("room and object resource geometry differs")
+        raise CastleExcellentError("room and object resource geometry differs")
     stream = bytearray()
     for index, records in enumerate(document.objects):
         if len(records) > maximum:
-            raise CastleError(f"room {index + 1} has too many static objects")
+            raise CastleExcellentError(f"room {index + 1} has too many static objects")
         for record in records:
             if (
                 record.encoded_type >= type_count
@@ -951,19 +951,19 @@ def build_levels(
                 or record.y >= height
                 or min(record.encoded_type, record.x, record.y) < 0
             ):
-                raise CastleError(f"room {index + 1} object is outside profile limits")
+                raise CastleExcellentError(f"room {index + 1} object is outside profile limits")
             stream.extend((record.encoded_type, record.x, record.y))
         stream.append(0xFF)
     stream_capacity = stream_end_cpu - stream_cpu
     if len(stream) > stream_capacity:
-        raise CastleError(
+        raise CastleExcellentError(
             f"object stream needs {len(stream)} bytes, capacity is {stream_capacity}"
         )
     object_fill = _integer(
         objects_resource.parameters.get("fill_byte", 0xFF), "objects.fill_byte"
     )
     if object_fill > 0xFF:
-        raise CastleError("objects.fill_byte must fit a byte")
+        raise CastleExcellentError("objects.fill_byte must fit a byte")
     stream.extend(bytes((object_fill,)) * (stream_capacity - len(stream)))
     counts = bytes(len(records) for records in document.objects)
     object_offsets = _state_offsets(document.objects, state_capacity, "object")
@@ -992,7 +992,7 @@ def build_levels(
     output = plan.apply(source)
     changed_bytes = sum(left != right for left, right in zip(source, output))
     return output, {
-        "schema": "retrolarium.castle-level-build",
+        "schema": "retrolarium.castle-excellent-level-build",
         "schema_version": 1,
         "game": profile.game_id,
         "revision": revision.revision_id,

@@ -45,7 +45,7 @@ def main() -> int:
     args = parser.parse_args()
     if args.mame and not args.native_renderer:
         parser.error("--mame requires --native-renderer")
-    scratch = Path(__file__).resolve().parents[1] / "build"
+    scratch = Path(__file__).resolve().parents[2] / "build"
     scratch.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="flicky-bonus-placement-", dir=scratch) as name:
         project = Path(name)

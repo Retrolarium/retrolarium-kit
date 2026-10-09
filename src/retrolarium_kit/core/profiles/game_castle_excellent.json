@@ -40,7 +40,7 @@
     {
       "id": "rooms",
       "kind": "room-collection",
-      "codec": "castle.prefix-rooms.v1",
+      "codec": "castle-excellent.prefix-rooms.v1",
       "capacity_policy": "fixed",
       "parameters": {
         "room_count": 100,
@@ -70,7 +70,7 @@
     {
       "id": "objects",
       "kind": "object-layer",
-      "codec": "castle.object-stream.v1",
+      "codec": "castle-excellent.object-stream.v1",
       "capacity_policy": "fixed",
       "parameters": {
         "room_count": 100,
@@ -89,7 +89,7 @@
     {
       "id": "mutable-cell-state",
       "kind": "derived-state-layout",
-      "codec": "castle.mutable-cell-state.v1",
+      "codec": "castle-excellent.mutable-cell-state.v1",
       "capacity_policy": "fixed",
       "parameters": {
         "state_offsets_cpu": 43950,
@@ -101,7 +101,7 @@
     {
       "id": "room-rendering",
       "kind": "rendering-data",
-      "codec": "castle.room-rendering.v1",
+      "codec": "castle-excellent.room-rendering.v1",
       "capacity_policy": "fixed",
       "parameters": {
         "chr_bank": 0,
@@ -219,7 +219,7 @@
     {
       "id": "room-cell-visuals",
       "kind": "metatile",
-      "codec": "castle.room-cell-visuals.v1",
+      "codec": "castle-excellent.room-cell-visuals.v1",
       "capacity_policy": "fixed",
       "parameters": {
         "cell_count": 100,
@@ -231,7 +231,7 @@
     {
       "id": "metasprite-descriptors",
       "kind": "animation",
-      "codec": "castle.metasprite-descriptors.v1",
+      "codec": "castle-excellent.metasprite-descriptors.v1",
       "capacity_policy": "fixed",
       "parameters": {
         "file_offset": 13510,
@@ -242,7 +242,7 @@
     {
       "id": "sub-command-text",
       "kind": "text",
-      "codec": "castle.sub-command-text.v1",
+      "codec": "castle-excellent.sub-command-text.v1",
       "capacity_policy": "fixed",
       "parameters": {
         "file_offset": 31623,
@@ -254,7 +254,7 @@
     {
       "id": "sfx-parameters",
       "kind": "audio-parameter",
-      "codec": "castle.sfx-parameters.v1",
+      "codec": "castle-excellent.sfx-parameters.v1",
       "capacity_policy": "fixed",
       "parameters": {
         "file_offset": 17465,
@@ -266,7 +266,7 @@
     {
       "id": "music",
       "kind": "audio",
-      "codec": "castle.mml-music.v1",
+      "codec": "castle-excellent.mml-music.v1",
       "capacity_policy": "fixed",
       "parameters": {
         "track_table_file_offset": 14550,
@@ -285,14 +285,14 @@
     {
       "id": "title-demo",
       "kind": "demo",
-      "codec": "castle.title-demo.v1",
+      "codec": "castle-excellent.title-demo.v1",
       "capacity_policy": "fixed",
       "parameters": {"script_cpu": 47148, "init_cpu": 47101, "reader_cpu": 47114, "capacity": 72}
     },
     {
       "id": "screens",
       "kind": "screens",
-      "codec": "castle.screens.v1",
+      "codec": "castle-excellent.screens.v1",
       "capacity_policy": "fixed",
       "parameters": {"chr_file_offset": 57360, "pages": [20, 24, 28], "page_names": ["completion", "title", "castle-map"], "chr_banks": [0, 1, 1], "game_over_cpu": 65156, "game_over_length": 9}
     }

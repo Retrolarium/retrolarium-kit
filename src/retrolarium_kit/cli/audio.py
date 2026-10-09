@@ -155,10 +155,10 @@ def command_audio_render_sfx(args: argparse.Namespace) -> None:
                              tables=tables))
 
 
-def command_audio_render_castle_wav(args: argparse.Namespace) -> None:
-    from retrolarium_kit.games.castle.audio_preview import render_castle_wav
+def command_audio_render_castle_excellent_wav(args: argparse.Namespace) -> None:
+    from retrolarium_kit.games.castle_excellent.audio_preview import render_castle_excellent_wav
 
-    print_json(render_castle_wav(
+    print_json(render_castle_excellent_wav(
         args.document, args.output, track=args.track, seconds=args.seconds,
         muted=tuple(args.mute),
     ))
@@ -262,7 +262,7 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     )
     sfx_render.add_argument("project", type=Path)
     sfx_render.add_argument("--effect", required=True,
-                            help="smb:square1:N, smb:square2:N, smb:noise:N, castle:N or doraemon:DRIVER:N")
+                            help="smb:square1:N, smb:square2:N, smb:noise:N, castle-excellent:N or doraemon:DRIVER:N")
     sfx_render.add_argument("--document", type=Path, help="NES resource bundle to play instead of the source")
     sfx_render.add_argument("--wav", type=Path)
     sfx_render.add_argument("--trace", type=Path)
@@ -315,19 +315,19 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
         choices=("pulse1", "pulse2", "triangle", "noise"),
     )
     audio_solomon_render.set_defaults(handler=command_audio_render_solomon_wav)
-    audio_castle_render = audio_commands.add_parser(
-        "render-castle-wav",
+    audio_castle_excellent_render = audio_commands.add_parser(
+        "render-castle-excellent-wav",
         help="render one Castle Excellent music track set (0-7) to WAV",
     )
-    audio_castle_render.add_argument("document", type=Path,
+    audio_castle_excellent_render.add_argument("document", type=Path,
                                      help="the music resource, or a bundle holding it")
-    audio_castle_render.add_argument("--output", type=Path, required=True)
-    audio_castle_render.add_argument("--track", type=int, required=True)
-    audio_castle_render.add_argument("--seconds", type=float, default=20.0)
-    audio_castle_render.add_argument(
+    audio_castle_excellent_render.add_argument("--output", type=Path, required=True)
+    audio_castle_excellent_render.add_argument("--track", type=int, required=True)
+    audio_castle_excellent_render.add_argument("--seconds", type=float, default=20.0)
+    audio_castle_excellent_render.add_argument(
         "--mute", action="append", default=[], choices=("pulse1", "pulse2", "triangle"),
     )
-    audio_castle_render.set_defaults(handler=command_audio_render_castle_wav)
+    audio_castle_excellent_render.set_defaults(handler=command_audio_render_castle_excellent_wav)
     audio_smb_export = audio_commands.add_parser(
         "export-smb-midi", help="export one SMB tonal channel as Standard MIDI"
     )

@@ -1,0 +1,122 @@
+# Retrolarium Studio views for the solomons-key.v1 profile (Solomon's Key).
+# The kit writes these into every project it prepares from a game
+# repository's descriptor; documents are relative to hack/<revision>/
+
+[workspace]
+layout = "auto"
+startup_tab = "rooms"
+
+[[workspace.tabs]]
+id = "rooms"
+title = "Rooms & Objects"
+kind = "solomon.rooms"
+group = "content"
+document = "levels.json"
+resource = "levels"
+codec = "solomon.rooms@3"
+capabilities = ["edit", "preview", "playtest", "restore", "undo"]
+depends_on = ["room-art", "animations", "graphics", "palettes"]
+
+[[workspace.tabs]]
+id = "mirrors"
+title = "Spawn Mirrors"
+kind = "solomon.mirrors"
+group = "content"
+document = "levels.json"
+resource = "levels"
+codec = "solomon.mirrors@3"
+capabilities = ["edit", "restore", "undo"]
+
+[[workspace.tabs]]
+id = "special"
+title = "Special Rooms"
+kind = "solomon.special"
+group = "content"
+document = "levels.json"
+resource = "levels"
+codec = "solomon.special@3"
+capabilities = ["edit", "preview", "restore", "undo"]
+
+[[workspace.tabs]]
+id = "room-art"
+title = "Room Art"
+kind = "solomon.room-art"
+group = "assets"
+document = "room-art.json"
+resource = "room-art"
+codec = "solomon.room-art@1"
+capabilities = ["edit", "preview", "restore", "undo"]
+depends_on = ["graphics", "palettes"]
+
+[[workspace.tabs]]
+id = "animations"
+title = "Animations & Mappings"
+kind = "solomon.animations"
+group = "assets"
+document = "animations.json"
+resource = "animations"
+codec = "solomon.animations@1"
+capabilities = ["edit", "preview", "restore", "undo"]
+depends_on = ["graphics", "palettes"]
+
+[[workspace.tabs]]
+id = "audio"
+title = "Music & Sounds"
+kind = "solomon.audio"
+group = "content"
+document = "audio.json"
+resource = "audio"
+codec = "solomon.audio@1"
+capabilities = ["edit", "piano-roll", "preview", "wav-preview", "restore", "undo"]
+
+[[workspace.tabs]]
+id = "screens"
+title = "Screens"
+kind = "solomon.screens"
+group = "content"
+document = "presentation.json"
+resource = "presentation"
+codec = "solomon.screens@1"
+capabilities = ["edit", "preview", "restore", "undo"]
+depends_on = ["graphics", "palettes"]
+
+[[workspace.tabs]]
+id = "demo"
+title = "Presentation"
+kind = "solomon.presentation"
+group = "content"
+document = "presentation.json"
+resource = "presentation"
+codec = "solomon.presentation@1"
+capabilities = ["edit", "preview", "restore", "undo"]
+
+[[workspace.tabs]]
+id = "graphics"
+title = "Graphics"
+kind = "graphics.tile-set"
+group = "assets"
+document = "graphics.json"
+resource = "resource-bundle"
+codec = "nes.chr-2bpp.v1"
+capabilities = ["pixel-paint", "restore", "undo"]
+depends_on = ["palettes"]
+
+[[workspace.tabs]]
+id = "palettes"
+title = "Palettes"
+kind = "palette.set"
+group = "assets"
+document = "graphics.json"
+resource = "resource-bundle"
+codec = "nes.palette-table.v1"
+capabilities = ["paint", "preview", "undo"]
+
+[[workspace.tabs]]
+id = "text"
+title = "Text"
+kind = "solomon.text"
+group = "content"
+document = "text.json"
+resource = "text"
+codec = "solomon.text@1"
+capabilities = ["edit", "preview", "restore", "undo"]

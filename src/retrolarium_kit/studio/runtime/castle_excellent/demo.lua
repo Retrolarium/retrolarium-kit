@@ -2,10 +2,10 @@
 -- The game reaches its demo the way it does after power-on: the title waits,
 -- then plays the demo script in place of controller 1. Outside the demo the
 -- emulator runs unthrottled and muted. After each run the machine powers on
--- again, so every loop is the console's first demo. CASTLE_DEMO_READY, when
+-- again, so every loop is the console's first demo. CASTLE_EXCELLENT_DEMO_READY, when
 -- set, names a file written when the demo starts.
 --
--- With CASTLE_DEMO_RECORD set, the demo plays the player's controller through
+-- With CASTLE_EXCELLENT_DEMO_RECORD set, the demo plays the player's controller through
 -- its own script, so the game runs the code it runs when it plays the
 -- commands back: the script reads, for each 12-frame command, the buttons
 -- the player holds when the command starts. The controller port reads idle
@@ -21,13 +21,13 @@ local function setting(name)
     return value
 end
 
-local script = setting("CASTLE_DEMO_SCRIPT")
-local reader = setting("CASTLE_DEMO_READER")
-local capacity = setting("CASTLE_DEMO_CAPACITY")
-local demo_active = setting("CASTLE_DEMO_ACTIVE")
-local record_path = os.getenv("CASTLE_DEMO_RECORD")
+local script = setting("CASTLE_EXCELLENT_DEMO_SCRIPT")
+local reader = setting("CASTLE_EXCELLENT_DEMO_READER")
+local capacity = setting("CASTLE_EXCELLENT_DEMO_CAPACITY")
+local demo_active = setting("CASTLE_EXCELLENT_DEMO_ACTIVE")
+local record_path = os.getenv("CASTLE_EXCELLENT_DEMO_RECORD")
 local recording = record_path ~= nil and record_path ~= ""
-local ready_path = os.getenv("CASTLE_DEMO_READY")
+local ready_path = os.getenv("CASTLE_EXCELLENT_DEMO_READY")
 
 local JOYPAD1 = 0x4016
 local TERMINATOR = 0xff
@@ -78,7 +78,7 @@ local function start_demo()
     if recording and output == nil then
         active = true
         output = assert(io.open(record_path, "w"))
-        print("Castle demo: recording; press Start or stop the emulator to finish")
+        print("Castle Excellent demo: recording; press Start or stop the emulator to finish")
     end
 end
 
@@ -86,7 +86,7 @@ local function demo_over()
     in_demo = false
     if active then
         close_recording()
-        print("Castle demo: recording finished")
+        print("Castle Excellent demo: recording finished")
         machine:exit()
     elseif not recording then
         machine:hard_reset()
@@ -94,7 +94,7 @@ local function demo_over()
 end
 
 -- ReadDemoController1 reads the script once a frame.
-script_tap = memory:install_read_tap(script, script + capacity, "castle-demo-script",
+script_tap = memory:install_read_tap(script, script + capacity, "castle-excellent-demo-script",
     function(offset, data)
         if pc.value ~= script_read then return data end
         if not in_demo then start_demo() end
@@ -113,14 +113,14 @@ script_tap = memory:install_read_tap(script, script + capacity, "castle-demo-scr
         return value
     end)
 -- The demo ends at its terminator with a jump to Reset.
-reset_tap = memory:install_read_tap(reset, reset, "castle-demo-reset",
+reset_tap = memory:install_read_tap(reset, reset, "castle-excellent-demo-reset",
     function(_, data)
         if pc.value == reset and in_demo then demo_over() end
         return data
     end)
 if recording then
     -- A strobe write restarts the controller's serial bits.
-    strobe_tap = memory:install_write_tap(JOYPAD1, JOYPAD1, "castle-demo-strobe",
+    strobe_tap = memory:install_write_tap(JOYPAD1, JOYPAD1, "castle-excellent-demo-strobe",
         function(_, data)
             bit = 0
             polled = 0
@@ -128,7 +128,7 @@ if recording then
         end)
     -- PollController1 shifts eight reads into A, B, Select, Start, Up,
     -- Down, Left, Right from bit 0 up; the game reads the port idle.
-    port_tap = memory:install_read_tap(JOYPAD1, JOYPAD1, "castle-demo-port",
+    port_tap = memory:install_read_tap(JOYPAD1, JOYPAD1, "castle-excellent-demo-port",
         function(_, data)
             if bit < 8 then
                 if data & 0x03 ~= 0 then polled = polled | (1 << bit) end
@@ -155,6 +155,6 @@ emu.register_frame_done(function()
         machine.video.throttled = false
         machine.sound.ui_mute = true
     end
-end, "castle-demo-frame")
+end, "castle-excellent-demo-frame")
 
-print(recording and "Castle demo: waiting for the demo to start" or "Castle demo: looping")
+print(recording and "Castle Excellent demo: waiting for the demo to start" or "Castle Excellent demo: looping")

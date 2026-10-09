@@ -21,7 +21,7 @@ from typing import Any, Mapping
 import wave
 
 from retrolarium_kit.core.authoring import AuthoringError
-from retrolarium_kit.games.castle.mml import CODEC
+from retrolarium_kit.games.castle_excellent.mml import CODEC
 
 
 NTSC_FRAME_RATE = 60.0988
@@ -36,7 +36,7 @@ LENGTH_TABLE = 7
 PERIOD_TABLE = 0x3F
 
 
-class CastleAudioError(AuthoringError):
+class CastleExcellentAudioError(AuthoringError):
     """The music document cannot be traced or rendered."""
 
 
@@ -62,7 +62,7 @@ def music_resource(value: Mapping[str, Any]) -> Mapping[str, Any]:
     for resource in value.get("resources", []) if isinstance(value.get("resources"), list) else []:
         if isinstance(resource, Mapping) and resource.get("codec") == CODEC:
             return resource
-    raise CastleAudioError("the document holds no castle.mml-music.v1 resource")
+    raise CastleExcellentAudioError("the document holds no castle-excellent.mml-music.v1 resource")
 
 
 class _Memory:
@@ -90,7 +90,7 @@ class _Memory:
             return self.prefix[address - self.prefix_cpu]
         if self.mml_cpu <= address < self.mml_cpu + len(self.arena):
             return self.arena[address - self.mml_cpu]
-        raise CastleAudioError(f"the music reads outside its data at ${address:04X}")
+        raise CastleExcellentAudioError(f"the music reads outside its data at ${address:04X}")
 
     def table(self, offset: int) -> int:
         return self.prefix[offset & 0xFF] if offset < len(self.prefix) else self.read(self.prefix_cpu + offset)
@@ -108,7 +108,7 @@ def _next_event(memory: _Memory, stream: _Stream, tempo: int, x: int) -> tuple[s
                 stream.pointer = 0
                 return None, 0, tempo
             if restart in visited:
-                raise CastleAudioError("a music stream restarts without an event")
+                raise CastleExcellentAudioError("a music stream restarts without an event")
             visited.add(restart)
             pointer = restart
             continue
@@ -144,7 +144,7 @@ def _next_event(memory: _Memory, stream: _Stream, tempo: int, x: int) -> tuple[s
             if x == 8:
                 period = (period + 0x18) & 0xFF
         elif command != ord("r"):
-            raise CastleAudioError(f"unsupported stream command ${command:02X}")
+            raise CastleExcellentAudioError(f"unsupported stream command ${command:02X}")
         length_index = stream.length_index
         duration = memory.read(pointer)
         if duration == ord("@") or ord("0") <= duration < ord(":"):
@@ -169,7 +169,7 @@ def track_lanes(music: Mapping[str, Any], track: int, frames: int) -> dict[str, 
     memory = _Memory(music)
     tracks = music["track_sets"]
     if not 0 <= track < len(tracks):
-        raise CastleAudioError(f"track set {track} does not exist")
+        raise CastleExcellentAudioError(f"track set {track} does not exist")
     record = tracks[track]
     streams = [_Stream(memory.starts[name]) if name else _Stream(0) for name in record["streams"]]
     lanes: dict[str, list[LaneEvent]] = {name: [] for name, _x in CHANNELS}
@@ -283,21 +283,21 @@ def render_wav(
     return buffer.getvalue()
 
 
-def render_castle_wav(
+def render_castle_excellent_wav(
     document: Path, output: Path, *, track: int, seconds: float = 20.0, muted: tuple[str, ...] = (),
 ) -> dict[str, object]:
     try:
         value = json.loads(document.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        raise CastleAudioError(f"cannot read {document}: {exc}") from exc
+        raise CastleExcellentAudioError(f"cannot read {document}: {exc}") from exc
     music = music_resource(value)
     unknown = set(muted) - {name for name, _x in CHANNELS}
     if unknown:
-        raise CastleAudioError(f"unknown channels: {', '.join(sorted(unknown))}")
+        raise CastleExcellentAudioError(f"unknown channels: {', '.join(sorted(unknown))}")
     if not 0 < seconds <= 600:
-        raise CastleAudioError("seconds must be within 0-600")
+        raise CastleExcellentAudioError("seconds must be within 0-600")
     payload = render_wav(music, track, seconds=seconds, muted=frozenset(muted))
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_bytes(payload)
-    return {"schema": "retrolarium.castle-wav", "output": str(output), "track": track,
+    return {"schema": "retrolarium.castle-excellent-wav", "output": str(output), "track": track,
             "bytes": len(payload), "seconds": seconds}

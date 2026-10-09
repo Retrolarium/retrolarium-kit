@@ -4,9 +4,9 @@ from pathlib import Path
 import sys
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
-from retrolarium_kit.games.castle.audio_preview import CastleAudioError, music_resource, render_wav, track_lanes
+from retrolarium_kit.games.castle_excellent.audio_preview import CastleExcellentAudioError, music_resource, render_wav, track_lanes
 
 
 def music(streams: list[dict[str, object]], pointers: list[str | None]) -> dict[str, object]:
@@ -16,7 +16,7 @@ def music(streams: list[dict[str, object]], pointers: list[str | None]) -> dict[
     for index in range(0, 146, 2):                       # APU periods
         prefix[63 + index:65 + index] = (0x200 - index).to_bytes(2, "little")
     return {
-        "codec": "castle.mml-music.v1",
+        "codec": "castle-excellent.mml-music.v1",
         "playback_prefix_cpu_address": 0xBB16,
         "mml_cpu_address": 0xBBE7,
         "playback_prefix": list(prefix),
@@ -25,7 +25,7 @@ def music(streams: list[dict[str, object]], pointers: list[str | None]) -> dict[
     }
 
 
-class CastleAudioPreviewTests(unittest.TestCase):
+class CastleExcellentAudioPreviewTests(unittest.TestCase):
     def test_lanes_follow_lengths_and_restarts(self) -> None:
         value = music([
             {"id": "stream_00", "text": "l4co5c8r2", "restart": "stream_00"},
@@ -45,9 +45,9 @@ class CastleAudioPreviewTests(unittest.TestCase):
         wav = render_wav(value, 0, seconds=1.0)
         self.assertEqual(b"RIFF", wav[:4])
         self.assertIs(value, music_resource({"resources": [{"codec": "other"}, value]}))
-        with self.assertRaises(CastleAudioError):
+        with self.assertRaises(CastleExcellentAudioError):
             music_resource({"resources": []})
-        with self.assertRaises(CastleAudioError):
+        with self.assertRaises(CastleExcellentAudioError):
             track_lanes(value, 3, 10)
 
 

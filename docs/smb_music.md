@@ -103,4 +103,4 @@ linear mix, not a cycle-accurate NES APU emulator. Final validation remains an
 exact build followed by playtest in the configured emulator.
 
 ANN/SMB2 FDS ending wave and volume programs are covered by
-[`Retrolarium_FDS_Synthesis_Authoring_Contract.md`](Retrolarium_FDS_Synthesis_Authoring_Contract.md).
+[`fds_synthesis.md`](fds_synthesis.md).

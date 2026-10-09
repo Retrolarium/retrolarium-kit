@@ -251,13 +251,13 @@ def upgrade_smb_studio_project(path: Path) -> dict[str, Any]:
     return result
 
 
-def upgrade_castle_studio_project(path: Path) -> dict[str, Any]:
+def upgrade_castle_excellent_studio_project(path: Path) -> dict[str, Any]:
     """Add the documents newer kits edit to a Castle Excellent project: the
     title demo (documents/demo.json) and the screens (documents/screens.json)."""
     added: list[str] = []
     for resource, name, tab_id, title, kind, codec in (
-        ("title-demo", "demo.json", "demo", "Demo", "castle.demo", "castle.demo@1"),
-        ("screens", "screens.json", "screens", "Screens", "castle.screens", "castle.screens@1"),
+        ("title-demo", "demo.json", "demo", "Demo", "castle-excellent.demo", "castle-excellent.demo@1"),
+        ("screens", "screens.json", "screens", "Screens", "castle-excellent.screens", "castle-excellent.screens@1"),
     ):
         result = _add_document_tab(
             path, profile="castle-excellent.v1", resource=resource, document_name=name,
@@ -563,16 +563,16 @@ def create_studio_project(
             raise StudioProjectError(
                 "resource document schema or source identity does not match the disassembly"
             )
-        if document_schema == "retrolarium.castle-levels":
+        if document_schema == "retrolarium.castle-excellent-levels":
             rooms = resource_root.get("rooms")
             if not isinstance(rooms, list) or not rooms:
                 raise StudioProjectError(
-                    "Castle resource document rooms must be a non-empty array"
+                    "Castle Excellent resource document rooms must be a non-empty array"
                 )
             resources = [{
                 "id": "rooms",
-                "kind": "castle",
-                "codec": "castle.prefix-rooms@1",
+                "kind": "castle-excellent",
+                "codec": "castle-excellent.prefix-rooms@1",
             }]
         elif document_schema == "retrolarium.solomon-rooms":
             if profile != "solomons-key.v1" \
@@ -677,16 +677,16 @@ def create_studio_project(
                 "id": "demo", "kind": "solomon-demo",
                 "codec": "solomon.presentation@1",
             }]
-        elif document_schema == "retrolarium.castle-screens":
+        elif document_schema == "retrolarium.castle-excellent-screens":
             if profile != "castle-excellent.v1" or resource_root.get("game") != "castle-excellent" \
                     or not isinstance(resource_root.get("screens"), list):
-                raise StudioProjectError("Castle screens require the castle-excellent.v1 profile")
-            resources = [{"id": "screens", "kind": "castle-screens", "codec": "castle.screens@1"}]
-        elif document_schema == "retrolarium.castle-demo":
+                raise StudioProjectError("Castle Excellent screens require the castle-excellent.v1 profile")
+            resources = [{"id": "screens", "kind": "castle-excellent-screens", "codec": "castle-excellent.screens@1"}]
+        elif document_schema == "retrolarium.castle-excellent-demo":
             if profile != "castle-excellent.v1" or resource_root.get("game") != "castle-excellent" \
                     or not isinstance(resource_root.get("steps"), list):
-                raise StudioProjectError("Castle demo requires the castle-excellent.v1 profile")
-            resources = [{"id": "title-demo", "kind": "castle-demo", "codec": "castle.demo@1"}]
+                raise StudioProjectError("Castle Excellent demo requires the castle-excellent.v1 profile")
+            resources = [{"id": "title-demo", "kind": "castle-excellent-demo", "codec": "castle-excellent.demo@1"}]
         elif document_schema == "retrolarium.doraemon-demo":
             if profile != "doraemon.v1" or resource_root.get("game") != "doraemon" \
                     or not isinstance(resource_root.get("steps"), list):
@@ -784,11 +784,11 @@ def create_studio_project(
             ("smb-demo", "demo", "Demo", "smb.demo",
              "content", "smb.demo@1",
              ["edit", "preview", "restore", "undo"]),
-            ("castle-demo", "demo", "Demo", "castle.demo",
-             "content", "castle.demo@1",
+            ("castle-excellent-demo", "demo", "Demo", "castle-excellent.demo",
+             "content", "castle-excellent.demo@1",
              ["edit", "preview", "restore", "undo"]),
-            ("castle-screens", "screens", "Screens", "castle.screens",
-             "content", "castle.screens@1",
+            ("castle-excellent-screens", "screens", "Screens", "castle-excellent.screens",
+             "content", "castle-excellent.screens@1",
              ["edit", "preview", "restore", "undo"]),
             ("doraemon-demo", "demo", "Demo", "doraemon.demo",
              "content", "doraemon.demo@1",
@@ -805,8 +805,8 @@ def create_studio_project(
             ("solomon-text", "text", "Text", "solomon.text",
              "content", "solomon.text@1",
              ["edit", "preview", "restore", "undo"]),
-            ("castle", "rooms", "Rooms & Objects", "castle.rooms", "content",
-             "castle.prefix-rooms@1", ["edit", "preview", "restore", "undo"]),
+            ("castle-excellent", "rooms", "Rooms & Objects", "castle-excellent.rooms", "content",
+             "castle-excellent.prefix-rooms@1", ["edit", "preview", "restore", "undo"]),
             ("world", "world", "World", "world.routing", "content",
              "smb.world.v1", ["edit", "restore", "undo"]),
             ("level", "maze", "Maze", "level.tile-grid", "content",
@@ -823,7 +823,7 @@ def create_studio_project(
              "pacman.sound-streams.v1",
              ["edit", "piano-roll", "midi-import", "wav-preview", "restore", "undo"]),
             ("audio-parameter", "sfx-parameters", "SFX Parameters",
-             "data.fixed-byte-records", "content", "castle.sfx-parameters.v1",
+             "data.fixed-byte-records", "content", "castle-excellent.sfx-parameters.v1",
              ["edit", "restore", "undo"]),
             ("text", "text", "Text", "text.fixed", "content",
              "nes.fixed-text-fields.v1", ["edit", "restore", "undo"]),
@@ -841,7 +841,7 @@ def create_studio_project(
                 continue
             selected_codec = expected_codec
             additional_tab = None
-            if kind == "castle" and profile == "castle-excellent.v1" \
+            if kind == "castle-excellent" and profile == "castle-excellent.v1" \
                     and resource_root.get("game") == "castle-excellent" \
                     and resource_root.get("revision") in {
                         "castle-excellent-japan-hsp-05", "castlequest-usa"
@@ -902,10 +902,10 @@ def create_studio_project(
                         "codec": fds_codec,
                         "capabilities": ["edit", "restore", "undo"],
                     }
-            elif kind == "audio" and kinds[kind] == {"castle.mml-music.v1"}:
+            elif kind == "audio" and kinds[kind] == {"castle-excellent.mml-music.v1"}:
                 title = "Music & Sounds"
-                editor_kind = "castle.mml-music"
-                selected_codec = "castle.mml-music.v1"
+                editor_kind = "castle-excellent.mml-music"
+                selected_codec = "castle-excellent.mml-music.v1"
                 capabilities = [
                     "edit", "piano-roll", "wav-preview", "restore", "undo"
                 ]
@@ -937,11 +937,11 @@ def create_studio_project(
                     else "nes.ppu-screen-packets.v1"
                 )
             elif kind == "text" and kinds[kind] == {
-                    "castle.sub-command-text.v1"}:
+                    "castle-excellent.sub-command-text.v1"}:
                 tab_id = "screens-text"
                 title = "Screens & Text"
                 editor_kind = "data.fixed-byte-records"
-                selected_codec = "castle.sub-command-text.v1"
+                selected_codec = "castle-excellent.sub-command-text.v1"
                 capabilities = ["edit", "restore", "undo"]
             elif kind == "screen" and kinds[kind].issubset({
                 "nes.nametable.v1", "nes.ppu-screen-packets.v1"
@@ -967,17 +967,17 @@ def create_studio_project(
                 selected_codec = "smb.player-frames.v1"
                 capabilities = ["edit", "preview", "restore", "undo"]
             elif kind == "animation" and kinds[kind] == {
-                    "castle.metasprite-descriptors.v1"}:
+                    "castle-excellent.metasprite-descriptors.v1"}:
                 title = "Animations & Mappings"
-                editor_kind = "castle.metasprites"
-                selected_codec = "castle.metasprite-descriptors.v1"
+                editor_kind = "castle-excellent.metasprites"
+                selected_codec = "castle-excellent.metasprite-descriptors.v1"
                 capabilities = ["edit", "preview", "restore", "undo"]
             elif kind == "metatile" and kinds[kind] == {
-                    "castle.room-cell-visuals.v1"}:
+                    "castle-excellent.room-cell-visuals.v1"}:
                 tab_id = "room-cells"
                 title = "Room Cells"
-                editor_kind = "castle.room-cells"
-                selected_codec = "castle.room-cell-visuals.v1"
+                editor_kind = "castle-excellent.room-cells"
+                selected_codec = "castle-excellent.room-cell-visuals.v1"
                 capabilities = ["edit", "preview", "restore", "undo"]
             elif kind == "animation" and kinds[kind].issubset({
                     "doraemon.metasprites.v1", "doraemon.world2-metasprites.v1"}):
@@ -1046,7 +1046,7 @@ def create_studio_project(
                     and tab["codec"] == "solomon.animations@1":
                 requested_dependencies = ("graphics", "palettes")
             if (tab["id"] == "animations" and tab["codec"] \
-                    == "castle.metasprite-descriptors.v1"):
+                    == "castle-excellent.metasprite-descriptors.v1"):
                 requested_dependencies = ("graphics", "palettes")
             tab["depends_on"] = [
                 dependency

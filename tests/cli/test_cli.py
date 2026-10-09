@@ -10,7 +10,7 @@ import sys
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from retrolarium_kit.cli import main
 from retrolarium_kit.studio.project import StudioProjectError
@@ -39,7 +39,7 @@ class CliTests(unittest.TestCase):
             "print(sorted(m for m in sys.modules if m.startswith('retrolarium_kit.')\n"
             "             and m.split('.')[1] in ('games', 'platform', 'studio', 'core')))\n"
         )
-        source = str(Path(__file__).resolve().parents[1] / "src")
+        source = str(Path(__file__).resolve().parents[2] / "src")
         environment = {"PYTHONPATH": source, "SYSTEMROOT": os.environ.get("SYSTEMROOT", "")}
         result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True,
                                 env=environment, check=True)

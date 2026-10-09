@@ -1,8 +1,9 @@
-# Castle codec probe
+# Castle Excellent codec probe
 
 This directory contains an original 0BSD test oracle for the data-driven
-`castle.prefix-rooms.v1` and `castle.object-stream.v1` codecs. The ROM image is
-constructed in memory by the Retrolarium Kit tests and is never committed.
+`castle-excellent.prefix-rooms.v1` and `castle-excellent.object-stream.v1`
+codecs. The ROM image is constructed in memory by the Retrolarium Kit tests and
+is never committed.
 
 The probe deliberately keeps the real format relationships while reducing the
 geometry to four 2x2 rooms:

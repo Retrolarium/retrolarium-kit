@@ -22,7 +22,7 @@ def main() -> int:
     parser.add_argument("--source-root", type=Path, required=True)
     parser.add_argument("--rom", type=Path, required=True)
     args = parser.parse_args()
-    scratch = Path(__file__).resolve().parents[1] / "build"
+    scratch = Path(__file__).resolve().parents[2] / "build"
     scratch.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="flicky-unsaved-audio-", dir=scratch) as name:
         root = Path(name)
@@ -53,7 +53,7 @@ def main() -> int:
         assert source.read_bytes() == original, "preview saved unsaved source changes"
         command = subprocess.run([
             sys.executable,
-            str(Path(__file__).resolve().parents[1] / "rltool.py"),
+            str(Path(__file__).resolve().parents[2] / "rltool.py"),
             "studio", "flicky-sound-preview", str(project),
             "--header", "zSFX90Header", "--seconds", "1",
             "--document-override", str(transient),

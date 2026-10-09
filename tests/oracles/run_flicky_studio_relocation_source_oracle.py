@@ -37,7 +37,7 @@ def main() -> int:
     args = parser.parse_args()
     os.environ["RETROLARIUM_FLICKY_LEVEL_WRITER"] = str(
         args.native_writer.resolve())
-    scratch = Path(__file__).resolve().parents[1] / "build"
+    scratch = Path(__file__).resolve().parents[2] / "build"
     scratch.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="flicky-relocation-", dir=scratch) as name:
         envelope = Path(name)

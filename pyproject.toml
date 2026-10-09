@@ -32,7 +32,7 @@ where = ["src"]
   "toolchains/payloads/*/*/*",
   "toolchains/sources/*",
 ]
-"retrolarium_kit.studio" = ["runtime/*.lua"]
+"retrolarium_kit.studio" = ["runtime/*/*.lua", "views/*.toml"]
 retrolarium_kit = ["schemas/*.json"]
 
 [tool.pytest.ini_options]

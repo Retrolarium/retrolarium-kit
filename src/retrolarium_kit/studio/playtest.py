@@ -1,5 +1,5 @@
 """Launch and playtest plans: the MAME process specs the Studio runs to play a
-build from a chosen point (an SMB area, a Castle room, a Solomon's Key room, a
+build from a chosen point (an SMB area, a Castle Excellent room, a Solomon's Key room, a
 Doraemon block or part, a Flicky or Pac-Man round), Flicky sound previews and
 smoke launches."""
 
@@ -152,7 +152,7 @@ def studio_flicky_round_playtest_plan(
         raise StudioProjectError(
             "Studio artifact is stale; build it again before round playtest"
         )
-    lua = Path(__file__).with_name("runtime") / "flicky_mame_round_playtest.lua"
+    lua = Path(__file__).with_name("runtime") / "flicky" / "playtest.lua"
     if not lua.is_file():
         raise StudioProjectError(f"packaged Flicky round playtest script is missing: {lua}")
     artifact = Path(verification["artifact"]["absolute_path"])
@@ -509,7 +509,7 @@ def studio_smb_point_playtest_plan(
         _bounded_integer(selected_route.get("area_type"), "area_type", 0, 3) << 5
     ) | _bounded_integer(selected_route.get("area_index"), "area_index", 0, 31)
     artifact = Path(verification["artifact"]["absolute_path"]).resolve()
-    lua = Path(__file__).with_name("runtime") / "smb1_mame_point_playtest.lua"
+    lua = Path(__file__).with_name("runtime") / "smb" / "playtest.lua"
     if not lua.is_file():
         raise StudioProjectError(f"packaged SMB point playtest script is missing: {lua}")
     environment = {
@@ -576,26 +576,26 @@ def studio_smb_point_playtest_plan(
     return plan
 
 
-def studio_castle_point_playtest_plan(
+def studio_castle_excellent_point_playtest_plan(
     path: Path, *, mame: Path, room: int, x: int, y: int,
 ) -> dict[str, Any]:
-    """Prepare an isolated Castle ROM that boots through its normal room loader."""
+    """Prepare an isolated Castle Excellent ROM that boots through its normal room loader."""
 
     inspection = load_studio_project(path)
     _require_declared_operation(inspection, "launch")
     if inspection["project"]["platform"] != "nes" \
             or inspection["project"]["profile"] != "castle-excellent.v1":
         raise StudioProjectError(
-            "Castle point playtest requires the castle-excellent.v1 NES profile"
+            "Castle Excellent point playtest requires the castle-excellent.v1 NES profile"
         )
     matching_tabs = [
         tab for tab in inspection["workspace"]["tabs"]
-        if tab["enabled"] and tab["codec"] == "castle.prefix-rooms@1"
+        if tab["enabled"] and tab["codec"] == "castle-excellent.prefix-rooms@1"
         and "playtest" in tab["capabilities"]
     ]
     if len(matching_tabs) != 1:
         raise StudioProjectError(
-            "Studio project must expose one enabled playtest-capable Castle Rooms tab"
+            "Studio project must expose one enabled playtest-capable Castle Excellent Rooms tab"
         )
     verification = verify_studio_project(path)
     if verification["status"] != "current":
@@ -610,20 +610,20 @@ def studio_castle_point_playtest_plan(
     try:
         document = _mapping(
             json.loads(document_path.read_text(encoding="utf-8")),
-            "Castle rooms document",
+            "Castle Excellent rooms document",
         )
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise StudioProjectError(f"cannot read Castle rooms document: {exc}") from exc
-    if document.get("schema") != "retrolarium.castle-levels" \
+        raise StudioProjectError(f"cannot read Castle Excellent rooms document: {exc}") from exc
+    if document.get("schema") != "retrolarium.castle-excellent-levels" \
             or document.get("schema_version") != 1 \
             or document.get("game") != "castle-excellent" \
             or document.get("revision") not in {
                 "castle-excellent-japan-hsp-05", "castlequest-usa"
             }:
-        raise StudioProjectError("Castle rooms document has an unsupported identity")
+        raise StudioProjectError("Castle Excellent rooms document has an unsupported identity")
     rooms = document.get("rooms")
     if not isinstance(rooms, list) or len(rooms) != 100:
-        raise StudioProjectError("Castle point playtest requires exactly 100 rooms")
+        raise StudioProjectError("Castle Excellent point playtest requires exactly 100 rooms")
     room = _bounded_integer(room, "room", 1, 100)
     x = _bounded_integer(x, "x", 0, 319)
     y = _bounded_integer(y, "y", 0, 159)
@@ -635,7 +635,7 @@ def studio_castle_point_playtest_plan(
     if len(source) != 65552 or source[:4] != b"NES\x1a" \
             or source[0x22c1] != 0xa9 or source[0x22c3:0x22c5] != b"\x85\x37":
         raise StudioProjectError(
-            "Castle build does not match the guarded initial-room layout"
+            "Castle Excellent build does not match the guarded initial-room layout"
         )
     preview = bytearray(source)
     preview[0x22c2] = room
@@ -643,11 +643,11 @@ def studio_castle_point_playtest_plan(
     preview_directory = project_root / "build" / "point-playtest"
     preview_directory.mkdir(parents=True, exist_ok=True)
     preview_path = preview_directory / (
-        f"castle-{sha256_file(artifact)[:16]}-room-{room:03d}.nes"
+        f"castle-excellent-{sha256_file(artifact)[:16]}-room-{room:03d}.nes"
     )
     if not preview_path.is_file() or preview_path.read_bytes() != preview:
         descriptor, temporary_name = tempfile.mkstemp(
-            prefix=".castle-point-", suffix=".tmp", dir=preview_directory
+            prefix=".castle-excellent-point-", suffix=".tmp", dir=preview_directory
         )
         temporary = Path(temporary_name)
         try:
@@ -659,21 +659,21 @@ def studio_castle_point_playtest_plan(
         finally:
             temporary.unlink(missing_ok=True)
 
-    lua = Path(__file__).with_name("runtime") / "castle_mame_point_playtest.lua"
+    lua = Path(__file__).with_name("runtime") / "castle_excellent" / "playtest.lua"
     if not lua.is_file():
-        raise StudioProjectError(f"packaged Castle point playtest script is missing: {lua}")
+        raise StudioProjectError(f"packaged Castle Excellent point playtest script is missing: {lua}")
     plan = launch_image_plan(preview_path, platform="nes", mame=executable)
     plan.update({
-        "operation": "retrolarium.studio.castle-point-playtest",
+        "operation": "retrolarium.studio.castle-excellent-point-playtest",
         "backend": "mame-lua",
         "arguments": [
             *plan["arguments"], "-autoboot_delay", "0",
             "-autoboot_script", str(lua.resolve()),
         ],
         "environment": {
-            "CASTLE_PLAYTEST_ROOM": str(room),
-            "CASTLE_PLAYTEST_X": str(x),
-            "CASTLE_PLAYTEST_Y": str(y),
+            "CASTLE_EXCELLENT_PLAYTEST_ROOM": str(room),
+            "CASTLE_EXCELLENT_PLAYTEST_X": str(x),
+            "CASTLE_EXCELLENT_PLAYTEST_Y": str(y),
         },
         "project_file": inspection["project_file"],
         "script": {"path": str(lua.resolve()), "sha256": sha256_file(lua)},
@@ -752,7 +752,7 @@ def studio_solomon_point_playtest_plan(
         raise StudioProjectError(
             "Solomon build does not match the guarded room-loader layout"
         )
-    lua = Path(__file__).with_name("runtime") / "solomon_mame_point_playtest.lua"
+    lua = Path(__file__).with_name("runtime") / "solomon" / "playtest.lua"
     if not lua.is_file():
         raise StudioProjectError(f"packaged Solomon point-playtest script is missing: {lua}")
     plan = launch_image_plan(
@@ -796,7 +796,7 @@ def studio_pacman_round_playtest_plan(path: Path, *, mame: Path, round: int) -> 
     verification = verify_studio_project(path)
     if verification["status"] != "current":
         raise StudioProjectError("Studio artifact is stale; build it again before round playtest")
-    lua = Path(__file__).with_name("runtime") / "pacman_mame_round_playtest.lua"
+    lua = Path(__file__).with_name("runtime") / "pacman" / "playtest.lua"
     if not lua.is_file():
         raise StudioProjectError(f"packaged Pac-Man round playtest script is missing: {lua}")
     artifact = Path(verification["artifact"]["absolute_path"]).resolve()
@@ -964,7 +964,7 @@ def studio_doraemon_playtest_plan(
                   0x88B5: 0xA9, 0x830C: 0xDF, 0x8326: 0xDF, 0x8557: 0xDF}[pc]
         if source[bank + pc:bank + pc + 2] != bytes((0x85, target)):
             raise StudioProjectError("Doraemon build does not match the guarded world start")
-    lua = Path(__file__).with_name("runtime") / "doraemon_mame_playtest.lua"
+    lua = Path(__file__).with_name("runtime") / "doraemon" / "playtest.lua"
     if not lua.is_file():
         raise StudioProjectError(f"packaged Doraemon playtest script is missing: {lua}")
     plan = launch_image_plan(artifact, platform="nes", mame=executable, machine="nes")

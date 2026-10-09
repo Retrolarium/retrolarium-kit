@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from helpers import game_repository
 from retrolarium_kit.games.smb.sfx_tables import source_tables
@@ -63,7 +63,7 @@ class Cpu6502Tests(unittest.TestCase):
         self.assertEqual([(0x4015, 0x0F)], bus.writes)
 
     def test_unknown_effects_are_refused(self) -> None:
-        for key in ("smb:square3:1", "smb:square1:3", "castle:6", "doraemon:1:15", "pacman:1"):
+        for key in ("smb:square3:1", "smb:square1:3", "castle-excellent:6", "doraemon:1:15", "pacman:1"):
             with self.assertRaises(SoundEffectError):
                 effect_plan(key, bytes(0x8000))
 
@@ -119,10 +119,10 @@ class RomEffectTests(unittest.TestCase):
         self.assertEqual(notes[0]["pitch"], choices[notes[0]["source"]["value"]])
 
     @unittest.skipUnless(CASTLE.is_file(), "the Castle Excellent ROM is not available")
-    def test_castle_effects_sound(self) -> None:
+    def test_castle_excellent_effects_sound(self) -> None:
         prg = CASTLE.read_bytes()[16:16 + 0x8000]
         for number in range(1, 6):
-            result = play(f"castle:{number}", prg)
+            result = play(f"castle-excellent:{number}", prg)
             self.assertGreater(result["frames"], 0, number)
 
     @unittest.skipUnless(DORAEMON.is_file(), "the Doraemon ROM is not available")

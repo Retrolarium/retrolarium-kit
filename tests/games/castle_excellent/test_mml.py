@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from retrolarium_kit.games.castle.mml import (
-    CastleMmlError,
+from retrolarium_kit.games.castle_excellent.mml import (
+    CastleExcellentMmlError,
     decode_music,
     encode_music,
     validate_mml_text,
@@ -44,7 +44,7 @@ def fixture() -> bytes:
     return bytes(image)
 
 
-class CastleMmlTests(unittest.TestCase):
+class CastleExcellentMmlTests(unittest.TestCase):
     def test_decode_encode_and_relocate_streams(self) -> None:
         source = fixture()
         document = decode_music(source, PARAMETERS)
@@ -73,16 +73,16 @@ class CastleMmlTests(unittest.TestCase):
 
     def test_grammar_capacity_and_identity_are_strict(self) -> None:
         self.assertEqual(validate_mml_text("t5vfl@o4c+8.r4")["note"], 1)
-        with self.assertRaisesRegex(CastleMmlError, "invalid byte"):
+        with self.assertRaisesRegex(CastleExcellentMmlError, "invalid byte"):
             validate_mml_text("c#4")
         document = decode_music(fixture(), PARAMETERS)
         document["streams"][0]["text"] = "c" * 30
         document["used_bytes"] = 40
-        with self.assertRaisesRegex(CastleMmlError, "capacity"):
+        with self.assertRaisesRegex(CastleExcellentMmlError, "capacity"):
             encode_music(document, PARAMETERS)
         document = decode_music(fixture(), PARAMETERS)
         document["track_sets"][0]["name"] = "Renamed"
-        with self.assertRaisesRegex(CastleMmlError, "identity"):
+        with self.assertRaisesRegex(CastleExcellentMmlError, "identity"):
             encode_music(document, PARAMETERS)
 
 

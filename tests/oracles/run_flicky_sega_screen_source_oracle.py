@@ -28,8 +28,7 @@ def asset(document: dict, identifier: str) -> dict:
 
 
 def capture_sega_screen(mame: Path, rom: Path, prefix: Path) -> Path:
-    probe = (Path(__file__).resolve().parents[1] / "src/retrolarium_kit/studio/runtime"
-             / "flicky_mame_sega_screen_probe.lua")
+    probe = Path(__file__).with_name("flicky_sega_screen_probe.lua")
     environment = os.environ.copy()
     environment["FLICKY_SEGA_SCREEN_PREFIX"] = str(prefix.resolve())
     result = subprocess.run([
@@ -63,7 +62,7 @@ def main() -> int:
     enigma = importlib.import_module("formats.enigma_dec")
     encoder = importlib.import_module("formats.enigma_enc")
 
-    scratch = Path(__file__).resolve().parents[1] / "build"
+    scratch = Path(__file__).resolve().parents[2] / "build"
     scratch.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="flicky-sega-screen-gate-", dir=scratch) as name:
         project = Path(name)

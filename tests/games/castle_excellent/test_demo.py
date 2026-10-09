@@ -5,10 +5,10 @@ from pathlib import Path
 import sys
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from retrolarium_kit.core.authoring import GameProfile, ResourceSpec, RevisionSpec
-from retrolarium_kit.games.castle.demo import CastleDemoError, build_demo, decode_demo, parse_demo_document
+from retrolarium_kit.games.castle_excellent.demo import CastleExcellentDemoError, build_demo, decode_demo, parse_demo_document
 
 
 def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
@@ -24,19 +24,19 @@ def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
     header = b"NES\x1a" + bytes((2, 1, 0x31, 0)) + bytes(8)
     source = header + bytes(prg) + bytes(0x2000)
     revision = RevisionSpec(
-        "probe", "Castle probe", len(source), hashlib.sha1(source).hexdigest(),
+        "probe", "Castle Excellent probe", len(source), hashlib.sha1(source).hexdigest(),
         hashlib.sha256(source).hexdigest(), "ines", 3,
     )
     profile = GameProfile(
-        "castle-excellent", 1, "Castle probe", "nes", ("demo",), (revision,),
-        (ResourceSpec("title-demo", "demo", "castle.title-demo.v1", "fixed", {
+        "castle-excellent", 1, "Castle Excellent probe", "nes", ("demo",), (revision,),
+        (ResourceSpec("title-demo", "demo", "castle-excellent.title-demo.v1", "fixed", {
             "script_cpu": script, "init_cpu": init, "reader_cpu": reader, "capacity": 8,
         }),),
     )
     return source, profile, revision
 
 
-class CastleDemoTests(unittest.TestCase):
+class CastleExcellentDemoTests(unittest.TestCase):
     def test_round_trip_and_edit(self) -> None:
         source, profile, revision = fixture()
         document = decode_demo(source, profile, revision)
@@ -60,11 +60,11 @@ class CastleDemoTests(unittest.TestCase):
         source, profile, revision = fixture()
         value = decode_demo(source, profile, revision).as_dict()
         value["steps"][0]["commands"] = 7
-        with self.assertRaisesRegex(CastleDemoError, "8 commands of 12 frames"):
+        with self.assertRaisesRegex(CastleExcellentDemoError, "8 commands of 12 frames"):
             parse_demo_document(value, profile, revision)
         value = decode_demo(source, profile, revision).as_dict()
         value["steps"][0]["buttons"] = ["START"]
-        with self.assertRaisesRegex(CastleDemoError, "unknown or unordered"):
+        with self.assertRaisesRegex(CastleExcellentDemoError, "unknown or unordered"):
             parse_demo_document(value, profile, revision)
 
 

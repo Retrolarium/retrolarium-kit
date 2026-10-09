@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 
+
+# The kit from this checkout, for every test package that imports helpers
+# first (each tests/<folder>/__init__.py does); the kit finds the core.
+SOURCE = Path(__file__).resolve().parents[1] / "src"
+if str(SOURCE) not in sys.path:
+    sys.path.insert(0, str(SOURCE))
 
 def nrom16_image() -> bytes:
     header = b"NES\x1a" + bytes((1, 1, 0, 0)) + bytes(8)
@@ -106,3 +113,27 @@ def game_repository(name: str) -> Path:
         if candidate.is_dir():
             return candidate / name
     return Path(__file__).resolve().parents[1] / "oranguthang-not-found" / name
+
+
+def fds_side() -> bytes:
+    """A Disk System side with two files, for the FDS and project tests."""
+    image = bytearray(65_500)
+    image[0] = 1
+    image[56:58] = bytes((2, 2))
+    position = 58
+    for number, identifier, name, address, payload in (
+        (0, 3, b"SMMAIN3 ", 0x6000, b"AB"),
+        (1, 4, b"SMMAIN4 ", 0xA000, b"CDE"),
+    ):
+        header = bytearray(16)
+        header[0:3] = bytes((3, number, identifier))
+        header[3:11] = name
+        header[11:13] = address.to_bytes(2, "little")
+        header[13:15] = len(payload).to_bytes(2, "little")
+        image[position:position + 16] = header
+        position += 16
+        image[position] = 4
+        position += 1
+        image[position:position + len(payload)] = payload
+        position += len(payload)
+    return bytes(image)

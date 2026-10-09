@@ -9,7 +9,7 @@ import tempfile
 import unittest
 
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from retrolarium_kit.core.authoring import (
     AuthoringError,
@@ -17,8 +17,8 @@ from retrolarium_kit.core.authoring import (
     ResourceSpec,
     RevisionSpec,
 )
-from retrolarium_kit.games.castle.rooms import (
-    CastleError,
+from retrolarium_kit.games.castle_excellent.rooms import (
+    CastleExcellentError,
     PrefixEntry,
     build_levels,
     decode_levels,
@@ -38,11 +38,11 @@ from retrolarium_kit.games.catalog import (
 
 
 ORACLE = (
-    Path(__file__).resolve().parents[1]
+    Path(__file__).resolve().parents[3]
     / "fixtures"
     / "synthetic"
     / "nes"
-    / "castle_codec_probe"
+    / "castle_excellent_codec_probe"
     / "oracle.json"
 )
 
@@ -87,8 +87,8 @@ def synthetic_image() -> bytes:
 
 def synthetic_profile(image: bytes) -> tuple[GameProfile, RevisionSpec]:
     revision = RevisionSpec(
-        "castle-probe",
-        "Castle codec probe",
+        "castle-excellent-probe",
+        "Castle Excellent codec probe",
         len(image),
         hashlib.sha1(image).hexdigest(),
         hashlib.sha256(image).hexdigest(),
@@ -98,7 +98,7 @@ def synthetic_profile(image: bytes) -> tuple[GameProfile, RevisionSpec]:
     rooms = ResourceSpec(
         "rooms",
         "room-collection",
-        "castle.prefix-rooms.v1",
+        "castle-excellent.prefix-rooms.v1",
         "fixed",
         {
             "room_count": 4,
@@ -116,7 +116,7 @@ def synthetic_profile(image: bytes) -> tuple[GameProfile, RevisionSpec]:
     objects = ResourceSpec(
         "objects",
         "object-layer",
-        "castle.object-stream.v1",
+        "castle-excellent.object-stream.v1",
         "fixed",
         {
             "room_count": 4,
@@ -135,7 +135,7 @@ def synthetic_profile(image: bytes) -> tuple[GameProfile, RevisionSpec]:
     mutable = ResourceSpec(
         "mutable-cell-state",
         "derived-state-layout",
-        "castle.mutable-cell-state.v1",
+        "castle-excellent.mutable-cell-state.v1",
         "fixed",
         {
             "state_offsets_cpu": 0x8260,
@@ -147,7 +147,7 @@ def synthetic_profile(image: bytes) -> tuple[GameProfile, RevisionSpec]:
     rendering = ResourceSpec(
         "room-rendering",
         "rendering-data",
-        "castle.room-rendering.v1",
+        "castle-excellent.room-rendering.v1",
         "fixed",
         {
             "chr_bank": 0,
@@ -174,9 +174,9 @@ def synthetic_profile(image: bytes) -> tuple[GameProfile, RevisionSpec]:
         },
     )
     profile = GameProfile(
-        "castle-probe",
+        "castle-excellent-probe",
         1,
-        "Castle codec probe",
+        "Castle Excellent codec probe",
         "nes",
         ("rooms", "objects", "fixed-arena-write"),
         (revision,),
@@ -226,14 +226,14 @@ def write_profile(path: Path, profile: GameProfile) -> None:
     )
 
 
-class CastleCodecTests(unittest.TestCase):
+class CastleExcellentCodecTests(unittest.TestCase):
     def test_packaged_profile_has_both_known_revisions(self) -> None:
         profile = packaged_game_profiles().get("castle-excellent")
         self.assertEqual(
             [revision.revision_id for revision in profile.revisions],
             ["castle-excellent-japan-hsp-05", "castlequest-usa"],
         )
-        self.assertEqual(profile.resource("rooms").codec, "castle.prefix-rooms.v1")
+        self.assertEqual(profile.resource("rooms").codec, "castle-excellent.prefix-rooms.v1")
         self.assertEqual(
             profile.resource("graphics-bundle").parameters["resource_ids"],
             ["chr-bank-0", "chr-bank-1", "screen-palettes", "room-palettes",
@@ -252,7 +252,7 @@ class CastleCodecTests(unittest.TestCase):
             [17677, 17741],
         )
         room_cells = profile.resource("room-cell-visuals")
-        self.assertEqual(room_cells.codec, "castle.room-cell-visuals.v1")
+        self.assertEqual(room_cells.codec, "castle-excellent.room-cell-visuals.v1")
         self.assertEqual(room_cells.parameters, {
             "cell_count": 100,
             "left_file_offset": 32576,
@@ -261,14 +261,14 @@ class CastleCodecTests(unittest.TestCase):
         })
         metasprites = profile.resource("metasprite-descriptors")
         self.assertEqual(
-            metasprites.codec, "castle.metasprite-descriptors.v1")
+            metasprites.codec, "castle-excellent.metasprite-descriptors.v1")
         self.assertEqual(metasprites.parameters, {
             "file_offset": 13510,
             "size": 406,
             "descriptor_count": 203,
         })
         text = profile.resource("sub-command-text")
-        self.assertEqual(text.codec, "castle.sub-command-text.v1")
+        self.assertEqual(text.codec, "castle-excellent.sub-command-text.v1")
         self.assertEqual(text.parameters, {
             "file_offset": 31623,
             "size": 53,
@@ -277,7 +277,7 @@ class CastleCodecTests(unittest.TestCase):
             "record_sizes": [12, 5, 5, 6, 5, 5, 8, 7],
         })
         sfx = profile.resource("sfx-parameters")
-        self.assertEqual(sfx.codec, "castle.sfx-parameters.v1")
+        self.assertEqual(sfx.codec, "castle-excellent.sfx-parameters.v1")
         self.assertEqual(sfx.parameters, {
             "file_offset": 17465,
             "size": 20,
@@ -287,7 +287,7 @@ class CastleCodecTests(unittest.TestCase):
             "record_sizes": [4, 4, 4, 4, 4],
         })
         music = profile.resource("music")
-        self.assertEqual(music.codec, "castle.mml-music.v1")
+        self.assertEqual(music.codec, "castle-excellent.mml-music.v1")
         self.assertEqual(music.parameters["track_table_file_offset"], 14550)
         self.assertEqual(music.parameters["track_count"], 8)
         self.assertEqual(music.parameters["playback_prefix_file_offset"], 15142)
@@ -306,7 +306,7 @@ class CastleCodecTests(unittest.TestCase):
         self.assertEqual(actual["width"], oracle["width"])
         self.assertEqual(actual["height"], oracle["height"])
         self.assertEqual(actual["rooms"], oracle["rooms"])
-        self.assertEqual(actual["rendering"]["codec"], "castle.room-rendering.v1")
+        self.assertEqual(actual["rendering"]["codec"], "castle-excellent.room-rendering.v1")
         self.assertEqual(len(actual["rendering"]["chr_2bpp"]), 8192)
         self.assertEqual(actual["rendering"]["left_tiles"][7], 7)
         self.assertEqual(actual["rendering"]["runtime_object_types"][0], 0x81)
@@ -349,7 +349,7 @@ class CastleCodecTests(unittest.TestCase):
         raw = decode_levels(image, profile, revision).as_dict()
         raw["rooms"][0]["cells"] = [[0x30, 0x30], [0x30, 0x30]]
         document = parse_level_document(raw, profile, revision)
-        with self.assertRaisesRegex(CastleError, "overflows CHR bank 2"):
+        with self.assertRaisesRegex(CastleExcellentError, "overflows CHR bank 2"):
             build_levels(image, document, profile, revision)
 
     def test_profile_driven_public_operations_use_atomic_outputs(self) -> None:
@@ -393,7 +393,7 @@ class CastleCodecTests(unittest.TestCase):
                 mame=mame_path,
                 custom_profile=profile_path,
             )
-            self.assertEqual(launch["game"], "castle-probe")
+            self.assertEqual(launch["game"], "castle-excellent-probe")
             self.assertEqual(launch["arguments"][0], "nes")
 
             with self.assertRaisesRegex(AuthoringError, "must not overwrite"):
@@ -414,12 +414,12 @@ class CastleCodecTests(unittest.TestCase):
             overflowing = json.loads(document_path.read_text(encoding="utf-8"))
             overflowing["rooms"][0]["cells"] = [[0x30, 0x30], [0x30, 0x30]]
             document_path.write_text(json.dumps(overflowing), encoding="utf-8")
-            with self.assertRaisesRegex(CastleError, "overflows CHR bank 2"):
+            with self.assertRaisesRegex(CastleExcellentError, "overflows CHR bank 2"):
                 validate_game(
                     image_path, document_path, custom_profile=profile_path
                 )
 
-    def test_castle_rooms_and_two_chr_banks_build_as_one_transaction(self) -> None:
+    def test_castle_excellent_rooms_and_two_chr_banks_build_as_one_transaction(self) -> None:
         image = synthetic_image()
         base, revision = synthetic_profile(image)
         profile = replace(
@@ -457,7 +457,7 @@ class CastleCodecTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            rom = root / "castle.nes"
+            rom = root / "castle-excellent.nes"
             profile_path = root / "profile.json"
             levels_path = root / "levels.json"
             graphics_path = root / "graphics.json"
@@ -510,9 +510,9 @@ class CastleCodecTests(unittest.TestCase):
             )
 
     def test_invalid_codebook_and_unknown_cell_are_rejected(self) -> None:
-        with self.assertRaisesRegex(CastleError, "prefix-free"):
+        with self.assertRaisesRegex(CastleExcellentError, "prefix-free"):
             validate_prefix_codebook((PrefixEntry(1, "0"), PrefixEntry(2, "01")))
-        with self.assertRaisesRegex(CastleError, "no prefix code"):
+        with self.assertRaisesRegex(CastleExcellentError, "no prefix code"):
             encode_prefix_stream((0x99,), (PrefixEntry(1, "0"), PrefixEntry(2, "1")))
 
 

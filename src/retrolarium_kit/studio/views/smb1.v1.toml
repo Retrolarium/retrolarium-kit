@@ -1,0 +1,112 @@
+# Retrolarium Studio views for the smb1.v1 profile (Super Mario Bros.).
+# The kit writes these into every project it prepares from a game
+# repository's descriptor; documents are relative to hack/<revision>/
+
+[workspace]
+layout = "auto"
+startup_tab = "world"
+
+[[workspace.tabs]]
+id = "world"
+title = "World"
+kind = "world.routing"
+group = "content"
+document = "resources.json"
+resource = "resource-bundle"
+codec = "smb.world.v1"
+capabilities = ["edit", "restore", "undo"]
+
+[[workspace.tabs]]
+id = "levels"
+title = "Levels"
+kind = "level.procedural"
+group = "content"
+document = "resources.json"
+resource = "resource-bundle"
+codec = "smb.levels.v1"
+capabilities = ["edit", "playtest", "preview", "restore", "semantic-overlays", "undo"]
+depends_on = ["graphics", "palettes"]
+
+[[workspace.tabs]]
+id = "screens"
+title = "Screens"
+kind = "screen.tilemap"
+group = "content"
+document = "resources.json"
+resource = "resource-bundle"
+codec = "nes.ppu-screen-packets.v1"
+capabilities = ["paint", "preview", "undo"]
+depends_on = ["graphics", "palettes"]
+
+[[workspace.tabs]]
+id = "music-sounds"
+title = "Sound"
+kind = "audio.sequencer"
+group = "content"
+document = "resources.json"
+resource = "resource-bundle"
+codec = "smb.apu-music.v1"
+capabilities = ["edit", "midi-import", "restore", "undo", "wav-preview"]
+
+[[workspace.tabs]]
+id = "text"
+title = "Text"
+kind = "text.fixed"
+group = "content"
+document = "resources.json"
+resource = "resource-bundle"
+codec = "nes.fixed-text-fields.v1"
+capabilities = ["edit", "restore", "undo"]
+
+[[workspace.tabs]]
+id = "graphics"
+title = "Graphics"
+kind = "graphics.tile-set"
+group = "assets"
+document = "resources.json"
+resource = "resource-bundle"
+codec = "nes.chr-2bpp.v1"
+capabilities = ["pixel-paint", "restore", "undo"]
+depends_on = ["palettes"]
+
+[[workspace.tabs]]
+id = "metatiles"
+title = "Metatiles"
+kind = "metatile.composer"
+group = "assets"
+document = "resources.json"
+resource = "resource-bundle"
+codec = "nes.metatile-2x2.v1"
+capabilities = ["compose", "preview", "restore", "undo"]
+depends_on = ["graphics", "palettes"]
+
+[[workspace.tabs]]
+id = "palettes"
+title = "Palettes"
+kind = "palette.set"
+group = "assets"
+document = "resources.json"
+resource = "resource-bundle"
+codec = "nes.palette-table.v1"
+capabilities = ["paint", "preview", "undo"]
+
+[[workspace.tabs]]
+id = "player-frames"
+title = "Animations"
+kind = "animation.mapping"
+group = "assets"
+document = "resources.json"
+resource = "resource-bundle"
+codec = "smb.player-frames.v1"
+capabilities = ["edit", "preview", "restore", "undo"]
+depends_on = ["graphics", "palettes"]
+
+[[workspace.tabs]]
+id = "demo"
+title = "Demo"
+kind = "smb.demo"
+group = "content"
+document = "demo.json"
+resource = "demo"
+codec = "smb.demo@1"
+capabilities = ["edit", "preview", "restore", "undo"]

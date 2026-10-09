@@ -139,6 +139,16 @@ def command_studio_reset(args: argparse.Namespace) -> None:
     print_json(reset_revision(load_descriptor(args.descriptor), args.revision))
 
 
+def command_studio_check(args: argparse.Namespace) -> None:
+    from retrolarium_kit.studio.repository import check_repository, load_descriptor
+
+    report = check_repository(load_descriptor(args.descriptor), args.revision or None,
+                              flicky_level_writer=args.flicky_level_writer)
+    print_json(report)
+    if report["status"] != "ok":
+        raise SystemExit(1)
+
+
 def command_studio_open_rom(args: argparse.Namespace) -> None:
     from retrolarium_kit.studio.repository import open_rom
 
@@ -306,10 +316,10 @@ def command_studio_pacman_round_playtest_plan(args: argparse.Namespace) -> None:
     print_json(studio_pacman_round_playtest_plan(args.project, mame=args.mame, round=args.round))
 
 
-def command_studio_castle_point_playtest_plan(args: argparse.Namespace) -> None:
-    from retrolarium_kit.studio.playtest import studio_castle_point_playtest_plan
+def command_studio_castle_excellent_point_playtest_plan(args: argparse.Namespace) -> None:
+    from retrolarium_kit.studio.playtest import studio_castle_excellent_point_playtest_plan
 
-    print_json(studio_castle_point_playtest_plan(
+    print_json(studio_castle_excellent_point_playtest_plan(
         args.project, mame=args.mame, room=args.room, x=args.x, y=args.y,
     ))
 
@@ -328,16 +338,16 @@ def command_studio_smb_upgrade(args: argparse.Namespace) -> None:
     print_json(upgrade_smb_studio_project(args.project))
 
 
-def command_studio_castle_upgrade(args: argparse.Namespace) -> None:
-    from retrolarium_kit.studio.create import upgrade_castle_studio_project
+def command_studio_castle_excellent_upgrade(args: argparse.Namespace) -> None:
+    from retrolarium_kit.studio.create import upgrade_castle_excellent_studio_project
 
-    print_json(upgrade_castle_studio_project(args.project))
+    print_json(upgrade_castle_excellent_studio_project(args.project))
 
 
-def command_studio_castle_demo_plan(args: argparse.Namespace) -> None:
-    from retrolarium_kit.studio.demo import studio_castle_demo_plan
+def command_studio_castle_excellent_demo_plan(args: argparse.Namespace) -> None:
+    from retrolarium_kit.studio.demo import studio_castle_excellent_demo_plan
 
-    print_json(studio_castle_demo_plan(args.project, mame=args.mame, record=args.record))
+    print_json(studio_castle_excellent_demo_plan(args.project, mame=args.mame, record=args.record))
 
 
 def command_studio_smb_demo_plan(args: argparse.Namespace) -> None:
@@ -467,6 +477,15 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     studio_reset.add_argument("descriptor", type=Path, help="the .rlj at the repository root")
     studio_reset.add_argument("--revision", required=True)
     studio_reset.set_defaults(handler=command_studio_reset)
+    studio_check = studio_commands.add_parser(
+        "check", help="prove every revision opens and builds back to its ROM, in a throwaway copy"
+    )
+    studio_check.add_argument("descriptor", type=Path, help="the .rlj at the repository root")
+    studio_check.add_argument("--revision", action="append",
+                              help="check only this revision (repeatable); default: all of them")
+    studio_check.add_argument("--flicky-level-writer", type=Path,
+                              help="the studio's retrolarium-flicky-level-writer, for Flicky")
+    studio_check.set_defaults(handler=command_studio_check)
     studio_open_rom = studio_commands.add_parser(
         "open-rom", help="identify a ROM, find or download its game's repository and ready its version"
     )
@@ -616,17 +635,17 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     pacman_round_playtest.add_argument("--mame", type=Path, required=True)
     pacman_round_playtest.add_argument("--round", type=int, required=True)
     pacman_round_playtest.set_defaults(handler=command_studio_pacman_round_playtest_plan)
-    castle_point_playtest = studio_commands.add_parser(
-        "castle-point-playtest-plan",
-        help="prepare a Castle room preview and emit its MAME process specification",
+    castle_excellent_point_playtest = studio_commands.add_parser(
+        "castle-excellent-point-playtest-plan",
+        help="prepare a Castle Excellent room preview and emit its MAME process specification",
     )
-    castle_point_playtest.add_argument("project", type=Path)
-    castle_point_playtest.add_argument("--mame", type=Path, required=True)
-    castle_point_playtest.add_argument("--room", type=int, required=True)
-    castle_point_playtest.add_argument("--x", type=int, required=True)
-    castle_point_playtest.add_argument("--y", type=int, required=True)
-    castle_point_playtest.set_defaults(
-        handler=command_studio_castle_point_playtest_plan
+    castle_excellent_point_playtest.add_argument("project", type=Path)
+    castle_excellent_point_playtest.add_argument("--mame", type=Path, required=True)
+    castle_excellent_point_playtest.add_argument("--room", type=int, required=True)
+    castle_excellent_point_playtest.add_argument("--x", type=int, required=True)
+    castle_excellent_point_playtest.add_argument("--y", type=int, required=True)
+    castle_excellent_point_playtest.set_defaults(
+        handler=command_studio_castle_excellent_point_playtest_plan
     )
     solomon_point_playtest = studio_commands.add_parser(
         "solomon-point-playtest-plan",
@@ -662,20 +681,20 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     )
     smb_upgrade.add_argument("project", type=Path)
     smb_upgrade.set_defaults(handler=command_studio_smb_upgrade)
-    castle_demo = studio_commands.add_parser(
-        "castle-demo-plan",
+    castle_excellent_demo = studio_commands.add_parser(
+        "castle-excellent-demo-plan",
         help="emit the MAME process that loops the Castle Excellent title demo or records a new one",
     )
-    castle_demo.add_argument("project", type=Path)
-    castle_demo.add_argument("--mame", type=Path, required=True)
-    castle_demo.add_argument("--record", type=Path, help="play the demo with the controller and write its commands here")
-    castle_demo.set_defaults(handler=command_studio_castle_demo_plan)
-    castle_upgrade = studio_commands.add_parser(
-        "castle-upgrade",
+    castle_excellent_demo.add_argument("project", type=Path)
+    castle_excellent_demo.add_argument("--mame", type=Path, required=True)
+    castle_excellent_demo.add_argument("--record", type=Path, help="play the demo with the controller and write its commands here")
+    castle_excellent_demo.set_defaults(handler=command_studio_castle_excellent_demo_plan)
+    castle_excellent_upgrade = studio_commands.add_parser(
+        "castle-excellent-upgrade",
         help="add the documents newer kits edit (title demo, screens) to a Castle Excellent project",
     )
-    castle_upgrade.add_argument("project", type=Path)
-    castle_upgrade.set_defaults(handler=command_studio_castle_upgrade)
+    castle_excellent_upgrade.add_argument("project", type=Path)
+    castle_excellent_upgrade.set_defaults(handler=command_studio_castle_excellent_upgrade)
     studio_launch = studio_commands.add_parser(
         "launch", help="run a bounded headless MAME smoke test of the edited artifact"
     )

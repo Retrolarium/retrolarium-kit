@@ -5,10 +5,10 @@ from pathlib import Path
 import sys
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from retrolarium_kit.core.authoring import GameProfile, ResourceSpec, RevisionSpec
-from retrolarium_kit.games.castle.screens import CastleScreensError, build_screens, decode_screens, parse_screens_document
+from retrolarium_kit.games.castle_excellent.screens import CastleExcellentScreensError, build_screens, decode_screens, parse_screens_document
 
 
 def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
@@ -22,12 +22,12 @@ def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
     header = b"NES\x1a" + bytes((2, 4, 0x31, 0)) + bytes(8)
     source = header + bytes(prg) + bytes(chr_data)
     revision = RevisionSpec(
-        "probe", "Castle probe", len(source), hashlib.sha1(source).hexdigest(),
+        "probe", "Castle Excellent probe", len(source), hashlib.sha1(source).hexdigest(),
         hashlib.sha256(source).hexdigest(), "ines", 3,
     )
     profile = GameProfile(
-        "castle-excellent", 1, "Castle probe", "nes", ("screens",), (revision,),
-        (ResourceSpec("screens", "screens", "castle.screens.v1", "fixed", {
+        "castle-excellent", 1, "Castle Excellent probe", "nes", ("screens",), (revision,),
+        (ResourceSpec("screens", "screens", "castle-excellent.screens.v1", "fixed", {
             "chr_file_offset": 16 + 0x8000 + 0x6000, "pages": [0x14, 0x18],
             "page_names": ["completion", "title"], "chr_banks": [0, 1],
             "game_over_cpu": 0xFE84, "game_over_length": 4,
@@ -36,7 +36,7 @@ def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
     return source, profile, revision
 
 
-class CastleScreensTests(unittest.TestCase):
+class CastleExcellentScreensTests(unittest.TestCase):
     def test_round_trip_and_edit(self) -> None:
         source, profile, revision = fixture()
         document = decode_screens(source, profile, revision)
@@ -57,11 +57,11 @@ class CastleScreensTests(unittest.TestCase):
         source, profile, revision = fixture()
         value = decode_screens(source, profile, revision).as_dict()
         value["game_over"] = [0x78, 0, 0x7D, 0x75]
-        with self.assertRaisesRegex(CastleScreensError, "no zero"):
+        with self.assertRaisesRegex(CastleExcellentScreensError, "no zero"):
             parse_screens_document(value, profile, revision)
         value = decode_screens(source, profile, revision).as_dict()
         value["screens"][0]["tiles"] = value["screens"][0]["tiles"][:-1]
-        with self.assertRaisesRegex(CastleScreensError, "960 byte values"):
+        with self.assertRaisesRegex(CastleExcellentScreensError, "960 byte values"):
             parse_screens_document(value, profile, revision)
 
 

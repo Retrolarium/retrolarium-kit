@@ -40,7 +40,7 @@ def studio_flicky_demo_plan(
     verification = verify_studio_project(path)
     if verification["status"] != "current":
         raise StudioProjectError("Studio artifact is stale; build it again before the demo")
-    lua = Path(__file__).with_name("runtime") / "flicky_mame_demo.lua"
+    lua = Path(__file__).with_name("runtime") / "flicky" / "demo.lua"
     if not lua.is_file():
         raise StudioProjectError(f"packaged Flicky demo script is missing: {lua}")
     artifact = Path(verification["artifact"]["absolute_path"])
@@ -121,7 +121,7 @@ def studio_smb_demo_plan(path: Path, *, mame: Path, record: Path | None = None) 
     if engine < 0 or source[engine:engine + 3] != b"\xae\x17\x07" \
             or source[engine + 14:engine + 16] != expected:
         raise StudioProjectError("SMB build does not match the guarded demo layout")
-    lua = Path(__file__).with_name("runtime") / "smb1_mame_demo.lua"
+    lua = Path(__file__).with_name("runtime") / "smb" / "demo.lua"
     if not lua.is_file():
         raise StudioProjectError(f"packaged SMB demo script is missing: {lua}")
     plan = launch_image_plan(artifact, platform="nes", mame=executable,
@@ -154,10 +154,10 @@ def studio_smb_demo_plan(path: Path, *, mame: Path, record: Path | None = None) 
 
 
 # Castle Excellent: the RAM flag that plays the demo in place of controller 1.
-CASTLE_DEMO_ACTIVE = 0x07C7
+CASTLE_EXCELLENT_DEMO_ACTIVE = 0x07C7
 
 
-def studio_castle_demo_plan(path: Path, *, mame: Path, record: Path | None = None) -> dict[str, Any]:
+def studio_castle_excellent_demo_plan(path: Path, *, mame: Path, record: Path | None = None) -> dict[str, Any]:
     """Loop the Castle Excellent title demo of the current build in MAME, or
     record a new one from the player's controller into ``record``."""
 
@@ -165,14 +165,14 @@ def studio_castle_demo_plan(path: Path, *, mame: Path, record: Path | None = Non
     _require_declared_operation(inspection, "launch")
     if inspection["project"]["platform"] != "nes" \
             or inspection["project"]["profile"] != "castle-excellent.v1":
-        raise StudioProjectError("Castle demo playtest requires the castle-excellent.v1 NES profile")
+        raise StudioProjectError("Castle Excellent demo playtest requires the castle-excellent.v1 NES profile")
     profile = packaged_game_profiles().get("castle-excellent")
     revision = next(
         (item for item in profile.revisions if item.sha256 == inspection["source"]["sha256"]), None
     )
     if revision is None:
-        raise StudioProjectError("Castle demo playtest needs a known Castle Excellent source")
-    demo = next(item for item in profile.resources_for(revision) if item.codec == "castle.title-demo.v1")
+        raise StudioProjectError("Castle Excellent demo playtest needs a known Castle Excellent source")
+    demo = next(item for item in profile.resources_for(revision) if item.codec == "castle-excellent.title-demo.v1")
     layout = demo.parameters
     executable = mame.resolve()
     if not executable.is_file():
@@ -187,26 +187,26 @@ def studio_castle_demo_plan(path: Path, *, mame: Path, record: Path | None = Non
     reader = 16 + layout["reader_cpu"] - 0x8000
     if source[init:init + 8] != bytes((0xA9, script & 0xFF, 0x85, 0xFD, 0xA9, script >> 8, 0x85, 0xFE)) \
             or source[reader + 10:reader + 12] != b"\xb1\xfd":
-        raise StudioProjectError("Castle build does not match the guarded demo layout")
-    lua = Path(__file__).with_name("runtime") / "castle_mame_demo.lua"
+        raise StudioProjectError("Castle Excellent build does not match the guarded demo layout")
+    lua = Path(__file__).with_name("runtime") / "castle_excellent" / "demo.lua"
     if not lua.is_file():
-        raise StudioProjectError(f"packaged Castle demo script is missing: {lua}")
+        raise StudioProjectError(f"packaged Castle Excellent demo script is missing: {lua}")
     plan = launch_image_plan(artifact, platform="nes", mame=executable,
                              machine="nespal" if revision.revision_id == "pal" else "nes")
     recording = "" if record is None else str(record.resolve())
     plan.update({
-        "operation": "retrolarium.studio.castle-demo",
+        "operation": "retrolarium.studio.castle-excellent-demo",
         "backend": "mame-lua",
         "arguments": [
             *plan["arguments"], "-autoboot_delay", "0",
             "-autoboot_script", str(lua.resolve()),
         ],
         "environment": {
-            "CASTLE_DEMO_SCRIPT": str(script),
-            "CASTLE_DEMO_READER": str(layout["reader_cpu"]),
-            "CASTLE_DEMO_CAPACITY": str(layout["capacity"]),
-            "CASTLE_DEMO_ACTIVE": str(CASTLE_DEMO_ACTIVE),
-            "CASTLE_DEMO_RECORD": recording,
+            "CASTLE_EXCELLENT_DEMO_SCRIPT": str(script),
+            "CASTLE_EXCELLENT_DEMO_READER": str(layout["reader_cpu"]),
+            "CASTLE_EXCELLENT_DEMO_CAPACITY": str(layout["capacity"]),
+            "CASTLE_EXCELLENT_DEMO_ACTIVE": str(CASTLE_EXCELLENT_DEMO_ACTIVE),
+            "CASTLE_EXCELLENT_DEMO_RECORD": recording,
         },
         "project_file": inspection["project_file"],
         "script": {"path": str(lua.resolve()), "sha256": sha256_file(lua)},
@@ -243,7 +243,7 @@ def studio_pacman_demo_plan(path: Path, *, mame: Path, record: Path | None = Non
     table = layout["table_cpu"]
     if source[script + 12:script + 15] != bytes((0xB9, table & 0xFF, table >> 8)):
         raise StudioProjectError("Pac-Man build does not match the guarded demo layout")
-    lua = Path(__file__).with_name("runtime") / "pacman_mame_demo.lua"
+    lua = Path(__file__).with_name("runtime") / "pacman" / "demo.lua"
     if not lua.is_file():
         raise StudioProjectError(f"packaged Pac-Man demo script is missing: {lua}")
     plan = launch_image_plan(artifact, platform="nes", mame=executable,
@@ -300,7 +300,7 @@ def studio_doraemon_demo_plan(path: Path, *, mame: Path, record: Path | None = N
     if source[entry:entry + 8] != bytes((0xA9, stream & 0xFF, 0x85, 0xA6, 0xA9, stream >> 8, 0x85, 0xA7)) \
             or source[reader:reader + 2] != bytes((0x85, 0x21)):
         raise StudioProjectError("Doraemon build does not match the guarded demo layout")
-    lua = Path(__file__).with_name("runtime") / "doraemon_mame_demo.lua"
+    lua = Path(__file__).with_name("runtime") / "doraemon" / "demo.lua"
     if not lua.is_file():
         raise StudioProjectError(f"packaged Doraemon demo script is missing: {lua}")
     plan = launch_image_plan(artifact, platform="nes", mame=executable,
@@ -362,7 +362,7 @@ def studio_solomon_demo_plan(
     # CPX #count in the playback loop).
     durations = source[offset + 0x1B] | (source[offset + 0x1C] << 8)
     steps = source[offset + 0x22]
-    lua = Path(__file__).with_name("runtime") / "solomon_mame_demo.lua"
+    lua = Path(__file__).with_name("runtime") / "solomon" / "demo.lua"
     if not lua.is_file():
         raise StudioProjectError(f"packaged Solomon demo script is missing: {lua}")
     plan = launch_image_plan(

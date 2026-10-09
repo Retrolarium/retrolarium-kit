@@ -10,7 +10,7 @@ import sys
 import zlib
 
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from retrolarium_kit.games.doraemon.world2.streams import (
     decode_screens, encode_screens, PAYLOAD_SIZE,

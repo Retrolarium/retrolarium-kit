@@ -1,0 +1,84 @@
+# Retrolarium Studio views for the pacman.v1 profile (Pac-Man).
+# The kit writes these into every project it prepares from a game
+# repository's descriptor; documents are relative to hack/<revision>/
+
+[workspace]
+layout = "auto"
+startup_tab = "maze"
+
+[[workspace.tabs]]
+id = "maze"
+title = "Maze"
+kind = "level.tile-grid"
+group = "content"
+document = "resources.json"
+codec = "pacman.maze-rle.v1"
+capabilities = ["paint", "eyedropper", "semantic-overlays", "undo"]
+depends_on = ["graphics"]
+
+[[workspace.tabs]]
+id = "screens"
+title = "Screens"
+kind = "screen.tilemap"
+group = "content"
+document = "resources.json"
+codec = "pacman.screen-collection.v1"
+capabilities = ["paint", "preview", "undo"]
+depends_on = ["graphics", "palettes"]
+
+[[workspace.tabs]]
+id = "music-sounds"
+title = "Sound"
+kind = "audio.sequencer"
+group = "content"
+document = "resources.json"
+codec = "pacman.sound-streams.v1"
+capabilities = ["edit", "piano-roll", "midi-import", "wav-preview", "restore", "undo"]
+
+[[workspace.tabs]]
+id = "text"
+title = "Text"
+kind = "text.fixed"
+group = "content"
+document = "resources.json"
+codec = "pacman.screen-collection.v1"
+capabilities = ["edit", "restore", "undo"]
+
+[[workspace.tabs]]
+id = "graphics"
+title = "Graphics"
+kind = "graphics.tile-set"
+group = "assets"
+document = "resources.json"
+codec = "nes.chr-2bpp.v1"
+capabilities = ["pixel-paint", "restore", "undo"]
+depends_on = ["palettes"]
+
+[[workspace.tabs]]
+id = "palettes"
+title = "Palettes"
+kind = "palette.set"
+group = "assets"
+document = "resources.json"
+codec = "pacman.palette-table.v1"
+capabilities = ["paint", "preview", "undo"]
+
+[[workspace.tabs]]
+id = "animations"
+title = "Animations & Mappings"
+kind = "animation.mapping"
+group = "assets"
+document = "resources.json"
+codec = "pacman.actor-mapping.v1"
+capabilities = ["paint", "preview", "restore", "undo"]
+depends_on = ["graphics"]
+
+[[workspace.tabs]]
+id = "demo"
+title = "Demo"
+kind = "pacman.demo"
+group = "content"
+document = "demo.json"
+resource = "attract-demo"
+codec = "pacman.demo@1"
+capabilities = ["edit", "preview", "restore", "undo"]
