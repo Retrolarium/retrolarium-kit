@@ -11,7 +11,7 @@ import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from retrolarium_kit.core.game_repository import (
+from retrolarium_kit.studio.repository import (
     GameRepositoryError, fetch_repository, identify_rom, ips_patch, load_descriptor, open_rom, prepare_revision,
     reset_revision, revision_statuses,
 )
