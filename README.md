@@ -144,21 +144,29 @@ effect routing use it.
 
 ## Bundled compiler suites
 
-Installing the wheel now installs the pinned compilers used by the first NES and
-Mega Drive authoring projects. No compiler download is performed at first use:
-the command only copies hash-verified package data into a writable cache.
+The kit carries the assemblers the game repositories build with: cc65's `ca65`
+and `ld65` for the NES, the AS macro assembler and `p2bin` for the Mega Drive,
+for Windows x86-64 and Linux x86-64. Nothing is downloaded at first use: the
+commands copy hash-verified files into a writable cache.
+
+The assemblers are built here, not taken from elsewhere:
+`tools/build_toolchains.ps1` builds them in Docker (`tools/toolchains/`) from
+the AS source archive in `core/toolchains/sources` and cc65 and p2bin at pinned
+commits, into `core/toolchains/payloads`. The build is reproducible, and
+`core/toolchains/manifest.json` pins every file's size and SHA-256, so a
+checkout builds them once and the studio's package ships them; users need
+nothing installed. After a deliberate change (a compiler image or source
+commit), `python tools/toolchains/write_manifest.py` writes the new digests.
 
 ```powershell
-python -m pip install retrolarium-kit
+powershell -ExecutionPolicy Bypass -File tools\build_toolchains.ps1
 rltool build-tools status
-rltool build-tools materialize nes
-rltool build-tools materialize megadrive
 rltool build-tools path nes ca65
 rltool build-tools path megadrive asl
 ```
 
-Python build integrations should use the public API instead of locating a
-repository-local `bin/` directory:
+Python build integrations use the public API instead of a repository-local
+`bin/` directory:
 
 ```python
 from retrolarium_kit.core.build_toolchains import materialize_build_toolchain
@@ -173,12 +181,8 @@ p2bin = sega.command("p2bin")
 environment = sega.process_environment()
 ```
 
-The `2026.09.11` payload provides both suites on Windows x86-64 and the Mega
-Drive suite on Linux x86-64. Linux cc65 and macOS suites remain explicitly
-unavailable until native wheel smoke tests exist. AS is GPL-2.0-or-later, so the
-wheel includes the exact corresponding Flamewing source snapshot for each host
-binary and the full license alongside the executables. cc65 and p2bin notices
-are bundled as well.
+AS is GPL-2.0-or-later: its source snapshot ships beside the binaries built from
+it, with the license. cc65 (zlib) and p2bin (ISC) notices ship as well.
 
 ## Castle Excellent / Castlequest authoring
 
@@ -339,6 +343,13 @@ uv build --wheel --out-dir build/dist .
 
 An editable development install uses `python -m pip install -e .`. All forms
 expose the `rltool` entry point.
+
+## Trademarks
+
+The games are named only to say which ones Retrolarium works with. Their titles
+and characters are trademarks of their owners, who have not made or endorsed
+Retrolarium. Retrolarium does not include the games: you need your own copy of
+each.
 
 ## License
 

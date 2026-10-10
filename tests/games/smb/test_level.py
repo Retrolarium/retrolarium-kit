@@ -27,8 +27,23 @@ from retrolarium_kit.platform.nes.resources import (
     parse_resource_document,
 )
 from retrolarium_kit.games.smb.level import decode_levels, encode_levels, positioned_area_objects, positioned_enemy_records
-from retrolarium_kit.games.smb.level_render import object_width, render_level_scene
+from retrolarium_kit.games.smb.level_render import SmbLevelRendering, object_width, render_level_scene
 from helpers import game_repository
+
+
+# The SMB1 JU level corpus, with the level tables the renderer needs; it
+# lives with the disassembly because it holds the game's data.
+CORPUS = game_repository("smb1_src") / "tests" / "retrolarium" / "smb1_ju_level_scenes.json"
+
+
+def corpus() -> dict:
+    if not CORPUS.is_file():
+        raise unittest.SkipTest(f"no SMB1 corpus at {CORPUS}")
+    return json.loads(CORPUS.read_text(encoding="utf-8"))
+
+
+def corpus_rendering(value: dict) -> SmbLevelRendering:
+    return SmbLevelRendering.from_resource(value["level_tables"], value["rendering"])
 
 
 PARAMETERS = {
@@ -417,6 +432,7 @@ class SmbLevelTests(unittest.TestCase):
         self.assertEqual(sum(levels.parameters["enemy_capacities"]), 1087)
 
     def test_procedural_renderer_reconstructs_terrain_objects_and_pages(self) -> None:
+        rendering = corpus_rendering(corpus())
         header = {
             "timer_setting": 0, "entrance_control": 0,
             "foreground_or_color": 0, "area_style": 0,
@@ -433,24 +449,24 @@ class SmbLevelTests(unittest.TestCase):
             {"kind": "enemy", "column": 6, "row": 5, "page_advance": False,
              "hard_mode": False, "object_or_page": 6},
         ]
-        scene = render_level_scene("ground_1", header, objects, enemies)
+        scene = render_level_scene("ground_1", header, objects, enemies, rendering=rendering)
         self.assertEqual(scene.width, 42)
-        self.assertEqual(scene.metatiles[0][0], 0x54)
+        # Ground terrain, an item brick for ground areas (row object 5 comes
+        # after the question blocks) and the flagpole's ends.
+        self.assertEqual(scene.metatiles[0][0], rendering["terrain_metatiles"][1])
         self.assertEqual(scene.metatiles[0][4], 0)
-        self.assertEqual(scene.metatiles[3][4], 0x56)
+        self.assertEqual(scene.metatiles[3][4], rendering.small_object(5, 1)[0])
+        self.assertEqual(scene.metatiles[3][4], rendering["block_metatiles"][5])
         self.assertEqual(scene.metatiles[16][11], 0)
-        self.assertEqual(scene.metatiles[20][0], 0x24)
-        self.assertEqual(scene.metatiles[20][10], 0x61)
+        self.assertEqual(scene.metatiles[20][0], rendering.one("flagpole_ball"))
+        self.assertEqual(scene.metatiles[20][10], rendering.one("flagpole_base"))
         self.assertEqual(scene.enemies[0]["x"], 38)
 
     def test_ju_golden_corpus_matches_all_34_python_scenes(self) -> None:
-        fixture_path = (game_repository("smb1_src") / "tests" / "retrolarium"
-                        / "smb1_ju_level_scenes.json")
-        if not fixture_path.is_file():
-            self.skipTest(f"no SMB1 corpus at {fixture_path}")
-        fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+        fixture = corpus()
+        rendering = corpus_rendering(fixture)
         self.assertEqual(fixture["schema"], "retrolarium.smb-level-scene-golden")
-        self.assertEqual(fixture["schema_version"], 1)
+        self.assertEqual(fixture["schema_version"], 2)
         self.assertEqual(fixture["profile"], "smb1.ju")
         self.assertEqual(fixture["source"]["area_streams_sha1"],
                          "63119cee5b53a6c64ef4a203bdbb9fcd7c0a2f42")
@@ -486,7 +502,7 @@ class SmbLevelTests(unittest.TestCase):
                 for item in area["enemies"]
             ]
             scene = render_level_scene(
-                area["name"], header, objects, enemies, world=area["world"],
+                area["name"], header, objects, enemies, world=area["world"], rendering=rendering,
             )
             flat_grid = bytes(value for column in scene.metatiles for value in column)
             expected = area["expected"]

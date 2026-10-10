@@ -49,6 +49,11 @@ from retrolarium_kit.platform.nes.text import (
     decode_text_fields,
     encode_text_fields,
 )
+from retrolarium_kit.platform.nes.byte_tables import (
+    CODEC as BYTE_TABLES_CODEC,
+    decode_tables,
+    encode_tables,
+)
 from retrolarium_kit.platform.nes.records import (
     CODEC as RECORD_TABLE_CODEC,
     decode_records,
@@ -978,6 +983,23 @@ def _parse_record_table(raw: dict[str, Any], spec: ResourceSpec) -> Encoded:
             tuple(_EncodedSpan(offset, data) for offset, data in runs))
 
 
+def _decode_byte_tables(image: bytes, resource: ResourceSpec) -> dict[str, object]:
+    try:
+        decoded = decode_tables(image, resource.parameters, resource.resource_id)
+    except AuthoringError as exc:
+        raise NesResourceError(str(exc)) from exc
+    return {"id": resource.resource_id, "kind": resource.kind, "codec": resource.codec, **decoded}
+
+
+def _parse_byte_tables(raw: dict[str, Any], spec: ResourceSpec) -> Encoded:
+    try:
+        runs = encode_tables(raw, spec.parameters, spec.resource_id)
+    except AuthoringError as exc:
+        raise NesResourceError(str(exc)) from exc
+    return ({"id", "kind", "codec", "tables"}, None,
+            tuple(_EncodedSpan(offset, data) for offset, data in runs))
+
+
 def _decode_ppu_screen_packet(image: bytes, resource: ResourceSpec) -> dict[str, object]:
     try:
         decoded = decode_screen_packets(image, resource.parameters)
@@ -1026,6 +1048,7 @@ register(NesCodec(PALETTE_PACKET_CODEC, decode=_decode_palette_packet, parse=_pa
 register(NesCodec(FIXED_TEXT_CODEC, decode=_decode_fixed_text, parse=_parse_fixed_text))
 register(NesCodec(PPU_SCREEN_PACKET_CODEC, decode=_decode_ppu_screen_packet, parse=_parse_ppu_screen_packet))
 register(NesCodec(RECORD_TABLE_CODEC, decode=_decode_record_table, parse=_parse_record_table))
+register(NesCodec(BYTE_TABLES_CODEC, decode=_decode_byte_tables, parse=_parse_byte_tables))
 
 
 def _decode_profile_resource(

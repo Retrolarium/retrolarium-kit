@@ -41,6 +41,7 @@ from typing import Any, Mapping
 from importlib import resources
 
 from retrolarium_kit.core.authoring import AuthoringError
+from retrolarium_kit.core.self_command import child_environment
 
 
 SCHEMA = "retrolarium.game"
@@ -353,9 +354,10 @@ def _edited(descriptor: GameDescriptor, revision: Revision) -> bool:
 
 
 def _run(descriptor: GameDescriptor, command: list[str], rom: Path) -> subprocess.CompletedProcess[str]:
+    # The game's scripts ask this kit for its assemblers through RLTOOL.
     arguments = [part.replace("{rom}", str(rom)) for part in command]
     return subprocess.run([sys.executable, str(descriptor.root / arguments[0]), *arguments[1:]],
-                          cwd=descriptor.root, capture_output=True, text=True)
+                          cwd=descriptor.root, capture_output=True, text=True, env=child_environment())
 
 
 def _split_status(descriptor: GameDescriptor, *, run: bool) -> dict[str, object]:

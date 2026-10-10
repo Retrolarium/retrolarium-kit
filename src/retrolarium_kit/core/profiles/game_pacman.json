@@ -43,6 +43,20 @@
       "mapper": 0,
       "resource_overrides": [
         {
+          "id": "render-tables",
+          "parameters": {
+            "tables": {
+              "note_period_base_pairs": {"file_offset": 28804, "size": 24},
+              "attract_attribute_rows": {"file_offset": 17789, "size": 1},
+              "attract_attribute_start": {"file_offset": 17793, "size": 1},
+              "attract_attribute_row_length": {"file_offset": 17795, "size": 1},
+              "attract_attribute_step": {"file_offset": 17804, "size": 1},
+              "attract_attribute_footer": {"file_offset": 17843, "size": 1},
+              "attract_attribute_footer_end": {"file_offset": 17854, "size": 1}
+            }
+          }
+        },
+        {
           "id": "maze",
           "parameters": {
             "file_offset": 742,
@@ -207,7 +221,17 @@
                   },
                   {
                     "name": "fruit_group",
-                    "label": "Fruit group"
+                    "label": "Fruit",
+                    "choices": [
+                      {"value": 0, "label": "Cherry"},
+                      {"value": 1, "label": "Strawberry"},
+                      {"value": 2, "label": "Orange"},
+                      {"value": 3, "label": "Apple"},
+                      {"value": 4, "label": "Melon"},
+                      {"value": 5, "label": "Galaxian"},
+                      {"value": 6, "label": "Bell"},
+                      {"value": 7, "label": "Key"}
+                    ]
                   },
                   {
                     "name": "release_interval",
@@ -442,7 +466,8 @@
           "round-speed-sets",
           "round-timing-sets",
           "round-pellet-thresholds",
-          "round-release-targets"
+          "round-release-targets",
+          "render-tables"
         ]
       }
     },
@@ -698,7 +723,17 @@
               },
               {
                 "name": "fruit_group",
-                "label": "Fruit group"
+                "label": "Fruit",
+                "choices": [
+                  {"value": 0, "label": "Cherry"},
+                  {"value": 1, "label": "Strawberry"},
+                  {"value": 2, "label": "Orange"},
+                  {"value": 3, "label": "Apple"},
+                  {"value": 4, "label": "Melon"},
+                  {"value": 5, "label": "Galaxian"},
+                  {"value": 6, "label": "Bell"},
+                  {"value": 7, "label": "Key"}
+                ]
               },
               {
                 "name": "release_interval",
@@ -924,6 +959,23 @@
             ]
           }
         ]
+      }
+    },
+    {
+      "id": "render-tables",
+      "kind": "tables",
+      "codec": "nes.byte-tables.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "tables": {
+          "note_period_base_pairs": {"file_offset": 12420, "size": 24},
+          "attract_attribute_rows": {"file_offset": 1405, "size": 1},
+          "attract_attribute_start": {"file_offset": 1409, "size": 1},
+          "attract_attribute_row_length": {"file_offset": 1411, "size": 1},
+          "attract_attribute_step": {"file_offset": 1420, "size": 1},
+          "attract_attribute_footer": {"file_offset": 1459, "size": 1},
+          "attract_attribute_footer_end": {"file_offset": 1470, "size": 1}
+        }
       }
     }
   ]

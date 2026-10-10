@@ -1,13 +1,18 @@
 {
   "schema": "retrolarium.build-toolchains",
   "schema_version": 1,
-  "release": "2026.09.11",
+  "release": "2026.10.11",
   "suites": {
     "nes": {
-      "components": ["cc65"]
+      "components": [
+        "cc65"
+      ]
     },
     "megadrive": {
-      "components": ["asl", "p2bin"]
+      "components": [
+        "asl",
+        "p2bin"
+      ]
     }
   },
   "components": {
@@ -18,12 +23,8 @@
       "license_file": "licenses/cc65-Zlib.txt",
       "license_size": 808,
       "license_sha256": "8e87ae93bbc45dbe3def75c8b20ba2905b052ddf766fe61d55b8e16a807d57f3",
-      "source": "https://github.com/cc65/cc65/tree/0fca835",
-      "binary_origin": {
-        "repository": "https://github.com/oranguthang/castle_excellent_src",
-        "commit": "92dd935dd7a3ef088fa0db1570f1fdc40eea0149",
-        "paths": ["bin/ca65.exe", "bin/ld65.exe"]
-      },
+      "source": "https://github.com/cc65/cc65/tree/0fca83500b1a32fa1758bf2484562a00381f5642",
+      "build": "tools/toolchains/build.sh",
       "hosts": {
         "windows-x86_64": {
           "commands": {
@@ -34,15 +35,37 @@
             {
               "package_path": "payloads/windows-x86_64/cc65/ca65.exe",
               "install_path": "cc65/ca65.exe",
-              "size": 721629,
-              "sha256": "9109d7118ff070e78f031bee4eb776061e56b74e7c8f9f40c70fd6707ea0ac5a",
+              "size": 323584,
+              "sha256": "779a2a266f038cfeea4cdb3cd2cf5bbef4b602bb43560c3fd9f1b45d7bc5c776",
               "executable": true
             },
             {
               "package_path": "payloads/windows-x86_64/cc65/ld65.exe",
               "install_path": "cc65/ld65.exe",
-              "size": 575874,
-              "sha256": "5f68367a135c578c88744e27ba0b1234604d87ef1ff6294b46fcb031ff984db4",
+              "size": 202240,
+              "sha256": "06720e9200c9a2a53e049413888a6a55ee023b0801a598d4b6143caae8466813",
+              "executable": true
+            }
+          ]
+        },
+        "linux-x86_64": {
+          "commands": {
+            "ca65": "cc65/ca65",
+            "ld65": "cc65/ld65"
+          },
+          "files": [
+            {
+              "package_path": "payloads/linux-x86_64/cc65/ca65",
+              "install_path": "cc65/ca65",
+              "size": 1072264,
+              "sha256": "711a2314417f36c12b1a2b7be74a992f265c6e380c92298f284711e19fc0eeb2",
+              "executable": true
+            },
+            {
+              "package_path": "payloads/linux-x86_64/cc65/ld65",
+              "install_path": "cc65/ld65",
+              "size": 957832,
+              "sha256": "e5759a387c9467104f959732a508349309e4f1565b776026ba402d544a7eeee5",
               "executable": true
             }
           ]
@@ -56,66 +79,57 @@
       "license_file": "licenses/AS-GPL-2.0.txt",
       "license_size": 18007,
       "license_sha256": "dcc100d4161cc0b7177545ab6e47216f84857cda3843847c792a25289852dcaa",
-      "source": "https://github.com/flamewing/asl-releases",
+      "source": "https://github.com/flamewing/asl-releases/tree/721a327a803585e2d1f59acac93cbd0768213d06",
+      "build": "tools/toolchains/build.sh",
       "corresponding_sources": {
         "windows-x86_64": {
           "revision": "721a327a803585e2d1f59acac93cbd0768213d06",
           "source_url": "https://github.com/flamewing/asl-releases/archive/721a327a803585e2d1f59acac93cbd0768213d06.tar.gz",
-          "binary_origin": {
-            "repository": "https://github.com/oranguthang/s1_improvements",
-            "commit": "10e7792967a38ed22c7871e77749bb13c45e2ae4",
-            "path": "build_tools/Windows-x86/asw.exe"
-          },
           "package_path": "sources/asl-flamewing-721a327a803585e2d1f59acac93cbd0768213d06.tar.gz",
           "size": 3182214,
           "sha256": "355b67422db3c61511d224019347b5e83c89359830570d68dd57841087697aef"
         },
         "linux-x86_64": {
-          "revision": "3a5d200f84be0418b3a49cda62749956e01a33a0",
-          "source_url": "https://github.com/flamewing/asl-releases/archive/3a5d200f84be0418b3a49cda62749956e01a33a0.tar.gz",
-          "binary_origin": {
-            "repository": "https://github.com/oranguthang/s1_improvements",
-            "commit": "1ce386fc63bcef58d53f87d51a2e8620ff24de9a",
-            "path": "build_tools/Linux-x86_64/asl"
-          },
-          "package_path": "sources/asl-flamewing-3a5d200f84be0418b3a49cda62749956e01a33a0.tar.gz",
-          "size": 2913139,
-          "sha256": "d5869ee205c0d0eaa1828faace5ebacc2432f7f1633f572cd115c08c2658bca4"
+          "revision": "721a327a803585e2d1f59acac93cbd0768213d06",
+          "source_url": "https://github.com/flamewing/asl-releases/archive/721a327a803585e2d1f59acac93cbd0768213d06.tar.gz",
+          "package_path": "sources/asl-flamewing-721a327a803585e2d1f59acac93cbd0768213d06.tar.gz",
+          "size": 3182214,
+          "sha256": "355b67422db3c61511d224019347b5e83c89359830570d68dd57841087697aef"
         }
       },
       "hosts": {
         "windows-x86_64": {
           "commands": {
-            "asl": "asl/asw.exe"
+            "asl": "asl/asl.exe"
           },
           "environment": {
             "AS_MSGPATH": "asl"
           },
           "files": [
             {
-              "package_path": "payloads/windows-x86_64/asl/asw.exe",
-              "install_path": "asl/asw.exe",
-              "size": 2718552,
-              "sha256": "02bcdccc6a887aa94d382059e4f4a83a0d5bd87246aa586e1b6692c1c2e3c896",
+              "package_path": "payloads/windows-x86_64/asl/asl.exe",
+              "install_path": "asl/asl.exe",
+              "size": 2258944,
+              "sha256": "73a35502b6e4c3bf5c0d5999a7872955bd4f05567874761dd026c296b33038f7",
               "executable": true
             },
             {
               "package_path": "payloads/windows-x86_64/asl/as.msg",
               "install_path": "asl/as.msg",
               "size": 26005,
-              "sha256": "92be47faed496e90ab5b1e1298325d9a4f0f1540e9fb69685baa291f117890ab"
+              "sha256": "c359ab2b8b894bcd6bf912f0e36839c11141d7f70d560b44823ab25dc0124f37"
             },
             {
               "package_path": "payloads/windows-x86_64/asl/cmdarg.msg",
               "install_path": "asl/cmdarg.msg",
               "size": 307,
-              "sha256": "83aabb22cdde0fd0579d5cf5f39af9ccae4639465286c1c109d8bbfa1ec6bc62"
+              "sha256": "371b06c672c25ea23513902e5f7aff889f61c0f213ffe1ddceb065b7df26c5ff"
             },
             {
               "package_path": "payloads/windows-x86_64/asl/ioerrs.msg",
               "install_path": "asl/ioerrs.msg",
               "size": 2862,
-              "sha256": "1f5e97d35696caf34eef35923b8280cb1ff483772cec0d60c765d3af13c09097"
+              "sha256": "c6428057293bd2542a4c47c0fe85ea8346b9905588e80ccab7226035ba0080dd"
             }
           ]
         },
@@ -130,47 +144,43 @@
             {
               "package_path": "payloads/linux-x86_64/asl/asl",
               "install_path": "asl/asl",
-              "size": 2372248,
-              "sha256": "be2ffab7be719e9c2b5452655be8ce40ad9888d04084e397687f23b6f8b85f1c",
+              "size": 3294184,
+              "sha256": "cd56b49aaf110ad6c4c6a5c74e853f4976aa46cac0e12aa57ac833d3459804e3",
               "executable": true
             },
             {
               "package_path": "payloads/linux-x86_64/asl/as.msg",
               "install_path": "asl/as.msg",
               "size": 26005,
-              "sha256": "18542d756467b567cf7713d4ee95081d784d8cf11575a7bb57516fc2c5c1c594"
+              "sha256": "c359ab2b8b894bcd6bf912f0e36839c11141d7f70d560b44823ab25dc0124f37"
             },
             {
               "package_path": "payloads/linux-x86_64/asl/cmdarg.msg",
               "install_path": "asl/cmdarg.msg",
               "size": 307,
-              "sha256": "aaa93507412473a546276128bd58a01ac9119979e80b1ef79b3671b602eade0e"
+              "sha256": "371b06c672c25ea23513902e5f7aff889f61c0f213ffe1ddceb065b7df26c5ff"
             },
             {
               "package_path": "payloads/linux-x86_64/asl/ioerrs.msg",
               "install_path": "asl/ioerrs.msg",
               "size": 2862,
-              "sha256": "5da942aa76c3ed784d967ba795543d87d3a52b80d5812737e12f18f3b2c94fba"
+              "sha256": "c6428057293bd2542a4c47c0fe85ea8346b9905588e80ccab7226035ba0080dd"
             }
           ]
         }
       }
     },
     "p2bin": {
-      "name": "Clownacy p2bin",
+      "name": "p2bin",
       "version": "e26d8aa8c43e285bac5e3b7df3be1adae515994f",
       "license": "ISC",
       "license_file": "licenses/p2bin-ISC.txt",
       "license_size": 636,
       "license_sha256": "66cda143ae32f2a947e5d16bb1d40b557d630d92965010237c473a195187d550",
       "source": "https://github.com/Clownacy/p2bin/tree/e26d8aa8c43e285bac5e3b7df3be1adae515994f",
+      "build": "tools/toolchains/build.sh",
       "hosts": {
         "windows-x86_64": {
-          "binary_origin": {
-            "repository": "https://github.com/oranguthang/s1_improvements",
-            "commit": "da7457dae9ad2b5dc2147b04c347d81b0dafca8d",
-            "path": "build_tools/Windows-x86/p2bin.exe"
-          },
           "commands": {
             "p2bin": "p2bin/p2bin.exe"
           },
@@ -178,18 +188,13 @@
             {
               "package_path": "payloads/windows-x86_64/p2bin/p2bin.exe",
               "install_path": "p2bin/p2bin.exe",
-              "size": 28672,
-              "sha256": "1323430afdfa630ab56ce76f0286ccbb05a04566126411d4b7d673f2a08115eb",
+              "size": 33792,
+              "sha256": "b6b7db88a3ecccb26f61410fa0f14bee7eda3ddf62ee9335ca51ef11c0d73252",
               "executable": true
             }
           ]
         },
         "linux-x86_64": {
-          "binary_origin": {
-            "repository": "https://github.com/oranguthang/s1_improvements",
-            "commit": "1ce386fc63bcef58d53f87d51a2e8620ff24de9a",
-            "path": "build_tools/Linux-x86_64/p2bin"
-          },
           "commands": {
             "p2bin": "p2bin/p2bin"
           },
@@ -197,8 +202,8 @@
             {
               "package_path": "payloads/linux-x86_64/p2bin/p2bin",
               "install_path": "p2bin/p2bin",
-              "size": 31040,
-              "sha256": "969c1df15a15ef32bc25124093228dab3b81906d772f37fc873e00bb70a94459",
+              "size": 826088,
+              "sha256": "804baf51dc84f99c227afddb211b827bbe1d99fec94a61b444ed024e0dcc88be",
               "executable": true
             }
           ]

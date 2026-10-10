@@ -7,7 +7,7 @@ import io
 import math
 import struct
 import wave
-from typing import Mapping
+from typing import Mapping, Sequence
 
 from retrolarium_kit.core.authoring import AuthoringError
 from retrolarium_kit.core.midi import MidiError, parse_midi, tick_seconds
@@ -17,10 +17,6 @@ CODEC = "pacman.sound-streams.v1"
 NTSC_FRAME_RATE = 60.0988
 CPU_FREQUENCY = 1_789_773.0
 BASE_MIDI_NOTE = 45
-BASE_PERIODS = (
-    0x3F9, 0x3C0, 0x38A, 0x357, 0x327, 0x2FA,
-    0x2CF, 0x2A7, 0x281, 0x25D, 0x23B, 0x21B,
-)
 DUTY_CYCLES = (0.125, 0.25, 0.5, 0.75)
 
 
@@ -391,9 +387,17 @@ def import_midi_commands(
     }
 
 
-def note_frequency(value: int) -> float:
+def note_periods(pairs: Sequence[int]) -> tuple[int, ...]:
+    """The engine's twelve base periods, from its table of high, low byte
+    pairs (the project's render-tables resource reads it from the game)."""
+    if len(pairs) != 24:
+        raise PacmanSoundError("the note period table holds twelve high, low byte pairs")
+    return tuple((pairs[index] << 8) | pairs[index + 1] for index in range(0, 24, 2))
+
+
+def note_frequency(value: int, periods: Sequence[int]) -> float:
     value = _integer(value, "sound note", maximum=0xBF)
-    period = BASE_PERIODS[value >> 4] >> (value & 0x0F)
+    period = periods[value >> 4] >> (value & 0x0F)
     return CPU_FREQUENCY / (16.0 * (period + 1))
 
 
@@ -408,7 +412,8 @@ ENVELOPE_RATE = 240.0
 LENGTH_RATE = 120.0
 
 
-def render_stream_pcm(stream: Mapping[str, object], sample_rate: int = 44_100) -> bytes:
+def render_stream_pcm(stream: Mapping[str, object], sample_rate: int = 44_100,
+                      *, periods: Sequence[int]) -> bytes:
     """A square channel as the engine drives it: the prologue's $4000 byte
     (duty, constant volume or envelope, halt) and $4003 byte (length load);
     each note rewrites the quad, restarting the envelope and length."""
@@ -436,7 +441,7 @@ def render_stream_pcm(stream: Mapping[str, object], sample_rate: int = 44_100) -
                 break
             continue
         if kind == "note":
-            frequency = note_frequency(int(command["value"]))
+            frequency = note_frequency(int(command["value"]), periods)
             envelope = 15
             divider = register0 & 0x0F
             length = LENGTH_TABLE[control >> 3]
@@ -483,10 +488,10 @@ def mix_pcm(parts: list[bytes]) -> bytes:
 
 
 def render_stream_wav(stream: Mapping[str, object], sample_rate: int = 44_100,
-                      *, also: tuple[Mapping[str, object], ...] = ()) -> bytes:
-    pcm = render_stream_pcm(stream, sample_rate)
+                      *, periods: Sequence[int], also: tuple[Mapping[str, object], ...] = ()) -> bytes:
+    pcm = render_stream_pcm(stream, sample_rate, periods=periods)
     if also:
-        pcm = mix_pcm([pcm, *(render_stream_pcm(other, sample_rate) for other in also)])
+        pcm = mix_pcm([pcm, *(render_stream_pcm(other, sample_rate, periods=periods) for other in also)])
     output = io.BytesIO()
     with wave.open(output, "wb") as wav:
         wav.setnchannels(1)

@@ -14,14 +14,18 @@ import re
 SOURCE = "game/bonus/objects.s"
 GROUPS = (
     ("seesaw", "Obj_BonusSeesaw:", "Obj_BonusTiger:"),
-    ("tiger", "Obj_BonusTiger:", "Obj_BonusHeldChick:"),
+    ("tiger", "Obj_BonusTiger:", "Obj_BonusNet:"),
     ("chick_spawn", "BonusChick_StateWait:", "BonusChick_StateFly:"),
 )
+# Labels a source from before the 2026-10 object names uses instead.
+LEGACY_LABELS = {"Obj_BonusNet:": "Obj_BonusHeldChick:"}
 X_WORD = re.compile(r"(?m)^\s*move\.w\s+#\$([0-9A-Fa-f]+),\$30\(a0\)\s*$")
 Y_WORD = re.compile(r"(?m)^\s*move\.w\s+#\$([0-9A-Fa-f]+),\$24\(a0\)\s*$")
 
 
 def _group(source: str, start: str, end: str) -> str:
+    if end not in source:
+        end = LEGACY_LABELS.get(end, end)
     if source.count(start) != 1 or source.count(end) != 1:
         raise ValueError(f"ambiguous Flicky bonus source boundary: {start}")
     begin = source.index(start)

@@ -18,6 +18,7 @@ from retrolarium_kit.games.pacman.sound import (
     NTSC_FRAME_RATE as PACMAN_NTSC_FRAME_RATE,
     encode_sound_bundle,
     import_midi_commands,
+    note_periods,
     render_stream_wav,
     sound_byte_to_midi,
     sound_summary,
@@ -333,7 +334,12 @@ def render_document_wav(
 
     item = _slot(resource, slot)
     stream = slot_stream(slot)
+    tables = next((item for item in document.get("resources", [])
+                   if isinstance(item, dict) and item.get("id") == "render-tables"), None)
+    if tables is None:
+        raise AuthoringError("the project lacks the game's sound tables; upgrade it with this kit")
     payload = render_stream_wav(stream, sample_rate,
+                                periods=note_periods(tables["tables"]["note_period_base_pairs"]),
                                 also=tuple(slot_stream(number) for number in mix_slots))
     _atomic_write(output_path, payload)
     return {

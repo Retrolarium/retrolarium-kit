@@ -16,8 +16,8 @@ import re
 
 DEMO_SOURCE = "game/screens/attract_mode.s"
 DEMO_COUNT = 4
-# Demo_RoundIndexTable: the round each demo plays, 1-based.
-DEMO_ROUNDS = (1, 10, 20, 24)
+# The table of the round each demo plays, 1-based.
+ROUND_TABLE_LABEL = "Demo_RoundIndexTable:"
 BUTTONS = (("A", 0x40), ("B", 0x10), ("C", 0x20), ("START", 0x80),
            ("UP", 0x01), ("DOWN", 0x02), ("LEFT", 0x04), ("RIGHT", 0x08))
 FIRST_LABEL = "Demo_InputStream0:"
@@ -122,9 +122,23 @@ def encode_steps(steps: list[dict[str, object]]) -> bytes:
     return bytes(result)
 
 
+def demo_rounds(source: str) -> tuple[int, ...]:
+    """The round each demo plays, from the source's round table."""
+    for line in source.splitlines():
+        if line.startswith(ROUND_TABLE_LABEL):
+            data = DATA_RE.match(line[len(ROUND_TABLE_LABEL):])
+            if data and data.group(1).lower() == "b":
+                rounds = tuple(_number(token) for token in data.group(2).split(","))
+                if len(rounds) == DEMO_COUNT:
+                    return rounds
+            break
+    raise ValueError(f"the Flicky source has no {DEMO_COUNT}-byte {ROUND_TABLE_LABEL[:-1]}")
+
+
 def export_attract_demos(source_root: Path) -> list[dict[str, object]]:
     source = (source_root / "src" / DEMO_SOURCE).read_text(encoding="utf-8")
-    return [{"id": f"demo{index}", "source": DEMO_SOURCE, "round": DEMO_ROUNDS[index],
+    rounds = demo_rounds(source)
+    return [{"id": f"demo{index}", "source": DEMO_SOURCE, "round": rounds[index],
              "baseline_bytes": list(stream), "steps": decode_steps(stream)}
             for index, stream in enumerate(_streams(source, source_root))]
 

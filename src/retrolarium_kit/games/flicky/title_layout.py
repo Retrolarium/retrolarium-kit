@@ -1,9 +1,9 @@
 """Title screen sprite positions from the pinned Flicky source snapshot.
 
-Title_Init places six static sprites (the logo pieces) from
-Title_StaticXTable and the four cast birds from Title_BirdXTable. Each
-table is x, y word pairs that run on through the next label
-(Title_StaticYTable / Title_BirdYTable), so a group keeps both labels and
+Title_Init places the six logo letters from Title_LogoLetterXTable and
+the four cast birds from Title_BirdXTable. Each table is x, y word pairs
+that run on through the next label (Title_LogoLetterYTable /
+Title_BirdYTable), so a group keeps both labels and
 its word count. Positions are VDP sprite coordinates ($80 is the screen's
 left or top edge).
 """
@@ -16,9 +16,12 @@ import re
 
 SOURCE = "game/screens/front_end.s"
 GROUPS = (
-    ("statics", "Title_StaticXTable", "Title_StaticYTable", 6),
+    ("statics", "Title_LogoLetterXTable", "Title_LogoLetterYTable", 6),
     ("cast", "Title_BirdXTable", "Title_BirdYTable", 4),
 )
+# Labels a source from before the 2026-10 object names uses instead.
+LEGACY_LABELS = {"Title_LogoLetterXTable": "Title_StaticXTable",
+                 "Title_LogoLetterYTable": "Title_StaticYTable"}
 LINE_RE = r"(?m)^{label}:(?P<pad>[ \t]+)dc\.w(?P<gap>[ \t]+)(?P<words>[^;\r\n]*?)(?P<tail>[ \t]*(?:;[^\r\n]*)?)$"
 
 
@@ -32,6 +35,8 @@ def _number(token: str) -> int:
 
 
 def _line(source: str, label: str) -> re.Match[str]:
+    if f"{label}:" not in source:
+        label = LEGACY_LABELS.get(label, label)
     matches = list(re.finditer(LINE_RE.format(label=re.escape(label)), source))
     if len(matches) != 1:
         raise ValueError(f"Flicky title table {label} is not one dc.w line")

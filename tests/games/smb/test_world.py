@@ -384,7 +384,7 @@ class SmbWorldTests(unittest.TestCase):
             list(ann_resources),
             [
                 "demo", "authoring-bundle", "world-normal", "levels-normal",
-                "world-extended", "levels-extended", "background-metatiles",
+                "world-extended", "levels-extended", "level-tables", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
                 "game-screen-packets", "warp-zone-screen", "title-screen",
                 "music", "swim-stomp-envelope", "sfx-tables", "fds-music",
@@ -529,7 +529,7 @@ class SmbWorldTests(unittest.TestCase):
             list(smb2_resources),
             [
                 "demo", "authoring-bundle", "world-normal", "levels-normal",
-                "world-hard", "levels-hard", "background-metatiles",
+                "world-hard", "levels-hard", "level-tables", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
                 "game-screen-packets", "warp-zone-screen", "title-screen",
                 "music", "swim-stomp-envelope", "sfx-tables", "fds-music",
@@ -694,7 +694,7 @@ class SmbWorldTests(unittest.TestCase):
             details["ann_fds"]["resources"],
             [
                 "demo", "authoring-bundle", "world-normal", "levels-normal",
-                "world-extended", "levels-extended", "background-metatiles",
+                "world-extended", "levels-extended", "level-tables", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
                 "game-screen-packets", "warp-zone-screen", "title-screen",
                 "music", "swim-stomp-envelope", "sfx-tables", "fds-music",
@@ -709,7 +709,7 @@ class SmbWorldTests(unittest.TestCase):
             details["smb2_jp_fds"]["resources"],
             [
                 "demo", "authoring-bundle", "world-normal", "levels-normal",
-                "world-hard", "levels-hard", "background-metatiles",
+                "world-hard", "levels-hard", "level-tables", "background-metatiles",
                 "area-palette-packets", "player-palettes", "player-frames",
                 "game-screen-packets", "warp-zone-screen", "title-screen",
                 "music", "swim-stomp-envelope", "sfx-tables", "fds-music",

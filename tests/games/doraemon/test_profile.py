@@ -100,7 +100,7 @@ ROUTING = (  # bank, address, the requests' effect slots
 )
 BEHAVIOR_FILE_OFFSET = 16 + 2 * 0x8000 + (0xD9CC - 0x8000)
 BEHAVIOR_SIZES = (40, 119, 248, 21, 96, 55, 248, 1, 14, 1, 34, 1, 130, 18, 18, 18)
-TABLE_CODECS = ("nes.record-table.v1", "doraemon.world3-behavior.v1")
+TABLE_CODECS = ("nes.record-table.v1", "doraemon.world3-behavior.v1", "nes.byte-tables.v1")
 
 
 def with_world2_screens(image: bytes) -> bytes:
