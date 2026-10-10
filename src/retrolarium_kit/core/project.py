@@ -23,7 +23,42 @@ class ProjectError(RuntimeError):
     """A declared project operation could not be completed."""
 
 
-MAME_NES_MACHINES = {"nes", "nespal", "famicom", "fds"}
+# Vs. System boards MAME runs, by machine name: the ROM chips the arcade
+# driver loads, as file names in the order PRG and CHR fill them (8 KiB each),
+# and the palette ROM of the board's RGB PPU.
+VS_MACHINES: dict[str, dict[str, Any]] = {
+    "suprmrio": {
+        "name": "Vs. Super Mario Bros. (set SM4-4 E)",
+        "prg": ("mds-sm4-4__1dor6d_e.1d or 6d", "mds-sm4-4__1cor6c_e.1c or 6c",
+                "mds-sm4-4__1bor6b_e.1b or 6b", "mds-sm4-4__1aor6a_e.1a or 6a"),
+        "chr": ("mds-sm4-4__2bor8b_e.2b or 8b", "mds-sm4-4__2aor8a_e.2a or 8a"),
+        "palette": "rp2c04-0004",
+        "revision": ("smb1", "vs_smb"),
+    },
+}
+VS_CHIP_SIZE = 0x2000
+
+
+def vs_machine(game: str, revision: str) -> str | None:
+    """The MAME Vs. System machine a game revision runs on, if it is one."""
+    return next((name for name, board in VS_MACHINES.items()
+                 if board["revision"] == (game, revision)), None)
+# The RGB PPUs' palette ROMs: 64 colours of three 3-bit DAC levels (red,
+# green, blue), as the NESdev wiki's "PPU palettes" page tabulates them; MAME
+# loads each as a 192-byte file, one level per byte. The kit builds the file
+# from the table (SHA-1 below, the checksum MAME expects).
+VS_PALETTES: dict[str, tuple[str, str]] = {
+    "rp2c04-0004": (
+        "430,326,044,660,000,755,014,630,555,310,070,003,764,770,040,572,"
+        "737,200,027,747,000,222,510,740,653,053,447,140,403,000,473,357,"
+        "503,031,420,006,407,507,333,704,022,666,036,020,111,773,444,707,"
+        "757,777,320,700,760,276,777,467,000,750,637,567,360,657,077,120",
+        "0f9090225eb1f08ae5072d40af3e95547cbce05f",
+    ),
+}
+MAME_VS_START = Path(__file__).with_name("mame_vs_start.lua")
+
+MAME_NES_MACHINES = {"nes", "nespal", "famicom", "fds", *VS_MACHINES}
 MAME_MEGADRIVE_MACHINES = {"genesis", "megadriv"}
 MAME_SNES_MACHINES = {"snes", "snespal"}
 MAME_MACHINES = {
@@ -594,21 +629,25 @@ def launch_image_plan(
             image, _rest = parse_ines_prefix(rom.read_bytes(), rom)
         except InesError as exc:
             raise ProjectError(f"{rom.name}: {exc}") from exc
-        if image.mapper == 99:
+        vs = image.mapper == 99
+        if vs != (selected_machine in VS_MACHINES):
             raise ProjectError(
-                "Vs. System games run on MAME's arcade Vs. driver, which the "
-                "studio's MAME does not include."
+                f"{rom.name}: a Vs. System image runs on its arcade machine "
+                f"({', '.join(sorted(VS_MACHINES))}), any other image on a console"
             )
+        if vs:
+            rom_folder = _vs_rom_set(image, rom, selected_machine)
     elif platform == "megadrive":
         load_megadrive(rom)
     elif platform == "snes":
         load_snes(rom)
     else:
         raise ProjectError(f"unsupported launch platform: {platform}")
+    vs = platform == "nes" and not disk and selected_machine in VS_MACHINES
+    medium = ["-rompath", str(rom_folder)] if vs else ["-flop" if disk else "-cart", str(rom)]
     arguments = [
         selected_machine,
-        "-flop" if disk else "-cart",
-        str(rom),
+        *medium,
         "-skip_gameinfo",
         "-window",
         "-nomouse",
@@ -624,6 +663,9 @@ def launch_image_plan(
         arguments.extend(["-attach_window", attach_window])
     if disk:
         arguments.extend(bios_arguments)
+    if vs and interactive:
+        arguments.extend(["-seconds_to_run", "299", "-autoboot_delay", "0",
+                          "-autoboot_script", str(MAME_VS_START)])
     plan = {
         "schema": "retrolarium.process-spec",
         "schema_version": 1,
@@ -641,7 +683,40 @@ def launch_image_plan(
     }
     if disk:
         plan["fds_bios"] = bios
+    if vs:
+        plan["vs_rom_set"] = str(rom_folder / selected_machine)
     return plan
+
+
+def _vs_rom_set(image: Any, rom: Path, machine: str) -> Path:
+    """Write a Vs. System build as the ROM chips MAME's machine loads, into
+    mame-roms/<machine>/ beside it, with the board's palette ROM; return the
+    folder to pass as -rompath. An edited build's chips do not match MAME's
+    checksums; the launch's start script gets past MAME's warning."""
+    board = VS_MACHINES[machine]
+    expected = (len(board["prg"]) + len(board["chr"])) * VS_CHIP_SIZE
+    chips = image.prg + image.chr
+    if len(image.prg) != len(board["prg"]) * VS_CHIP_SIZE or len(chips) != expected:
+        raise ProjectError(
+            f"{rom.name}: {len(image.prg)} bytes of PRG and {len(image.chr)} of CHR "
+            f"do not fill the chips of {machine} ({board['name']})"
+        )
+    levels, digest = VS_PALETTES[board["palette"]]
+    palette = bytes(int(level) for colour in levels.split(",") for level in colour)
+    if hashlib.sha1(palette).hexdigest() != digest:
+        raise ProjectError(f"the kit's {board['palette']} palette table is damaged")
+    root = rom.parent / "mame-roms"
+    if ";" in str(root):
+        raise ProjectError(f"MAME cannot use a folder with ';' in its name: {root}")
+    folder = root / machine
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        for index, name in enumerate((*board["prg"], *board["chr"])):
+            (folder / name).write_bytes(chips[index * VS_CHIP_SIZE:(index + 1) * VS_CHIP_SIZE])
+        (folder / f"{board['palette']}.pal").write_bytes(palette)
+    except OSError as exc:
+        raise ProjectError(f"cannot write the {machine} ROM set: {exc}") from exc
+    return root
 
 
 def launch_image_smoke(

@@ -48,7 +48,9 @@
           "world1-enemy-properties", "world1-descriptors", "world3-objects",
           "world2-secret-screens", "world3-schedule",
           "world1-metasprites", "world3-metasprites", "world2-enemy-metasprites",
-          "world2-screens", "world2-stage", "world2-branches", "world2-chapters"
+          "world2-screens", "world2-stage", "world2-branches", "world2-chapters",
+          "world1-underground-rooms", "world1-city-returns", "world1-weapon-sounds", "world1-weapon-shots", "world2-enemy-states", "world3-rooms", "world3-type05-motion", "world3-type0c-formation", "world3-type0a-formation", "world3-type08-formation",
+          "world1-effect-routing", "world2-effect-routing", "world3-effect-routing", "shell-effect-routing", "world3-behavior"
         ]
       }
     },
@@ -430,6 +432,81 @@
       "id": "world2-chapters", "kind": "chapter-palettes",
       "codec": "doraemon.world2-chapters.v1", "capacity_policy": "fixed",
       "parameters": {"file_offset": 35766, "size": 6}
+    },
+    {
+      "id": "world1-underground-rooms", "kind": "objects",
+      "codec": "nes.record-table.v1", "capacity_policy": "fixed",
+      "parameters": {"records": 9, "record_label": "Underground room {n}", "tables": [{"file_offset": 20991, "fields": [{"name": "camera_tile_x", "label": "Camera tile X"}, {"name": "camera_tile_y", "label": "Camera tile Y"}, {"name": "axis_scroll_limit", "label": "Scroll limit"}, {"name": "axis_scroll_start", "label": "Scroll start"}]}, {"file_offset": 21027, "fields": [{"name": "player_x", "label": "Entry X"}, {"name": "player_y", "label": "Entry Y"}, {"name": "negative_axis_city_return", "label": "Return going back", "maximum": 8, "none": 255}, {"name": "positive_axis_city_return", "label": "Return going on", "maximum": 8, "none": 255}]}]}
+    },
+    {
+      "id": "world1-city-returns", "kind": "objects",
+      "codec": "nes.record-table.v1", "capacity_policy": "fixed",
+      "parameters": {"records": 9, "record_label": "City return {i}", "tables": [{"file_offset": 21390, "fields": [{"name": "camera_tile_x", "label": "Camera tile X"}, {"name": "camera_tile_y", "label": "Camera tile Y"}, {"name": "manhole_x", "label": "Manhole X"}, {"name": "manhole_y", "label": "Manhole Y"}]}]}
+    },
+    {
+      "id": "world1-weapon-sounds", "kind": "objects",
+      "codec": "nes.record-table.v1", "capacity_policy": "fixed",
+      "parameters": {"records": 3, "record_label": "Weapon level {n}", "tables": [{"file_offset": 7315, "fields": [{"name": "sound_effect", "label": "Sound effect"}]}]}
+    },
+    {
+      "id": "world1-weapon-shots", "kind": "objects",
+      "codec": "nes.record-table.v1", "capacity_policy": "fixed",
+      "parameters": {"records": 12, "record_labels": ["Level 1 · down", "Level 1 · up", "Level 1 · left", "Level 1 · right", "Level 2 · down", "Level 2 · up", "Level 2 · left", "Level 2 · right", "Level 3 · down", "Level 3 · up", "Level 3 · left", "Level 3 · right"], "tables": [{"file_offset": 7318, "fields": [{"name": "x_offset", "label": "X offset"}, {"name": "y_offset", "label": "Y offset"}, {"name": "metasprite", "label": "Metasprite"}, {"name": "render_flags", "label": "Render flags"}]}]}
+    },
+    {
+      "id": "world2-enemy-states", "kind": "objects",
+      "codec": "nes.record-table.v1", "capacity_policy": "fixed",
+      "parameters": {"records": 21, "record_label": "State {hex}", "tables": [{"file_offset": 42253, "fields": [{"name": "attack_period", "label": "Attack period"}]}, {"file_offset": 42273, "fields": [{"name": "damage_threshold", "label": "Damage threshold", "locked": [0]}]}, {"file_offset": 42409, "fields": [{"name": "score_reward", "label": "Score reward", "locked": [0]}]}]}
+    },
+    {
+      "id": "world3-rooms", "kind": "objects",
+      "codec": "nes.record-table.v1", "capacity_policy": "fixed",
+      "parameters": {"records": 64, "record_label": "Room {i}", "tables": [{"file_offset": 69624, "fields": [{"name": "type03_metasprite", "label": "Type $03 metasprite", "choices": [{"value": 0, "label": "Normal"}, {"value": 1, "label": "Alternate"}]}]}, {"file_offset": 70524, "fields": [{"name": "type04_tracking", "label": "Type $04 tracks", "choices": [{"value": 0, "label": "No"}, {"value": 1, "label": "Yes"}]}]}, {"file_offset": 71008, "fields": [{"name": "type05_blocked", "label": "Type $05 stays", "choices": [{"value": 0, "label": "No"}, {"value": 1, "label": "Yes"}]}]}]}
+    },
+    {
+      "id": "world3-type05-motion", "kind": "objects",
+      "codec": "nes.record-table.v1", "capacity_policy": "fixed",
+      "parameters": {"records": 4, "record_label": "Held direction {n}", "tables": [{"file_offset": 70647, "columns": true, "fields": [{"name": "delta_x", "label": "Step X", "signed": true}, {"name": "delta_y", "label": "Step Y", "signed": true}]}]}
+    },
+    {
+      "id": "world3-type0c-formation", "kind": "objects",
+      "codec": "nes.record-table.v1", "capacity_policy": "fixed",
+      "parameters": {"records": 4, "record_label": "Member {n}", "tables": [{"file_offset": 69892, "columns": true, "fields": [{"name": "state", "label": "State"}, {"name": "x", "label": "X"}, {"name": "y", "label": "Y"}, {"name": "type", "label": "Type"}]}]}
+    },
+    {
+      "id": "world3-type0a-formation", "kind": "objects",
+      "codec": "nes.record-table.v1", "capacity_policy": "fixed",
+      "parameters": {"records": 8, "record_label": "Member {n}", "tables": [{"file_offset": 76924, "columns": true, "fields": [{"name": "state", "label": "State"}, {"name": "x", "label": "X"}, {"name": "y", "label": "Y"}, {"name": "type", "label": "Type"}]}]}
+    },
+    {
+      "id": "world3-type08-formation", "kind": "objects",
+      "codec": "nes.record-table.v1", "capacity_policy": "fixed",
+      "parameters": {"records": 8, "record_label": "Member {n}", "tables": [{"file_offset": 77065, "columns": true, "fields": [{"name": "state", "label": "State"}, {"name": "x", "label": "X"}, {"name": "y", "label": "Y"}, {"name": "type", "label": "Type"}, {"name": "frame_counter", "label": "Frame counter"}]}]}
+    },
+    {
+      "id": "world1-effect-routing", "kind": "audio-routing",
+      "codec": "nes.record-table.v1", "capacity_policy": "fixed",
+      "parameters": {"records": 26, "record_label": "Request {hex}", "tables": [{"file_offset": 25382, "fields": [{"name": "effect", "label": "Plays", "choices": [{"value": 0, "label": "Reset"}, {"value": 4, "label": "Pulse 1 alternating burst"}, {"value": 8, "label": "Pulse 1 melody"}, {"value": 12, "label": "Pulse 1 alternator 4"}, {"value": 16, "label": "Pulse 1 alternator 3"}, {"value": 20, "label": "Pulse 1 alternator 2"}, {"value": 24, "label": "Pulse 1 alternator 1"}, {"value": 28, "label": "Tonal sequence on all channels"}, {"value": 32, "label": "Pulse 2 pitch run, wide"}, {"value": 36, "label": "Pulse 2 fade"}, {"value": 40, "label": "Pulse 2 pitch run"}, {"value": 44, "label": "Pulse 2 three steps"}, {"value": 48, "label": "Pulse 2 two tones"}, {"value": 52, "label": "Pulse 1 tone, holds the triangle"}, {"value": 56, "label": "Pulse 1 tone"}, {"value": 60, "label": "Noise ramp"}, {"value": 64, "label": "Pulse 2 pitch run, long"}, {"value": 68, "label": "Pulse 2 pitch run, short"}, {"value": 72, "label": "Triangle rise"}, {"value": 76, "label": "Pulse 2 tone A"}, {"value": 80, "label": "Pulse 2 tone B"}, {"value": 84, "label": "Pulse 2 tone C"}, {"value": 88, "label": "Noise sweep, slow"}, {"value": 92, "label": "Noise sweep, fast"}, {"value": 96, "label": "Noise swell"}, {"value": 100, "label": "Triangle and noise burst"}], "unique": true, "locked": [0]}]}]}
+    },
+    {
+      "id": "world2-effect-routing", "kind": "audio-routing",
+      "codec": "nes.record-table.v1", "capacity_policy": "fixed",
+      "parameters": {"records": 15, "record_label": "Request {hex}", "tables": [{"file_offset": 43035, "fields": [{"name": "effect", "label": "Plays", "choices": [{"value": 0, "label": "Reset"}, {"value": 4, "label": "Pulse 1 alternating burst"}, {"value": 8, "label": "Pulse 1 melody"}, {"value": 12, "label": "Tonal sequence on all channels"}, {"value": 16, "label": "Pulse 2 pitch run"}, {"value": 20, "label": "Pulse 2 three steps"}, {"value": 24, "label": "Pulse 1 tone, holds the triangle"}, {"value": 28, "label": "Pulse 2 pitch run, long"}, {"value": 32, "label": "Pulse 2 pitch run, short"}, {"value": 36, "label": "Triangle rise"}, {"value": 40, "label": "Pulse 2 tone A"}, {"value": 44, "label": "Pulse 2 tone B"}, {"value": 48, "label": "Pulse 2 tone C"}, {"value": 52, "label": "Noise ramp"}, {"value": 56, "label": "Triangle and noise burst"}], "unique": true, "locked": [0]}]}]}
+    },
+    {
+      "id": "world3-effect-routing", "kind": "audio-routing",
+      "codec": "nes.record-table.v1", "capacity_policy": "fixed",
+      "parameters": {"records": 26, "record_label": "Request {hex}", "tables": [{"file_offset": 81438, "fields": [{"name": "effect", "label": "Plays", "choices": [{"value": 0, "label": "Reset"}, {"value": 4, "label": "Pulse 1 alternating burst"}, {"value": 8, "label": "Pulse 1 melody"}, {"value": 12, "label": "Pulse 1 alternator 4"}, {"value": 16, "label": "Pulse 1 alternator 3"}, {"value": 20, "label": "Pulse 1 alternator 2"}, {"value": 24, "label": "Pulse 1 alternator 1"}, {"value": 28, "label": "Tonal sequence on all channels"}, {"value": 32, "label": "Pulse 2 pitch run, wide"}, {"value": 36, "label": "Pulse 2 fade"}, {"value": 40, "label": "Pulse 2 pitch run"}, {"value": 44, "label": "Pulse 2 three steps"}, {"value": 48, "label": "Pulse 2 two tones"}, {"value": 52, "label": "Pulse 1 tone, holds the triangle"}, {"value": 56, "label": "Pulse 1 tone"}, {"value": 60, "label": "Noise ramp"}, {"value": 64, "label": "Pulse 2 pitch run, long"}, {"value": 68, "label": "Pulse 2 pitch run, short"}, {"value": 72, "label": "Triangle rise"}, {"value": 76, "label": "Pulse 2 tone A"}, {"value": 80, "label": "Pulse 2 tone B"}, {"value": 84, "label": "Pulse 2 tone C"}, {"value": 88, "label": "Noise sweep, slow"}, {"value": 92, "label": "Noise sweep, fast"}, {"value": 96, "label": "Noise swell"}, {"value": 100, "label": "Triangle and noise burst"}], "unique": true, "locked": [0]}]}]}
+    },
+    {
+      "id": "shell-effect-routing", "kind": "audio-routing",
+      "codec": "nes.record-table.v1", "capacity_policy": "fixed",
+      "parameters": {"records": 26, "record_label": "Request {hex}", "tables": [{"file_offset": 104340, "fields": [{"name": "effect", "label": "Plays", "choices": [{"value": 0, "label": "Reset"}, {"value": 4, "label": "Pulse 1 alternating burst"}, {"value": 8, "label": "Pulse 1 melody"}, {"value": 12, "label": "Pulse pair and noise tail"}, {"value": 16, "label": "Pulse 1 and falling noise"}, {"value": 20, "label": "Pulse 1 and rising noise"}, {"value": 24, "label": "Pulse 1 alternator 1"}, {"value": 28, "label": "Tonal sequence on all channels"}, {"value": 32, "label": "Pulse 2 pitch run, wide"}, {"value": 36, "label": "Pulse 2 fade"}, {"value": 40, "label": "Pulse 2 pitch run"}, {"value": 44, "label": "Pulse 2 three steps"}, {"value": 48, "label": "Pulse 2 two tones"}, {"value": 52, "label": "Pulse 1 tone, holds the triangle"}, {"value": 56, "label": "Pulse 1 tone"}, {"value": 60, "label": "Noise ramp"}, {"value": 64, "label": "Pulse 2 pitch run, long"}, {"value": 68, "label": "Pulse 2 pitch run, short"}, {"value": 72, "label": "Triangle rise"}, {"value": 76, "label": "Pulse 2 tone A"}, {"value": 80, "label": "Pulse 2 tone B"}, {"value": 84, "label": "Pulse 2 tone C"}, {"value": 88, "label": "Noise sweep, slow"}, {"value": 92, "label": "Noise sweep, fast"}, {"value": 96, "label": "Noise swell"}, {"value": 100, "label": "Triangle and noise burst"}], "unique": true, "locked": [0]}]}]}
+    },
+    {
+      "id": "world3-behavior", "kind": "behavior",
+      "codec": "doraemon.world3-behavior.v1", "capacity_policy": "fixed",
+      "parameters": {"file_offset": 88540, "size": 1062, "stream_sizes": [40, 119, 248, 21, 96, 55, 248, 1, 14, 1, 34, 1, 130, 18, 18, 18]}
     },
     {
       "id": "demo", "kind": "demo",

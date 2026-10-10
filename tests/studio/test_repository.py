@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from retrolarium_kit.studio import repository
 from retrolarium_kit.studio.repository import (
-    GameRepositoryError, check_repository, fetch_repository, identify_rom, ips_patch, load_descriptor, open_rom, prepare_revision,
+    GameRepositoryError, check_release, check_repository, fetch_repository, identify_rom, ips_patch, load_descriptor, open_rom, prepare_revision,
     profile_views, reset_revision, revision_statuses,
 )
 from retrolarium_kit.studio.project import build_studio_project, load_studio_project, verify_studio_project
@@ -193,6 +193,24 @@ class DescriptorTests(unittest.TestCase):
                 self.assertRaises(GameRepositoryError):
             load_descriptor(self.root / "pacman.rlj")
 
+    def test_a_newer_kit_adds_its_resources_and_keeps_edits(self) -> None:
+        ready = prepare_revision(self.descriptor, "japan-v10", rom=V10)
+        bundle_path = self.root / "hack" / "japan-v10" / "resources.json"
+        bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+        palette = next(r for r in bundle["resources"] if r["id"] == "round-gameplay")
+        palette["values"][1] = (palette["values"][1] + 1) % 0x40
+        # As an older kit left them: one resource fewer, older originals.
+        dropped = bundle["resources"].pop()
+        bundle_path.write_text(json.dumps(bundle), encoding="utf-8")
+        stamp = Path(ready["project"]).parent / "original" / ".kit-extraction"
+        stamp.write_text("0.0.0 old\n", encoding="utf-8")
+        prepare_revision(self.descriptor, "japan-v10")
+        upgraded = json.loads(bundle_path.read_text(encoding="utf-8"))
+        self.assertEqual(dropped["id"], upgraded["resources"][-1]["id"])
+        self.assertEqual(palette, next(r for r in upgraded["resources"] if r["id"] == "round-gameplay"))
+        self.assertNotEqual("0.0.0 old\n", stamp.read_text(encoding="utf-8"))
+        self.assertTrue(revision_statuses(self.descriptor)["revisions"][0]["edited"])
+
     def test_check_builds_every_revision_in_a_copy(self) -> None:
         shutil.copyfile(V10, self.root / "pacman10.nes")
         shutil.copyfile(V11, self.root / "pacman11.nes")
@@ -216,6 +234,98 @@ class DescriptorTests(unittest.TestCase):
         (self.root / "pacman.rlj").write_text(DESCRIPTOR + '\n[workspace]\nlayout = "auto"\n', encoding="utf-8")
         with self.assertRaisesRegex(GameRepositoryError, "views come from the kit"):
             load_descriptor(self.root / "pacman.rlj")
+
+    def built(self, build: str) -> None:
+        (self.root / "pacman.rlj").write_text(DESCRIPTOR + BUILT + build, encoding="utf-8")
+        self.descriptor = load_descriptor(self.root / "pacman.rlj")
+
+    def test_a_built_revision_is_made_from_its_base_rom(self) -> None:
+        # A stand-in build: it copies the ROM it is given, which is not the
+        # expanded image, so the kit names the failed build.
+        (self.root / "copy.py").write_text(
+            "import shutil, sys\nshutil.copyfile(sys.argv[1], sys.argv[2])\n", encoding="utf-8")
+        self.built('from = "japan-v10"\ncommand = ["copy.py", "{rom}", "{output}"]\n')
+        expanded = revision_statuses(self.descriptor)["revisions"][2]
+        self.assertEqual(("missing", "japan-v10"), (expanded["rom_status"], expanded["built_from"]["id"]))
+        needs = prepare_revision(self.descriptor, "japan-v10-nrom256")
+        self.assertEqual(("needs-rom", "pacman10.nes"), (needs["status"], needs["rom"]))
+        # The ROM given for it is its base's, and lands where the base's goes.
+        self.assertEqual("rom-mismatch", prepare_revision(self.descriptor, "japan-v10-nrom256", rom=V11)["status"])
+        failed = prepare_revision(self.descriptor, "japan-v10-nrom256", rom=V10)
+        self.assertEqual(V10.read_bytes(), (self.root / "pacman10.nes").read_bytes())
+        self.assertEqual("build-failed", failed["status"])
+        # A stale image is built again when the revision opens.
+        self.assertTrue((self.root / "build/expanded/pacman.nes").is_file())
+        self.assertEqual("buildable", revision_statuses(self.descriptor)["revisions"][2]["rom_status"])
+
+    def test_a_built_revision_names_a_dumped_one(self) -> None:
+        for build, message in (('from = "japan-v12"\ncommand = ["x.py"]\n', "built from a dumped revision"),
+                               ('command = ["x.py"]\n', "build needs from and command")):
+            with self.subTest(build=build), self.assertRaisesRegex(GameRepositoryError, message):
+                self.built(build)
+
+    @unittest.skipUnless((PACMAN / "pacman.rlj").is_file(), "the Pac-Man repository is not available")
+    def test_the_repository_builds_its_expanded_revision(self) -> None:
+        report = check_repository(load_descriptor(PACMAN / "pacman.rlj"), ["japan-v10-nrom256"])
+        self.assertEqual(("ok", "ok"), (report["status"], report["revisions"][0]["status"]))
+
+
+class ReleaseManifestTests(unittest.TestCase):
+    """The Retrolarium part of a 3.0 manifest; no ROM is needed."""
+
+    def setUp(self) -> None:
+        from retrolarium_kit import __version__
+        self.version = __version__
+        self.root = Path(tempfile.mkdtemp())
+        (self.root / "pacman.rlj").write_text(DESCRIPTOR, encoding="utf-8")
+        self.descriptor = load_descriptor(self.root / "pacman.rlj")
+        self.manifest = self.root / "release.json"
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.root)
+
+    def check(self, **changes) -> dict:
+        document = {"release_line": "3.0", "release_kind": "retrolarium", "status": "development",
+                    "retrolarium": {"descriptor": "pacman.rlj", "profile": "pacman.v1",
+                                    "revisions": ["japan-v10", "japan-v11"],
+                                    "kit": {"version": None, "commit": None},
+                                    "removed_authoring": [{"path": "scripts/authoring/maze_studio.py",
+                                                           "replaced_by": "Levels view"}]}}
+        for key, value in changes.items():
+            target = document["retrolarium"] if key in document["retrolarium"] else document
+            target[key] = value
+        self.manifest.write_text(json.dumps(document), encoding="utf-8")
+        return check_release(self.descriptor, self.manifest)
+
+    def test_a_development_draft_may_leave_the_kit_unpinned(self) -> None:
+        self.assertEqual(("ok", []), (self.check()["status"], self.check()["problems"]))
+
+    def test_a_tag_ready_release_pins_this_kit(self) -> None:
+        self.assertIn("must pin the kit version", self.check(status="tag-ready")["problems"][0])
+        pinned = {"version": self.version, "commit": "0" * 40}
+        self.assertEqual("ok", self.check(status="tag-ready", kit=pinned)["status"])
+        other = self.check(status="tag-ready", kit={"version": "0.0.1", "commit": None})
+        self.assertIn("this is kit", other["problems"][0])
+
+    def test_the_manifest_matches_the_descriptor_and_the_tree(self) -> None:
+        self.assertIn("differ from the descriptor", self.check(revisions=["japan-v10"])["problems"][0])
+        self.assertIn("profile", self.check(profile="smb1.v1")["problems"][0])
+        (self.root / "scripts/authoring").mkdir(parents=True)
+        (self.root / "scripts/authoring/maze_studio.py").write_text("", encoding="utf-8")
+        problems = self.check()["problems"]
+        self.assertTrue(any("still in the repository" in item for item in problems))
+        self.assertTrue(any("scripts/authoring/ still holds tools" in item for item in problems))
+
+
+# Pac-Man's expanded NROM-256 revision, built rather than dumped; the test
+# adds its build table.
+BUILT = """[[revisions]]
+id = "japan-v10-nrom256"
+label = "Japan · v1.0 expanded"
+rom = "build/expanded/pacman.nes"
+
+[revisions.build]
+"""
 
 
 FLICKY = game_repository("flicky_src")

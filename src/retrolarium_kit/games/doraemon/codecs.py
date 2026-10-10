@@ -7,6 +7,11 @@ from __future__ import annotations
 from typing import Any
 
 from retrolarium_kit.core.authoring import AuthoringError, ResourceSpec
+from retrolarium_kit.games.doraemon.behavior import (
+    CODEC as DORAEMON_BEHAVIOR_CODEC,
+    decode_behavior as decode_doraemon_behavior,
+    encode_behavior as encode_doraemon_behavior,
+)
 from retrolarium_kit.games.doraemon.hierarchy import (
     CODEC as DORAEMON_HIERARCHY_CODEC,
     decode_hierarchy as decode_doraemon_hierarchy,
@@ -417,6 +422,33 @@ def _parse_room_selector(raw: dict[str, Any], spec: ResourceSpec) -> Encoded:
     return expected_fields, payload, encoded_spans
 
 
+def _stream_sizes(resource: ResourceSpec) -> list[int]:
+    sizes = resource.parameters.get("stream_sizes")
+    if not isinstance(sizes, list) or not sizes or any(type(size) is not int or size < 1 for size in sizes):
+        raise NesResourceError(f"{resource.resource_id}.stream_sizes must list positive sizes")
+    return sizes
+
+
+def _decode_behavior(image: bytes, resource: ResourceSpec) -> dict[str, object]:
+    sizes = _stream_sizes(resource)
+    offset, size = _span(resource, sum(sizes))
+    try:
+        streams = decode_doraemon_behavior(image[offset:offset + size], sizes)
+    except AuthoringError as exc:
+        raise NesResourceError(str(exc)) from exc
+    return {"id": resource.resource_id, "kind": resource.kind, "codec": resource.codec, "streams": streams}
+
+
+def _parse_behavior(raw: dict[str, Any], spec: ResourceSpec) -> Encoded:
+    sizes = _stream_sizes(spec)
+    _span(spec, sum(sizes))
+    try:
+        payload = encode_doraemon_behavior(raw.get("streams"), sizes)
+    except AuthoringError as exc:
+        raise NesResourceError(str(exc)) from exc
+    return {"id", "kind", "codec", "streams"}, payload, None
+
+
 def _decode_hierarchy(image: bytes, resource: ResourceSpec) -> dict[str, object]:
     world = resource.parameters.get("world")
     try:
@@ -471,3 +503,4 @@ register(NesCodec(DORAEMON_SCHEDULE_CODEC, decode=_decode_tables, parse=_parse_t
 register(NesCodec(DORAEMON_OAM_STREAM_CODEC, decode=_decode_oam_stream, parse=_parse_oam_stream))
 register(NesCodec(DORAEMON_ROOM_SELECTOR_CODEC, decode=_decode_room_selector, parse=_parse_room_selector))
 register(NesCodec(DORAEMON_HIERARCHY_CODEC, decode=_decode_hierarchy, parse=_parse_hierarchy))
+register(NesCodec(DORAEMON_BEHAVIOR_CODEC, decode=_decode_behavior, parse=_parse_behavior))

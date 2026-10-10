@@ -32,6 +32,391 @@
       "sha256": "06ed4f706d87940728d623d289caa7fd0abd5c0d6466cb52d4c491ff3b8c0ed9",
       "container": "ines",
       "mapper": 0
+    },
+    {
+      "id": "japan-v10-nrom256",
+      "name": "Pac-Man Japan v1.0 expanded (NROM-256)",
+      "size": 40976,
+      "sha1": "1a351d963c3e644aa8c59cb28406fb0d3029dbb2",
+      "sha256": "6ea0a5ce61c410aa77b48fb208b2793dcac18f6f9e6eef5b490cced630a61512",
+      "container": "ines",
+      "mapper": 0,
+      "resource_overrides": [
+        {
+          "id": "maze",
+          "parameters": {
+            "file_offset": 742,
+            "pellet_count_offsets": []
+          }
+        },
+        {
+          "id": "sound-streams",
+          "parameters": {
+            "pointer_file_offset": 1183,
+            "arena_file_offset": 1215,
+            "arena_cpu_address": 33967,
+            "capacity": 8192,
+            "storage_order": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+          }
+        },
+        {
+          "id": "actor-frames",
+          "parameters": {
+            "file_offset": 9407
+          }
+        },
+        {
+          "id": "title-background",
+          "parameters": {
+            "file_offset": 10031
+          }
+        },
+        {
+          "id": "attract-bg-sprite",
+          "parameters": {
+            "file_offset": 10047
+          }
+        },
+        {
+          "id": "round-gameplay",
+          "parameters": {
+            "file_offset": 10079
+          }
+        },
+        {
+          "id": "intermission-sprites",
+          "parameters": {
+            "file_offset": 10111
+          }
+        },
+        {
+          "id": "fruit-by-stage",
+          "parameters": {
+            "file_offset": 10142
+          }
+        },
+        {
+          "id": "frightened-active-normal",
+          "parameters": {
+            "replicated_file_offsets": [[10130, 10140], [10135]]
+          }
+        },
+        {
+          "id": "screen-content",
+          "parameters": {
+            "prg_cpu_base": 32768,
+            "title_logo": {
+              "file_offset": 10158,
+              "ppu_address": 8421,
+              "width": 23,
+              "height": 6
+            },
+            "title_packets": {
+              "file_offset": 10296,
+              "payload_sizes": [21, 10, 9, 9, 22, 19]
+            },
+            "title_attributes": {
+              "file_offset": 10552,
+              "ppu_address": 9160,
+              "size": 24
+            },
+            "fixed_blocks": [
+              {
+                "key": "menu_prompt",
+                "label": "Menu prompt",
+                "file_offset": 10576,
+                "size": 8
+              },
+              {
+                "key": "player_count_glyphs",
+                "label": "Player-count glyphs",
+                "file_offset": 10584,
+                "size": 3
+              },
+              {
+                "key": "hud_blocks",
+                "label": "HUD blocks",
+                "file_offset": 11119,
+                "size": 23
+              },
+              {
+                "key": "hud_player_packets",
+                "label": "HUD player packets",
+                "file_offset": 11142,
+                "size": 18
+              },
+              {
+                "key": "pause_tiles",
+                "label": "Pause visible/blank packets",
+                "file_offset": 11160,
+                "size": 12
+              }
+            ],
+            "attract": {
+              "pointer_file_offset": 10587,
+              "packet_file_offsets": [10607, 10632, 10647, 10659, 10674, 10685, 10700, 10712, 10727, 10739],
+              "payload_sizes": [21, 11, 8, 11, 7, 11, 8, 11, 8, 31]
+            },
+            "intermission_visual": [
+              {
+                "key": "cycle_tiles",
+                "file_offset": 11172,
+                "size": 8,
+                "allowed_values": []
+              },
+              {
+                "key": "cycle_pattern_indexes",
+                "file_offset": 11180,
+                "size": 8,
+                "allowed_values": [0, 4, 8]
+              },
+              {
+                "key": "banner_tile_quads",
+                "file_offset": 11188,
+                "size": 12,
+                "allowed_values": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "round-profiles",
+          "parameters": {
+            "tables": [
+              {
+                "file_offset": 432,
+                "fields": [
+                  {
+                    "name": "speed_set",
+                    "label": "Speed and timing set",
+                    "maximum": 4
+                  },
+                  {
+                    "name": "frightened_time",
+                    "label": "Frightened time"
+                  },
+                  {
+                    "name": "pellet_threshold_set",
+                    "label": "Pellet threshold set",
+                    "maximum": 6
+                  },
+                  {
+                    "name": "release_target_set",
+                    "label": "Release target set",
+                    "maximum": 2
+                  },
+                  {
+                    "name": "fruit_group",
+                    "label": "Fruit group"
+                  },
+                  {
+                    "name": "release_interval",
+                    "label": "Release interval (s)"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "round-speed-sets",
+          "parameters": {
+            "tables": [
+              {
+                "file_offset": 570,
+                "fields": [
+                  {
+                    "name": "byte_00",
+                    "label": "+$00"
+                  },
+                  {
+                    "name": "byte_01",
+                    "label": "+$01"
+                  },
+                  {
+                    "name": "byte_02",
+                    "label": "+$02"
+                  },
+                  {
+                    "name": "byte_03",
+                    "label": "+$03"
+                  },
+                  {
+                    "name": "byte_04",
+                    "label": "+$04"
+                  },
+                  {
+                    "name": "byte_05",
+                    "label": "+$05"
+                  },
+                  {
+                    "name": "byte_06",
+                    "label": "+$06"
+                  },
+                  {
+                    "name": "byte_07",
+                    "label": "+$07"
+                  },
+                  {
+                    "name": "byte_08",
+                    "label": "+$08"
+                  },
+                  {
+                    "name": "byte_09",
+                    "label": "+$09"
+                  },
+                  {
+                    "name": "byte_10",
+                    "label": "+$0A"
+                  },
+                  {
+                    "name": "byte_11",
+                    "label": "+$0B"
+                  },
+                  {
+                    "name": "byte_12",
+                    "label": "+$0C"
+                  },
+                  {
+                    "name": "byte_13",
+                    "label": "+$0D"
+                  },
+                  {
+                    "name": "byte_14",
+                    "label": "+$0E"
+                  },
+                  {
+                    "name": "byte_15",
+                    "label": "+$0F"
+                  },
+                  {
+                    "name": "byte_16",
+                    "label": "+$10"
+                  },
+                  {
+                    "name": "byte_17",
+                    "label": "+$11"
+                  },
+                  {
+                    "name": "byte_18",
+                    "label": "+$12"
+                  },
+                  {
+                    "name": "byte_19",
+                    "label": "+$13"
+                  },
+                  {
+                    "name": "byte_20",
+                    "label": "+$14"
+                  },
+                  {
+                    "name": "byte_21",
+                    "label": "+$15"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "round-timing-sets",
+          "parameters": {
+            "tables": [
+              {
+                "file_offset": 680,
+                "fields": [
+                  {
+                    "name": "phase_0",
+                    "label": "Phase 1"
+                  },
+                  {
+                    "name": "phase_1",
+                    "label": "Phase 2"
+                  },
+                  {
+                    "name": "phase_2",
+                    "label": "Phase 3"
+                  },
+                  {
+                    "name": "phase_3",
+                    "label": "Phase 4"
+                  },
+                  {
+                    "name": "phase_4",
+                    "label": "Phase 5"
+                  },
+                  {
+                    "name": "phase_5",
+                    "label": "Phase 6"
+                  },
+                  {
+                    "name": "phase_6",
+                    "label": "Phase 7"
+                  },
+                  {
+                    "name": "phase_7",
+                    "label": "Phase 8"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "round-pellet-thresholds",
+          "parameters": {
+            "tables": [
+              {
+                "file_offset": 712,
+                "fields": [
+                  {
+                    "name": "first",
+                    "label": "First"
+                  },
+                  {
+                    "name": "second",
+                    "label": "Second"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "round-release-targets",
+          "parameters": {
+            "tables": [
+              {
+                "file_offset": 726,
+                "fields": [
+                  {
+                    "name": "target_0",
+                    "label": "Target 1"
+                  },
+                  {
+                    "name": "target_1",
+                    "label": "Target 2"
+                  },
+                  {
+                    "name": "target_2",
+                    "label": "Target 3"
+                  },
+                  {
+                    "name": "target_3",
+                    "label": "Target 4"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "character-graphics",
+          "parameters": {
+            "file_offset": 32784
+          }
+        }
+      ]
     }
   ],
   "resources": [
@@ -52,7 +437,12 @@
           "intermission-sprites",
           "fruit-by-stage",
           "character-graphics",
-          "actor-frames"
+          "actor-frames",
+          "round-profiles",
+          "round-speed-sets",
+          "round-timing-sets",
+          "round-pellet-thresholds",
+          "round-release-targets"
         ]
       }
     },
@@ -274,6 +664,267 @@
       "codec": "pacman.attract-demo.v1",
       "capacity_policy": "fixed",
       "parameters": {"script_cpu": 54385, "table_cpu": 54410, "pairs": 28}
+    },
+    {
+      "id": "round-profiles",
+      "kind": "round-data",
+      "codec": "nes.record-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "records": 23,
+        "record_label": "Round {n}",
+        "tables": [
+          {
+            "file_offset": 11090,
+            "fields": [
+              {
+                "name": "speed_set",
+                "label": "Speed and timing set",
+                "maximum": 4
+              },
+              {
+                "name": "frightened_time",
+                "label": "Frightened time"
+              },
+              {
+                "name": "pellet_threshold_set",
+                "label": "Pellet threshold set",
+                "maximum": 6
+              },
+              {
+                "name": "release_target_set",
+                "label": "Release target set",
+                "maximum": 2
+              },
+              {
+                "name": "fruit_group",
+                "label": "Fruit group"
+              },
+              {
+                "name": "release_interval",
+                "label": "Release interval (s)"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "round-speed-sets",
+      "kind": "round-data",
+      "codec": "nes.record-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "records": 5,
+        "record_label": "Set {i}",
+        "tables": [
+          {
+            "file_offset": 11228,
+            "fields": [
+              {
+                "name": "byte_00",
+                "label": "+$00"
+              },
+              {
+                "name": "byte_01",
+                "label": "+$01"
+              },
+              {
+                "name": "byte_02",
+                "label": "+$02"
+              },
+              {
+                "name": "byte_03",
+                "label": "+$03"
+              },
+              {
+                "name": "byte_04",
+                "label": "+$04"
+              },
+              {
+                "name": "byte_05",
+                "label": "+$05"
+              },
+              {
+                "name": "byte_06",
+                "label": "+$06"
+              },
+              {
+                "name": "byte_07",
+                "label": "+$07"
+              },
+              {
+                "name": "byte_08",
+                "label": "+$08"
+              },
+              {
+                "name": "byte_09",
+                "label": "+$09"
+              },
+              {
+                "name": "byte_10",
+                "label": "+$0A"
+              },
+              {
+                "name": "byte_11",
+                "label": "+$0B"
+              },
+              {
+                "name": "byte_12",
+                "label": "+$0C"
+              },
+              {
+                "name": "byte_13",
+                "label": "+$0D"
+              },
+              {
+                "name": "byte_14",
+                "label": "+$0E"
+              },
+              {
+                "name": "byte_15",
+                "label": "+$0F"
+              },
+              {
+                "name": "byte_16",
+                "label": "+$10"
+              },
+              {
+                "name": "byte_17",
+                "label": "+$11"
+              },
+              {
+                "name": "byte_18",
+                "label": "+$12"
+              },
+              {
+                "name": "byte_19",
+                "label": "+$13"
+              },
+              {
+                "name": "byte_20",
+                "label": "+$14"
+              },
+              {
+                "name": "byte_21",
+                "label": "+$15"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "round-timing-sets",
+      "kind": "round-data",
+      "codec": "nes.record-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "records": 4,
+        "record_label": "Set {i}",
+        "tables": [
+          {
+            "file_offset": 11338,
+            "fields": [
+              {
+                "name": "phase_0",
+                "label": "Phase 1"
+              },
+              {
+                "name": "phase_1",
+                "label": "Phase 2"
+              },
+              {
+                "name": "phase_2",
+                "label": "Phase 3"
+              },
+              {
+                "name": "phase_3",
+                "label": "Phase 4"
+              },
+              {
+                "name": "phase_4",
+                "label": "Phase 5"
+              },
+              {
+                "name": "phase_5",
+                "label": "Phase 6"
+              },
+              {
+                "name": "phase_6",
+                "label": "Phase 7"
+              },
+              {
+                "name": "phase_7",
+                "label": "Phase 8"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "round-pellet-thresholds",
+      "kind": "round-data",
+      "codec": "nes.record-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "records": 7,
+        "record_label": "Set {i}",
+        "tables": [
+          {
+            "file_offset": 11370,
+            "fields": [
+              {
+                "name": "first",
+                "label": "First"
+              },
+              {
+                "name": "second",
+                "label": "Second"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "round-release-targets",
+      "kind": "round-data",
+      "codec": "nes.record-table.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "records": 4,
+        "record_labels": [
+          "Set 0",
+          "Set 1",
+          "Set 2",
+          "Restart"
+        ],
+        "tables": [
+          {
+            "file_offset": 11384,
+            "fields": [
+              {
+                "name": "target_0",
+                "label": "Target 1"
+              },
+              {
+                "name": "target_1",
+                "label": "Target 2"
+              },
+              {
+                "name": "target_2",
+                "label": "Target 3"
+              },
+              {
+                "name": "target_3",
+                "label": "Target 4"
+              }
+            ]
+          }
+        ]
+      }
     }
   ]
 }

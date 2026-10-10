@@ -49,6 +49,11 @@ from retrolarium_kit.platform.nes.text import (
     decode_text_fields,
     encode_text_fields,
 )
+from retrolarium_kit.platform.nes.records import (
+    CODEC as RECORD_TABLE_CODEC,
+    decode_records,
+    encode_records,
+)
 from retrolarium_kit.platform.nes.screen_packets import (
     CODEC as PPU_SCREEN_PACKET_CODEC,
     decode_screen_packets,
@@ -956,6 +961,23 @@ def _parse_fixed_text(raw: dict[str, Any], spec: ResourceSpec) -> Encoded:
     return expected_fields, payload, encoded_spans
 
 
+def _decode_record_table(image: bytes, resource: ResourceSpec) -> dict[str, object]:
+    try:
+        decoded = decode_records(image, resource.parameters, resource.resource_id)
+    except AuthoringError as exc:
+        raise NesResourceError(str(exc)) from exc
+    return {"id": resource.resource_id, "kind": resource.kind, "codec": resource.codec, **decoded}
+
+
+def _parse_record_table(raw: dict[str, Any], spec: ResourceSpec) -> Encoded:
+    try:
+        runs = encode_records(raw, spec.parameters, spec.resource_id)
+    except AuthoringError as exc:
+        raise NesResourceError(str(exc)) from exc
+    return ({"id", "kind", "codec", "fields", "record_labels", "records"}, None,
+            tuple(_EncodedSpan(offset, data) for offset, data in runs))
+
+
 def _decode_ppu_screen_packet(image: bytes, resource: ResourceSpec) -> dict[str, object]:
     try:
         decoded = decode_screen_packets(image, resource.parameters)
@@ -1003,6 +1025,7 @@ register(NesCodec(FDS_MUSIC_CODEC, decode=_decode_fds_music, parse=_parse_fds_mu
 register(NesCodec(PALETTE_PACKET_CODEC, decode=_decode_palette_packet, parse=_parse_palette_packet))
 register(NesCodec(FIXED_TEXT_CODEC, decode=_decode_fixed_text, parse=_parse_fixed_text))
 register(NesCodec(PPU_SCREEN_PACKET_CODEC, decode=_decode_ppu_screen_packet, parse=_parse_ppu_screen_packet))
+register(NesCodec(RECORD_TABLE_CODEC, decode=_decode_record_table, parse=_parse_record_table))
 
 
 def _decode_profile_resource(

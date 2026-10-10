@@ -143,7 +143,8 @@ def command_studio_check(args: argparse.Namespace) -> None:
     from retrolarium_kit.studio.repository import check_repository, load_descriptor
 
     report = check_repository(load_descriptor(args.descriptor), args.revision or None,
-                              flicky_level_writer=args.flicky_level_writer)
+                              flicky_level_writer=args.flicky_level_writer,
+                              release=args.release)
     print_json(report)
     if report["status"] != "ok":
         raise SystemExit(1)
@@ -485,6 +486,8 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
                               help="check only this revision (repeatable); default: all of them")
     studio_check.add_argument("--flicky-level-writer", type=Path,
                               help="the studio's retrolarium-flicky-level-writer, for Flicky")
+    studio_check.add_argument("--release", type=Path,
+                              help="also check the Retrolarium part of this 3.0/4.0 release manifest")
     studio_check.set_defaults(handler=command_studio_check)
     studio_open_rom = studio_commands.add_parser(
         "open-rom", help="identify a ROM, find or download its game's repository and ready its version"
