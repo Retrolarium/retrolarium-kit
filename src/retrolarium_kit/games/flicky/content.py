@@ -1,8 +1,10 @@
-"""Isolated build oracle for the canonical Flicky content workspace.
+"""The Flicky source snapshot a studio project edits and builds.
 
-The neighboring reconstruction is an import source, never a build target.  Its
-tracked files and the user-supplied ROM are copied into a relocatable snapshot
-before any authoring script is run.  Normal GUI editing remains native C++.
+The game repository is an import source, never a build target: its tracked
+files and the user's ROM are copied into a relocatable snapshot, the assets
+are split from the ROM there, and the kit's content workspace
+(workspace/) makes the documents the studio edits. A build stages the
+documents into a copy of the snapshot's source and runs its build scripts.
 """
 
 from __future__ import annotations
@@ -14,7 +16,6 @@ import os
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import shutil
 import subprocess
-import sys
 import tempfile
 
 from retrolarium_core.megadrive import stamp_cartridge_checksum
@@ -24,6 +25,10 @@ from retrolarium_kit.games.flicky.bonus_placement import (
     export_bonus_placements, validate_bonus_placements,
 )
 from retrolarium_kit.games.flicky.title_layout import export_title_layout, validate_title_layout
+from retrolarium_kit.games.flicky.workspace.build import build_content
+from retrolarium_kit.games.flicky.workspace.content import (
+    FlickyWorkspaceError, initialize as initialize_workspace, validate_workspace,
+)
 
 
 CANONICAL_SHA256 = "4df1a91e08376ae773a6eb8e5abe310f94ca39d8f81583b91a9477fedcb68c11"
@@ -57,16 +62,6 @@ def _canonical_rom(path: Path) -> None:
     if not path.is_file() or path.stat().st_size != CANONICAL_SIZE \
             or _sha256(path) != CANONICAL_SHA256:
         raise FlickyContentError("Flicky requires the exact canonical (UE) ROM")
-
-
-def _run(command: list[str], root: Path, *, env: dict[str, str] | None = None) -> None:
-    result = subprocess.run(command, cwd=root, env=env, text=True,
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    if result.returncode:
-        raise FlickyContentError(
-            f"Flicky source command failed ({result.returncode}): "
-            + " ".join(command[:3]) + "\n" + result.stdout[-8000:]
-        )
 
 
 def _source_names(source_root: Path) -> list[str]:
@@ -183,8 +178,10 @@ def import_flicky_source(
             shutil.copy2(source_root / relative, target)
         shutil.copy2(canonical_rom, staging / ROM_NAME)
         _extract_assets(staging, staging / ROM_NAME)
-        _run([sys.executable, "scripts/run.py", "authoring.content_workspace",
-              "init"], staging)
+        try:
+            initialize_workspace(staging)
+        except FlickyWorkspaceError as exc:
+            raise FlickyContentError(str(exc)) from exc
         levels_path = staging / WORKSPACE_FILES["level_layouts"]
         levels = json.loads(levels_path.read_text(encoding="utf-8"))
         levels["bonus_placements"] = export_bonus_placements(staging)
@@ -246,8 +243,10 @@ def validate_flicky_source_snapshot(project_root: Path) -> dict[str, str]:
     semantics = json.loads((source / WORKSPACE_FILES["graphics_semantics"])
                            .read_text(encoding="utf-8"))
     validate_title_layout(semantics, source)
-    _run([sys.executable, "scripts/run.py", "authoring.content_workspace",
-          "validate"], source)
+    try:
+        validate_workspace(source)
+    except FlickyWorkspaceError as exc:
+        raise FlickyContentError(str(exc)) from exc
     return {key: _sha256(source / relative)
             for key, relative in WORKSPACE_FILES.items()}
 
@@ -260,22 +259,12 @@ def build_flicky_source_snapshot(
     project_root = project_root.resolve()
     source = project_root / SOURCE_DIRECTORY
     document_hashes = validate_flicky_source_snapshot(project_root)
-    manifest_path = source / "config/authoring/content_studios.json"
-    try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise FlickyContentError(f"cannot read Flicky content manifest: {exc}") from exc
-    if manifest.get("profile") != "canonical" or manifest.get("image_size") != CANONICAL_SIZE \
-            or manifest.get("image_sha1") != "83d8bbf0a9b38c42a0bf492d105cc3abe9644a96":
-        raise FlickyContentError("Flicky content manifest is not canonical")
     tool_dir = source / "bin" / ("windows_i386" if os.name == "nt" else "linux_x86_64")
     as_bin = tool_dir / ("asw.exe" if os.name == "nt" else "asl")
     p2bin = tool_dir / ("p2bin.exe" if os.name == "nt" else "p2bin")
     if not as_bin.is_file() or not p2bin.is_file():
         raise FlickyContentError(f"Flicky assembler tools are missing: {tool_dir}")
-    env = os.environ.copy()
-    env["AS_MSGPATH"] = str(tool_dir)
-    selected_writer = native_writer or env.get("RETROLARIUM_FLICKY_LEVEL_WRITER") \
+    selected_writer = native_writer or os.environ.get("RETROLARIUM_FLICKY_LEVEL_WRITER") \
         or shutil.which("retrolarium-flicky-level-writer")
     if not selected_writer:
         raise FlickyContentError(
@@ -286,9 +275,10 @@ def build_flicky_source_snapshot(
     writer = Path(selected_writer).resolve()
     if not writer.is_file():
         raise FlickyContentError(f"native Flicky level writer is missing: {writer}")
-    _run([sys.executable, str(Path(__file__).with_name("native_build.py")),
-          "--source", str(source), "--writer", str(writer),
-          "--as-bin", str(as_bin), "--p2bin", str(p2bin)], source, env=env)
+    try:
+        build_content(source, as_bin=as_bin, p2bin=p2bin, level_writer=writer)
+    except (FlickyWorkspaceError, subprocess.CalledProcessError) as exc:
+        raise FlickyContentError(str(exc)) from exc
     built = source / "build/content/flicky.bin"
     if not built.is_file() or built.stat().st_size != CANONICAL_SIZE:
         raise FlickyContentError("Flicky content build did not produce a 128 KiB ROM")
