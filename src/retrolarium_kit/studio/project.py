@@ -509,20 +509,19 @@ def load_studio_project(path: Path) -> dict[str, Any]:
         if normalized_metadata["platform"] != "megadrive" \
                 or normalized_metadata["profile"] != "flicky-ue.v1":
             raise _error("project", "Flicky content requires megadrive/flicky-ue.v1")
-        if source_relative != "flicky-source/config/authoring/content_studios.json":
-            raise _error("source.manifest", "must name the imported Flicky content manifest")
+        if source_relative != "flicky-source/retrolarium-flicky-snapshot.json":
+            raise _error("source.manifest", "must name the Flicky source snapshot record")
         if source_sha256 != FLICKY_SHA256:
             raise _error("source.sha256", "does not match canonical Flicky (UE)")
         try:
             manifest = json.loads(source_path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-            raise _error("source.manifest", f"cannot read content manifest: {exc}") from exc
-        if not isinstance(manifest, Mapping) or manifest.get("schema_version") != 1 \
-                or manifest.get("profile") != "canonical" \
-                or manifest.get("image_size") != 131072 \
-                or manifest.get("image_sha1") != "83d8bbf0a9b38c42a0bf492d105cc3abe9644a96":
-            raise _error("source.manifest", "is not the canonical Flicky content manifest")
-        manifest_schema = "flicky.content-studios"
+            raise _error("source.manifest", f"cannot read the snapshot record: {exc}") from exc
+        if (not isinstance(manifest, Mapping)
+                or manifest.get("schema") != "retrolarium.flicky-source-snapshot"
+                or manifest.get("schema_version") != 1 or manifest.get("canonical_sha256") != FLICKY_SHA256):
+            raise _error("source.manifest", "is not a canonical Flicky source snapshot record")
+        manifest_schema = "retrolarium.flicky-source-snapshot"
     else:
         try:
             manifest = load_disassembly_manifest(source_path)

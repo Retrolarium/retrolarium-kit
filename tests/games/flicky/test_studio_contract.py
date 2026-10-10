@@ -35,7 +35,7 @@ class FlickyStudioContractTests(unittest.TestCase):
     def test_imported_five_document_projection(self) -> None:
         inspection = load_studio_project(FIXTURE / "accept-flicky-content.rlj")
         self.assertEqual("flicky-content", inspection["project"]["source_mode"])
-        self.assertEqual("flicky.content-studios", inspection["source"]["schema"])
+        self.assertEqual("retrolarium.flicky-source-snapshot", inspection["source"]["schema"])
         self.assertEqual(5, len(inspection["workspace"]["tabs"]))
         self.assertEqual("levels", inspection["workspace"]["startup_tab"])
         levels = next(tab for tab in inspection["workspace"]["tabs"]
@@ -130,7 +130,7 @@ class FlickyStudioContractTests(unittest.TestCase):
         upgrading.assert_called_once_with(Path("flicky-ue.rlj"), output=None)
         self.assertIn("upgraded", output.getvalue())
 
-    def test_bonus_upgrade_rejects_unpinned_source_without_touching_project(self) -> None:
+    def test_bonus_upgrade_rejects_an_unverified_snapshot_without_touching_project(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             shutil.copytree(FIXTURE / "flicky-source", root / "flicky-source")
@@ -140,7 +140,7 @@ class FlickyStudioContractTests(unittest.TestCase):
             source.parent.mkdir(parents=True)
             source.write_text("Obj_BonusSeesaw:\n", encoding="utf-8")
             before = project.read_bytes()
-            with self.assertRaisesRegex(StudioProjectError, "pinned source snapshot"):
+            with self.assertRaisesRegex(StudioProjectError, "cannot safely upgrade"):
                 upgrade_flicky_studio_project(project)
             self.assertEqual(before, project.read_bytes())
 

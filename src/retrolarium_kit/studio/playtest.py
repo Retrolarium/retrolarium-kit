@@ -9,9 +9,8 @@ from collections.abc import Mapping
 import json
 import os
 from pathlib import Path
-import runpy
+import shutil
 import subprocess
-import sys
 import tempfile
 from typing import Any
 
@@ -227,10 +226,11 @@ def studio_flicky_sound_preview(
             )
         document = candidate
         document_origin = "unsaved"
-    model_path = source / "scripts/authoring/sound_studio_model.py"
+    from retrolarium_kit.games.flicky.workspace import sound as flicky_sound
+    from retrolarium_kit.games.flicky.workspace.preview import render_preview
+
     try:
-        sound_model = runpy.run_path(str(model_path))
-        inventory = sound_model["export_document"](document)
+        inventory = flicky_sound.export_document(document)
     except (OSError, ValueError, KeyError) as exc:
         raise StudioProjectError(f"cannot read Flicky Sound inventory: {exc}") from exc
     headers = {item["id"]: item for item in inventory["headers"]}
@@ -247,11 +247,7 @@ def studio_flicky_sound_preview(
                 f"enabled channels must be unique indexes in 0..{track_count - 1}"
             )
         enabled_channels = tuple(sorted(enabled_channels))
-    renderer = source / "bin/windows_i386/ymfm_renderer.exe"
-    if not renderer.is_file():
-        raise StudioProjectError(
-            "pinned Flicky YMFM renderer is unavailable in the source snapshot"
-        )
+    renderer = ymfm_renderer()
     channel_key = "all" if enabled_channels is None else "-".join(
         str(index) for index in enabled_channels)
     stem = f"{header}-{sha256_file(document)[:12]}-s{seconds}-c{channel_key}"
@@ -259,27 +255,12 @@ def studio_flicky_sound_preview(
     wav = output_dir / f"{stem}.wav"
     with tempfile.TemporaryDirectory(prefix=".flicky-sound-", dir=output_dir) as name:
         temporary = Path(name)
-        command = [
-            sys.executable, str(Path(__file__).resolve().parents[1] / "games" / "flicky"
-                / "sound_preview_runtime.py"), header,
-            "--workspace", str(document),
-            "--vgm", str(temporary / "preview.vgm"),
-            "--wav", str(temporary / "preview.wav"),
-            "--renderer", str(renderer),
-            "--seconds", str(seconds),
-        ]
-        if enabled_channels is not None:
-            command.extend(("--channels", ",".join(map(str, enabled_channels))))
         try:
-            result = subprocess.run(
-                command, cwd=source, capture_output=True, text=True, timeout=180,
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
+            render_preview(source, document, header, temporary / "preview.vgm", temporary / "preview.wav",
+                           seconds=seconds, renderer=renderer,
+                           enabled_channels=None if enabled_channels is None else set(enabled_channels))
+        except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as exc:
             raise StudioProjectError(f"Flicky Sound preview failed: {exc}") from exc
-        if result.returncode:
-            raise StudioProjectError(
-                "Flicky Sound preview failed: " + (result.stderr or result.stdout)[-4000:]
-            )
         temporary_vgm = temporary / "preview.vgm"
         temporary_wav = temporary / "preview.wav"
         try:
@@ -311,6 +292,18 @@ def studio_flicky_sound_preview(
         "wav": {"path": str(wav), "size": wav.stat().st_size,
                 "sha256": sha256_file(wav)},
     }
+
+
+def ymfm_renderer() -> Path:
+    """The studio's YM2612 renderer (retrolarium-ymfm-renderer): from
+    RETROLARIUM_YMFM_RENDERER, which the studio sets, or the PATH."""
+    found = os.environ.get("RETROLARIUM_YMFM_RENDERER") or shutil.which("retrolarium-ymfm-renderer")
+    if not found or not Path(found).is_file():
+        raise StudioProjectError(
+            "the YMFM renderer is missing: set RETROLARIUM_YMFM_RENDERER to the studio's "
+            "retrolarium-ymfm-renderer or put it on the PATH"
+        )
+    return Path(found).resolve()
 
 
 def _smb_area_pointer(name: str) -> int:
