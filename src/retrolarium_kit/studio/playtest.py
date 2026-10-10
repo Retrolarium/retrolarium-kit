@@ -21,7 +21,7 @@ from retrolarium_kit.games.flicky.content import (
     FlickyContentError,
 )
 from retrolarium_core.fds import FdsError, parse_fds_side
-from retrolarium_kit.core.project import launch_image_plan, launch_image_smoke, sha256_file
+from retrolarium_kit.core.project import launch_image_plan, launch_image_smoke, sha256_file, vs_machine
 from retrolarium_kit.studio.project import (
     SOLOMON_REVISIONS,
     StudioProjectError,
@@ -93,9 +93,11 @@ def _source_revision(inspection: Mapping[str, Any]):
 
 def _revision_machine(inspection: Mapping[str, Any]) -> str | None:
     profile, revision = _source_revision(inspection)
-    if profile is not None and (profile.game_id, revision.revision_id) in PAL_REVISIONS:
+    if profile is None:
+        return None
+    if (profile.game_id, revision.revision_id) in PAL_REVISIONS:
         return "nespal"
-    return None
+    return vs_machine(profile.game_id, revision.revision_id)
 
 
 def studio_launch_plan(

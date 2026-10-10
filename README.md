@@ -112,7 +112,7 @@ game shares them instead of keeping a copy.
 rltool studio revisions path\to\game.rlj
 rltool studio prepare path\to\game.rlj --revision <id> [--rom path\to\rom]
 rltool studio reset path\to\game.rlj --revision <id>
-rltool studio check path\to\game.rlj [--revision <id>]
+rltool studio check path\to\game.rlj [--revision <id>] [--release manifest.json]
 ```
 
 `prepare` keeps edits in `hack/<revision>/` and writes the generated project and
@@ -121,6 +121,26 @@ what a repository's `make studio-check` runs: in a throwaway copy of the
 repository it prepares every revision from its ROM, validates it, builds it with
 no edits and compares the result with that ROM byte for byte. It needs every
 revision's ROM at the root and never touches the user's folders.
+
+With `--release`, `check` also checks the `retrolarium` section of the
+repository's 3.0 or 4.0 release manifest: the descriptor, profile and revisions
+it names, the editors it lists as removed, and the kit version it pins, which
+must be the running kit's unless the manifest is still in `development`.
+
+## Record tables
+
+Many games keep small fixed tables in PRG: a stat per enemy, an offset per
+weapon direction, a flag per room. A profile describes such a table once as a
+`nes.record-table.v1` resource: its record count and labels, and one or more
+tables at file offsets, each holding some of the fields record by record or
+field by field (`"columns": true`). A field is a byte with an optional range,
+signed reading, named choices, a `none` byte shown as null, `locked` records
+that stay as they are (the byte is code or another table's), and `unique` values
+(with as many choices as records, the records share the choices out). Two tables
+may share a byte; an edit that gives it two values is refused. The document
+repeats the field descriptions and record labels, so the studio's generic table
+view needs nothing else. Doraemon's object tables and its four sound drivers'
+effect routing use it.
 
 ## Bundled compiler suites
 

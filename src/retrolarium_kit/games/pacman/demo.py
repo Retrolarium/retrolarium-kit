@@ -31,7 +31,6 @@ VERSION = 1
 DIRECTIONS = ("up", "left", "down", "right")
 FIRST_STEP_UPDATES = 255
 FIELDS = ("script_cpu", "table_cpu", "pairs")
-PRG_BASE = 0xC000
 
 
 class PacmanDemoError(AuthoringError):
@@ -76,15 +75,21 @@ def _source(source: bytes, revision: RevisionSpec, *, verify: bool = True):
     if verify and hashlib.sha256(source).hexdigest() != revision.sha256:
         raise PacmanDemoError("demo source identity mismatch")
     image = parse_ines(source)
-    if len(image.prg) != 0x4000:
-        raise PacmanDemoError("Pac-Man demo needs 16 KiB PRG")
+    if len(image.prg) not in (0x4000, 0x8000):
+        raise PacmanDemoError("Pac-Man demo needs 16 or 32 KiB of NROM PRG")
     return image
 
 
+def _base(prg: bytes) -> int:
+    """Where NROM maps the PRG: $C000 for 16 KiB, $8000 for the expanded 32 KiB."""
+    return 0x10000 - len(prg)
+
+
 def _read(prg: bytes, address: int, count: int) -> bytes:
-    if not PRG_BASE <= address <= 0x10000 - count:
+    base = _base(prg)
+    if not base <= address <= 0x10000 - count:
         raise PacmanDemoError("demo range escapes PRG")
-    return prg[address - PRG_BASE:address - PRG_BASE + count]
+    return prg[address - base:address - base + count]
 
 
 def _check_engine(prg: bytes, layout: Mapping[str, int]) -> None:
@@ -180,7 +185,7 @@ def build_demo(
     layout = _layout(profile, revision)
     _check_engine(image.prg, layout)
     checked = parse_demo_document(document.as_dict(), profile, revision)
-    start = len(image.header) + len(image.trainer) + layout["table_cpu"] - PRG_BASE
+    start = len(image.header) + len(image.trainer) + layout["table_cpu"] - _base(image.prg)
     table = _encode(checked.as_dict(), layout, first_duration=source[start])
     output = source
     if source[start:start + len(table)] != table:

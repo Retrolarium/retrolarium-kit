@@ -32,7 +32,7 @@ from retrolarium_kit.platform.nes.resources import (
     inspection_details as nes_resource_details,
     parse_resource_document,
 )
-from retrolarium_kit.core.project import launch_image_plan, launch_image_smoke
+from retrolarium_kit.core.project import launch_image_plan, launch_image_smoke, vs_machine
 from retrolarium_kit.games.solomon.rooms import (
     BLOCK_CODEC as SOLOMON_BLOCK_CODEC,
     DOCUMENT_SCHEMA as SOLOMON_ROOM_DOCUMENT_SCHEMA,
@@ -1018,7 +1018,7 @@ def game_launch_plan(
         artifact,
         platform=profile.platform,
         mame=mame,
-        machine=machine,
+        machine=machine or vs_machine(profile.game_id, revision.revision_id),
         attach_window=attach_window,
     )
     plan["game"] = profile.game_id
@@ -1045,7 +1045,7 @@ def launch_game_smoke(
         platform=profile.platform,
         mame=mame,
         output=output,
-        machine=machine,
+        machine=machine or vs_machine(profile.game_id, revision.revision_id),
         seconds=seconds,
         timeout=timeout,
     )

@@ -58,13 +58,6 @@ def command_game_build(args: argparse.Namespace) -> None:
     )
 
 
-def command_game_compare_pacman_legacy(args: argparse.Namespace) -> None:
-    from retrolarium_kit.games.pacman.migration import compare_pacman_legacy
-
-    print_json(compare_pacman_legacy(
-        args.rom, args.legacy_source, profile_path=args.profile))
-
-
 def command_game_audit_smb_migration(args: argparse.Namespace) -> None:
     from retrolarium_kit.games.smb.migration import audit_smb_migration
 
@@ -148,14 +141,6 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     game_build.add_argument("--report", type=Path)
     game_build.add_argument("--profile", type=Path)
     game_build.set_defaults(handler=command_game_build)
-    game_compare_pacman = game_commands.add_parser(
-        "compare-pacman-legacy",
-        help="compare normalized resources with the retired Pac-Man Studios",
-    )
-    game_compare_pacman.add_argument("rom", type=Path)
-    game_compare_pacman.add_argument("--legacy-source", type=Path, required=True)
-    game_compare_pacman.add_argument("--profile", type=Path)
-    game_compare_pacman.set_defaults(handler=command_game_compare_pacman_legacy)
     game_audit_smb = game_commands.add_parser(
         "audit-smb-migration",
         help="audit Retrolarium resource coverage of the retired SMB Studios",

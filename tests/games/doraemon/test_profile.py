@@ -88,8 +88,30 @@ def synthetic_metasprite_records(size: int) -> bytes:
     return bytes(output)
 
 
+def resource_by_id(document: dict, identifier: str) -> dict:
+    return next(item for item in document["resources"] if item["id"] == identifier)
+
+
+ROUTING = (  # bank, address, the requests' effect slots
+    (0, 0xE316, (0, 84, 100, 76, 64, 68, 4, 56, 52, 60, 28, 80, 88, 96, 44, 40, 8, 72, 48, 32, 36, 24, 20, 16, 12, 92)),
+    (1, 0xA80B, (0, 48, 56, 40, 28, 32, 4, 24, 52, 12, 44, 20, 16, 8, 36)),
+    (2, 0xBE0E, (0, 84, 100, 76, 64, 68, 4, 56, 52, 60, 28, 80, 88, 96, 44, 40, 8, 72, 48, 32, 36, 24, 20, 16, 12, 92)),
+    (3, 0x9784, (0, 84, 100, 76, 64, 68, 4, 56, 52, 60, 28, 80, 88, 96, 44, 40, 8, 72, 48, 32, 36, 24, 20, 16, 12, 92)),
+)
+BEHAVIOR_FILE_OFFSET = 16 + 2 * 0x8000 + (0xD9CC - 0x8000)
+BEHAVIOR_SIZES = (40, 119, 248, 21, 96, 55, 248, 1, 14, 1, 34, 1, 130, 18, 18, 18)
+TABLE_CODECS = ("nes.record-table.v1", "doraemon.world3-behavior.v1")
+
+
 def with_world2_screens(image: bytes) -> bytes:
     edited = bytearray(image)
+    # World 3 behavior: every stream moves on X until its last byte stops.
+    edited[BEHAVIOR_FILE_OFFSET:BEHAVIOR_FILE_OFFSET + sum(BEHAVIOR_SIZES)] = b"".join(
+        bytes(size - 1) + b"\xf0" for size in BEHAVIOR_SIZES)
+    # The effect routing: each request plays its own effect.
+    for bank, address, slots in ROUTING:
+        offset = 16 + bank * 0x8000 + address - 0x8000
+        edited[offset:offset + len(slots)] = bytes(slots)
     edited[48878:48878 + 16669] = synthetic_world2_payload()
     edited[35766:35772] = bytes((1, 4, 5, 16, 32, 48))
     # The help screens' OAM streams: whole sprites, then the zero Y.
@@ -154,15 +176,27 @@ class DoraemonProfileTests(unittest.TestCase):
             )
             self.assertEqual(resources[3].parameters,
                              {"file_offset": 77282, "size": 64})
-            self.assertEqual(resources[-4].parameters,
+            by_id = {resource.resource_id: resource for resource in resources}
+            self.assertEqual(by_id["world2-screens"].parameters,
                              {"file_offset": 48878, "size": 16669})
-            self.assertEqual(resources[-3].parameters,
+            self.assertEqual(by_id["world2-stage"].parameters,
                              {"file_offset": 48623, "size": 229,
                               "start_file_offset": 35656, "start_size": 3})
-            self.assertEqual(resources[-2].parameters,
+            self.assertEqual(by_id["world2-branches"].parameters,
                              {"file_offset": 42783, "size": 68})
-            self.assertEqual(resources[-1].parameters,
+            self.assertEqual(by_id["world2-chapters"].parameters,
                              {"file_offset": 35766, "size": 6})
+            self.assertEqual(by_id["world3-behavior"].parameters["file_offset"], BEHAVIOR_FILE_OFFSET)
+
+    def synthetic_tables(self) -> list[dict]:
+        """The object tables, effect routing and behavior of a synthetic
+        image, decoded by the kit."""
+        header = b"NES\x1a" + bytes((8, 4, 0x20, 0x40)) + bytes(8)
+        image = with_world2_screens(header + bytes(8 * 16384 + 4 * 8192))
+        revision = replace(self.profile.revisions[0], sha1=hashlib.sha1(image).hexdigest(),
+                           sha256=hashlib.sha256(image).hexdigest())
+        return [item for item in decode_resources(image, self.profile, revision).resources
+                if item["codec"] in TABLE_CODECS]
 
     def test_all_banks_round_trip_and_isolated_pixel_edit(self) -> None:
         # A private retail ROM is not required to verify the profile's physical
@@ -325,7 +359,7 @@ class DoraemonProfileTests(unittest.TestCase):
             sha256=hashlib.sha256(image).hexdigest(),
         )
         document = decode_resources(image, self.profile, revision).as_dict()
-        for screen in document["resources"][-4]["screens"]:
+        for screen in resource_by_id(document, "world2-screens")["screens"]:
             screen[0][0] = 1
         rebuilt, report = build_resources(
             image, parse_resource_document(document, self.profile, revision),
@@ -337,10 +371,10 @@ class DoraemonProfileTests(unittest.TestCase):
         self.assertTrue(all(48878 <= index < 48878 + 16669 for index in changed))
         self.assertEqual(report["changed_bytes"], len(changed))
         self.assertEqual(
-            decode_resources(rebuilt, self.profile, replace(
+            resource_by_id(decode_resources(rebuilt, self.profile, replace(
                 revision, sha1=hashlib.sha1(rebuilt).hexdigest(),
                 sha256=hashlib.sha256(rebuilt).hexdigest(),
-            )).resources[-4]["screens"][118][0][0], 1,
+            )).as_dict(), "world2-screens")["screens"][118][0][0], 1,
         )
 
     def test_world2_stage_sequence_owns_disjoint_bytecode_and_starts(self) -> None:
@@ -365,7 +399,7 @@ class DoraemonProfileTests(unittest.TestCase):
             sha256=hashlib.sha256(image).hexdigest(),
         )
         document = decode_resources(image, self.profile, revision).as_dict()
-        stage = document["resources"][-3]
+        stage = resource_by_id(document, "world2-stage")
         self.assertEqual(stage["start_offsets"], [0, 0, 0])
         self.assertEqual(stage["tokens"], [0] * 229)
         stage["start_offsets"][1] = 37
@@ -395,7 +429,7 @@ class DoraemonProfileTests(unittest.TestCase):
             sha256=hashlib.sha256(image).hexdigest(),
         )
         document = decode_resources(image, self.profile, revision).as_dict()
-        document["resources"][-2]["branches"][0]["condition_code"] = 3
+        resource_by_id(document, "world2-branches")["branches"][0]["condition_code"] = 3
         rebuilt, report = build_resources(
             image, parse_resource_document(document, self.profile, revision),
             self.profile, revision,
@@ -421,7 +455,7 @@ class DoraemonProfileTests(unittest.TestCase):
             sha256=hashlib.sha256(image).hexdigest(),
         )
         document = decode_resources(image, self.profile, revision).as_dict()
-        chapters = document["resources"][-1]
+        chapters = resource_by_id(document, "world2-chapters")
         chapters["background_palette_ids"][0] = 2
         chapters["sprite_offsets"][0] = 32
         rebuilt, report = build_resources(
@@ -567,7 +601,7 @@ class DoraemonProfileTests(unittest.TestCase):
                     {"id": "world2-chapters", "kind": "chapter-palettes",
                      "codec": "doraemon.world2-chapters.v1",
                      **decode_world2_chapters(bytes((1, 4, 5, 16, 32, 48)))},
-                ],
+                ] + self.synthetic_tables(),
             }
             parse_resource_document(resource_document, self.profile, revision)
             document_path.write_text(json.dumps(resource_document), encoding="utf-8")

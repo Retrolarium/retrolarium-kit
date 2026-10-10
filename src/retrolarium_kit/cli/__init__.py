@@ -23,7 +23,6 @@ EXPECTED_ERRORS = {
     "retrolarium_kit.core.authoring": "AuthoringError",
     "retrolarium_kit.core.build_toolchains": "BuildToolchainError",
     "retrolarium_kit.core.project": "ProjectError",
-    "retrolarium_kit.games.pacman.migration": "PacmanMigrationError",
     "retrolarium_kit.games.smb.migration": "SmbMigrationError",
     "retrolarium_kit.studio.project": "StudioProjectError",
 }
