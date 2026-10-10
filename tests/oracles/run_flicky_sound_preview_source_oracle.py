@@ -77,7 +77,7 @@ def main() -> int:
                 pass
             else:
                 raise AssertionError(f"invalid preview accepted: {kwargs}")
-        pinned_script = source / "scripts/authoring/sound_vgm.py"
+        pinned_script = source / "src/sound/z80/driver.asm"
         pinned_script.write_bytes(pinned_script.read_bytes() + b"\n# stale source probe\n")
         try:
             studio_flicky_sound_preview(
@@ -85,7 +85,7 @@ def main() -> int:
         except StudioProjectError as error:
             assert "snapshot changed" in str(error)
         else:
-            raise AssertionError("changed Flicky sound renderer source was accepted")
+            raise AssertionError("a changed Flicky sound driver source was accepted")
         print("Flicky Sound preview: music, mute, SFX and native GUI note edit verified")
     return 0
 

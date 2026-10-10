@@ -353,7 +353,7 @@ def _project_text(descriptor: GameDescriptor, revision: Revision) -> str:
         f"source_mode = {_toml(descriptor.source_mode)}",
         "",
         "[source]",
-        *(['manifest = "flicky-source/config/authoring/content_studios.json"'] if flicky else
+        *(['manifest = "flicky-source/retrolarium-flicky-snapshot.json"'] if flicky else
           [f"rom = {_toml(up + '/' + revision.rom)}"]),
         f"sha256 = {_toml(revision.sha256)}",
         *([] if flicky else [f"repository = {_toml(up)}"]),

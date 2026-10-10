@@ -16,7 +16,6 @@ from retrolarium_core.contracts import ContractError, load_disassembly_manifest
 from retrolarium_kit.games.flicky.content import (
     CANONICAL_SHA256 as FLICKY_SHA256,
     ROM_NAME as FLICKY_ROM_NAME,
-    SNAPSHOT_RECORD as FLICKY_SNAPSHOT_RECORD,
     SOURCE_DIRECTORY as FLICKY_SOURCE_DIRECTORY,
     WORKSPACE_FILES as FLICKY_WORKSPACE_FILES,
     validate_flicky_source_snapshot,
@@ -74,7 +73,7 @@ def create_flicky_studio_project(project_root: Path) -> dict[str, Any]:
         'id = "flicky-ue"', 'name = "Flicky (UE)"',
         'platform = "megadrive"', 'profile = "flicky-ue.v1"',
         'source_mode = "flicky-content"', "", "[source]",
-        'manifest = "flicky-source/config/authoring/content_studios.json"',
+        'manifest = "flicky-source/retrolarium-flicky-snapshot.json"',
         f'sha256 = "{FLICKY_SHA256}"', "", "[workspace]",
         'layout = "two-row"', 'startup_tab = "levels"',
     ]
@@ -317,16 +316,15 @@ def upgrade_flicky_studio_project(
         raise StudioProjectError("Flicky upgrade requires canonical flicky-ue.v1")
     project_root = Path(inspection["project_root"])
     source_root = project_root / FLICKY_SOURCE_DIRECTORY
-    snapshot_record = source_root / FLICKY_SNAPSHOT_RECORD
     objects_source = source_root / "src/game/bonus/objects.s"
-    skipped_documents = (["levels.bonus_placements"]
-                         if not snapshot_record.is_file() and not objects_source.exists()
-                         else [])
+    # A project's snapshot always has its record; a snapshot without the
+    # source objects (a bare test fixture) has nothing to upgrade from.
+    skipped_documents = [] if objects_source.exists() else ["levels.bonus_placements"]
     bonus_document_path: Path | None = None
     bonus_document_payload: str | None = None
     title_document_path: Path | None = None
     title_document_payload: str | None = None
-    if snapshot_record.is_file():
+    if objects_source.exists():
         try:
             validate_flicky_source_snapshot(project_root)
             levels_tab = next(tab for tab in inspection["workspace"]["tabs"]
@@ -358,10 +356,6 @@ def upgrade_flicky_studio_project(
             raise StudioProjectError(
                 f"cannot safely upgrade Flicky bonus placements: {exc}"
             ) from exc
-    elif objects_source.exists():
-        raise StudioProjectError(
-            "cannot upgrade Flicky bonus placements without a pinned source snapshot"
-        )
     payload = source_path.read_bytes().decode("utf-8")
     parsed = tomllib.loads(payload)
     raw_tabs = parsed["workspace"]["tabs"]

@@ -8,7 +8,6 @@ ignored build/ directory; the neighboring source checkout is read-only.
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -80,13 +79,10 @@ def timer_animation_address(rom: bytes, delay: int) -> tuple[int, list[int]]:
 
 
 def sound_source_model(source: Path):
-    """Load the imported source oracle without importing the sibling checkout."""
-    path = source / "scripts/authoring/sound_studio_model.py"
-    spec = importlib.util.spec_from_file_location("flicky_sound_source_oracle", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    """The kit's Flicky sound document model (the source path is unused)."""
+    from retrolarium_kit.games.flicky.workspace import sound
+
+    return sound
 
 
 def main() -> int:
@@ -579,7 +575,7 @@ def main() -> int:
         relocated_file = relocated_project / project_file.name
         relocated = build_studio_project(relocated_file)
         assert relocated["artifact"]["sha256"] == CANONICAL_SHA256, "relocated build must be exact"
-        source_file = relocated_project / SOURCE_DIRECTORY / "scripts/authoring/build_content.py"
+        source_file = relocated_project / SOURCE_DIRECTORY / "src/main.s"
         source_file.write_bytes(source_file.read_bytes() + b"\n")
         stale_source = verify_studio_project(relocated_file)
         assert stale_source["status"] == "mismatch"

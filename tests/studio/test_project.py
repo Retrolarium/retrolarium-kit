@@ -101,13 +101,13 @@ class StudioProjectTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source = root / "flicky-source"
-            manifest_path = source / "config/authoring/content_studios.json"
-            manifest_path.parent.mkdir(parents=True)
-            manifest_path.write_text(json.dumps({
+            record = source / "retrolarium-flicky-snapshot.json"
+            record.parent.mkdir(parents=True)
+            record.write_text(json.dumps({
+                "schema": "retrolarium.flicky-source-snapshot",
                 "schema_version": 1,
-                "profile": "canonical",
-                "image_size": 131072,
-                "image_sha1": "83d8bbf0a9b38c42a0bf492d105cc3abe9644a96",
+                "canonical_sha256": "4df1a91e08376ae773a6eb8e5abe310f94ca39d8f81583b91a9477fedcb68c11",
+                "files": {},
             }), encoding="utf-8")
             for relative in FLICKY_WORKSPACE_FILES.values():
                 document = source / relative
