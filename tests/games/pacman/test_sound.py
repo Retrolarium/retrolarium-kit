@@ -38,6 +38,8 @@ from retrolarium_kit.platform.nes.resources import (
 
 
 ORDER = [2, 6, 10, 11, 12, 9, 7, 13, 14, 8, 3, 0, 1, 4, 5, 15]
+# Equal-tempered periods from A2 up, as a stand-in for the game's table.
+PERIODS = tuple(round(1_789_773 / (16 * 110 * 2 ** (step / 12))) - 1 for step in range(12))
 
 
 def parameters(capacity: int = 256) -> dict[str, object]:
@@ -155,18 +157,18 @@ class PacmanSoundTests(unittest.TestCase):
             import_midi_commands(midi_file(low), 0, 0)
 
     def test_preview_is_deterministic_mono_pcm_wav(self) -> None:
-        first = render_stream_wav(stream(3), sample_rate=8_000)
-        second = render_stream_wav(stream(3), sample_rate=8_000)
+        first = render_stream_wav(stream(3), sample_rate=8_000, periods=PERIODS)
+        second = render_stream_wav(stream(3), sample_rate=8_000, periods=PERIODS)
         self.assertEqual(first, second)
         self.assertEqual(first[:4], b"RIFF")
         self.assertEqual(first[8:12], b"WAVE")
         self.assertGreater(len(first), 44)
 
     def test_preview_mixes_slots_playing_together(self) -> None:
-        alone = render_stream_wav(stream(3), sample_rate=8_000)
-        mixed = render_stream_wav(stream(3), sample_rate=8_000, also=(stream(5),))
+        alone = render_stream_wav(stream(3), sample_rate=8_000, periods=PERIODS)
+        mixed = render_stream_wav(stream(3), sample_rate=8_000, periods=PERIODS, also=(stream(5),))
         self.assertNotEqual(alone, mixed)
-        self.assertEqual(mixed, render_stream_wav(stream(3), sample_rate=8_000, also=(stream(5),)))
+        self.assertEqual(mixed, render_stream_wav(stream(3), sample_rate=8_000, periods=PERIODS, also=(stream(5),)))
         self.assertGreaterEqual(len(mixed), len(alone))
 
     def test_nes_resource_bundle_rebuilds_pointer_table_and_arena(self) -> None:
@@ -273,6 +275,14 @@ class PacmanSoundTests(unittest.TestCase):
                 edited["resources"][0]["slots"][3]["stream"]["commands"][0],
                 {"kind": "note", "value": 0, "duration": 30},
             )
+            # The project's render-tables resource gives the preview the
+            # engine's note periods.
+            edited["resources"].append({
+                "id": "render-tables", "kind": "tables", "codec": "nes.byte-tables.v1",
+                "tables": {"note_period_base_pairs": [byte for period in PERIODS
+                                                      for byte in (period >> 8, period & 0xFF)]},
+            })
+            edited_path.write_text(json.dumps(edited), encoding="utf-8")
             preview = render_document_wav(
                 edited_path, wav_path, resource_id="sounds", slot=3,
                 sample_rate=8_000, profile_path=profile_path,

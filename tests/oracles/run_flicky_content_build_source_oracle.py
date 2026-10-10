@@ -314,7 +314,7 @@ def main() -> int:
         sequences_original = sequences_path.read_bytes()
         sequences_document = json.loads(sequences_original)
         mapping = next(record for record in sequences_document["mappings"]
-                       if record["id"] == "Obj_TitleCursorData")
+                       if record["id"] in ("Obj_TitlePushStartData", "Obj_TitleCursorData"))
         original_mapping = mapping_bytes(mapping)
         assert original_bytes.count(original_mapping) == 1, \
             "source mapping has no unique ROM address"

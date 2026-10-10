@@ -1,4 +1,10 @@
-"""Profile-aware procedural metatile renderer for SMB-family level streams."""
+"""Profile-aware procedural metatile renderer for SMB-family level streams.
+
+The renderer follows the area parser's logic; every metatile it lays out
+comes from the game. The level-tables resource (codec nes.byte-tables.v1)
+reads the parser's tables and the metatiles its instructions load from the
+image built from the disassembly, so the kit holds none of them.
+"""
 
 from __future__ import annotations
 
@@ -8,72 +14,58 @@ from typing import Mapping, Sequence
 from retrolarium_kit.games.smb.level import AREA_TYPES, positioned_area_objects, positioned_enemy_records
 
 
-BACKGROUND_SCENERY_OFFSETS = (0x00, 0x30, 0x60)
-BACKGROUND_SCENERY_PATTERNS = (
-    0x93, 0, 0, 0x11, 0x12, 0x12, 0x13, 0, 0, 0x51, 0x52, 0x53, 0, 0, 0, 0,
-    0, 0, 0x01, 0x02, 0x02, 0x03, 0, 0, 0, 0, 0, 0, 0x91, 0x92, 0x93, 0,
-    0, 0, 0, 0x51, 0x52, 0x53, 0x41, 0x42, 0x43, 0, 0, 0, 0, 0, 0x91, 0x92,
-    0x97, 0x87, 0x88, 0x89, 0x99, 0, 0, 0, 0x11, 0x12, 0x13, 0xA4, 0xA5, 0xA5, 0xA5, 0xA6,
-    0x97, 0x98, 0x99, 0x01, 0x02, 0x03, 0, 0xA4, 0xA5, 0xA6, 0, 0x11, 0x12, 0x12, 0x12, 0x13,
-    0, 0, 0, 0, 0x01, 0x02, 0x02, 0x03, 0, 0xA4, 0xA5, 0xA5, 0xA6, 0, 0, 0,
-    0x11, 0x12, 0x12, 0x13, 0, 0, 0, 0, 0, 0, 0, 0x9C, 0, 0x8B, 0xAA, 0xAA,
-    0xAA, 0xAA, 0x11, 0x12, 0x13, 0x8B, 0, 0x9C, 0x9C, 0, 0, 0x01, 0x02, 0x03, 0x11, 0x12,
-    0x12, 0x13, 0, 0, 0, 0, 0xAA, 0xAA, 0x9C, 0xAA, 0, 0x8B, 0, 0x01, 0x02, 0x03,
-)
-BACKGROUND_SCENERY_METATILES = (
-    0x80, 0x83, 0, 0x81, 0x84, 0, 0x82, 0x85, 0,
-    0x02, 0, 0, 0x03, 0, 0, 0x04, 0, 0,
-    0, 0x05, 0x06, 0x07, 0x06, 0x0A, 0, 0x08, 0x09,
-    0x4D, 0, 0, 0x0D, 0x0F, 0x4E, 0x0E, 0x4E, 0x4E,
-)
-FOREGROUND_SCENERY_OFFSETS = (0x00, 0x0D, 0x1A)
-FOREGROUND_SCENERY_METATILES = (
-    0x86, 0x87, 0x87, 0x87, 0x87, 0x87, 0x87, 0x87, 0x87, 0x87, 0x87, 0x69, 0x69,
-    0, 0, 0, 0, 0, 0x45, 0x47, 0x47, 0x47, 0x47, 0x47, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x86, 0x87,
-)
-TERRAIN_RENDER_MASKS = (
-    (0x00, 0x00), (0x00, 0x18), (0x01, 0x18), (0x07, 0x18),
-    (0x0F, 0x18), (0xFF, 0x18), (0x01, 0x1F), (0x07, 0x1F),
-    (0x0F, 0x1F), (0x81, 0x1F), (0x01, 0x00), (0x8F, 0x1F),
-    (0xF1, 0x1F), (0xF9, 0x18), (0xF1, 0x18), (0xFF, 0x1F),
-)
-CASTLE_STRUCTURE_METATILES = (
-    0, 0x45, 0x45, 0x45, 0, 0, 0x48, 0x47, 0x46, 0,
-    0x45, 0x49, 0x49, 0x49, 0x45, 0x47, 0x47, 0x4A, 0x47, 0x47,
-    0x47, 0x47, 0x4B, 0x47, 0x47, 0x49, 0x49, 0x49, 0x49, 0x49,
-    0x47, 0x4A, 0x47, 0x4A, 0x47, 0x47, 0x4B, 0x47, 0x4B, 0x47,
-    0x47, 0x47, 0x47, 0x47, 0x47, 0x4A, 0x47, 0x4A, 0x47, 0x4A,
-    0x4B, 0x47, 0x4B, 0x47, 0x4B,
-)
-SMALL_OBJECTS = (
-    ((0xC1,), (0xC1,)), ((0xC0,), (0xC0,)), ((0x5F,), (0x5F,)),
-    ((0x60,), (0x60,)), ((0x55,), (0x5A,)), ((0x56,), (0x5B,)),
-    ((0x57,), (0x5C,)), ((0x58,), (0x5D,)), ((0x59,), (0x5E,)),
-    ((0x6B, 0x6C), (0x6B, 0x6C)), ((0xC4,), (0xC4,)),
-    ((0x67, 0x68), (0x67, 0x68)),
-)
+# Brick and question-block objects per engine: question blocks come first in
+# the block table, then a row of item bricks for ground areas and one for the
+# others, each this long.
+ITEM_BRICK_COUNTS = {"smb1": 5, "ann": 5, "smb2": 6}
+UPSIDE_DOWN_PIPES = frozenset({"ann", "smb2"})
 
 
 @dataclass(frozen=True)
 class SmbLevelRendering:
-    terrain_metatiles: tuple[int, ...] = (0x69, 0x54, 0x52, 0x62)
-    foreground_scenery_metatiles: tuple[int, ...] = FOREGROUND_SCENERY_METATILES
-    brick_metatiles: tuple[int, ...] = (0x22, 0x51, 0x52, 0x52, 0x88)
-    solid_metatiles: tuple[int, ...] = (0x69, 0x61, 0x61, 0x62)
-    coin_metatiles: tuple[int, ...] = (0xC3, 0xC2, 0xC2, 0xC2)
-    side_pipe_top_metatiles: tuple[int, ...] = (0x1C, 0x1D, 0x1E, 0x15)
-    side_pipe_bottom_metatiles: tuple[int, ...] = (0x1F, 0x20, 0x21, 0x15)
-    castle_special_metatiles: tuple[int, ...] = (0xC5, 0x0C, 0x89)
-    secondary_ledge_metatiles: tuple[int, ...] = (0x19, 0x1A, 0x1B)
-    secondary_ledge_support_metatiles: tuple[int, ...] = (0x4F, 0x50)
-    cannon_metatiles: tuple[int, ...] = (0x64, 0x65, 0x66)
-    bridge_metatile: int = 0x63
-    flagpole_metatiles: tuple[int, ...] = (0x24, 0x25, 0x61)
-    staircase_metatile: int = 0x61
-    residual_flag_metatile: int = 0x6D
-    upside_down_pipes: bool = False
-    small_objects: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...] = SMALL_OBJECTS
+    """What one engine renders with: its id (smb1, ann or smb2) and the
+    tables of the project's level-tables resource."""
+
+    engine: str
+    tables: Mapping[str, Sequence[int]]
+
+    @classmethod
+    def from_resource(cls, resource: Mapping[str, object], engine: str) -> "SmbLevelRendering":
+        if engine not in ITEM_BRICK_COUNTS:
+            raise ValueError(f"unsupported SMB level rendering {engine!r}")
+        tables = resource.get("tables")
+        if not isinstance(tables, Mapping):
+            raise ValueError("the level-tables resource holds no tables")
+        return cls(engine, {name: tuple(values) for name, values in tables.items()})
+
+    def __getitem__(self, name: str) -> Sequence[int]:
+        return self.tables[name]
+
+    def one(self, name: str) -> int:
+        return self.tables[name][0]
+
+    def small_object(self, value: int, area_type: int) -> tuple[int, ...]:
+        """The metatiles of row-object value (identifier 0), top down."""
+        blocks = self["block_metatiles"]
+        bricks = ITEM_BRICK_COUNTS[self.engine]
+        questions = len(blocks) - 2 * bricks
+        if value < questions:
+            return (blocks[value],)
+        if value < questions + bricks:
+            return (blocks[value + (0 if area_type == 1 else bricks)],)
+        extra = value - questions - bricks
+        if extra == 0:
+            return (self.one("water_pipe_top"), self.one("water_pipe_bottom"))
+        if extra == 1:
+            return (self.one("empty_block"),)
+        if extra == 2:
+            return (self.one("jumpspring_top"), self.one("jumpspring_bottom"))
+        return ()
+
+    def side_pipe(self, part: str) -> tuple[int, ...]:
+        """A sideways pipe's top or bottom row, left to right (the game's
+        tables run right to left)."""
+        return tuple(reversed(self[f"side_pipe_{part}_metatiles"]))
 
 
 @dataclass(frozen=True)
@@ -110,8 +102,8 @@ def render_level_scene(
     objects: Sequence[Mapping[str, object]],
     enemies: Sequence[Mapping[str, object]],
     *,
+    rendering: SmbLevelRendering,
     world: int = 0,
-    rendering: SmbLevelRendering = SmbLevelRendering(),
 ) -> SmbLevelScene:
     positioned_objects = positioned_area_objects(objects)
     positioned_enemies = positioned_enemy_records(enemies)
@@ -155,26 +147,27 @@ def _base_column(column: int, area_type: int, world: int, foreground: int,
                  rendering: SmbLevelRendering) -> list[int]:
     values = [0] * 13
     if background:
-        index = BACKGROUND_SCENERY_OFFSETS[background - 1] + ((column // 16) % 3) * 16 + column % 16
-        pattern = BACKGROUND_SCENERY_PATTERNS[index]
+        index = rendering["background_scenery_offsets"][background - 1] + ((column // 16) % 3) * 16 + column % 16
+        pattern = rendering["background_scenery_patterns"][index]
         if pattern:
             row, offset = pattern >> 4, ((pattern & 15) - 1) * 3
             for part in range(3):
                 if row + part >= 11: break
-                values[row + part] = BACKGROUND_SCENERY_METATILES[offset + part]
+                values[row + part] = rendering["background_scenery_metatiles"][offset + part]
     if foreground:
-        offset = FOREGROUND_SCENERY_OFFSETS[foreground - 1]
+        offset = rendering["foreground_scenery_offsets"][foreground - 1]
         for row in range(13):
-            value = rendering.foreground_scenery_metatiles[offset + row]
+            value = rendering["foreground_scenery_metatiles"][offset + row]
             if value: values[row] = value
-    terrain_value = rendering.terrain_metatiles[3] if area_type == 0 and world == 7 else rendering.terrain_metatiles[area_type]
-    if cloud: terrain_value = 0x88
-    masks = TERRAIN_RENDER_MASKS[terrain]
+    terrain_metatiles = rendering["terrain_metatiles"]
+    terrain_value = terrain_metatiles[3] if area_type == 0 and world == 7 else terrain_metatiles[area_type]
+    if cloud: terrain_value = rendering.one("cloud_terrain")
+    masks = rendering["terrain_render_masks"][terrain * 2:terrain * 2 + 2]
     for row in range(13):
         byte, bit = (masks[0], row) if row < 8 else (masks[1], row - 8)
         if cloud and row >= 8: byte &= 8
         if byte & (1 << bit):
-            values[row] = rendering.terrain_metatiles[1] if area_type == 2 and row >= 11 else terrain_value
+            values[row] = terrain_metatiles[1] if area_type == 2 and row >= 11 else terrain_value
     return values
 
 
@@ -192,21 +185,24 @@ def _render_object(grid: list[list[int]], item: Mapping[str, object], area_type:
     value, identifier = control & 15, (control >> 4) & 7
     if row <= 11:
         if identifier == 0:
-            if value < len(rendering.small_objects):
-                for offset, tile in enumerate(rendering.small_objects[value][0 if area_type == 1 else 1]):
-                    _write(grid, column, row + offset, tile)
+            for offset, tile in enumerate(rendering.small_object(value, area_type)):
+                _write(grid, column, row + offset, tile)
         elif identifier == 1:
             _render_style(grid, column, row, value, style, rendering)
         elif identifier in {2, 3, 4}:
-            tile = rendering.brick_metatiles[4 if cloud else area_type] if identifier == 2 else rendering.solid_metatiles[area_type] if identifier == 3 else rendering.coin_metatiles[area_type]
+            tile = (rendering["brick_metatiles"][4 if cloud else area_type] if identifier == 2
+                    else rendering["solid_block_metatiles"][area_type] if identifier == 3
+                    else rendering["coin_metatiles"][area_type])
             for offset in range(value + 1): _write(grid, column + offset, row, tile)
         elif identifier in {5, 6}:
-            tile = rendering.brick_metatiles[area_type] if identifier == 5 else rendering.solid_metatiles[area_type]
+            tile = rendering["brick_metatiles"][area_type] if identifier == 5 else rendering["solid_block_metatiles"][area_type]
             _fill_down(grid, column, row, value, tile)
         else:
-            _write(grid, column, row, 0x12); _write(grid, column + 1, row, 0x13)
+            # A decoration pipe: the game's table holds right, left pairs.
+            pipe = rendering["vertical_pipe_metatiles"]
+            _write(grid, column, row, pipe[5]); _write(grid, column + 1, row, pipe[4])
             for offset in range(1, (value & 7) + 1):
-                _write(grid, column, row + offset, 0x14); _write(grid, column + 1, row + offset, 0x15)
+                _write(grid, column, row + offset, pipe[7]); _write(grid, column + 1, row + offset, pipe[6])
     elif row == 12:
         _render_row_c(grid, column, identifier, value, area_type, rendering)
     elif row == 13 and control & 0x40:
@@ -218,84 +214,97 @@ def _render_object(grid: list[list[int]], item: Mapping[str, object], area_type:
 def _render_style(grid: list[list[int]], column: int, row: int, length: int,
                   style: int, rendering: SmbLevelRendering) -> None:
     if style == 1:
-        start, middle, end = rendering.secondary_ledge_metatiles
+        ledge = "mushroom_ledge" if "mushroom_ledge_start" in rendering.tables else "cloud_ledge"
+        start, middle, end = (rendering.one(f"{ledge}_{part}") for part in ("start", "middle", "end"))
         for offset in range(length + 1):
             _write(grid, column + offset, row, start if offset == 0 else end if offset == length else middle)
-        top, body = rendering.secondary_ledge_support_metatiles
-        center = column + (length + 1) // 2
-        _write(grid, center, row + 1, top); _fill_down(grid, center, row + 2, 12, body)
+        if "mushroom_stem" in rendering.tables:
+            center = column + (length + 1) // 2
+            _write(grid, center, row + 1, rendering.one("mushroom_stem_top"))
+            _fill_down(grid, center, row + 2, 12, rendering.one("mushroom_stem"))
     elif style == 2:
-        top, middle, bottom = rendering.cannon_metatiles
-        _write(grid, column, row, top)
-        if length: _write(grid, column, row + 1, middle)
-        if length > 1: _fill_down(grid, column, row + 2, length - 2, bottom)
+        _write(grid, column, row, rendering.one("cannon_top"))
+        if length: _write(grid, column, row + 1, rendering.one("cannon_middle"))
+        if length > 1: _fill_down(grid, column, row + 2, length - 2, rendering.one("cannon_bottom"))
     else:
+        start, middle, end = (rendering.one(f"tree_ledge_{part}") for part in ("start", "middle", "end"))
         for offset in range(length + 1):
-            _write(grid, column + offset, row, 0x16 if offset == 0 else 0x18 if offset == length else 0x17)
-            if 0 < offset < length: _fill_down(grid, column + offset, row + 1, 12, 0x4C)
+            _write(grid, column + offset, row, start if offset == 0 else end if offset == length else middle)
+            if 0 < offset < length: _fill_down(grid, column + offset, row + 1, 12, rendering.one("tree_ledge_trunk"))
 
 
 def _render_row_c(grid: list[list[int]], column: int, identifier: int, length: int,
                   area_type: int, rendering: SmbLevelRendering) -> None:
     count = length + 1
     if identifier == 0:
-        hole = (0x87, 0, 0, 0)[area_type]
+        hole = rendering["hole_metatiles"][area_type]
         for x in range(column, column + count):
             for row in range(8, 13): _write(grid, x, row, hole)
     elif identifier == 1:
-        for offset in range(count): _write(grid, column + offset, 0, 0x42 if offset == 0 else 0x43 if offset == count - 1 else 0x41)
+        start, middle, end = rendering["pulley_rope_metatiles"]
+        for offset in range(count): _write(grid, column + offset, 0, start if offset == 0 else end if offset == count - 1 else middle)
     elif identifier in {2, 3, 4}:
         row = (6, 7, 9)[identifier - 2]
-        for x in range(column, column + count): _write(grid, x, row, 0x0B); _fill_down(grid, x, row + 1, 12, rendering.bridge_metatile)
+        for x in range(column, column + count):
+            _write(grid, x, row, rendering.one("bridge_top")); _fill_down(grid, x, row + 1, 12, rendering.one("bridge_support"))
     elif identifier == 5:
-        for x in range(column, column + count): _write(grid, x, 10, 0x86); _fill_down(grid, x, 11, 1, 0x87)
+        for x in range(column, column + count):
+            _write(grid, x, 10, rendering.one("water_surface")); _fill_down(grid, x, 11, 1, rendering.one("water_body"))
     elif identifier in {6, 7}:
         row = 3 if identifier == 6 else 7
-        for x in range(column, column + count): _write(grid, x, row, 0xC0)
+        for x in range(column, column + count): _write(grid, x, row, rendering.one("coin_row"))
 
 
 def _render_row_d(grid: list[list[int]], column: int, identifier: int,
                   rendering: SmbLevelRendering) -> None:
     if identifier == 0:
+        top, bottom = rendering.side_pipe("top"), rendering.side_pipe("bottom")
         for offset in range(4):
-            _write(grid, column + offset, 9, rendering.side_pipe_top_metatiles[offset])
-            _write(grid, column + offset, 10, rendering.side_pipe_bottom_metatiles[offset])
-        _write(grid, column + 2, 7, 0x10); _write(grid, column + 2, 8, 0x14)
-        _write(grid, column + 3, 7, 0x11); _write(grid, column + 3, 8, 0x15)
+            _write(grid, column + offset, 9, top[offset])
+            _write(grid, column + offset, 10, bottom[offset])
+        # An entrance pipe above it: the game's table holds right, left pairs.
+        pipe = rendering["vertical_pipe_metatiles"]
+        _write(grid, column + 2, 7, pipe[1]); _write(grid, column + 2, 8, pipe[3])
+        _write(grid, column + 3, 7, pipe[0]); _write(grid, column + 3, 8, pipe[2])
     elif identifier == 1:
-        ball, shaft, base = rendering.flagpole_metatiles
-        _write(grid, column, 0, ball)
-        for row in range(1, 10): _write(grid, column, row, shaft)
-        _write(grid, column, 10, base)
+        _write(grid, column, 0, rendering.one("flagpole_ball"))
+        for row in range(1, 10): _write(grid, column, row, rendering.one("flagpole_shaft"))
+        _write(grid, column, 10, rendering.one("flagpole_base"))
     elif identifier in {2, 3, 4}:
-        row = (6, 7, 8)[identifier - 2]
-        for offset in range(13 if identifier == 4 else 1): _write(grid, column + offset, row, rendering.castle_special_metatiles[identifier - 2])
+        row = rendering["castle_object_rows"][identifier - 2]
+        tile = rendering["castle_object_metatiles"][identifier - 2]
+        for offset in range(13 if identifier == 4 else 1): _write(grid, column + offset, row, tile)
 
 
 def _render_row_f(grid: list[list[int]], column: int, identifier: int, length: int,
                   page: int, rendering: SmbLevelRendering) -> None:
-    if identifier == 0: _fill_down(grid, column, 0, 12, 0x40)
+    if identifier == 0: _fill_down(grid, column, 0, 12, rendering.one("rope"))
     elif identifier == 1:
-        _fill_down(grid, column, 1, 12, 0x44); _fill_down(grid, column, 1, length, 0x40)
+        _fill_down(grid, column, 1, 12, rendering.one("balance_rope_top")); _fill_down(grid, column, 1, length, rendering.one("rope"))
     elif identifier == 2:
+        structure = rendering["castle_structure_metatiles"]
         start = min(length, 10)
         for x_offset in range(5):
             table_column = 4 - x_offset
-            for row in range(start, 11): _write(grid, column + x_offset, row, CASTLE_STRUCTURE_METATILES[table_column + (row - start) * 5])
+            for row in range(start, 11): _write(grid, column + x_offset, row, structure[table_column + (row - start) * 5])
         if page:
-            _write(grid, column + 3, 10, 0x50)
-            if start == 0: _write(grid, column + 1, 10, 0x50)
+            stop = rendering.one("castle_stop_block")
+            _write(grid, column + 3, 10, stop)
+            if start == 0: _write(grid, column + 1, 10, stop)
     elif identifier == 3:
-        heights, rows = (7, 7, 6, 5, 4, 3, 2, 1, 0), (3, 3, 4, 5, 6, 7, 8, 9, 10)
+        heights, rows = rendering["staircase_heights"], rendering["staircase_start_rows"]
         for offset in range(min(length + 1, len(rows))):
-            index = 8 - offset; _fill_down(grid, column + offset, rows[index], heights[index], rendering.staircase_metatile)
+            index = len(rows) - 1 - offset
+            _fill_down(grid, column + offset, rows[index], heights[index], rendering.one("staircase"))
     elif identifier == 4:
+        shaft = rendering["side_pipe_shaft_metatiles"]
         bottom, mouth = max(0, length - 2), max(0, length - 2) + 1
-        for row in range(bottom + 1): _write(grid, column + 2, row, 0x14); _write(grid, column + 3, row, 0x15)
-        for offset, tile in enumerate(rendering.side_pipe_top_metatiles): _write(grid, column + offset, mouth, tile)
-        for offset, tile in enumerate(rendering.side_pipe_bottom_metatiles): _write(grid, column + offset, mouth + 1, tile)
-    elif identifier == 5: _fill_down(grid, column, 2, length, rendering.residual_flag_metatile)
-    elif identifier in {6, 7} and rendering.upside_down_pipes:
+        for row in range(bottom + 1): _write(grid, column + 2, row, shaft[1]); _write(grid, column + 3, row, shaft[0])
+        for offset, tile in enumerate(rendering.side_pipe("top")): _write(grid, column + offset, mouth, tile)
+        for offset, tile in enumerate(rendering.side_pipe("bottom")): _write(grid, column + offset, mouth + 1, tile)
+    elif identifier == 5: _fill_down(grid, column, 2, length, rendering.one("residual_flag"))
+    elif identifier in {6, 7} and rendering.engine in UPSIDE_DOWN_PIPES:
+        pipe = rendering["vertical_pipe_metatiles"]
         start, count = (1 if identifier == 6 else 4), max(1, length & 7)
-        for offset in range(count): _write(grid, column, start + offset, 0x14); _write(grid, column + 1, start + offset, 0x15)
-        _write(grid, column, start + count, 0x10); _write(grid, column + 1, start + count, 0x11)
+        for offset in range(count): _write(grid, column, start + offset, pipe[3]); _write(grid, column + 1, start + offset, pipe[2])
+        _write(grid, column, start + count, pipe[1]); _write(grid, column + 1, start + count, pipe[0])

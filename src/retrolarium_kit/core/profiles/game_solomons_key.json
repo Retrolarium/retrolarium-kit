@@ -39,6 +39,10 @@
         "ready_frames": 1000
       },
       "resource_overrides": [
+        {"id": "render-tables", "parameters": {"tables": {
+            "constellation_tile_patterns": {"file_offset": 6507, "size": 96},
+            "constellation_palettes": {"file_offset": 6603, "size": 12}
+          }}},
         {"id": "room-blocks", "parameters": {"prg_offset": 24492}},
         {"id": "enemy-streams", "parameters": {
           "pointer_table_prg": 23660,
@@ -122,6 +126,10 @@
         "ready_frames": 1000
       },
       "resource_overrides": [
+        {"id": "render-tables", "parameters": {"tables": {
+            "constellation_tile_patterns": {"file_offset": 6374, "size": 96},
+            "constellation_palettes": {"file_offset": 6470, "size": 12}
+          }}},
         {"id": "special-rooms", "parameters": {
           "bonus_positions_prg": 6469,
           "bonus_types_prg": 6501,
@@ -238,8 +246,20 @@
       "parameters": {
         "resource_ids": [
           "chr-bank-0", "chr-bank-1", "chr-bank-2", "chr-bank-3",
-          "room-palettes", "ending-fade"
+          "room-palettes", "ending-fade", "render-tables"
         ]
+      }
+    },
+    {
+      "id": "render-tables",
+      "kind": "tables",
+      "codec": "nes.byte-tables.v1",
+      "capacity_policy": "fixed",
+      "parameters": {
+        "tables": {
+          "constellation_tile_patterns": {"file_offset": 6499, "size": 96},
+          "constellation_palettes": {"file_offset": 6595, "size": 12}
+        }
       }
     },
     {

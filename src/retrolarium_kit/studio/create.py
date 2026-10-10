@@ -143,7 +143,8 @@ def _project_source(inspection: Mapping[str, Any]) -> Path:
 
 def _add_bundle_resources(path: Path, *, profile: str, codec: str) -> list[str]:
     """Give a project's resource bundle the resources newer kits add to its
-    profile, decoded from the project's own source; edited resources stay."""
+    profile, decoded from the project's own source, and the newer kit's
+    tables read from the game; edited resources stay."""
 
     from retrolarium_kit.games.catalog import extract_game
 
@@ -161,14 +162,25 @@ def _add_bundle_resources(path: Path, *, profile: str, codec: str) -> list[str]:
     os.close(descriptor)
     temporary = Path(temporary_name)
     try:
-        extract_game(_project_source(inspection), temporary)
+        # By name: a revision with a demo (All Night Nippon, Super Mario
+        # Bros. 2) extracts the demo by default.
+        extract_game(_project_source(inspection), temporary, resource="resource-bundle")
         fresh = json.loads(temporary.read_text(encoding="utf-8"))
     finally:
         temporary.unlink(missing_ok=True)
-    added = [item["id"] for item in fresh["resources"] if item["id"] not in present]
+    by_id = {item.get("id"): item for item in document["resources"]}
+    # Tables read from the game (nes.byte-tables.v1) are never edited: a
+    # newer kit's set replaces the project's.
+    refreshed = [
+        item["id"] for item in fresh["resources"]
+        if item["id"] in present and item.get("codec") == "nes.byte-tables.v1" and by_id[item["id"]] != item
+    ]
+    added = [item["id"] for item in fresh["resources"] if item["id"] not in present] + refreshed
     if not added:
         return []
-    by_id = {item.get("id"): item for item in document["resources"]}
+    for item in fresh["resources"]:
+        if item["id"] in refreshed:
+            by_id[item["id"]] = item
     document["resources"] = [by_id.get(item["id"], item) for item in fresh["resources"]]
     payload = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
     descriptor, temporary_name = tempfile.mkstemp(prefix=".bundle-upgrade-", suffix=".json", dir=document_path.parent)
@@ -228,11 +240,18 @@ def _add_document_tab(
 
 
 def upgrade_solomon_studio_project(path: Path) -> dict[str, Any]:
-    """Add the screen text (documents/text.json) to a Solomon's Key project."""
-    return _add_document_tab(
+    """Add what newer kits edit to a Solomon's Key project: the screen text
+    (documents/text.json) and the graphics bundle's new resources (the
+    tables read from the game)."""
+    result = _add_document_tab(
         path, profile="solomons-key.v1", resource="text", document_name="text.json",
         tab_id="text", title="Text", kind="solomon.text", codec="solomon.text@1",
     )
+    added = _add_bundle_resources(path, profile="solomons-key.v1", codec="nes.chr-2bpp.v1")
+    if added:
+        result["status"] = "upgraded"
+    result["added_resources"] = added
+    return result
 
 
 def upgrade_smb_studio_project(path: Path) -> dict[str, Any]:
@@ -287,11 +306,18 @@ def upgrade_doraemon_studio_project(path: Path) -> dict[str, Any]:
 
 
 def upgrade_pacman_studio_project(path: Path) -> dict[str, Any]:
-    """Add the attract demo (documents/demo.json) to a Pac-Man project."""
-    return _add_document_tab(
+    """Add what newer kits edit to a Pac-Man project: the attract demo
+    (documents/demo.json) and the bundle's new resources (the round tables,
+    the tables read from the game)."""
+    result = _add_document_tab(
         path, profile="pacman.v1", resource="attract-demo", document_name="demo.json",
         tab_id="demo", title="Demo", kind="pacman.demo", codec="pacman.demo@1",
     )
+    added = _add_bundle_resources(path, profile="pacman.v1", codec="pacman.maze-rle.v1")
+    if added:
+        result["status"] = "upgraded"
+    result["added_resources"] = added
+    return result
 
 
 def upgrade_flicky_studio_project(

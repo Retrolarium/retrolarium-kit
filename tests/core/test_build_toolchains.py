@@ -19,6 +19,14 @@ from retrolarium_kit.core.build_toolchains import (
 )
 
 
+# The assemblers are built by tools/build_toolchains.ps1 and not tracked; the
+# tests that run them skip in a checkout that has not built them.
+PAYLOADS = (Path(__file__).resolve().parents[2] / "src" / "retrolarium_kit" / "core"
+            / "toolchains" / "payloads")
+BUILT = (PAYLOADS / "windows-x86_64").is_dir() and (PAYLOADS / "linux-x86_64").is_dir()
+needs_payloads = unittest.skipUnless(BUILT, "the assemblers are not built (tools/build_toolchains.ps1)")
+
+
 class BuildToolchainTests(unittest.TestCase):
     def test_host_names_are_stable(self) -> None:
         self.assertEqual(normalize_host("Windows", "AMD64"), "windows-x86_64")
@@ -33,35 +41,24 @@ class BuildToolchainTests(unittest.TestCase):
         self.assertEqual(
             manifest["suites"]["megadrive"]["components"], ["asl", "p2bin"]
         )
+        # Both hosts' AS builds come from the one source archive the kit
+        # ships, and every component names the script that builds it.
         sources = manifest["components"]["asl"]["corresponding_sources"]
-        self.assertEqual(
-            sources["windows-x86_64"]["revision"],
-            "721a327a803585e2d1f59acac93cbd0768213d06",
-        )
-        self.assertEqual(
-            sources["linux-x86_64"]["revision"],
-            "3a5d200f84be0418b3a49cda62749956e01a33a0",
-        )
-        self.assertEqual(
-            sources["windows-x86_64"]["binary_origin"]["commit"],
-            "10e7792967a38ed22c7871e77749bb13c45e2ae4",
-        )
-        self.assertEqual(
-            manifest["components"]["p2bin"]["hosts"]["linux-x86_64"]
-            ["binary_origin"]["commit"],
-            "1ce386fc63bcef58d53f87d51a2e8620ff24de9a",
-        )
+        self.assertEqual({source["revision"] for source in sources.values()},
+                         {"721a327a803585e2d1f59acac93cbd0768213d06"})
+        self.assertEqual(set(sources), {"windows-x86_64", "linux-x86_64"})
+        for component in manifest["components"].values():
+            self.assertEqual(component["build"], "tools/toolchains/build.sh")
+            self.assertEqual(set(component["hosts"]), {"windows-x86_64", "linux-x86_64"})
 
-    def test_packaged_windows_payloads_pass_every_hash(self) -> None:
-        status = packaged_toolchain_status("windows-x86_64")
-        self.assertTrue(status["suites"]["nes"]["available"])
-        self.assertTrue(status["suites"]["megadrive"]["available"])
+    @needs_payloads
+    def test_built_payloads_pass_every_hash_on_both_hosts(self) -> None:
+        for host in ("windows-x86_64", "linux-x86_64"):
+            status = packaged_toolchain_status(host)
+            self.assertTrue(status["suites"]["nes"]["available"], host)
+            self.assertTrue(status["suites"]["megadrive"]["available"], host)
 
-    def test_linux_reports_the_honest_partial_boundary(self) -> None:
-        status = packaged_toolchain_status("linux-x86_64")
-        self.assertFalse(status["suites"]["nes"]["available"])
-        self.assertTrue(status["suites"]["megadrive"]["available"])
-
+    @needs_payloads
     def test_materializes_verified_commands_and_as_environment(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -80,6 +77,7 @@ class BuildToolchainTests(unittest.TestCase):
                 sega.process_environment({"EXISTING": "yes"})["EXISTING"], "yes"
             )
 
+    @needs_payloads
     def test_unknown_suite_and_command_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaisesRegex(BuildToolchainError, "unknown"):
@@ -92,6 +90,7 @@ class BuildToolchainTests(unittest.TestCase):
             with self.assertRaisesRegex(BuildToolchainError, "no command"):
                 suite.command("asl")
 
+    @needs_payloads
     @unittest.skipUnless(os.name == "nt", "bundled PE smoke runs on Windows")
     def test_windows_compilers_report_pinned_versions(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -118,6 +117,7 @@ class BuildToolchainTests(unittest.TestCase):
             self.assertIn("ca65 V2.19 - Git 0fca835", ca65.stdout + ca65.stderr)
             self.assertIn("Macro Assembler 1.42 Beta [Bld 212]", asl.stdout + asl.stderr)
 
+    @needs_payloads
     @unittest.skipUnless(os.name == "nt", "bundled PE smoke runs on Windows")
     def test_windows_nes_suite_builds_a_binary(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -157,6 +157,7 @@ class BuildToolchainTests(unittest.TestCase):
             )
             self.assertEqual(output.read_bytes(), b"RL")
 
+    @needs_payloads
     @unittest.skipUnless(os.name == "nt", "bundled PE smoke runs on Windows")
     def test_windows_megadrive_suite_builds_a_binary(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

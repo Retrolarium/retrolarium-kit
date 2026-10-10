@@ -16,6 +16,8 @@ from retrolarium_kit.games.flicky.demo import (
 SOURCE = """Demo_ReadInput:
                 rts
 
+Demo_RoundIndexTable:       dc.b    2, $B, $15, $19
+
 Demo_InputStream0:  binclude "data/other/stream0.bin"
 Demo_InputStream0_End:
 Demo_InputStream1:  dc.w    $12, $801, $A00
@@ -44,7 +46,7 @@ class FlickyDemoTests(unittest.TestCase):
             root = Path(name)
             fixture(root)
             demos = export_attract_demos(root)
-            self.assertEqual([1, 10, 20, 24], [demo["round"] for demo in demos])
+            self.assertEqual([2, 11, 21, 25], [demo["round"] for demo in demos])
             self.assertEqual([{"frames": 18, "buttons": []},
                               {"frames": 5, "buttons": ["A", "RIGHT"]},
                               {"frames": 256, "buttons": []}], demos[0]["steps"])
