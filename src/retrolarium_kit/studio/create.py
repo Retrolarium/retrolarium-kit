@@ -777,7 +777,7 @@ def create_studio_project(
         templates = (
             ("solomon", "rooms", "Rooms & Objects", "solomon.rooms", "content",
              "solomon.rooms@3", ["edit", "preview", "restore", "undo"]),
-            ("solomon-mirrors", "mirrors", "Spawn Mirrors", "solomon.mirrors",
+            ("solomon-mirrors", "mirrors", "Mirrors", "solomon.mirrors",
              "content", "solomon.mirrors@3",
              ["edit", "restore", "undo"]),
             ("solomon-special", "special", "Special Rooms", "solomon.special",

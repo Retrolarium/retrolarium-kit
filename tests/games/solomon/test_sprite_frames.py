@@ -50,8 +50,8 @@ class SolomonSpriteFrameTests(unittest.TestCase):
         source, profile, revision = fixture()
         decoded = decode_sprite_frames(source, profile, revision)
         self.assertEqual(6, len(decoded.frames))
-        self.assertEqual(("right",), decoded.frames[0].wizard_facings)
-        self.assertEqual(("left",), decoded.frames[1].wizard_facings)
+        self.assertEqual(("right",), decoded.frames[0].player_facings)
+        self.assertEqual(("left",), decoded.frames[1].player_facings)
         self.assertEqual(27, len(decoded.frames[2].enemy_types))
         self.assertEqual(
             source, build_sprite_frames(source, decoded, profile, revision)[0]

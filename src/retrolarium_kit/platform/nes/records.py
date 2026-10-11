@@ -29,7 +29,8 @@ from retrolarium_kit.core.authoring import AuthoringError
 
 
 CODEC = "nes.record-table.v1"
-FIELD_KEYS = frozenset({"name", "label", "minimum", "maximum", "signed", "choices", "none", "locked", "unique"})
+FIELD_KEYS = frozenset({"name", "label", "minimum", "maximum", "signed", "choices", "names", "none", "locked",
+                        "unique"})
 
 
 class RecordTableError(AuthoringError):
@@ -45,7 +46,9 @@ def _integer(value: object, context: str, *, minimum: int = 0, maximum: int | No
 
 def _field(raw: object, records: int, context: str) -> dict[str, Any]:
     """One field description, normalized: name, label, minimum, maximum,
-    signed, and choices, none and locked when given."""
+    signed, and choices, names, none and locked when given. `names` is the
+    category of the game's names (its repository's config/names.json) the
+    studio shows for the values in place of the choices' neutral labels."""
     if not isinstance(raw, Mapping) or not set(raw) <= FIELD_KEYS or "name" not in raw:
         raise RecordTableError(f"{context} needs a name and only {sorted(FIELD_KEYS)}")
     name = raw["name"]
@@ -75,6 +78,10 @@ def _field(raw: object, records: int, context: str) -> dict[str, Any]:
                 raise RecordTableError(f"{context}.choices repeats {value}")
             seen.add(value)
         field["choices"] = [dict(choice) for choice in choices]
+    if "names" in raw:
+        if not isinstance(raw["names"], str) or not raw["names"].isidentifier():
+            raise RecordTableError(f"{context}.names must name a category")
+        field["names"] = raw["names"]
     if "none" in raw:
         field["none"] = _integer(raw["none"], f"{context}.none", minimum=0, maximum=255)
     if raw.get("unique", False) is not False:

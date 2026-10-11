@@ -68,12 +68,12 @@ def check_shared(document: dict, prg: bytes, layout: object,
                 {"initial_phase": item["initial_phase"],
                  "loop_phase": item["loop_phase"]}
                 for item in schedules],
-            f"{revision}: Spawn Mirror schedules disagree with oracle")
+            f"{revision}: mirror schedules disagree with oracle")
     require(document["mirror_enemy_sets"] == [
                 {"enemy_types": item["enemy_types"],
                  "loop_offset": item["loop_offset"]}
                 for item in enemy_sets],
-            f"{revision}: Spawn Mirror enemy sets disagree with oracle")
+            f"{revision}: mirror enemy sets disagree with oracle")
     require(document["special_rooms"]
             == without_raw(oracle.decode_special_room_data(prg, layout)),
             f"{revision}: special-room tables disagree with oracle")

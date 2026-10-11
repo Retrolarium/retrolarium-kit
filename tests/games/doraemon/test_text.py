@@ -25,7 +25,7 @@ MANIFEST = {
                      "text_spans": [{"id": "candy", "address": "0x8044", "size": 5}]}],
     },
     "ending_credits": {"address": "0x8050", "row_width": 8, "row_count": 2},
-    "signatures": [{"address": "0x8060", "bytes": "A9 48"}],
+    "signatures": [{"address": "0x8060", "size": 2, "crc32": "461bdcfd"}],
 }
 
 

@@ -18,7 +18,7 @@ src/retrolarium_kit/
   cli/        rltool: a module per command group; commands import what they run
   core/       game profiles (profiles/), authoring primitives, the generated-
               project runner with its bundled assemblers (toolchains/) and
-              OpenDiskSys (opendisksys/), MIDI
+              OpenDiskSys (opendisksys/), MIDI, the shared linter (lint/)
   platform/   console codecs: nes/ (the resource bundle, CHR, palettes,
               nametables, text, PPU packets, metatiles, APU effects) and fds/
   games/      a package per game: smb, pacman, castle_excellent, solomon, flicky,
@@ -127,6 +127,17 @@ repository's 3.0 or 4.0 release manifest: the descriptor, profile and revisions
 it names, the editors it lists as removed, and the kit version it pins, which
 must be the running kit's unless the manifest is still in `development`.
 
+### The game's names
+
+The names inside a game (its characters, enemies, items, places) and the lists
+that carry them (an animation's frames, the source files a codec reads) are the
+game's: its repository keeps them in `config/names.json`, in English, and the
+kit and the studio read them when a project opens (`core/game_names.py`). The
+kit keeps none of them; where one is missing, numbers stand in. The file's
+`guard` list feeds the core's name guard, which `tests/test_game_names.py` runs
+over this repository, together with its check for literal tables
+(`name_guard_tables.txt` lists the files that may hold one, and why).
+
 ## Record tables
 
 Many games keep small fixed tables in PRG: a stat per enemy, an offset per
@@ -134,13 +145,14 @@ weapon direction, a flag per room. A profile describes such a table once as a
 `nes.record-table.v1` resource: its record count and labels, and one or more
 tables at file offsets, each holding some of the fields record by record or
 field by field (`"columns": true`). A field is a byte with an optional range,
-signed reading, named choices, a `none` byte shown as null, `locked` records
-that stay as they are (the byte is code or another table's), and `unique` values
-(with as many choices as records, the records share the choices out). Two tables
-may share a byte; an edit that gives it two values is refused. The document
-repeats the field descriptions and record labels, so the studio's generic table
-view needs nothing else. Doraemon's object tables and its four sound drivers'
-effect routing use it.
+signed reading, named choices (with `names`, the studio shows the game's names
+for them), a `none` byte shown as null, `locked` records that stay as they are
+(the byte is code or another table's), and `unique` values (with as many choices
+as records, the records share the choices out). Two tables may share a byte; an
+edit that gives it two values is refused. The document repeats the field
+descriptions and record labels, so the studio's generic table view needs nothing
+else. Doraemon's object tables and its four sound drivers' effect routing use
+it.
 
 ## Bundled compiler suites
 
@@ -183,6 +195,36 @@ environment = sega.process_environment()
 
 AS is GPL-2.0-or-later: its source snapshot ships beside the binaries built from
 it, with the license. cc65 (zlib) and p2bin (ISC) notices ship as well.
+
+## Shared linter
+
+Every game repository keeps one house style, checked and applied by the kit: the
+ca65 layout of the NES disassemblies, the AS layout of the Mega Drive ones and a
+text-format contract for the rest of the tree (LF endings, no trailing spaces,
+one final newline, valid JSON). A game keeps only `config/lint.json`, which
+names its assembler dialect and source folders and the trees the text contract
+skips; checks about one game's own source stay in its repository.
+
+```json
+{
+  "schema": "retrolarium.lint",
+  "schema_version": 1,
+  "assembly": {"dialect": "ca65", "paths": ["src"]},
+  "text": {"json": "valid", "skip": ["assets/generated"]}
+}
+```
+
+```powershell
+rltool lint --project .
+rltool lint --project . --fix
+rltool lint --project . --fix --only assembly src/game/new_module.asm
+```
+
+`--fix` changes only whitespace and comment text, so a formatted source
+assembles to the same bytes. The text contract reads the files Git sees and
+always skips `.git`, `build`, `.retrolarium` and `hack`. `"json": "indent"` also
+lays JSON out with two-space indentation, for games that write their JSON by
+machine.
 
 ## Castle Excellent / Castlequest authoring
 

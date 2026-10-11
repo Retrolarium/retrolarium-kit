@@ -74,7 +74,7 @@ def build_content(root: Path, *, as_bin: Path, p2bin: Path, level_writer: Path,
     semantics_document = semantics.load_document(workspace_path(root, artifact("graphics_semantics")))
     semantics.apply_document(semantics_document, root, staged)
     stage_title_layout(semantics_document, root, staged)
-    sequences_document = sequences.load_document(workspace_path(root, artifact("graphics_sequences")))
+    sequences_document = sequences.load_document(workspace_path(root, artifact("graphics_sequences")), root)
     sequences.apply_document(sequences_document, root, staged)
     stage_bonus_motion(sequences_document, root, staged)
 

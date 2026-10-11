@@ -61,7 +61,7 @@ local entered_at = 0
 --                       palette ($29, 1 on the mountain);
 --   "stage N"           World 2: the stage index Bank1_World2Main clears;
 --   "room N"            World 3: the room Bank2_World3Main sets to 0 and the
---                       pass hoop's room the respawn then loads (the game
+--                       respawn ring's room the respawn then loads (the game
 --                       picks a passable position in it); answered until the
 --                       world shows.
 --   "underground R X Y CX A"  World 1's underground: on the city's first

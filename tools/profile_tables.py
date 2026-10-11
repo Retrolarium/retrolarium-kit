@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Find where a game keeps the tables and constants a kit codec reads.
 
-    python tools/profile_tables.py tools/profile_tables/smb1.json path/to/smb1_src
+    python tools/profile_tables.py path/to/smb1_src [--spec SPEC]
 
 The kit reads what a game draws with (scenery tables, metatile numbers) from
 the image built from the game's own disassembly, so none of it is copied
@@ -10,7 +10,9 @@ works those places out from the ca65 debug files of the game's builds and
 prints them as the "tables" parameter of an nes.byte-tables.v1 resource,
 per revision.
 
-The spec names every value without its contents: a table by its label
+The spec belongs to the game: its repository keeps it as
+config/profile_tables.json, beside the labels it names. It names every
+value without its contents: a table by its label
 (its size runs to the next label unless given), and a constant an
 instruction loads by the label before it and which immediate operand it is
 among the instructions assembled after that label ("immediate": 0 is the
@@ -176,12 +178,14 @@ def match(settings: dict, resolved: dict, game_root: Path) -> dict[str, dict[str
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("spec", type=Path)
     parser.add_argument("game_root", type=Path)
+    parser.add_argument("--spec", type=Path,
+                        help="the spec (default: the game's config/profile_tables.json)")
     parser.add_argument("--list", metavar="REVISION:LABEL",
                         help="print the immediates a revision assembles after a label, to write the spec")
     arguments = parser.parse_args()
-    spec = json.loads(arguments.spec.read_text(encoding="utf-8"))
+    spec_path = arguments.spec or arguments.game_root / "config" / "profile_tables.json"
+    spec = json.loads(spec_path.read_text(encoding="utf-8"))
     if arguments.list:
         revision, _, label = arguments.list.partition(":")
         debug = DebugInfo(arguments.game_root / spec["revisions"][revision]["dbg"], arguments.game_root)

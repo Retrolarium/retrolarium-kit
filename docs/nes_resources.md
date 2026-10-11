@@ -123,21 +123,22 @@ palette packet.
 JU, PAL, PC10, VS and the original FDS reissue also expose seven independently
 addressed fixed-width UI fields through `nes.fixed-text-fields.v1`: the status
 player name and headings, lives-screen world label, time-up and game-over
-messages, warp-zone welcome message and Brother name. Their offsets were checked
-against the public disassembly linker labels and built PRG bytes. ANN and SMB2
-do not reuse this text resource because their Japanese layouts differ.
+messages, warp-zone welcome message and the second player's name. Their offsets
+were checked against the public disassembly linker labels and built PRG bytes.
+ANN and SMB2 do not reuse this text resource because their Japanese layouts
+differ.
 
 ANN and SMB2 now publish their PRG-resident title display lists as Screens
 resources. Both use the shared screen editor and CHR/palette dependencies: ANN
 contains 31 commands in a 351-byte span, while SMB2 contains 31 commands in a
 357-byte span with its original two trailing bytes. Their public-source PRG
 builds round-trip through the codec byte-for-byte. Each resource also exposes
-four embedded Text fields: `1986 NINTENDO`, `HERO GAME`, `BROTHER GAME`, and
-`TOP-`. The addresses are profile-specific—including the differing copyright and
-top-score positions—and were verified against both public-source PRG builds.
-Cartridge, VS and original FDS title screens remain gated on a locally available
-CHR fixture because that engine copies the display list from CHR rather than
-storing it in PRG.
+four embedded Text fields: the copyright line, the one- and two-player game
+choices and the top-score label. The addresses are profile-specific—including
+the differing copyright and top-score positions—and were verified against both
+public-source PRG builds. Cartridge, VS and original FDS title screens remain
+gated on a locally available CHR fixture because that engine copies the display
+list from CHR rather than storing it in PRG.
 
 The Qt 5.15 application now supplies generic CHR, palette and text editors plus
 typed nametable, packet-screen, Pac-Man screen-collection and SMB procedural

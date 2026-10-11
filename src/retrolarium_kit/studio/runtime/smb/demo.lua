@@ -13,7 +13,7 @@
 -- the step timer and index go to zero, so the engine loads a step at once,
 -- reading 255 frames and the new buttons. Every finished step is written
 -- to the file as "step frames buttons", then "end" when the demo ends (Start
--- starts a game, Select returns to the title, Hero dies) or MAME stops.
+-- starts a game, Select returns to the title, the player dies) or MAME stops.
 
 local function setting(name)
     local value = tonumber(os.getenv(name) or "")

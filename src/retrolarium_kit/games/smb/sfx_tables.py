@@ -3,10 +3,14 @@
 SoundEngine's effects read four byte tables between their code: the 1-up
 and power-up grab sequences, the power-up reveal / vine sequence (the
 reveal plays its first eight entries) and the brick shatter noise
-periods. A note table holds offsets into tbl_music_note_periods, the
-period table music uses too, so its values are even; a noise byte is the
-$400E value (mode bit and period index). Each table keeps its place and
-size.
+periods. A note table holds offsets into the music's note period table, so
+its values are even; a noise byte is the $400E value (mode bit and period
+index). Each table keeps its place and size.
+
+Where the effects can be played, the resource also names where SoundEngine
+starts (engine_file_offset) and where the note period table lies
+(note_periods_file_offset); the kit finds them by these offsets, never by
+the game's code.
 """
 
 from __future__ import annotations
@@ -23,6 +27,9 @@ KINDS = ("note", "noise")
 
 class SmbSfxTableError(AuthoringError):
     """A sound effect table does not fit its place."""
+
+
+OFFSETS = ("engine_file_offset", "note_periods_file_offset")
 
 
 def table_specs(parameters: Mapping[str, Any]) -> list[tuple[str, int, int, str]]:
@@ -42,6 +49,9 @@ def table_specs(parameters: Mapping[str, Any]) -> list[tuple[str, int, int, str]
         result.append((name, offset, size, kind))
     if len({name for name, *_ in result}) != len(result):
         raise SmbSfxTableError("sfx table ids repeat")
+    for key in OFFSETS:
+        if key in parameters and (type(parameters[key]) is not int or parameters[key] < 0):
+            raise SmbSfxTableError(f"sfx tables {key} must be a file offset")
     return result
 
 
@@ -75,14 +85,14 @@ def encode(value: Any, parameters: Mapping[str, Any]) -> list[tuple[int, bytes]]
     return spans
 
 
-def source_tables(source: bytes) -> tuple["Table", ...]:
-    """The effect tables a packaged profile declares for this image
-    (smb.sfx-tables.v1), at their CPU addresses in the 32 KiB window."""
+def _source_resources(source: bytes):
+    """(parameters, base) of each sfx-tables resource a packaged profile
+    declares for this image; base turns a file offset into a CPU address in
+    the 32 KiB window."""
     import hashlib
 
     from retrolarium_kit.core.game_profiles import packaged_game_profiles
     from retrolarium_kit.platform.nes.resources import _resource_payload, _resource_specs
-    from retrolarium_kit.platform.nes.sound_effects import Table
 
     sha = hashlib.sha256(source).hexdigest()
     registry = packaged_game_profiles()
@@ -98,10 +108,30 @@ def source_tables(source: bytes) -> tuple["Table", ...]:
                 payload = _resource_payload(profile, revision, spec)
                 # An iNES image's PRG follows its 16-byte header.
                 base = 0x8000 - 16 if payload is None else payload.load_address
-                if base is None:
-                    continue
-                for name, offset, size, kind in table_specs(spec.parameters):
-                    if 0x8000 <= base + offset and base + offset + size <= 0x10000:
-                        result.append(Table(name, base + offset, size, kind))
-            return tuple(result)
-    return ()
+                if base is not None:
+                    result.append((spec.parameters, base))
+            return result
+    return []
+
+
+def source_tables(source: bytes) -> tuple["Table", ...]:
+    """The effect tables a packaged profile declares for this image
+    (smb.sfx-tables.v1), at their CPU addresses in the 32 KiB window."""
+    from retrolarium_kit.platform.nes.sound_effects import Table
+
+    result = []
+    for parameters, base in _source_resources(source):
+        for name, offset, size, kind in table_specs(parameters):
+            if 0x8000 <= base + offset and base + offset + size <= 0x10000:
+                result.append(Table(name, base + offset, size, kind))
+    return tuple(result)
+
+
+def source_sound(source: bytes) -> tuple[int | None, int | None]:
+    """The CPU addresses of SoundEngine and of the note period table the
+    profile names for this image; None where it names none."""
+    for parameters, base in _source_resources(source):
+        engine, periods = (parameters.get(key) for key in OFFSETS)
+        return (base + engine if engine is not None else None,
+                base + periods if periods is not None else None)
+    return None, None

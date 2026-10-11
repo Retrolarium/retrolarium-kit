@@ -1,4 +1,4 @@
-"""Spawn Mirror records and special-room tables for Solomon's Key."""
+"""mirror records and special-room tables for Solomon's Key."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from retrolarium_kit.games.solomon.streams import Position, decode_position, par
 
 
 class SolomonSpecialError(AuthoringError):
-    """Invalid Spawn Mirror or special-room data."""
+    """Invalid mirror or special-room data."""
 
 
 SEAL_ROOMS = (9, 13, 17, 19, 21, 29, 46, 47)
@@ -48,7 +48,7 @@ class MirrorSchedule:
 
 def decode_mirror_schedule(prg: bytes, start: int, limit: int) -> tuple[MirrorSchedule, int]:
     if limit - start != 8:
-        raise SolomonSpecialError("Spawn Mirror schedule must occupy eight bytes")
+        raise SolomonSpecialError("mirror schedule must occupy eight bytes")
     return MirrorSchedule(prg[start:start + 4], prg[start + 4:limit]), limit
 
 
@@ -65,7 +65,7 @@ def parse_mirror_schedule(value: object, name: str) -> MirrorSchedule:
 
 def encode_mirror_schedule(value: MirrorSchedule) -> bytes:
     if len(value.initial_phase) != 4 or len(value.loop_phase) != 4:
-        raise SolomonSpecialError("Spawn Mirror schedule must occupy eight bytes")
+        raise SolomonSpecialError("mirror schedule must occupy eight bytes")
     return value.initial_phase + value.loop_phase
 
 
@@ -83,7 +83,7 @@ def decode_mirror_enemy_set(
     prg: bytes, start: int, limit: int
 ) -> tuple[MirrorEnemySet, int]:
     if not 0 <= start < limit <= len(prg):
-        raise SolomonSpecialError("Spawn Mirror enemy-set pointer escapes its arena")
+        raise SolomonSpecialError("mirror enemy-set pointer escapes its arena")
     cursor = start
     enemy_types = bytearray()
     while cursor < limit:
@@ -92,12 +92,12 @@ def decode_mirror_enemy_set(
         if value >= 0x90:
             offset = value - 0x90
             if not enemy_types or offset >= len(enemy_types):
-                raise SolomonSpecialError("Spawn Mirror loop offset is invalid")
+                raise SolomonSpecialError("mirror loop offset is invalid")
             return MirrorEnemySet(bytes(enemy_types), offset), cursor
         if not 0x18 <= value <= 0x83:
-            raise SolomonSpecialError("Spawn Mirror enemy type is invalid")
+            raise SolomonSpecialError("mirror enemy type is invalid")
         enemy_types.append(value)
-    raise SolomonSpecialError("Spawn Mirror enemy set has no loop command")
+    raise SolomonSpecialError("mirror enemy set has no loop command")
 
 
 def parse_mirror_enemy_set(value: object, name: str) -> MirrorEnemySet:
@@ -117,7 +117,7 @@ def parse_mirror_enemy_set(value: object, name: str) -> MirrorEnemySet:
 
 
 def encode_mirror_enemy_set(value: MirrorEnemySet) -> bytes:
-    parsed = parse_mirror_enemy_set(value.as_dict(), "Spawn Mirror enemy set")
+    parsed = parse_mirror_enemy_set(value.as_dict(), "mirror enemy set")
     return parsed.enemy_types + bytes((0x90 + parsed.loop_offset,))
 
 

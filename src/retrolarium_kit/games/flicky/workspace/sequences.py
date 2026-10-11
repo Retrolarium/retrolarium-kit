@@ -7,51 +7,29 @@ import re
 from pathlib import Path
 from typing import Any
 
+from retrolarium_kit.core.game_names import GameNames
+
 
 MAPPING_SOURCE = "data/tables.s"
-ANIMATION_SOURCES = (
-    "game/bonus/objects.s",
-    "game/actors/chirp.s",
-    "game/actors/window_girl_and_throwable.s",
-    "game/enemies/tiger.s",
-    "game/actors/player.s",
-    "game/enemies/lizard.s",
-    "game/enemies/spawner.s",
-    "rendering/hud.s",
-)
-LEGACY_SOURCE_PATHS = {
-    "game/bonus_objects.s": "game/bonus/objects.s",
-    "game/cat.s": "game/actors/chirp.s",
-    "game/chick.s": "game/actors/window_girl_and_throwable.s",
-    "game/lizard.s": "game/enemies/tiger.s",
-    "game/player.s": "game/actors/player.s",
-    "game/snake.s": "game/enemies/lizard.s",
-    "game/spawner.s": "game/enemies/spawner.s",
-    "game/actors/chick.s": "game/actors/window_girl_and_throwable.s",
-    "game/actors/exit_and_throwable.s": "game/actors/window_girl_and_throwable.s",
-    "game/enemies/cat.s": "game/actors/chirp.s",
-    "game/enemies/lizard.s": "game/enemies/tiger.s",
-    "game/enemies/snake.s": "game/enemies/lizard.s",
-}
+# The source files the animations are read from, and the paths and label
+# prefixes earlier source inventories used, are the game's: its names file
+# (config/names.json, copied with the source) lists them.
 
 
-def current_object_name(identifier: str) -> str:
+def animation_sources(root: Path) -> list[str]:
+    sources = GameNames.load(root).catalog("animation_sources")
+    if not sources:
+        raise ValueError("the Flicky source has no animation_sources in config/names.json")
+    return [str(item) for item in sources]
+
+
+def legacy_source_paths(root: Path) -> dict[str, str]:
+    return dict(GameNames.load(root).catalog("legacy_animation_sources", {}))
+
+
+def current_object_name(identifier: str, prefixes: list[list[str]] | None = None) -> str:
     """Upgrade graphics names from earlier source inventories in memory."""
-    for old, new in (
-        ("UI_CatCountdownAnim", "UI_RoundStartCountdownAnim"),
-        ("UI_CatCountReverseAnim", "UI_RoundEndCountdownAnim"),
-        ("UI_CatCountReverseData3", "UI_CountdownFrame3"),
-        ("Chick_Thrown", "Throwable_Thrown"),
-        ("Cat_", "Chirp_"),
-        ("Lizard_", "Tiger_"),
-        ("Snake_", "Lizard_"),
-        ("BonusCat_OuterFrame", "BonusSeesaw_Frame"),
-        ("BonusCat_InnerFrame", "BonusTiger_Frame"),
-        ("BonusCat_AnimOuter", "BonusSeesaw_Anim"),
-        ("BonusCat_AnimInner", "BonusTiger_Anim"),
-        ("ExitDoor_OpenFrame", "WindowGirl_Frame"),
-        ("ExitDoor_AnimOpen", "WindowGirl_AnimIdle"),
-    ):
+    for old, new in prefixes or ():
         if identifier.startswith(old):
             return new + identifier[len(old):]
     return identifier
@@ -165,7 +143,7 @@ def parse_mappings(root: Path) -> list[dict[str, Any]]:
 
 def parse_animations(root: Path) -> list[dict[str, Any]]:
     animations: list[dict[str, Any]] = []
-    for relative in ANIMATION_SOURCES:
+    for relative in animation_sources(root):
         lines = (root / "src" / relative).read_text(encoding="utf-8").splitlines()
         index = 0
         while index < len(lines):
@@ -294,8 +272,12 @@ def validate_document(document: dict[str, Any], root: Path) -> None:
             raise ValueError(f"{identifier}: invalid animation sequence")
 
 
-def load_document(path: Path) -> dict[str, Any]:
+def load_document(path: Path, root: Path | None = None) -> dict[str, Any]:
+    """A sequences document, upgraded in memory; `root` (the game source) has
+    the names earlier inventories gave its sources and labels."""
     document = json.loads(path.read_text(encoding="utf-8"))
+    legacy = legacy_source_paths(root) if root is not None else {}
+    prefixes = GameNames.load(root).catalog("legacy_label_prefixes", []) if root is not None else []
     if document.get("schema_version") == 1:
         # Schema 1 exposed the Genesis size byte backwards: its horizontal
         # count lives in bits 2-3 and its vertical count in bits 0-1. Migrate
@@ -307,12 +289,12 @@ def load_document(path: Path) -> dict[str, Any]:
         document["schema_version"] = 2
     for animation in document.get("animations", []):
         source = animation.get("source")
-        if source in LEGACY_SOURCE_PATHS:
-            animation["source"] = LEGACY_SOURCE_PATHS[source]
-        animation["id"] = current_object_name(animation["id"])
-        animation["frames"] = [current_object_name(frame) for frame in animation["frames"]]
+        if source in legacy:
+            animation["source"] = legacy[source]
+        animation["id"] = current_object_name(animation["id"], prefixes)
+        animation["frames"] = [current_object_name(frame, prefixes) for frame in animation["frames"]]
     for mapping in document.get("mappings", []):
-        mapping["id"] = current_object_name(mapping["id"])
+        mapping["id"] = current_object_name(mapping["id"], prefixes)
     return document
 
 

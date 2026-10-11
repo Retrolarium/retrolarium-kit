@@ -120,7 +120,8 @@
             {"id": "power_up_grab", "file_offset": 29931, "size": 27, "kind": "note"},
             {"id": "power_up_reveal_and_vine", "file_offset": 29961, "size": 32, "kind": "note"},
             {"id": "brick_shatter_noise", "file_offset": 30268, "size": 16, "kind": "noise"}
-          ]}
+          ],
+            "engine_file_offset": 29409, "note_periods_file_offset": 32528}
         }
       ]
     },
@@ -328,7 +329,7 @@
           "payload": "prg",
           "parameters": {
             "fields": [
-              {"key": "brother-name", "label": "Brother name", "file_offset": 2537, "width": 5}
+              {"key": "second-player-name", "label": "Second player name", "file_offset": 2537, "width": 5}
             ]
           }
         },
@@ -565,7 +566,7 @@
           "payload": "prg",
           "parameters": {
             "fields": [
-              {"key": "brother-name", "label": "Brother name", "file_offset": 2035, "width": 5}
+              {"key": "second-player-name", "label": "Second player name", "file_offset": 2035, "width": 5}
             ]
           }
         },
@@ -1081,8 +1082,8 @@
             },
             "text_fields": [
               {"key": "copyright", "label": "Copyright", "screen": "title", "address": 8687, "width": 13},
-              {"key": "hero-game", "label": "Hero game", "screen": "title", "address": 8781, "width": 10},
-              {"key": "brother-game", "label": "Brother game", "screen": "title", "address": 8845, "width": 10},
+              {"key": "one-player-game", "label": "1 player game", "screen": "title", "address": 8781, "width": 10},
+              {"key": "two-player-game", "label": "2 player game", "screen": "title", "address": 8845, "width": 10},
               {"key": "top-score", "label": "Top score", "screen": "title", "address": 8941, "width": 4}
             ],
             "screens": [
@@ -1701,8 +1702,8 @@
             },
             "text_fields": [
               {"key": "copyright", "label": "Copyright", "screen": "title", "address": 8688, "width": 13},
-              {"key": "hero-game", "label": "Hero game", "screen": "title", "address": 8781, "width": 10},
-              {"key": "brother-game", "label": "Brother game", "screen": "title", "address": 8845, "width": 10},
+              {"key": "one-player-game", "label": "1 player game", "screen": "title", "address": 8781, "width": 10},
+              {"key": "two-player-game", "label": "2 player game", "screen": "title", "address": 8845, "width": 10},
               {"key": "top-score", "label": "Top score", "screen": "title", "address": 8939, "width": 4}
             ],
             "screens": [
@@ -2151,7 +2152,7 @@
           "padding": 36
         },
         "fields": [
-          {"key": "brother-name", "label": "Brother name", "file_offset": 2045, "width": 5}
+          {"key": "second-player-name", "label": "Second player name", "file_offset": 2045, "width": 5}
         ]
       }
     },
@@ -2240,7 +2241,8 @@
         {"id": "power_up_grab", "file_offset": 29930, "size": 27, "kind": "note"},
         {"id": "power_up_reveal_and_vine", "file_offset": 29960, "size": 32, "kind": "note"},
         {"id": "brick_shatter_noise", "file_offset": 30267, "size": 16, "kind": "noise"}
-      ]}
+      ],
+        "engine_file_offset": 29408, "note_periods_file_offset": 32528}
     },
     {
       "id": "character-graphics",

@@ -18,7 +18,7 @@ bank in bits 4-5 and the CHR bank in bits 0-1:
   (``ORA #$80`` instead of ``LDA #$80``) so a wrapper can keep the CHR bank.
 * bank 0's reset vector maps bank 1 before the normal reset runs.
 
-In bank 1 the old stream arenas are free; the Spawn Mirror enemy sets, which
+In bank 1 the old stream arenas are free; the mirror enemy sets, which
 gameplay reads from bank 1, move into the old enemy-stream arena.
 """
 

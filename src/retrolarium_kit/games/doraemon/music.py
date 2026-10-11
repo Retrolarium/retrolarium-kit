@@ -21,7 +21,6 @@ from retrolarium_kit.core.authoring import (
 )
 from retrolarium_kit.games.doraemon import audio_streams as streams
 from retrolarium_kit.games.doraemon import sound_synth as synth
-from retrolarium_kit.games.doraemon.track_catalog import track_identity
 from retrolarium_core.ines import parse_ines
 
 
@@ -148,15 +147,6 @@ def build_music(source: bytes, document: DoraemonMusicDocument, profile: GamePro
 
 def _streams_document(document: Mapping[str, Any]) -> dict[str, Any]:
     return {"schema_version": 1, "format": "doraemon-music-streams", "drivers": document["drivers"]}
-
-
-def track_titles(document: Mapping[str, Any]) -> list[dict[str, Any]]:
-    result = []
-    for d, driver in enumerate(document["drivers"]):
-        for h, header in enumerate(driver["headers"]):
-            identity = track_identity(str(driver["name"]), int(header["track_id"]))
-            result.append({"driver": d, "track": h, "title": identity.title})
-    return result
 
 
 def trace_track(document: Mapping[str, Any], prg: bytes, driver: int, track: int, frames: int) -> dict[str, Any]:

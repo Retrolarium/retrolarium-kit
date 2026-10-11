@@ -1,4 +1,4 @@
--- Enter a validated SMB1 JU area and place Hero at the editor point in MAME.
+-- Enter a validated SMB1 JU area and place the player at the editor point in MAME.
 -- The host supplies only the fixed SMB1_PLAYTEST_* environment settings.
 
 local function setting(name, minimum, maximum)

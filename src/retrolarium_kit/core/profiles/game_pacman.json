@@ -222,15 +222,16 @@
                   {
                     "name": "fruit_group",
                     "label": "Fruit",
+                    "names": "fruits",
                     "choices": [
-                      {"value": 0, "label": "Cherry"},
-                      {"value": 1, "label": "Strawberry"},
-                      {"value": 2, "label": "Orange"},
-                      {"value": 3, "label": "Apple"},
-                      {"value": 4, "label": "Melon"},
-                      {"value": 5, "label": "Galaxian"},
-                      {"value": 6, "label": "Bell"},
-                      {"value": 7, "label": "Key"}
+                      {"value": 0, "label": "Fruit 0"},
+                      {"value": 1, "label": "Fruit 1"},
+                      {"value": 2, "label": "Fruit 2"},
+                      {"value": 3, "label": "Fruit 3"},
+                      {"value": 4, "label": "Fruit 4"},
+                      {"value": 5, "label": "Fruit 5"},
+                      {"value": 6, "label": "Fruit 6"},
+                      {"value": 7, "label": "Fruit 7"}
                     ]
                   },
                   {
@@ -560,12 +561,12 @@
           {"key": "title-copyright", "label": "Title: copyright line", "path": ["title_packets", 4, "bytes"], "start": 1, "width": 20},
           {"key": "title-rights", "label": "Title: rights line", "path": ["title_packets", 5, "bytes"], "start": 0, "width": 19},
           {"key": "attract-header", "label": "Attract: character header", "path": ["attract_packets", 0, "bytes"], "start": 0, "width": 21},
-          {"key": "attract-chaser", "label": "Attract: CHASER", "path": ["attract_packets", 1, "bytes"], "start": 0, "width": 11},
-          {"key": "attract-red", "label": "Attract: RED", "path": ["attract_packets", 2, "bytes"], "start": 1, "width": 6},
-          {"key": "attract-ambusher", "label": "Attract: AMBUSHER", "path": ["attract_packets", 3, "bytes"], "start": 0, "width": 11},
-          {"key": "attract-pink", "label": "Attract: PINK", "path": ["attract_packets", 4, "bytes"], "start": 1, "width": 5},
-          {"key": "attract-feigner", "label": "Attract: FEIGNER", "path": ["attract_packets", 7, "bytes"], "start": 0, "width": 11},
-          {"key": "attract-orange", "label": "Attract: ORANGE", "path": ["attract_packets", 8, "bytes"], "start": 1, "width": 6},
+          {"key": "attract-nickname-1", "label": "Attract: ghost 1 nickname", "path": ["attract_packets", 1, "bytes"], "start": 0, "width": 11},
+          {"key": "attract-name-1", "label": "Attract: ghost 1 name", "path": ["attract_packets", 2, "bytes"], "start": 1, "width": 6},
+          {"key": "attract-nickname-2", "label": "Attract: ghost 2 nickname", "path": ["attract_packets", 3, "bytes"], "start": 0, "width": 11},
+          {"key": "attract-name-2", "label": "Attract: ghost 2 name", "path": ["attract_packets", 4, "bytes"], "start": 1, "width": 5},
+          {"key": "attract-nickname-4", "label": "Attract: ghost 4 nickname", "path": ["attract_packets", 7, "bytes"], "start": 0, "width": 11},
+          {"key": "attract-name-4", "label": "Attract: ghost 4 name", "path": ["attract_packets", 8, "bytes"], "start": 1, "width": 6},
           {"key": "points-ten", "label": "Attract: 10 PTS", "path": ["attract_packets", 9, "bytes"], "start": 2, "width": 6},
           {"key": "points-fifty", "label": "Attract: 50 PTS", "path": ["attract_packets", 9, "bytes"], "start": 13, "width": 6},
           {"key": "pause", "label": "Gameplay: PAUSE", "path": ["fixed_blocks", "pause_tiles"], "start": 0, "width": 5}
@@ -724,15 +725,16 @@
               {
                 "name": "fruit_group",
                 "label": "Fruit",
+                "names": "fruits",
                 "choices": [
-                  {"value": 0, "label": "Cherry"},
-                  {"value": 1, "label": "Strawberry"},
-                  {"value": 2, "label": "Orange"},
-                  {"value": 3, "label": "Apple"},
-                  {"value": 4, "label": "Melon"},
-                  {"value": 5, "label": "Galaxian"},
-                  {"value": 6, "label": "Bell"},
-                  {"value": 7, "label": "Key"}
+                  {"value": 0, "label": "Fruit 0"},
+                  {"value": 1, "label": "Fruit 1"},
+                  {"value": 2, "label": "Fruit 2"},
+                  {"value": 3, "label": "Fruit 3"},
+                  {"value": 4, "label": "Fruit 4"},
+                  {"value": 5, "label": "Fruit 5"},
+                  {"value": 6, "label": "Fruit 6"},
+                  {"value": 7, "label": "Fruit 7"}
                 ]
               },
               {

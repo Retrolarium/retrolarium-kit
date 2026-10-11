@@ -23,9 +23,9 @@ ROM = game_repository("doraemon_src") / "Doraemon (J) (PRG0) [!].nes"
 @unittest.skipUnless(ROM.is_file(), "the Doraemon ROM is not available")
 class DoraemonRomTableTests(unittest.TestCase):
     def test_world2_enemy_metasprites_start_at_their_label(self) -> None:
-        # World2_MetaspriteTileQuads ($A3DC) opens with W2Enemy1's $80 $81
-        # $90 $91; W2Enemy10 (records 36-37, World 2 enemy state $0A) is drawn
-        # from $4D $4E $5D $5E.
+        # World2_MetaspriteTileQuads ($A3DC) opens with enemy state $01's $80
+        # $81 $90 $91; state $0A (records 36-37) is drawn from $4D $4E $5D
+        # $5E.
         source = ROM.read_bytes()
         profile = packaged_game_profiles().get("doraemon")
         resource = next(item for item in profile.resources_for(profile.revisions[0]) if item.codec == WORLD2_CODEC)
@@ -35,7 +35,7 @@ class DoraemonRomTableTests(unittest.TestCase):
                               source[p["attributes_file_offset"]:p["attributes_file_offset"] + 36])
         self.assertEqual([0x80, 0x81, 0x90, 0x91], value["tiles"][0])
         self.assertEqual([0x4D, 0x4E, 0x5D, 0x5E], value["tiles"][36])
-        # W2Enemy11's first frame: palette 3, the lower row flipped both ways.
+        # Enemy state $0B's first frame: palette 3, the lower row flipped both ways.
         self.assertEqual(0x1F, value["descriptors"][32])
         self.assertEqual([0x40, 0x40, 0xC0, 0xC0], value["attributes"][0x1C:0x20])
 
