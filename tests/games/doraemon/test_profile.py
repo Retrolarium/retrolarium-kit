@@ -92,11 +92,13 @@ def resource_by_id(document: dict, identifier: str) -> dict:
     return next(item for item in document["resources"] if item["id"] == identifier)
 
 
+# Each request plays its own effect: request i takes slot 4 * i, a valid,
+# distinct choice for every driver (26 requests, World 2's driver 15).
 ROUTING = (  # bank, address, the requests' effect slots
-    (0, 0xE316, (0, 84, 100, 76, 64, 68, 4, 56, 52, 60, 28, 80, 88, 96, 44, 40, 8, 72, 48, 32, 36, 24, 20, 16, 12, 92)),
-    (1, 0xA80B, (0, 48, 56, 40, 28, 32, 4, 24, 52, 12, 44, 20, 16, 8, 36)),
-    (2, 0xBE0E, (0, 84, 100, 76, 64, 68, 4, 56, 52, 60, 28, 80, 88, 96, 44, 40, 8, 72, 48, 32, 36, 24, 20, 16, 12, 92)),
-    (3, 0x9784, (0, 84, 100, 76, 64, 68, 4, 56, 52, 60, 28, 80, 88, 96, 44, 40, 8, 72, 48, 32, 36, 24, 20, 16, 12, 92)),
+    (0, 0xE316, tuple(4 * request for request in range(26))),
+    (1, 0xA80B, tuple(4 * request for request in range(15))),
+    (2, 0xBE0E, tuple(4 * request for request in range(26))),
+    (3, 0x9784, tuple(4 * request for request in range(26))),
 )
 BEHAVIOR_FILE_OFFSET = 16 + 2 * 0x8000 + (0xD9CC - 0x8000)
 BEHAVIOR_SIZES = (40, 119, 248, 21, 96, 55, 248, 1, 14, 1, 34, 1, 130, 18, 18, 18)

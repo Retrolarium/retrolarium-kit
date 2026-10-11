@@ -1,0 +1,8 @@
+# Files that may hold a literal run of 24 numbers or more, and why
+# (python -m retrolarium_core.name_guard tables).
+src/retrolarium_kit/core/profiles/game_smb1.json  # layout: stream byte capacities, font codes, pointer-to-stream order
+src/retrolarium_kit/core/profiles/game_pacman.json  # the font's character codes
+src/retrolarium_kit/games/pacman/sound.py  # the APU length-counter table (hardware)
+src/retrolarium_kit/games/smb/apu.py  # the APU length-counter table (hardware)
+src/retrolarium_kit/platform/nes/sound_effects.py  # the APU length-counter table (hardware)
+tests/platforms/nes/test_sound_effects.py  # a synthetic 6502 test program

@@ -178,7 +178,7 @@ def _special_resources(
     if all(item is None for item in matches):
         return None
     if any(item is None for item in matches):
-        raise SolomonError("profile needs all Spawn Mirror and special-room resources")
+        raise SolomonError("profile needs all mirror and special-room resources")
     return matches[0], matches[1], matches[2]
 
 
@@ -299,7 +299,7 @@ def decode_rooms(
     streams = _stream_resources(profile, revision)
     special = _special_resources(profile, revision)
     if special is not None and streams is None:
-        raise SolomonError("Spawn Mirror resources need room streams")
+        raise SolomonError("mirror resources need room streams")
     enemies: tuple[object, ...] = ()
     items: tuple[object, ...] = ()
     schedules: tuple[object, ...] = ()
@@ -374,7 +374,7 @@ def parse_room_document(
             and _stream_resources(profile, revision) is None:
         raise SolomonError("Solomon room streams need a version-2 profile")
     if version == DOCUMENT_VERSION and _special_resources(profile, revision) is None:
-        raise SolomonError("Spawn Mirror tables need a version-3 profile")
+        raise SolomonError("mirror tables need a version-3 profile")
     if document.get("width") != width or document.get("height") != height:
         raise SolomonError("Solomon room geometry disagrees with the profile")
     raw_rooms = document.get("rooms")
@@ -405,9 +405,9 @@ def parse_room_document(
         raw_schedules = document["mirror_schedules"]
         raw_sets = document["mirror_enemy_sets"]
         if not isinstance(raw_schedules, list) or len(raw_schedules) != 16:
-            raise SolomonError("Spawn Mirror needs 16 schedules")
+            raise SolomonError("mirror needs 16 schedules")
         if not isinstance(raw_sets, list) or len(raw_sets) != 17:
-            raise SolomonError("Spawn Mirror needs 17 enemy sets")
+            raise SolomonError("mirror needs 17 enemy sets")
         schedules = tuple(parse_mirror_schedule(record, f"mirror_schedules[{index}]")
                           for index, record in enumerate(raw_schedules))
         mirror_sets = tuple(parse_mirror_enemy_set(record, f"mirror_enemy_sets[{index}]")
@@ -529,7 +529,7 @@ def build_rooms(
         if resources is None or document.special_rooms is None \
                 or len(document.mirror_schedules) != 16 \
                 or len(document.mirror_enemy_sets) != 17:
-            raise SolomonError("Spawn Mirror and special-room records are incomplete")
+            raise SolomonError("mirror and special-room records are incomplete")
         mirror_records = [("mirror_schedules", resources[0],
                            list(document.mirror_schedules), encode_mirror_schedule)]
         if not document.expanded_rom:

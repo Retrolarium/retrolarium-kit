@@ -154,7 +154,7 @@ class SolomonAnimationTests(unittest.TestCase):
         value = document.as_dict()
         value["group_pointers"][0] = value["descriptors"][36]["cpu_address"]
         with self.assertRaisesRegex(
-            SolomonAnimationError, "Wizard animation group"
+            SolomonAnimationError, "player animation group"
         ):
             parse_animation_document(value, profile, revision)
         value = document.as_dict()

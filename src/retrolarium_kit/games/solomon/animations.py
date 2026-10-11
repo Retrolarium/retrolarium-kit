@@ -225,7 +225,7 @@ def parse_animation_document(
         for offset, count in zip(GROUP_OFFSETS, GROUP_COUNTS)
     }
     if group_capacity[group_pointers[0]] <= 0x17:
-        raise SolomonAnimationError("Wizard animation group lacks both facings")
+        raise SolomonAnimationError("player animation group lacks both facings")
     for enemy_type in range(0x18, 0x84):
         flags = configuration[(enemy_type - 0x18) >> 2]
         action = (enemy_type & 3) | (0 if flags & 8 else 0x18)

@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 from typing import Any, Mapping
+import zlib
 
 from retrolarium_kit.core.authoring import (
     Address, AddressRange, AuthoringError, BuildPlan, Change, ChangeSet,
@@ -96,10 +97,12 @@ def _region(prg: bytes, bank: int, spec: Mapping[str, Any]) -> bytes:
 
 
 def _check_signatures(prg: bytes, manifest: Mapping[str, Any]) -> None:
+    """The shell code the text codec relies on is where the profile says:
+    each signature is the CRC-32 of a stretch of code, not the code."""
     bank = int(manifest["bank"])
     for signature in manifest.get("signatures", []):
-        raw = bytes.fromhex(str(signature["bytes"]))
-        if _bank_slice(prg, bank, number(signature["address"]), len(raw)) != raw:
+        code = _bank_slice(prg, bank, number(signature["address"]), int(signature["size"]))
+        if f"{zlib.crc32(code):08x}" != str(signature["crc32"]).lower():
             raise DoraemonTextError(f"the shell code at ${number(signature['address']):04X} differs from the profile")
 
 

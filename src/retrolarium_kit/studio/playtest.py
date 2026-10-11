@@ -818,8 +818,8 @@ DORAEMON_START_CHAPTER_READ = 0x83FD
 # world's bank): World1_InitializeDemoState's camera, player position and
 # area palette ($29),
 # Bank1_World2Main's stage index, Bank2_World3Main's two room clears and
-# World3_LoadRoomFromPassHoop's store of the hoop's room (a respawn
-# returns to wherever the shuffled pass hoop lies).
+# World 3's respawn loader's store of the respawn room (a respawn returns
+# to wherever the game shuffled the respawn ring).
 DORAEMON_WORLD1_START_WRITES = (0x831C, 0x8320, 0x8324, 0x8328, 0x8342)
 # World 1's underground: World1_TryEnterManhole's reads of the buttons and
 # the manhole flag, World1_EnterManhole's store of the manhole's object id

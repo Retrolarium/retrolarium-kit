@@ -133,13 +133,14 @@ def command_audio_render_sfx(args: argparse.Namespace) -> None:
     from retrolarium_kit.core.game_profiles import packaged_game_profiles
     from retrolarium_core.ines import parse_ines
     from retrolarium_kit.platform.nes.resources import build_resources, parse_resource_document
-    from retrolarium_kit.games.smb.sfx_tables import source_tables
+    from retrolarium_kit.games.smb.sfx_tables import source_sound, source_tables
     from retrolarium_kit.platform.nes.sound_effects import CHANNEL_NAMES, render_effect
     from retrolarium_kit.studio.create import _project_source
     from retrolarium_kit.studio.project import load_studio_project
 
     source = _project_source(load_studio_project(args.project)).read_bytes()
     tables = source_tables(source)
+    engine, periods = source_sound(source)
     if args.document is not None:
         # The project's unsaved state: effect tables edited in the studio.
         value = json.loads(args.document.read_text(encoding="utf-8"))
@@ -152,7 +153,7 @@ def command_audio_render_sfx(args: argparse.Namespace) -> None:
         raise SystemExit(f"unknown channels: {', '.join(sorted(unknown))}")
     muted = {i for i, name in enumerate(CHANNEL_NAMES) if name not in channels}
     print_json(render_effect(args.effect, parse_ines(source).prg, wav=args.wav, trace=args.trace, muted=muted,
-                             tables=tables))
+                             tables=tables, engine=engine, periods=periods))
 
 
 def command_audio_render_castle_excellent_wav(args: argparse.Namespace) -> None:

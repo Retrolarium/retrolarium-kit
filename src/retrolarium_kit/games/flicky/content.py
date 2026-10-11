@@ -19,6 +19,7 @@ import subprocess
 import tempfile
 
 from retrolarium_core.megadrive import stamp_cartridge_checksum
+from retrolarium_kit.core.build_toolchains import BuildToolchainError, materialize_build_toolchain
 from retrolarium_kit.games.flicky.bonus_motion import export_bonus_motion, validate_bonus_motion
 from retrolarium_kit.games.flicky.demo import export_attract_demos, validate_attract_demos
 from retrolarium_kit.games.flicky.bonus_placement import (
@@ -35,7 +36,7 @@ CANONICAL_SHA256 = "4df1a91e08376ae773a6eb8e5abe310f94ca39d8f81583b91a9477fedcb6
 CANONICAL_SIZE = 131072
 ROM_NAME = "Flicky (UE) [!].bin"
 SOURCE_DIRECTORY = "flicky-source"
-SOURCE_PATHS = ("assets", "bin", "config", "data", "mk", "scripts", "src", "third_party")
+SOURCE_PATHS = ("assets", "config", "data", "mk", "scripts", "src", "third_party")
 WORKSPACE_FILES = {
     "level_layouts": "content/workspace/level/levels.json",
     "graphics_assets": "content/workspace/graphics/graphics.json",
@@ -259,11 +260,12 @@ def build_flicky_source_snapshot(
     project_root = project_root.resolve()
     source = project_root / SOURCE_DIRECTORY
     document_hashes = validate_flicky_source_snapshot(project_root)
-    tool_dir = source / "bin" / ("windows_i386" if os.name == "nt" else "linux_x86_64")
-    as_bin = tool_dir / ("asw.exe" if os.name == "nt" else "asl")
-    p2bin = tool_dir / ("p2bin.exe" if os.name == "nt" else "p2bin")
-    if not as_bin.is_file() or not p2bin.is_file():
-        raise FlickyContentError(f"Flicky assembler tools are missing: {tool_dir}")
+    # AS and p2bin are the kit's own (the megadrive suite), not the game's.
+    try:
+        tools = materialize_build_toolchain("megadrive")
+        as_bin, p2bin = tools.command("asl"), tools.command("p2bin")
+    except BuildToolchainError as exc:
+        raise FlickyContentError(f"Flicky assembler tools are unavailable: {exc}") from exc
     selected_writer = native_writer or os.environ.get("RETROLARIUM_FLICKY_LEVEL_WRITER") \
         or shutil.which("retrolarium-flicky-level-writer")
     if not selected_writer:

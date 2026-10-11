@@ -10,15 +10,17 @@ import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
+from retrolarium_kit.core.game_names import GameNames
 from retrolarium_kit.games.catalog import build_game, extract_game, inspect_game
 
 
-def check(rom: Path, revision: str, oracle: object, contract: dict) -> None:
+def check(rom: Path, revision: str, oracle: object, contract: dict, player_method: str) -> None:
     inspection = inspect_game(rom)
     if inspection["game"] != "solomons-key" or inspection["revision"] != revision:
         raise AssertionError(f"{revision}: unexpected source image")
     source = rom.read_bytes()
     decoder = oracle.EnemySpriteDecoder(source[16:16 + 0x8000], contract)
+    player_frame = getattr(decoder, player_method)
     with tempfile.TemporaryDirectory(
         prefix=f"retrolarium-solomon-sprites-{revision}-"
     ) as temporary:
@@ -44,15 +46,15 @@ def check(rom: Path, revision: str, oracle: object, contract: dict) -> None:
             ):
                 raise AssertionError(f"{revision}: type {enemy_type:02X} frame differs")
         for facing, faces_left in (("right", False), ("left", True)):
-            matched = [frame for frame in frames if facing in frame["wizard_facings"]]
-            reference = decoder.wizard_frame(faces_left)
+            matched = [frame for frame in frames if facing in frame["player_facings"]]
+            reference = player_frame(faces_left)
             if len(matched) != 1 or reference is None:
-                raise AssertionError(f"{revision}: Wizard {facing} binding differs")
+                raise AssertionError(f"{revision}: the player {facing} binding differs")
             frame = matched[0]
             if (frame["left_tile"], frame["right_tile"], frame["flags"]) != (
                 reference.left_tile, reference.right_tile, reference.flags
             ):
-                raise AssertionError(f"{revision}: Wizard {facing} frame differs")
+                raise AssertionError(f"{revision}: the player {facing} frame differs")
         exact = build_game(rom, original_path, exact_path)
         if exact["changed_bytes"] or exact_path.read_bytes() != source:
             raise AssertionError(f"{revision}: sprite-frame zero-edit ROM differs")
@@ -84,8 +86,17 @@ def check(rom: Path, revision: str, oracle: object, contract: dict) -> None:
                 )
     print(
         f"Solomon {revision}: 28 shared frames, 108 enemy types, "
-        "Wizard L/R and exact one-byte ROM edit"
+        "the player L/R and exact one-byte ROM edit"
     )
+
+
+def player_frame_method(source_project: Path) -> str:
+    """The oracle's player-frame method, which the game's source names after
+    its player (the player name in the game's config/names.json)."""
+    player = GameNames.load(source_project).name("player", 0)
+    if not player:
+        raise SystemExit("the source project has no player name in config/names.json")
+    return f"{player.lower()}_frame"
 
 
 def main() -> None:
@@ -104,7 +115,7 @@ def main() -> None:
         ("usa", args.usa), ("europe", args.europe)
     ):
         contract = get_profile(profiles, revision)["level_preview"]
-        check(path.resolve(strict=True), revision, oracle, contract)
+        check(path.resolve(strict=True), revision, oracle, contract, player_frame_method(source_project))
 
 
 if __name__ == "__main__":

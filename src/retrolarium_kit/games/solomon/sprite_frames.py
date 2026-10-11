@@ -1,4 +1,4 @@
-"""Source-bound initial enemy and Wizard sprite frames for Solomon's Key."""
+"""Source-bound initial enemy and player sprite frames for Solomon's Key."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ ENEMY_TYPE_FIRST = 0x18
 ENEMY_TYPE_COUNT = 108
 POINTER_COUNT = 33
 CONFIGURATION_COUNT = 27
-WIZARD_ACTIONS = {"right": 0x16, "left": 0x17}
+PLAYER_ACTIONS = {"right": 0x16, "left": 0x17}
 
 
 class SolomonSpriteFrameError(AuthoringError):
@@ -34,7 +34,7 @@ class SpriteFrame:
     right_tile: int
     flags: int
     enemy_types: tuple[int, ...]
-    wizard_facings: tuple[str, ...]
+    player_facings: tuple[str, ...]
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -43,7 +43,7 @@ class SpriteFrame:
             "right_tile": self.right_tile,
             "flags": self.flags,
             "enemy_types": list(self.enemy_types),
-            "wizard_facings": list(self.wizard_facings),
+            "player_facings": list(self.player_facings),
         }
 
 
@@ -154,7 +154,7 @@ def _bindings(
             prg, pointer_table, enemy_type >> 2, action, enemy_type & 3
         )
         result.setdefault(offset, ([], []))[0].append(enemy_type)
-    for facing, action in WIZARD_ACTIONS.items():
+    for facing, action in PLAYER_ACTIONS.items():
         offset = _frame_offset(prg, pointer_table, 0, action, 0)
         result.setdefault(offset, ([], []))[1].append(facing)
     offsets = sorted(result)
@@ -214,7 +214,7 @@ def parse_sprite_frame_document(
     previous_end = -1
     required = {
         "prg_offset", "left_tile", "right_tile", "flags",
-        "enemy_types", "wizard_facings",
+        "enemy_types", "player_facings",
     }
     for index, raw in enumerate(raw_frames):
         if not isinstance(raw, Mapping) or set(raw) != required:
@@ -226,11 +226,11 @@ def parse_sprite_frame_document(
             raise SolomonSpriteFrameError("sprite-frame records overlap or are unordered")
         previous_end = offset + 3
         enemy_types = raw["enemy_types"]
-        facings = raw["wizard_facings"]
+        facings = raw["player_facings"]
         if not isinstance(enemy_types, list) or not isinstance(facings, list):
             raise SolomonSpriteFrameError("sprite-frame bindings must be lists")
         if not enemy_types and not facings:
-            raise SolomonSpriteFrameError("sprite frame has no enemy or Wizard binding")
+            raise SolomonSpriteFrameError("sprite frame has no enemy or player binding")
         if any(
             type(item) is not int
             or not ENEMY_TYPE_FIRST <= item < ENEMY_TYPE_FIRST + ENEMY_TYPE_COUNT
@@ -238,11 +238,11 @@ def parse_sprite_frame_document(
         ) or enemy_types != sorted(set(enemy_types)):
             raise SolomonSpriteFrameError("sprite-frame enemy bindings are invalid")
         if (
-            any(type(item) is not str or item not in WIZARD_ACTIONS
+            any(type(item) is not str or item not in PLAYER_ACTIONS
                 for item in facings)
-            or facings != [item for item in WIZARD_ACTIONS if item in facings]
+            or facings != [item for item in PLAYER_ACTIONS if item in facings]
         ):
-            raise SolomonSpriteFrameError("sprite-frame Wizard bindings are invalid")
+            raise SolomonSpriteFrameError("sprite-frame player bindings are invalid")
         if seen_enemies.intersection(enemy_types) or seen_facings.intersection(facings):
             raise SolomonSpriteFrameError("sprite-frame bindings are duplicated")
         seen_enemies.update(enemy_types)
@@ -258,7 +258,7 @@ def parse_sprite_frame_document(
         seen_enemies != set(range(
             ENEMY_TYPE_FIRST, ENEMY_TYPE_FIRST + ENEMY_TYPE_COUNT
         ))
-        or seen_facings != set(WIZARD_ACTIONS)
+        or seen_facings != set(PLAYER_ACTIONS)
     ):
         raise SolomonSpriteFrameError("sprite-frame bindings do not cover all types")
     return SolomonSpriteFrameDocument(
@@ -276,8 +276,8 @@ def build_sprite_frames(
     if len(checked.frames) != len(original.frames):
         raise SolomonSpriteFrameError("sprite-frame layout differs from source")
     for index, (edited, baseline) in enumerate(zip(checked.frames, original.frames)):
-        if (edited.prg_offset, edited.enemy_types, edited.wizard_facings) != (
-            baseline.prg_offset, baseline.enemy_types, baseline.wizard_facings
+        if (edited.prg_offset, edited.enemy_types, edited.player_facings) != (
+            baseline.prg_offset, baseline.enemy_types, baseline.player_facings
         ):
             raise SolomonSpriteFrameError(
                 f"sprite frame {index} binding differs from source"

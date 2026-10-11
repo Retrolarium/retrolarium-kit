@@ -19,7 +19,7 @@ depends_on = ["room-art", "animations", "graphics", "palettes"]
 
 [[workspace.tabs]]
 id = "mirrors"
-title = "Spawn Mirrors"
+title = "Mirrors"
 kind = "solomon.mirrors"
 group = "content"
 document = "levels.json"

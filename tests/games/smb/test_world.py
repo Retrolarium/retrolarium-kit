@@ -508,9 +508,9 @@ class SmbWorldTests(unittest.TestCase):
             [
                 {"key": "copyright", "label": "Copyright", "screen": "title",
                  "address": 0x21EF, "width": 13},
-                {"key": "hero-game", "label": "Hero game", "screen": "title",
+                {"key": "one-player-game", "label": "1 player game", "screen": "title",
                  "address": 0x224D, "width": 10},
-                {"key": "brother-game", "label": "Brother game", "screen": "title",
+                {"key": "two-player-game", "label": "2 player game", "screen": "title",
                  "address": 0x228D, "width": 10},
                 {"key": "top-score", "label": "Top score", "screen": "title",
                  "address": 0x22ED, "width": 4},
@@ -622,9 +622,9 @@ class SmbWorldTests(unittest.TestCase):
             [
                 {"key": "copyright", "label": "Copyright", "screen": "title",
                  "address": 0x21F0, "width": 13},
-                {"key": "hero-game", "label": "Hero game", "screen": "title",
+                {"key": "one-player-game", "label": "1 player game", "screen": "title",
                  "address": 0x224D, "width": 10},
-                {"key": "brother-game", "label": "Brother game", "screen": "title",
+                {"key": "two-player-game", "label": "2 player game", "screen": "title",
                  "address": 0x228D, "width": 10},
                 {"key": "top-score", "label": "Top score", "screen": "title",
                  "address": 0x22EB, "width": 4},

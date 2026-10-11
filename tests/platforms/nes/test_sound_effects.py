@@ -7,7 +7,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from helpers import game_repository
-from retrolarium_kit.games.smb.sfx_tables import source_tables
+from retrolarium_kit.games.smb.sfx_tables import source_sound, source_tables
 from retrolarium_kit.platform.nes.sound_effects import (
     Apu, Bus, Cpu6502, SoundEffectError, Table, effect_plan, play,
 )
@@ -100,17 +100,21 @@ def _notes(result: dict, channel: str) -> list[tuple[int, int, int]]:
 class RomEffectTests(unittest.TestCase):
     @unittest.skipUnless(SMB.is_file(), "the Super Mario Bros. ROM is not available")
     def test_smb_coin_and_extra_life(self) -> None:
-        prg = SMB.read_bytes()[16:16 + 0x8000]
+        data = SMB.read_bytes()
+        prg = data[16:16 + 0x8000]
+        engine, _periods = source_sound(data)
         # The coin: B5 then a held E6; the 1-up: E G E' C' D' G'.
-        self.assertEqual([83, 88], [p for _s, _l, p in _notes(play("smb:square2:1", prg), "Pulse 2")])
-        self.assertEqual([88, 91, 100, 96, 98, 103], [p for _s, _l, p in _notes(play("smb:square2:64", prg), "Pulse 2")])
+        self.assertEqual([83, 88], [p for _s, _l, p in _notes(play("smb:square2:1", prg, engine=engine), "Pulse 2")])
+        self.assertEqual([88, 91, 100, 96, 98, 103],
+                         [p for _s, _l, p in _notes(play("smb:square2:64", prg, engine=engine), "Pulse 2")])
 
     @unittest.skipUnless(SMB.is_file(), "the Super Mario Bros. ROM is not available")
     def test_smb_notes_name_their_table_bytes(self) -> None:
         data = SMB.read_bytes()
         tables = source_tables(data)
+        engine, periods = source_sound(data)
         self.assertIn(Table("extra_life", 0xF4D4, 6, "note"), tables)
-        result = play("smb:square2:64", data[16:16 + 0x8000], tables=tables)
+        result = play("smb:square2:64", data[16:16 + 0x8000], tables=tables, engine=engine, periods=periods)
         notes = result["channels"][1]["notes"]
         # The 1-up reads its table from the end; each byte is one note.
         self.assertEqual([5, 4, 3, 2, 1, 0], [n["source"]["index"] for n in notes])

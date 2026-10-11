@@ -357,8 +357,6 @@ class EffectPlan:
 
 SMB_QUEUES = {"square1": 0xFF, "square2": 0xFE, "noise": 0xFD}
 SMB_OPER_MODE = 0x0770
-# SoundEngine: LDA OperMode / BNE SndOn / STA SND_MASTERCTRL_REG / RTS.
-SMB_ENGINE_SIGNATURE = bytes((0xAD, 0x70, 0x07, 0xD0, 0x04, 0x8D, 0x15, 0x40, 0x60))
 CASTLE_EXCELLENT_STARTS = (0xC20D, 0xC233, 0xC272, 0xC29A, 0xC2BD)
 CASTLE_EXCELLENT_UPDATE = 0xC2F9
 # Doraemon's four bank-local drivers: QueueEffect, UpdateEffects, requests.
@@ -379,19 +377,19 @@ def _number(text: str, key: str) -> int:
         raise SoundEffectError(f"unknown sound effect {key!r}") from None
 
 
-def effect_plan(key: str, prg: bytes) -> EffectPlan:
+def effect_plan(key: str, prg: bytes, engine: int | None = None) -> EffectPlan:
+    """How to start and service an effect; Super Mario Bros. needs the CPU
+    address of its SoundEngine (the profile's engine_file_offset)."""
     game = key.split(":", 1)[0]
     if game == "smb":
         channel, value = _key_parts(key, "smb", 3)
         bit = _number(value, key)
         if channel not in SMB_QUEUES or bit not in (1, 2, 4, 8, 16, 32, 64, 128):
             raise SoundEffectError(f"unknown sound effect {key!r}")
-        window = prg[:0x8000] if len(prg) >= 0x8000 else prg * 2
-        at = window.find(SMB_ENGINE_SIGNATURE)
-        if at < 0:
-            raise SoundEffectError("SoundEngine was not found in this Super Mario Bros. image")
+        if engine is None:
+            raise SoundEffectError("the profile names no SoundEngine for this Super Mario Bros. image")
         return EffectPlan(0, (Action("poke", SMB_OPER_MODE, 1), Action("poke", SMB_QUEUES[channel], bit)),
-                          (0x8000 + at,), True)
+                          (engine,), True)
     if game == "castle-excellent":
         (index,) = _key_parts(key, "castle-excellent", 2)
         number = _number(index, key)
@@ -421,10 +419,10 @@ class Table:
 
 
 def capture(key: str, prg: bytes, *, frames: int = MAX_FRAMES, tables: tuple[Table, ...] = (),
-            reads: list[list[tuple[str, int]]] | None = None) -> list[list[tuple[int, int]]]:
+            reads: list[list[tuple[str, int]]] | None = None, engine: int | None = None) -> list[list[tuple[int, int]]]:
     """The APU writes of each frame while the effect plays; `reads` gets
     the table bytes each frame read."""
-    plan = effect_plan(key, prg)
+    plan = effect_plan(key, prg, engine)
     start = plan.bank * 0x8000
     window = prg[start:start + 0x8000] if len(prg) > 0x4000 else prg
     bus = Bus(window)
@@ -449,20 +447,19 @@ def capture(key: str, prg: bytes, *, frames: int = MAX_FRAMES, tables: tuple[Tab
     return result
 
 
-# SetFreq: TAY / LDA periods+1,Y / BEQ / STA $4002,X / LDA periods,Y.
-NOTE_PERIOD_SIGNATURE = bytes((0x9D, 0x02, 0x40, 0xB9))
 SMB_NOTE_PERIODS = 51
 
 
-def table_choices(table: Table, prg: bytes) -> list[dict[str, int]]:
-    """The values a table byte can take and the pitch each one plays."""
+def table_choices(table: Table, prg: bytes, periods: int | None = None) -> list[dict[str, int]]:
+    """The values a table byte can take and the pitch each one plays; a note
+    table's pitches come from the note period table at CPU address
+    `periods` (the profile's note_periods_file_offset)."""
     if table.kind == "noise":
         return [{"value": v, "pitch": _pitch(3, float(v))} for v in range(16)]
     window = prg[:0x8000] if len(prg) >= 0x8000 else prg * 2
-    at = window.find(NOTE_PERIOD_SIGNATURE)
-    if at < 0:
+    if periods is None:
         return []
-    base = window[at + 4] | window[at + 5] << 8
+    base = periods
     choices = []
     for value in range(0, SMB_NOTE_PERIODS * 2, 2):
         high, low = window[base + value - 0x8000], window[base + value + 1 - 0x8000]
@@ -833,12 +830,13 @@ def _sources(writes: list[list[tuple[int, int]]], reads: list[list[tuple[str, in
     return result
 
 
-def play(key: str, prg: bytes, *, muted: set[int] | None = None, tables: tuple[Table, ...] = ()) -> dict[str, object]:
+def play(key: str, prg: bytes, *, muted: set[int] | None = None, tables: tuple[Table, ...] = (),
+         engine: int | None = None, periods: int | None = None) -> dict[str, object]:
     """Runs the effect and returns its per-channel notes and PCM samples;
     notes set from a table byte name it as their source."""
     reads: list[list[tuple[str, int]]] = []
-    writes = capture(key, prg, tables=tables, reads=reads)
-    plan = effect_plan(key, prg)
+    writes = capture(key, prg, tables=tables, reads=reads, engine=engine)
+    plan = effect_plan(key, prg, engine)
     window = prg[plan.bank * 0x8000:plan.bank * 0x8000 + 0x8000] if len(prg) > 0x4000 else prg * 2
     values = {t.id: list(window[t.address - 0x8000:t.address - 0x8000 + t.size]) for t in tables}
     sources = _sources(writes, reads, tables, values)
@@ -888,7 +886,7 @@ def play(key: str, prg: bytes, *, muted: set[int] | None = None, tables: tuple[T
                 notes.append(note)  # type: ignore[arg-type]
         channels.append({"name": name, "notes": notes})
     used = {n["source"]["table"] for c in channels for n in c["notes"] if "source" in n}  # type: ignore[index]
-    described = [{"id": t.id, "kind": t.kind, "values": values[t.id], "choices": table_choices(t, window)}
+    described = [{"id": t.id, "kind": t.kind, "values": values[t.id], "choices": table_choices(t, window, periods)}
                  for t in tables if t.id in used]
     return {"key": key, "frames": frames, "channels": channels, "tables": described, "samples": samples[:keep]}
 
@@ -907,8 +905,9 @@ def wav_bytes(samples: list[float]) -> bytes:
 
 
 def render_effect(key: str, prg: bytes, *, wav: Path | None, trace: Path | None,
-                  muted: set[int] | None = None, tables: tuple[Table, ...] = ()) -> dict[str, object]:
-    result = play(key, prg, muted=muted, tables=tables)
+                  muted: set[int] | None = None, tables: tuple[Table, ...] = (),
+                  engine: int | None = None, periods: int | None = None) -> dict[str, object]:
+    result = play(key, prg, muted=muted, tables=tables, engine=engine, periods=periods)
     report: dict[str, object] = {"schema": "retrolarium.sound-effect", "key": key, "frames": result["frames"]}
     if wav is not None:
         wav.parent.mkdir(parents=True, exist_ok=True)
