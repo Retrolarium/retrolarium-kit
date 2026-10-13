@@ -317,7 +317,7 @@ rltool game build ../retrolarium-disassembler/fixtures/nes/bin/HonkeyPong.nes `
   --output build/honkeypong/edited.nes
 ```
 
-See [`nes_resources.md`](docs/nes_resources.md).
+See [`platform/nes/resources.md`](docs/platform/nes/resources.md).
 
 ## Pac-Man maze authoring
 
@@ -342,7 +342,7 @@ intentionally deferred until the bundle supports replicated ranges.
 `pacman.actor-mapping.v1` round-trips the original 624-byte table as 64 standard
 and 13 alternate four-quadrant frames, validates OAM attribute bits and keeps
 the shared 16x16 offset layout read-only. See
-[`pacman_maze.md`](docs/pacman_maze.md).
+[`games/pacman/maze.md`](docs/games/pacman/maze.md).
 
 The title logo reuses `nes.nametable.v1` as a tile-only 23x6 region. Both
 verified revisions rebuild exactly, and the common Screens editor disables its
@@ -350,7 +350,7 @@ palette brush when a region has no attribute bytes. The addressed PPU packets,
 HUD/intermission regions are not bundled yet. `nes.fixed-text-fields.v1`
 projects 14 disjoint title, attract and pause ranges into one Text resource; the
 profile owns the glyph map, case folding, labels, widths and addresses. See
-[`nes_text.md`](docs/nes_text.md).
+[`platform/nes/text.md`](docs/platform/nes/text.md).
 
 ## Super Mario Bros. authoring
 
@@ -363,10 +363,10 @@ effect envelope, and the complete CHR bank. The generated Studio workspace owns
 World, Levels, Screens, Music & Sounds, Text, Graphics, Metatiles, Palettes,
 Player Frames and Code & Analysis tabs. These editors share undo/redo, restore
 and atomic save. The zero-edit disassemble/extract/build/verify path is
-byte-identical. See [`smb_world.md`](docs/smb_world.md). ANN and SMB2 Japan
-additionally expose their ending-bank FDS waveforms and volume programs through
-a dedicated `audio.synthesis` Studio tab; see
-[`fds_synthesis.md`](docs/fds_synthesis.md).
+byte-identical. See [`games/smb/world.md`](docs/games/smb/world.md). ANN and
+SMB2 Japan additionally expose their ending-bank FDS waveforms and volume
+programs through a dedicated `audio.synthesis` Studio tab; see
+[`platform/nes/fds_synthesis.md`](docs/platform/nes/fds_synthesis.md).
 
 ## Other commands
 
