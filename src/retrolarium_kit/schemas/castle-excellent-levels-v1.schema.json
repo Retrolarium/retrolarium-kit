@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://retrolarium.local/schemas/castle-excellent-levels-v1.schema.json",
+  "$id": "https://raw.githubusercontent.com/Retrolarium/retrolarium-kit/main/src/retrolarium_kit/schemas/castle-excellent-levels-v1.schema.json",
   "title": "Retrolarium Castle Excellent level document v1",
   "type": "object",
   "additionalProperties": false,

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://retrolarium.local/schemas/solomon-rooms-v2.schema.json",
+  "$id": "https://raw.githubusercontent.com/Retrolarium/retrolarium-kit/main/src/retrolarium_kit/schemas/solomon-rooms-v2.schema.json",
   "title": "Retrolarium Solomon's Key room document v2",
   "type": "object",
   "additionalProperties": false,
