@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://retrolarium.local/schemas/nes-resource-bundle-v1.schema.json",
+  "$id": "https://raw.githubusercontent.com/Retrolarium/retrolarium-kit/main/src/retrolarium_kit/schemas/nes-resource-bundle-v1.schema.json",
   "title": "Retrolarium NES resource bundle document v1",
   "type": "object",
   "additionalProperties": false,
