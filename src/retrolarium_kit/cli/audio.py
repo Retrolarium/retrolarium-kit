@@ -130,7 +130,7 @@ def command_audio_trace_doraemon(args: argparse.Namespace) -> None:
 def command_audio_render_sfx(args: argparse.Namespace) -> None:
     from retrolarium_kit.studio.project import load_studio_project
 
-    from retrolarium_kit.core.game_profiles import packaged_game_profiles
+    from retrolarium_kit.core.game_profiles import game_profiles
     from retrolarium_core.ines import parse_ines
     from retrolarium_kit.platform.nes.resources import build_resources, parse_resource_document
     from retrolarium_kit.games.smb.sfx_tables import source_sound, source_tables
@@ -144,7 +144,7 @@ def command_audio_render_sfx(args: argparse.Namespace) -> None:
     if args.document is not None:
         # The project's unsaved state: effect tables edited in the studio.
         value = json.loads(args.document.read_text(encoding="utf-8"))
-        profile = packaged_game_profiles().get(value.get("game"))
+        profile = game_profiles().get(value.get("game"))
         revision = next(r for r in profile.revisions if r.revision_id == value.get("revision"))
         source, _report = build_resources(source, parse_resource_document(value, profile, revision), profile, revision)
     channels = args.channel or list(CHANNEL_NAMES)

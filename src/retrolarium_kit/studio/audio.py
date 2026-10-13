@@ -12,7 +12,7 @@ import tempfile
 from typing import Any, Mapping
 
 from retrolarium_kit.core.authoring import AuthoringError, GameProfile, ResourceSpec, RevisionSpec
-from retrolarium_kit.core.game_profiles import load_game_profile, packaged_game_profiles
+from retrolarium_kit.core.game_profiles import load_game_profile, game_profiles
 from retrolarium_kit.games.pacman.sound import (
     CODEC,
     NTSC_FRAME_RATE as PACMAN_NTSC_FRAME_RATE,
@@ -60,7 +60,7 @@ def _profile(
     profile = (
         load_game_profile(profile_path)
         if profile_path is not None
-        else packaged_game_profiles().get(game)
+        else game_profiles().get(game)
     )
     if profile.game_id != game:
         raise AuthoringError("audio document game differs from the selected profile")

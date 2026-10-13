@@ -8,7 +8,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from retrolarium_kit.core.authoring import AuthoringError
-from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from helpers import game_profile
 from retrolarium_kit.games.doraemon.behavior import DoraemonBehaviorError, decode_behavior, encode_behavior
 from retrolarium_kit.platform.nes.resources import build_resources, decode_resources, parse_resource_document
 from helpers import game_repository
@@ -27,7 +27,7 @@ def by_id(document) -> dict[str, dict]:
 class DoraemonTableTests(unittest.TestCase):
     def setUp(self) -> None:
         self.source = ROM.read_bytes()
-        self.profile = packaged_game_profiles().get("doraemon")
+        self.profile = game_profile("doraemon")
         self.revision = self.profile.revisions[0]
         self.document = decode_resources(self.source, self.profile, self.revision)
         self.resources = by_id(self.document)

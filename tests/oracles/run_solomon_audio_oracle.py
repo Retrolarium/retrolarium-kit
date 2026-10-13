@@ -10,15 +10,14 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "retrolarium-core" / "python"))
 
-from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from retrolarium_kit.core.game_profiles import repository_profile
 from retrolarium_core.ines import parse_ines
 from retrolarium_kit.games.solomon.audio import (
     build_audio, decode_audio, parse_audio_document,
 )
 
 
-def check(rom: Path, revision_id: str, oracle: object) -> None:
-    profile = packaged_game_profiles().get("solomons-key")
+def check(rom: Path, revision_id: str, oracle: object, profile) -> None:
     revision = next(
         item for item in profile.revisions if item.revision_id == revision_id
     )
@@ -64,11 +63,13 @@ def main() -> None:
     parser.add_argument("--usa", type=Path, required=True)
     parser.add_argument("--europe", type=Path, required=True)
     args = parser.parse_args()
-    sys.path.insert(0, str(args.neighbor.resolve(strict=True)))
+    neighbor = args.neighbor.resolve(strict=True)
+    profile = repository_profile(neighbor)
+    sys.path.insert(0, str(neighbor))
     from scripts.authoring import audio_editor
 
-    check(args.usa.resolve(strict=True), "usa", audio_editor)
-    check(args.europe.resolve(strict=True), "europe", audio_editor)
+    check(args.usa.resolve(strict=True), "usa", audio_editor, profile)
+    check(args.europe.resolve(strict=True), "europe", audio_editor, profile)
 
 
 if __name__ == "__main__":

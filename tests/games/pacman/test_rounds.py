@@ -8,7 +8,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from helpers import game_repository
-from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from helpers import game_profile
 from retrolarium_kit.platform.nes.resources import build_resources, decode_resources, parse_resource_document
 
 
@@ -21,7 +21,7 @@ TABLES = ("round-profiles", "round-speed-sets", "round-timing-sets", "round-pell
 
 
 def revision(revision_id: str):
-    profile = packaged_game_profiles().get("pacman")
+    profile = game_profile("pacman")
     return profile, next(item for item in profile.revisions if item.revision_id == revision_id)
 
 

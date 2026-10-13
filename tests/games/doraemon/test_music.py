@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "retrolarium-core" 
 from retrolarium_kit.games.doraemon.music import (
     DoraemonMusicError, build_music, decode_music, parse_music_document, trace_track,
 )
-from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from helpers import game_profile
 from retrolarium_core.ines import parse_ines
 from helpers import game_repository
 
@@ -25,7 +25,7 @@ ROM = game_repository("doraemon_src") / "Doraemon (J) (PRG0) [!].nes"
 class DoraemonMusicTests(unittest.TestCase):
     def setUp(self) -> None:
         self.source = ROM.read_bytes()
-        self.profile = packaged_game_profiles().get("doraemon")
+        self.profile = game_profile("doraemon")
         self.revision = self.profile.revisions[0]
 
     def test_round_trip_edit_and_trace(self) -> None:

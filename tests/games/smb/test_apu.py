@@ -18,7 +18,7 @@ from retrolarium_kit.studio.audio import (
 )
 from retrolarium_kit.core.authoring import GameProfile, ResourceSpec, RevisionSpec
 from retrolarium_kit.cli import main as cli_main
-from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from helpers import game_profile
 from retrolarium_kit.platform.nes.resources import (
     build_resources,
     decode_resources,
@@ -653,7 +653,7 @@ class SmbApuTests(unittest.TestCase):
             )
 
     def test_packaged_profile_drives_regional_preview_timing(self) -> None:
-        profile = packaged_game_profiles().get("smb1")
+        profile = game_profile("smb1")
 
         def music_parameters(revision_id: str) -> dict[str, object]:
             resource = next(

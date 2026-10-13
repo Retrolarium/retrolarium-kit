@@ -21,7 +21,7 @@ fixture; no ROM bytes are committed as part of the profile.
 
 ## Profile evidence
 
-The committed profile is `profiles/game_honkeypong.json`. Its ranges were
+The profile is `tests/fixtures/game_honkeypong.json`. Its ranges were
 cross-checked three ways: Ophis source `.incbin` directives, the generated
 `HonkeyPong_Debug.map`, and byte comparison between each upstream asset and the
 built ROM.

@@ -26,7 +26,7 @@ from retrolarium_kit.games.castle_excellent.rooms import (
     parse_level_document,
     validate_prefix_codebook,
 )
-from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from helpers import game_profile
 from retrolarium_kit.games.catalog import (
     build_game,
     build_game_documents,
@@ -228,7 +228,7 @@ def write_profile(path: Path, profile: GameProfile) -> None:
 
 class CastleExcellentCodecTests(unittest.TestCase):
     def test_packaged_profile_has_both_known_revisions(self) -> None:
-        profile = packaged_game_profiles().get("castle-excellent")
+        profile = game_profile("castle-excellent")
         self.assertEqual(
             [revision.revision_id for revision in profile.revisions],
             ["castle-excellent-japan-hsp-05", "castlequest-usa"],

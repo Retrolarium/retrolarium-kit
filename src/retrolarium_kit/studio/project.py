@@ -35,6 +35,7 @@ from retrolarium_core.fds import FdsError, parse_fds_side
 from retrolarium_core.ines import InesError, load_ines, parse_ines_prefix
 from retrolarium_core.megadrive import load_megadrive
 from retrolarium_kit.core.project import build_project, sha256_file, verify_project, write_document
+from retrolarium_kit.core.game_profiles import repository_profile
 from retrolarium_core.snes import load_snes
 
 
@@ -491,6 +492,8 @@ def load_studio_project(path: Path) -> dict[str, Any]:
         if not repository.parts or any(part != ".." for part in repository.parts):
             raise _error("source.repository", "must name the repository root as '../..'")
         boundary = root.joinpath(*repository.parts).resolve()
+        # The game's profile, which the commands on this project use.
+        repository_profile(boundary)
     else:
         source_key = "manifest" if flicky_content else "disassembly"
         _check_keys(source_table, "source", {source_key, "sha256"},

@@ -19,7 +19,7 @@ from retrolarium_kit.games.castle_excellent.rooms import (
 )
 from retrolarium_kit.core.game_profiles import (
     load_game_profile,
-    packaged_game_profiles,
+    game_profiles,
     recognize_revision,
 )
 from retrolarium_core.ines import load_ines
@@ -150,7 +150,7 @@ from retrolarium_kit.games.solomon.text import (
 def _profiles(custom_profile: Path | None) -> tuple[GameProfile, ...]:
     if custom_profile is not None:
         return (load_game_profile(custom_profile),)
-    registry = packaged_game_profiles()
+    registry = game_profiles()
     return tuple(registry.get(identifier) for identifier in registry.identifiers())
 
 
@@ -682,10 +682,10 @@ def resolve_profile_revision(
     match = re.fullmatch(r"([a-z0-9][a-z0-9._-]*)\.v([1-9][0-9]*)", profile_reference)
     if match is None:
         raise AuthoringError(
-            "Studio profile must use the packaged game-id.vN form"
+            "Studio profile must use the game-id.vN form"
         )
     game_id, version_text = match.groups()
-    registry = packaged_game_profiles()
+    registry = game_profiles()
     try:
         profile = registry.get(game_id)
     except AuthoringError as exc:
@@ -693,7 +693,7 @@ def resolve_profile_revision(
     version = int(version_text)
     if profile.profile_version != version:
         raise AuthoringError(
-            f"Studio profile {profile_reference} does not match packaged profile "
+            f"Studio profile {profile_reference} does not match the repository's profile "
             f"version {profile.profile_version}"
         )
     matches = [
@@ -778,7 +778,7 @@ def _atomic_write_json(path: Path, value: object) -> None:
 
 
 def profile_catalog() -> dict[str, object]:
-    registry = packaged_game_profiles()
+    registry = game_profiles()
     profiles = []
     for identifier in registry.identifiers():
         profile = registry.get(identifier)

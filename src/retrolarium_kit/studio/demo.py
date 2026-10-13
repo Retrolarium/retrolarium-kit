@@ -6,7 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from retrolarium_kit.core.game_profiles import game_profiles
 from retrolarium_kit.core.project import launch_image_plan, sha256_file
 from retrolarium_kit.studio.project import (
     StudioProjectError,
@@ -97,7 +97,7 @@ def studio_smb_demo_plan(path: Path, *, mame: Path, record: Path | None = None) 
     _require_declared_operation(inspection, "launch")
     if inspection["project"]["platform"] != "nes" or inspection["project"]["profile"] != "smb1.v1":
         raise StudioProjectError("SMB demo playtest requires the smb1.v1 NES profile")
-    profile = packaged_game_profiles().get("smb1")
+    profile = game_profiles().get("smb1")
     revision = next(
         (item for item in profile.revisions if item.sha256 == inspection["source"]["sha256"]), None
     )
@@ -166,7 +166,7 @@ def studio_castle_excellent_demo_plan(path: Path, *, mame: Path, record: Path | 
     if inspection["project"]["platform"] != "nes" \
             or inspection["project"]["profile"] != "castle-excellent.v1":
         raise StudioProjectError("Castle Excellent demo playtest requires the castle-excellent.v1 NES profile")
-    profile = packaged_game_profiles().get("castle-excellent")
+    profile = game_profiles().get("castle-excellent")
     revision = next(
         (item for item in profile.revisions if item.sha256 == inspection["source"]["sha256"]), None
     )
@@ -223,7 +223,7 @@ def studio_pacman_demo_plan(path: Path, *, mame: Path, record: Path | None = Non
     _require_declared_operation(inspection, "launch")
     if inspection["project"]["platform"] != "nes"             or inspection["project"]["profile"] != "pacman.v1":
         raise StudioProjectError("Pac-Man demo playtest requires the pacman.v1 NES profile")
-    profile = packaged_game_profiles().get("pacman")
+    profile = game_profiles().get("pacman")
     revision = next(
         (item for item in profile.revisions if item.sha256 == inspection["source"]["sha256"]), None
     )
@@ -279,7 +279,7 @@ def studio_doraemon_demo_plan(path: Path, *, mame: Path, record: Path | None = N
     _require_declared_operation(inspection, "launch")
     if inspection["project"]["platform"] != "nes" or inspection["project"]["profile"] != "doraemon.v1":
         raise StudioProjectError("Doraemon demo playtest requires the doraemon.v1 NES profile")
-    profile = packaged_game_profiles().get("doraemon")
+    profile = game_profiles().get("doraemon")
     revision = next(
         (item for item in profile.revisions if item.sha256 == inspection["source"]["sha256"]), None
     )
@@ -337,7 +337,7 @@ def studio_solomon_demo_plan(
     if inspection["project"]["platform"] != "nes" \
             or inspection["project"]["profile"] != "solomons-key.v1":
         raise StudioProjectError("Solomon demo playtest requires the solomons-key.v1 NES profile")
-    profile = packaged_game_profiles().get("solomons-key")
+    profile = game_profiles().get("solomons-key")
     revision = next(
         (item for item in profile.revisions if item.sha256 == inspection["source"]["sha256"]), None
     )

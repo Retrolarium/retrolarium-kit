@@ -18,7 +18,8 @@ from retrolarium_kit.studio.repository import (
     profile_views, reset_revision, revision_statuses,
 )
 from retrolarium_kit.studio.project import build_studio_project, load_studio_project, verify_studio_project
-from helpers import game_repository
+from retrolarium_kit.core.game_profiles import game_profiles, repository_profile
+from helpers import GAME_REPOSITORIES, game_repository
 
 
 def apply_ips(original: bytes, patch: bytes) -> bytes:
@@ -41,6 +42,8 @@ def apply_ips(original: bytes, patch: bytes) -> bytes:
 PACMAN = game_repository("pacman_src")
 V10 = PACMAN / "Pac-Man (J) (V1.0) [!].nes"
 V11 = PACMAN / "Pac-Man (J) (V1.1) [!].nes"
+# The game's profile, which a repository keeps beside its descriptor.
+PROFILE = PACMAN / "config" / "game_profile.json"
 
 DESCRIPTOR = """schema = "retrolarium.game"
 schema_version = 1
@@ -62,6 +65,14 @@ label = "Japan · v1.1"
 rom = "pacman11.nes"
 
 """
+
+
+def write_repository(root: Path, descriptor: str = DESCRIPTOR) -> Path:
+    """A Pac-Man repository: the descriptor and the game's profile."""
+    (root / "config").mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(PROFILE, root / "config" / "game_profile.json")
+    (root / "pacman.rlj").write_text(descriptor, encoding="utf-8")
+    return root / "pacman.rlj"
 
 
 class IpsTests(unittest.TestCase):
@@ -88,12 +99,11 @@ class IpsTests(unittest.TestCase):
             ips_patch(bytes(4), bytes(2))
 
 
-@unittest.skipUnless(V10.is_file() and V11.is_file(), "the Pac-Man ROMs are not available")
+@unittest.skipUnless(V10.is_file() and V11.is_file() and PROFILE.is_file(), "the Pac-Man ROMs are not available")
 class DescriptorTests(unittest.TestCase):
     def setUp(self) -> None:
         self.root = Path(tempfile.mkdtemp())
-        (self.root / "pacman.rlj").write_text(DESCRIPTOR, encoding="utf-8")
-        self.descriptor = load_descriptor(self.root / "pacman.rlj")
+        self.descriptor = load_descriptor(write_repository(self.root))
 
     def tearDown(self) -> None:
         shutil.rmtree(self.root)
@@ -154,6 +164,7 @@ class DescriptorTests(unittest.TestCase):
         archives.mkdir()
         with zipfile.ZipFile(archives / "pacman_src.zip", "w") as bundle:
             bundle.writestr("pacman_src-main/pacman.rlj", DESCRIPTOR)
+            bundle.write(PROFILE, "pacman_src-main/config/game_profile.json")
         games = self.root / "games"
         source = str(archives / "{repository}.zip")
         first = open_rom(V11, games, source=source)
@@ -278,6 +289,34 @@ class DescriptorTests(unittest.TestCase):
         self.assertEqual(("ok", "ok"), (report["status"], report["revisions"][0]["status"]))
 
 
+@unittest.skipUnless(PROFILE.is_file(), "the Pac-Man repository is not available")
+class RepositoryProfileTests(unittest.TestCase):
+    def test_the_profile_comes_from_the_repository(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "pacman.rlj").write_text(DESCRIPTOR, encoding="utf-8")
+            with self.assertRaisesRegex(GameRepositoryError, "no config/game_profile.json"):
+                load_descriptor(root / "pacman.rlj")
+            write_repository(root, DESCRIPTOR.replace('"pacman.v1"', '"pacman.v2"'))
+            with self.assertRaisesRegex(GameRepositoryError, "profile of pacman.v1, not pacman.v2"):
+                load_descriptor(root / "pacman.rlj")
+            self.assertEqual("pacman.v1", load_descriptor(write_repository(root)).profile)
+            self.assertEqual(["japan-v10", "japan-v11", "japan-v10-nrom256"],
+                             [item.revision_id for item in game_profiles().get("pacman").revisions])
+
+    def test_open_rom_knows_the_revisions_the_repositories_keep(self) -> None:
+        games = repository.repository_catalog()["games"]
+        for game_id, folder in GAME_REPOSITORIES.items():
+            profile = repository_profile(game_repository(folder))
+            if profile is None:
+                continue
+            with self.subTest(game=game_id):
+                self.assertEqual(
+                    [(item.revision_id, item.name, item.sha256) for item in profile.revisions],
+                    [(item["id"], item["name"], item["sha256"]) for item in games[game_id]["revisions"]])
+
+
+@unittest.skipUnless(PROFILE.is_file(), "the Pac-Man repository is not available")
 class ReleaseManifestTests(unittest.TestCase):
     """The Retrolarium part of a 3.0 manifest; no ROM is needed."""
 
@@ -285,8 +324,7 @@ class ReleaseManifestTests(unittest.TestCase):
         from retrolarium_kit import __version__
         self.version = __version__
         self.root = Path(tempfile.mkdtemp())
-        (self.root / "pacman.rlj").write_text(DESCRIPTOR, encoding="utf-8")
-        self.descriptor = load_descriptor(self.root / "pacman.rlj")
+        self.descriptor = load_descriptor(write_repository(self.root))
         self.manifest = self.root / "release.json"
 
     def tearDown(self) -> None:

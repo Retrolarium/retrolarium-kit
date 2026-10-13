@@ -8,7 +8,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from retrolarium_kit.core.authoring import GameProfile, ResourceSpec, RevisionSpec
-from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from helpers import game_profile
 from retrolarium_kit.games.catalog import authoring_adapters
 from retrolarium_kit.games.solomon.animations import (
     DEFINITION_SIZE, FRAME_COUNT, GROUP_COUNTS, GROUP_OFFSETS, POINTER_COUNT,
@@ -87,7 +87,7 @@ class SolomonAnimationTests(unittest.TestCase):
                 )
 
     def test_packaged_regions_and_adapter_are_registered(self) -> None:
-        profile = packaged_game_profiles().get("solomons-key")
+        profile = game_profile("solomons-key")
         for revision_id, expected in (("usa", 0x50E8), ("europe", 0x5068)):
             revision = next(
                 item for item in profile.revisions

@@ -17,7 +17,7 @@ from retrolarium_kit.core.authoring import (
     RevisionSpec,
 )
 from retrolarium_core.fds import fds_payload
-from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from helpers import game_profile
 from retrolarium_kit.games.catalog import profile_catalog
 from retrolarium_kit.platform.nes.resources import (
     build_resources,
@@ -195,7 +195,7 @@ class SmbWorldTests(unittest.TestCase):
             parse_resource_document(raw, profile, revision)
 
     def test_packaged_profile_matches_verified_ju_and_pal_identities(self) -> None:
-        profile = packaged_game_profiles().get("smb1")
+        profile = game_profile("smb1")
         self.assertEqual(
             [revision.revision_id for revision in profile.revisions],
             [
@@ -735,7 +735,7 @@ class SmbWorldTests(unittest.TestCase):
         )
 
     def test_revision_matrix_routes_level_banks_and_palette_models(self) -> None:
-        profile = packaged_game_profiles().get("smb1")
+        profile = game_profile("smb1")
         expected = {
             "ju": (
                 (("world", None),), (("levels", "world", None),), "nes"
@@ -816,7 +816,7 @@ class SmbWorldTests(unittest.TestCase):
                 )
 
     def test_split_course_bank_spans_match_declared_capacities(self) -> None:
-        profile = packaged_game_profiles().get("smb1")
+        profile = game_profile("smb1")
         for revision_id in ("ann_fds", "smb2_jp_fds"):
             revision = next(
                 item for item in profile.revisions

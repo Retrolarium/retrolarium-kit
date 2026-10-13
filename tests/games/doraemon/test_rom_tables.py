@@ -11,7 +11,7 @@ from retrolarium_kit.games.doraemon.objects import (
     DoraemonObjectError, decode_descriptors, decode_placements, decode_registry, decode_schedule,
     encode_placements, encode_registry, encode_schedule,
 )
-from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from helpers import game_profile
 from helpers import game_repository
 
 
@@ -27,7 +27,7 @@ class DoraemonRomTableTests(unittest.TestCase):
         # $81 $90 $91; state $0A (records 36-37) is drawn from $4D $4E $5D
         # $5E.
         source = ROM.read_bytes()
-        profile = packaged_game_profiles().get("doraemon")
+        profile = game_profile("doraemon")
         resource = next(item for item in profile.resources_for(profile.revisions[0]) if item.codec == WORLD2_CODEC)
         p = resource.parameters
         value = decode_world2(source[p["file_offset"]:p["file_offset"] + p["size"]],
