@@ -58,13 +58,6 @@ def command_game_build(args: argparse.Namespace) -> None:
     )
 
 
-def command_game_audit_smb_migration(args: argparse.Namespace) -> None:
-    from retrolarium_kit.games.smb.migration import audit_smb_migration
-
-    print_json(audit_smb_migration(
-        args.legacy_source, args.revision, profile_path=args.profile))
-
-
 def command_game_launch_plan(args: argparse.Namespace) -> None:
     from retrolarium_kit.games.catalog import game_launch_plan
 
@@ -141,14 +134,6 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     game_build.add_argument("--report", type=Path)
     game_build.add_argument("--profile", type=Path)
     game_build.set_defaults(handler=command_game_build)
-    game_audit_smb = game_commands.add_parser(
-        "audit-smb-migration",
-        help="audit Retrolarium resource coverage of the retired SMB Studios",
-    )
-    game_audit_smb.add_argument("revision")
-    game_audit_smb.add_argument("--legacy-source", type=Path, required=True)
-    game_audit_smb.add_argument("--profile", type=Path)
-    game_audit_smb.set_defaults(handler=command_game_audit_smb_migration)
     game_launch_plan_parser = game_commands.add_parser(
         "launch-plan", help="create a validated MAME process-spec for an edited ROM"
     )

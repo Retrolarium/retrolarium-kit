@@ -177,6 +177,14 @@ class DescriptorTests(unittest.TestCase):
             fetch_repository("pacman", self.root / "games", source=str(archives / "{repository}.zip"))
         self.assertFalse((self.root / "escape.txt").exists())
 
+    def test_downloads_name_a_release_tag_or_a_branch(self) -> None:
+        catalog = repository.repository_catalog()
+        for game, entry in catalog["games"].items():
+            self.assertRegex(entry["ref"], r"^(tags|heads)/[\w.-]+$", game)
+        self.assertEqual(
+            "https://github.com/RetrolariumLab/pacman_src/archive/refs/tags/source-reconstruction-3.0.zip",
+            repository._archive_url(catalog, catalog["games"]["pacman"], None))
+
     def test_a_view_can_belong_to_some_revisions(self) -> None:
         views = profile_views("pacman.v1")
         only_v11 = {**views, "tabs": [
@@ -306,6 +314,11 @@ class ReleaseManifestTests(unittest.TestCase):
         self.assertEqual("ok", self.check(status="tag-ready", kit=pinned)["status"])
         other = self.check(status="tag-ready", kit={"version": "0.0.1", "commit": None})
         self.assertIn("this is kit", other["problems"][0])
+
+    def test_a_minor_release_of_the_line_is_accepted(self) -> None:
+        self.assertEqual("ok", self.check(release_line="3.x")["status"])
+        self.assertIn("are not 3.0 or 3.x", self.check(release_line="4.0")["problems"][0])
+        self.assertIn("are not 3.0 or 3.x", self.check(release_kind="advanced")["problems"][0])
 
     def test_the_manifest_matches_the_descriptor_and_the_tree(self) -> None:
         self.assertIn("differ from the descriptor", self.check(revisions=["japan-v10"])["problems"][0])

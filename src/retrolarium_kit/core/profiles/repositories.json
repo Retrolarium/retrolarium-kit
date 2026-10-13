@@ -2,13 +2,12 @@
   "schema": "retrolarium.game-repositories",
   "schema_version": 1,
   "organization": "https://github.com/RetrolariumLab",
-  "branch": "main",
   "games": {
-    "pacman": {"repository": "pacman_src", "descriptor": "pacman.rlj"},
-    "castle-excellent": {"repository": "castle_excellent_src", "descriptor": "castle_excellent.rlj"},
-    "doraemon": {"repository": "doraemon_src", "descriptor": "doraemon.rlj"},
-    "smb1": {"repository": "smb1_src", "descriptor": "super_mario_bros.rlj"},
-    "solomons-key": {"repository": "solomon_no_kagi_src", "descriptor": "solomons_key.rlj"},
-    "flicky": {"repository": "flicky_src", "descriptor": "flicky.rlj"}
+    "pacman": {"repository": "pacman_src", "descriptor": "pacman.rlj", "ref": "tags/source-reconstruction-3.0"},
+    "castle-excellent": {"repository": "castle_excellent_src", "descriptor": "castle_excellent.rlj", "ref": "tags/source-reconstruction-3.0"},
+    "doraemon": {"repository": "doraemon_src", "descriptor": "doraemon.rlj", "ref": "tags/source-reconstruction-3.0"},
+    "smb1": {"repository": "smb1_src", "descriptor": "super_mario_bros.rlj", "ref": "tags/source-reconstruction-3.0"},
+    "solomons-key": {"repository": "solomon_no_kagi_src", "descriptor": "solomons_key.rlj", "ref": "tags/source-reconstruction-3.0"},
+    "flicky": {"repository": "flicky_src", "descriptor": "flicky.rlj", "ref": "tags/source-reconstruction-3.0"}
   }
 }
