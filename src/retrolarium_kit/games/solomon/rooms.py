@@ -1,7 +1,7 @@
 """Solomon's Key room bitplanes and shared stream arenas for USA and Europe.
 
 The 53 room records are 24 brown and 24 white bytes each.  Their regional
-PRG offsets come from the packaged profile, never from the filename.
+PRG offsets come from the game's profile, never from the filename.
 """
 
 from __future__ import annotations

@@ -13,7 +13,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from helpers import patched_manifest
-from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from helpers import game_profile
 from retrolarium_kit.games.doraemon.hierarchy import (
     DoraemonHierarchyError,
     decode_hierarchy,
@@ -133,7 +133,7 @@ def with_world2_screens(image: bytes) -> bytes:
 
 class DoraemonProfileTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.profile = packaged_game_profiles().get("doraemon")
+        self.profile = game_profile("doraemon")
 
     def test_revision_identity_and_gnrom_chr_spans(self) -> None:
         self.assertEqual(

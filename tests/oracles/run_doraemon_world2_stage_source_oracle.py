@@ -23,7 +23,7 @@ from retrolarium_kit.games.doraemon.world2.routes import (
 )
 from retrolarium_kit.games.doraemon.world2.projection import project_screen
 from retrolarium_kit.games.doraemon.world2.streams import decode_screens, encode_screens
-from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from retrolarium_kit.core.game_profiles import repository_profile
 
 
 def main() -> int:
@@ -33,7 +33,7 @@ def main() -> int:
     root = args.source_root.resolve()
     if root.name != "doraemon_src":
         parser.error("--source-root must point directly to doraemon_src")
-    profile = packaged_game_profiles().get("doraemon")
+    profile = repository_profile(root)
     expected_offsets = {
         "world2-stage": (0xBDDF, 229),
         "world2-branches": (0xA70F, 68),

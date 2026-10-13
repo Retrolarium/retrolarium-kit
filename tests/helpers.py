@@ -115,6 +115,35 @@ def game_repository(name: str) -> Path:
     return Path(__file__).resolve().parents[1] / "oranguthang-not-found" / name
 
 
+# The repositories keeping the profiles of the games the kit edits.
+GAME_REPOSITORIES = {
+    "castle-excellent": "castle_excellent_src",
+    "doraemon": "doraemon_src",
+    "pacman": "pacman_src",
+    "smb1": "smb1_src",
+    "solomons-key": "solomon_no_kagi_src",
+}
+
+# HonkeyPong, the open homebrew game of the disassembler's fixtures, has
+# its profile here.
+HONKEYPONG_PROFILE = Path(__file__).resolve().parent / "fixtures" / "game_honkeypong.json"
+
+
+def game_profile(game_id: str):
+    """A game's profile, from its repository's config/game_profile.json
+    (see game_repository); the test is skipped without it."""
+    import unittest
+
+    from retrolarium_kit.core.game_profiles import load_game_profile, repository_profile
+
+    if game_id == "honkeypong":
+        return load_game_profile(HONKEYPONG_PROFILE)
+    profile = repository_profile(game_repository(GAME_REPOSITORIES[game_id]))
+    if profile is None:
+        raise unittest.SkipTest(f"{GAME_REPOSITORIES[game_id]} with its game profile is not present")
+    return profile
+
+
 def fds_side() -> bytes:
     """A Disk System side with two files, for the FDS and project tests."""
     image = bytearray(65_500)

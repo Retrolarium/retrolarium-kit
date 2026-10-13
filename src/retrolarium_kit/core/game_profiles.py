@@ -1,9 +1,16 @@
-"""Load declarative game/revision/resource profiles from package data."""
+"""Declarative game/revision/resource profiles, from the games' repositories.
+
+A game's profile says where its resources lie in each revision's image, so it
+is knowledge about the game: the game's repository keeps it in
+config/game_profile.json, and the kit packages none. The kit learns a
+profile when it opens the repository (its descriptor, or a studio project
+made from it), and the profiles this process opened are the ones the
+commands that name a game by its id can use.
+"""
 
 from __future__ import annotations
 
 import hashlib
-from importlib import resources
 import json
 from pathlib import Path
 from typing import Any, Iterable
@@ -196,22 +203,28 @@ def load_game_profile(path: Path) -> GameProfile:
     return parse_game_profile(document)
 
 
-def packaged_game_profiles() -> Registry[GameProfile]:
+PROFILE_PATH = Path("config/game_profile.json")
+
+# The profiles of the repositories this process opened, by game id.
+_OPENED: dict[str, GameProfile] = {}
+
+
+def repository_profile(root: Path) -> GameProfile | None:
+    """The profile a game repository keeps, now usable by its game id;
+    None when the repository keeps none."""
+    path = root / PROFILE_PATH
+    if not path.is_file():
+        return None
+    profile = load_game_profile(path)
+    _OPENED[profile.game_id] = profile
+    return profile
+
+
+def game_profiles() -> Registry[GameProfile]:
+    """The profiles of the game repositories this process opened."""
     registry: Registry[GameProfile] = Registry("game profile")
-    profile_root = resources.files("retrolarium_kit.core").joinpath("profiles")
-    for item in sorted(profile_root.iterdir(), key=lambda value: value.name):
-        if not item.name.startswith("game_") or not item.name.endswith(".json"):
-            continue
-        try:
-            document = json.loads(item.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            raise AuthoringError(
-                f"cannot read packaged game profile {item.name}: {exc}"
-            ) from exc
-        profile = parse_game_profile(document)
-        registry.register(profile.game_id, profile)
-    if not registry.identifiers():
-        raise AuthoringError("package contains no game profiles")
+    for game_id in sorted(_OPENED):
+        registry.register(game_id, _OPENED[game_id])
     return registry
 
 
@@ -219,7 +232,7 @@ def recognize_revision(
     image: bytes, profiles: Iterable[GameProfile] | None = None
 ) -> tuple[GameProfile, RevisionSpec]:
     if profiles is None:
-        registry = packaged_game_profiles()
+        registry = game_profiles()
         candidates = tuple(registry.get(identifier) for identifier in registry.identifiers())
     else:
         candidates = tuple(profiles)

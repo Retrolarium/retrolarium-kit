@@ -21,7 +21,7 @@ from retrolarium_kit.core.authoring import (
     ResourceSpec,
     RevisionSpec,
 )
-from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from helpers import game_profile
 import retrolarium_kit.games.catalog as games_module
 from retrolarium_kit.games.catalog import (
     build_game,
@@ -493,7 +493,7 @@ class NesResourceTests(unittest.TestCase):
         self.assertEqual(0xEA, reopened.resources[-1]["frames"][4][3])
 
     def test_packaged_honkeypong_profile_has_open_fixture_identity(self) -> None:
-        profile = packaged_game_profiles().get("honkeypong")
+        profile = game_profile("honkeypong")
         self.assertEqual(profile.revisions[0].sha256, "cce7bf2f71eb9e63de0dba15098679dde06a1da9d7553f2319aa60ea57a1193b")
         self.assertEqual(profile.revisions[0].mapper, 0)
         self.assertEqual(

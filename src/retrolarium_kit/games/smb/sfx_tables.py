@@ -86,16 +86,16 @@ def encode(value: Any, parameters: Mapping[str, Any]) -> list[tuple[int, bytes]]
 
 
 def _source_resources(source: bytes):
-    """(parameters, base) of each sfx-tables resource a packaged profile
+    """(parameters, base) of each sfx-tables resource an opened profile
     declares for this image; base turns a file offset into a CPU address in
     the 32 KiB window."""
     import hashlib
 
-    from retrolarium_kit.core.game_profiles import packaged_game_profiles
+    from retrolarium_kit.core.game_profiles import game_profiles
     from retrolarium_kit.platform.nes.resources import _resource_payload, _resource_specs
 
     sha = hashlib.sha256(source).hexdigest()
-    registry = packaged_game_profiles()
+    registry = game_profiles()
     for identifier in registry.identifiers():
         profile = registry.get(identifier)
         for revision in profile.revisions:
@@ -115,7 +115,7 @@ def _source_resources(source: bytes):
 
 
 def source_tables(source: bytes) -> tuple["Table", ...]:
-    """The effect tables a packaged profile declares for this image
+    """The effect tables an opened profile declares for this image
     (smb.sfx-tables.v1), at their CPU addresses in the 32 KiB window."""
     from retrolarium_kit.platform.nes.sound_effects import Table
 

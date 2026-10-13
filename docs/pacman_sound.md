@@ -13,9 +13,9 @@ maps logical slots to their physical order. `labels` supplies project-facing
 names. `trailing_sizes` separates intentional post-stop bytes from unused `$FF`
 arena padding, including after streams have been shortened and repacked.
 
-The bundled Pac-Man profile describes the J v1.0 and J v1.1 layout at pointer
-table file offset `$309E` and arena `$30BE..$3437` (890 bytes). No ROM data is
-packaged with the Kit.
+The Pac-Man profile describes the J v1.0 and J v1.1 layout at pointer table file
+offset `$309E` and arena `$30BE..$3437` (890 bytes). No ROM data is packaged
+with the Kit.
 
 ## Editable document
 
@@ -50,11 +50,11 @@ rltool audio import-midi game.json --resource sound-streams --slot 3 --midi deat
 rltool audio render-wav edited.json --resource sound-streams --slot 3 --output death.wav
 ```
 
-All commands validate the resource against its packaged (or explicitly selected)
-game profile. Preview performs the complete conversion and capacity check
-without writing the document. The Qt editor displays this report and asks for
-explicit confirmation before applying it. MIDI output is written atomically only
-after the entire 16-slot arena passes capacity validation.
+All commands validate the resource against its repository's (or an explicitly
+selected) game profile. Preview performs the complete conversion and capacity
+check without writing the document. The Qt editor displays this report and asks
+for explicit confirmation before applying it. MIDI output is written atomically
+only after the entire 16-slot arena passes capacity validation.
 
 ## Preview
 

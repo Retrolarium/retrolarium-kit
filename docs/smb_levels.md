@@ -6,7 +6,7 @@ Codec: `smb.levels.v1`
 
 ## Scope
 
-The packaged `smb1.v1` profile exposes all 34 procedural areas from the
+The `smb1.v1` profile (in `smb1_src`) exposes all 34 procedural areas from the
 byte-identical open `smb1_src` JU build. Area-object and enemy streams remain
 parallel named records rather than being flattened into a tilemap. No ROM or
 extracted asset is distributed with the package.

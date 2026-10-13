@@ -10,7 +10,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from retrolarium_kit.core.authoring import GameProfile, ResourceSpec, RevisionSpec
-from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from helpers import game_profile
 from retrolarium_kit.platform.nes.resources import (
     build_resources,
     decode_resources,
@@ -127,7 +127,7 @@ class NesVisualTests(unittest.TestCase):
             parse_resource_document(invalid, profile, revision)
 
     def test_packaged_smb_profile_declares_exact_ju_visual_layout(self) -> None:
-        profile = packaged_game_profiles().get("smb1")
+        profile = game_profile("smb1")
         metatiles = profile.resource("background-metatiles")
         palettes = profile.resource("area-palette-packets")
         self.assertEqual(metatiles.parameters["group_sizes"], [39, 46, 10, 6])

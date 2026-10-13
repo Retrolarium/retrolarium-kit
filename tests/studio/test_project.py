@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from helpers import patched_manifest
-from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from helpers import game_profile
 from retrolarium_kit.studio.project import (
     FLICKY_WORKSPACE_FILES,
     StudioProjectError,
@@ -809,7 +809,7 @@ class StudioProjectTests(unittest.TestCase):
             )
 
     def test_smb_revision_matrix_creates_only_supported_editor_tabs(self) -> None:
-        profile = packaged_game_profiles().get("smb1")
+        profile = game_profile("smb1")
         expected_common = {
             "world", "levels", "graphics", "metatiles", "palettes",
             "player-frames", "code",

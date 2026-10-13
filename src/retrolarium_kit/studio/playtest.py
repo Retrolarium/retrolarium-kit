@@ -14,7 +14,7 @@ import subprocess
 import tempfile
 from typing import Any
 
-from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from retrolarium_kit.core.game_profiles import game_profiles
 from retrolarium_kit.games.flicky.content import (
     WORKSPACE_FILES as FLICKY_WORKSPACE_FILES,
     validate_flicky_source_snapshot,
@@ -80,7 +80,7 @@ def _fds_file_blob(image_path: Path, file_id: int) -> bytes:
 
 def _source_revision(inspection: Mapping[str, Any]):
     """The profile and revision a project's source is, if the kit knows it."""
-    registry = packaged_game_profiles()
+    registry = game_profiles()
     for identifier in registry.identifiers():
         profile = registry.get(identifier)
         if f"{profile.game_id}.v{profile.profile_version}" != inspection["project"]["profile"]:
@@ -716,7 +716,7 @@ def studio_solomon_point_playtest_plan(
             or len(document["rooms"]) != 53:
         raise StudioProjectError("Solomon rooms document has an unsupported identity")
     room = _bounded_integer(room, "room", 0, 52)
-    profile = packaged_game_profiles().get("solomons-key")
+    profile = game_profiles().get("solomons-key")
     revision = next(
         item for item in profile.revisions if item.revision_id == revision_id
     )

@@ -4,10 +4,11 @@ Status: implemented first Pac-Man Studio vertical slice.
 
 ## Public boundary
 
-The packaged `pacman.v1` game profile recognizes only the Japan v1.0 and v1.1
-revisions whose resource locations were independently verified. Recognition is
-by complete image size, SHA-1 and SHA-256; the package contains metadata and
-code only, never ROM bytes.
+The `pacman.v1` game profile, which `pacman_src` keeps in
+`config/game_profile.json`, recognizes only the Japan v1.0 and v1.1 revisions
+whose resource locations were independently verified. Recognition is by complete
+image size, SHA-1 and SHA-256; the package contains metadata and code only,
+never ROM bytes.
 
 The profile selects the existing `nes.resource-bundle.v1` authoring adapter and
 composes ten fixed resources in one `retrolarium.nes-resource-bundle` document:

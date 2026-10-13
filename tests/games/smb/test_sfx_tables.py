@@ -7,7 +7,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
-from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from helpers import game_profile
 from retrolarium_kit.platform.nes.resources import (
     NesResourceBundleDocument, NesResourceError, _decode_profile_resource, _resource_specs, build_resources,
     decode_resources,
@@ -22,7 +22,7 @@ ROMS = game_repository("smb1_src")
 
 
 def _images() -> dict[str, bytes]:
-    profile = packaged_game_profiles().get("smb1")
+    profile = game_profile("smb1")
     by_sha = {revision.sha256: revision.revision_id for revision in profile.revisions}
     images = {}
     if ROMS.is_dir():
@@ -49,7 +49,7 @@ class SmbSfxTableTests(unittest.TestCase):
         images = _images()
         if not images:
             self.skipTest("no Super Mario Bros. images are available")
-        profile = packaged_game_profiles().get("smb1")
+        profile = game_profile("smb1")
         for revision_id, data in images.items():
             revision = next(r for r in profile.revisions if r.revision_id == revision_id)
             spec = next(item for item in _resource_specs(profile, revision) if item.resource_id == "sfx-tables")
@@ -64,7 +64,7 @@ class SmbSfxTableTests(unittest.TestCase):
         data = _images().get("ju")
         if data is None:
             self.skipTest("the Super Mario Bros. (JU) image is not available")
-        profile = packaged_game_profiles().get("smb1")
+        profile = game_profile("smb1")
         revision = next(r for r in profile.revisions if r.revision_id == "ju")
         document = decode_resources(data, profile, revision)
         resources = []

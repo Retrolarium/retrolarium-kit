@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from helpers import game_repository
 from retrolarium_kit.core.authoring import GameProfile, ResourceSpec, RevisionSpec
-from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from helpers import game_profile
 from retrolarium_kit.platform.nes.resources import build_resources, decode_resources, parse_resource_document
 from retrolarium_kit.games.pacman.maze import (
     COLUMNS,
@@ -73,7 +73,7 @@ def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
 
 class PacmanMazeTests(unittest.TestCase):
     def test_packaged_profile_has_verified_compatible_revisions(self) -> None:
-        profile = packaged_game_profiles().get("pacman")
+        profile = game_profile("pacman")
         self.assertEqual(
             [item.revision_id for item in profile.revisions],
             ["japan-v10", "japan-v11", "japan-v10-nrom256"],
@@ -148,7 +148,7 @@ class PacmanMazeTests(unittest.TestCase):
 class PacmanMazeRomTests(unittest.TestCase):
     def setUp(self) -> None:
         self.image = ROM.read_bytes()
-        self.profile = packaged_game_profiles().get("pacman")
+        self.profile = game_profile("pacman")
         self.revision = next(
             item for item in self.profile.revisions if item.revision_id == "japan-v10"
         )

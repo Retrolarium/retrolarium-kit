@@ -19,7 +19,7 @@ from retrolarium_kit.core.authoring import (
     RevisionSpec,
 )
 from retrolarium_core.fds import fds_payload
-from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from helpers import game_profile
 from retrolarium_kit.platform.nes.resources import (
     NesResourceError,
     build_resources,
@@ -418,7 +418,7 @@ class SmbLevelTests(unittest.TestCase):
             parse_resource_document(raw, profile, revision)
 
     def test_packaged_ju_profile_exposes_all_open_source_streams(self) -> None:
-        profile = packaged_game_profiles().get("smb1")
+        profile = game_profile("smb1")
         levels = next(item for item in profile.resources if item.kind == "level")
         palettes = next(
             item for item in profile.resources if item.codec == "nes.ppu-palette-packets.v1"
@@ -473,7 +473,7 @@ class SmbLevelTests(unittest.TestCase):
         self.assertEqual(fixture["source"]["enemy_streams_sha1"],
                          "16bd5a146588d7731f254e7722bab5467111c7c2")
 
-        profile = packaged_game_profiles().get("smb1")
+        profile = game_profile("smb1")
         levels = next(item for item in profile.resources if item.kind == "level")
         areas = fixture["areas"]
         self.assertEqual([area["name"] for area in areas],

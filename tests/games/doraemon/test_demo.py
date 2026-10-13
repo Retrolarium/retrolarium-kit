@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 from retrolarium_kit.games.doraemon.demo import (
     DoraemonDemoError, build_demo, capacity, decode_demo, parse_demo_document,
 )
-from retrolarium_kit.core.game_profiles import packaged_game_profiles
+from helpers import game_profile
 from helpers import game_repository
 
 
@@ -24,7 +24,7 @@ STREAM = 16 + 0xFCBF - 0x8000
 class DoraemonDemoTests(unittest.TestCase):
     def setUp(self) -> None:
         self.source = ROM.read_bytes()
-        self.profile = packaged_game_profiles().get("doraemon")
+        self.profile = game_profile("doraemon")
         self.revision = self.profile.revisions[0]
 
     def build(self, value: dict) -> bytes:

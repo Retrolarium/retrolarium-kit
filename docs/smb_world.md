@@ -7,12 +7,12 @@ Codec: `smb.world.v1`
 
 ## Scope
 
-The packaged `smb1.v1` profile recognizes seven accepted revisions from the open
-`smb1_src` reconstruction. Every revision exposes typed World and Levels
-resources plus shared graphics assets. Layout, payload ownership, palette model,
-course banks and optional Screens/Text capabilities are revision data; the
-codecs and Qt widgets do not branch on game or revision IDs. No ROM or extracted
-asset is distributed in the package.
+The `smb1.v1` profile (in `smb1_src`) recognizes seven accepted revisions from
+the open `smb1_src` reconstruction. Every revision exposes typed World and
+Levels resources plus shared graphics assets. Layout, payload ownership, palette
+model, course banks and optional Screens/Text capabilities are revision data;
+the codecs and Qt widgets do not branch on game or revision IDs. No ROM or
+extracted asset is distributed in the package.
 
 For the base JU layout, the World resource combines two independent fixed ranges
 because they are one authoring workflow but are not adjacent in the original
@@ -83,8 +83,8 @@ NES disassemble -> game extract -> studio create -> studio validate
 
 For the JU open-source build the final artifact is byte-identical to the input
 (`f61548fdf1670cffefcc4f0b7bdcdd9eaba0c226e3b74f8666071496988248de`). The
-packaged-profile tests pin identities, resource overrides, offsets, capacities,
-payload ownership and capability lists for PAL, PC10, VS, FDS, ANN and SMB2.
+profile tests pin identities, resource overrides, offsets, capacities, payload
+ownership and capability lists for PAL, PC10, VS, FDS, ANN and SMB2.
 Public-source PRG audits additionally prove exact title-screen rebuilds for ANN
 and SMB2. Full extract/edit/build/verify runs against permitted complete source
 images remain the final cross-revision gate; the repository does not embed those

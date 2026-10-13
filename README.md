@@ -138,6 +138,17 @@ kit keeps none of them; where one is missing, numbers stand in. The file's
 over this repository, together with its check for literal tables
 (`name_guard_tables.txt` lists the files that may hold one, and why).
 
+### The game's profile
+
+Where a game's resources lie in each revision's image, which codec reads each
+one, and the revisions' hashes are knowledge about the game, so its repository
+keeps them in `config/game_profile.json` (`retrolarium.game-profile` v1) and the
+kit packages none. The kit reads the profile when it opens the descriptor or a
+studio project made from it, and checks that it is the profile the descriptor
+names. Open ROM recognizes a dump before any repository is there from
+`core/profiles/repositories.json`, which lists each game's repository and the
+SHA-256 of its revisions.
+
 ## Record tables
 
 Many games keep small fixed tables in PRG: a stat per enemy, an offset per
@@ -250,12 +261,12 @@ rltool game launch "Castle Excellent (J).nes" build/castle_excellent/edited.nes 
 ```
 
 Game/revision identities, resource codecs, addresses, arenas and capacity rules
-live in `profiles/game_castle_excellent.json`. A user-supplied profile can be
-selected with `--profile`; it is parsed with the same strict v1 contract. The
-shipped codec repacks the two room arenas, room pointers, terminated object
-stream, object count/state offsets and mutable-cell state offsets as one
-transactional `BuildPlan`. Zero-edit builds of both known revisions are
-byte-identical.
+live in the game's profile, `config/game_profile.json` in
+`castle_excellent_src`; the kit packages no game profiles. `--profile` selects
+the profile file, parsed with the same strict v1 contract. The shipped codec
+repacks the two room arenas, room pointers, terminated object stream, object
+count/state offsets and mutable-cell state offsets as one transactional
+`BuildPlan`. Zero-edit builds of both known revisions are byte-identical.
 
 The extracted document also contains a profile-bound
 `castle-excellent.room-rendering.v1` snapshot: CHR bank 0, the 32-byte gameplay
@@ -288,26 +299,29 @@ this package and plays the edited ROM through the same launch plan.
 
 ## Open HonkeyPong NES resources
 
-The second bundled game profile exercises a different authoring family on the
-MIT-licensed HonkeyPong fixture. `nes.resource-bundle.v1` exposes the title
-nametable, three palette blocks and all 512 CHR-ROM tiles as typed JSON, then
-uses the same transactional `BuildPlan` and public game commands. It supports
-zero-edit exact rebuilds, edited builds and the common MAME launch path without
-a HonkeyPong-specific CLI branch.
+The profile in `tests/fixtures/game_honkeypong.json` exercises a different
+authoring family on the MIT-licensed HonkeyPong fixture.
+`nes.resource-bundle.v1` exposes the title nametable, three palette blocks and
+all 512 CHR-ROM tiles as typed JSON, then uses the same transactional
+`BuildPlan` and public game commands. It supports zero-edit exact rebuilds,
+edited builds and the common MAME launch path without a HonkeyPong-specific CLI
+branch.
 
 ```powershell
-rltool game inspect ../retrolarium-disassembler/fixtures/nes/bin/HonkeyPong.nes
+rltool game inspect ../retrolarium-disassembler/fixtures/nes/bin/HonkeyPong.nes `
+  --profile tests/fixtures/game_honkeypong.json
 rltool game extract ../retrolarium-disassembler/fixtures/nes/bin/HonkeyPong.nes `
-  --output build/honkeypong/resources.json
+  --profile tests/fixtures/game_honkeypong.json --output build/honkeypong/resources.json
 rltool game build ../retrolarium-disassembler/fixtures/nes/bin/HonkeyPong.nes `
-  build/honkeypong/resources.json --output build/honkeypong/edited.nes
+  build/honkeypong/resources.json --profile tests/fixtures/game_honkeypong.json `
+  --output build/honkeypong/edited.nes
 ```
 
 See [`nes_resources.md`](docs/nes_resources.md).
 
 ## Pac-Man maze authoring
 
-The packaged `pacman.v1` profile currently recognizes the two verified
+The `pacman.v1` profile (in `pacman_src`) recognizes the two verified
 layout-compatible Japan v1.0/v1.1 revisions. `game extract` produces one
 `retrolarium.nes-resource-bundle` containing the 27x22 maze, 23x6 title logo, 14
 fixed-width messages, five main palette contexts, complete CHR bank and fixed
@@ -340,15 +354,15 @@ profile owns the glyph map, case folding, labels, widths and addresses. See
 
 ## Super Mario Bros. authoring
 
-The packaged `smb1.v1` profile recognizes the verified byte-identical JU build
-from the open `smb1_src` reconstruction. `game extract` emits a 12-resource
-bundle containing all 36 course routes, nine player-physics tables, 34 level
-areas, metatiles, palette packets and player palettes, five screen regions,
-seven fixed text fields, 26 player frames, the main APU music bank and effect
-envelope, and the complete CHR bank. The generated Studio workspace owns World,
-Levels, Screens, Music & Sounds, Text, Graphics, Metatiles, Palettes, Player
-Frames and Code & Analysis tabs. These editors share undo/redo, restore and
-atomic save. The zero-edit disassemble/extract/build/verify path is
+The `smb1.v1` profile (in `smb1_src`) recognizes the verified byte-identical JU
+build from the open `smb1_src` reconstruction. `game extract` emits a
+12-resource bundle containing all 36 course routes, nine player-physics tables,
+34 level areas, metatiles, palette packets and player palettes, five screen
+regions, seven fixed text fields, 26 player frames, the main APU music bank and
+effect envelope, and the complete CHR bank. The generated Studio workspace owns
+World, Levels, Screens, Music & Sounds, Text, Graphics, Metatiles, Palettes,
+Player Frames and Code & Analysis tabs. These editors share undo/redo, restore
+and atomic save. The zero-edit disassemble/extract/build/verify path is
 byte-identical. See [`smb_world.md`](docs/smb_world.md). ANN and SMB2 Japan
 additionally expose their ending-bank FDS waveforms and volume programs through
 a dedicated `audio.synthesis` Studio tab; see

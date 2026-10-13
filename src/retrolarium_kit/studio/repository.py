@@ -149,7 +149,7 @@ def load_descriptor(path: Path) -> GameDescriptor:
 
         shas = {FLICKY_REVISION: CANONICAL_SHA256}
     else:
-        profile = _profile_by_id(profile_id)
+        profile = _profile_by_id(path.parent, profile_id)
         shas = {revision.revision_id: revision.sha256 for revision in profile.revisions}
     revisions = []
     for index, item in enumerate(raw.get("revisions") or []):
@@ -201,16 +201,18 @@ def load_descriptor(path: Path) -> GameDescriptor:
                           "flicky-content" if profile_id == FLICKY_PROFILE else "rom")
 
 
-def _profile_by_id(profile_id: str):
-    """The packaged game profile a descriptor names ("pacman.v1")."""
-    from retrolarium_kit.core.game_profiles import packaged_game_profiles
+def _profile_by_id(root: Path, profile_id: str):
+    """The game profile a repository keeps, which its descriptor names
+    ("pacman.v1")."""
+    from retrolarium_kit.core.game_profiles import PROFILE_PATH, repository_profile
 
-    registry = packaged_game_profiles()
-    for identifier in registry.identifiers():
-        profile = registry.get(identifier)
-        if f"{profile.game_id}.v{profile.profile_version}" == profile_id or identifier == profile_id:
-            return profile
-    raise GameRepositoryError(f"the kit has no game profile {profile_id!r}")
+    profile = repository_profile(root)
+    if profile is None:
+        raise GameRepositoryError(f"the repository has no {PROFILE_PATH.as_posix()}, the profile of {profile_id}")
+    if f"{profile.game_id}.v{profile.profile_version}" != profile_id:
+        raise GameRepositoryError(f"{PROFILE_PATH.as_posix()} is the profile of "
+                                  f"{profile.game_id}.v{profile.profile_version}, not {profile_id}")
+    return profile
 
 
 def _extraction_stamp(descriptor: GameDescriptor) -> str:
@@ -218,7 +220,7 @@ def _extraction_stamp(descriptor: GameDescriptor) -> str:
     profile differently (new resources, changed codecs) takes them again."""
     from retrolarium_kit import __version__
 
-    profile = _profile_by_id(descriptor.profile)
+    profile = _profile_by_id(descriptor.root, descriptor.profile)
     resources = [(item.resource_id, item.codec, item.kind, item.parameters) for item in profile.resources]
     digest = hashlib.sha256(json.dumps(resources, sort_keys=True, default=repr).encode("utf-8")).hexdigest()
     return f"{__version__} {digest}\n"
@@ -251,24 +253,11 @@ def _sha256(path: Path) -> str:
 
 
 def identify_rom(path: Path) -> list[dict[str, str]]:
-    """Every packaged profile revision whose image this file is."""
-    from retrolarium_kit.core.game_profiles import packaged_game_profiles
-
-    from retrolarium_kit.games.flicky.content import CANONICAL_SHA256
-
+    """Every revision of the repository catalog whose image this file is."""
     digest = _sha256(path)
-    registry = packaged_game_profiles()
-    found = []
-    if digest == CANONICAL_SHA256:
-        found.append({"game": "flicky", "profile": "flicky", "revision": FLICKY_REVISION,
-                      "name": "Flicky (USA, Europe)"})
-    for identifier in registry.identifiers():
-        profile = registry.get(identifier)
-        for revision in profile.revisions:
-            if revision.sha256 == digest:
-                found.append({"game": profile.game_id, "profile": identifier,
-                              "revision": revision.revision_id, "name": revision.name})
-    return found
+    return [{"game": game_id, "revision": revision["id"], "name": revision["name"]}
+            for game_id, entry in repository_catalog()["games"].items()
+            for revision in entry["revisions"] if revision["sha256"] == digest]
 
 
 def _build_revision(descriptor: GameDescriptor, revision: Revision) -> dict[str, object] | None:
@@ -697,7 +686,8 @@ def repository_catalog() -> Mapping[str, Any]:
     """The game repositories the kit knows: where each game's disassembly
     is published, the Git ref to download (a release tag, refs/tags/...,
     or a branch, refs/heads/..., for a game with no Retrolarium release
-    yet) and the descriptor at its root."""
+    yet), the descriptor at its root, and the revisions Open ROM
+    recognizes by their SHA-256."""
     from importlib import resources
 
     path = resources.files("retrolarium_kit.core").joinpath("profiles", "repositories.json")
