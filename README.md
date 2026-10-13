@@ -123,7 +123,7 @@ no edits and compares the result with that ROM byte for byte. It needs every
 revision's ROM at the root and never touches the user's folders.
 
 With `--release`, `check` also checks the `retrolarium` section of the
-repository's 3.0 or 4.0 release manifest: the descriptor, profile and revisions
+repository's 3.0 or 3.x release manifest: the descriptor, profile and revisions
 it names, the editors it lists as removed, and the kit version it pins, which
 must be the running kit's unless the manifest is still in `development`.
 

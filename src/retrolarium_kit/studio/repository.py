@@ -614,11 +614,12 @@ def check_repository(descriptor: GameDescriptor, revision_ids: list[str] | None 
     return report
 
 
-RELEASE_LINES = {"3.0": "retrolarium", "4.0": "advanced"}
+# Every release of the Retrolarium line, 3.0 and its 3.x minors, is a retrolarium release.
+RELEASE_LINES = {"3.0": "retrolarium", "3.x": "retrolarium"}
 
 
 def check_release(descriptor: GameDescriptor, manifest: Path) -> dict[str, object]:
-    """Check the Retrolarium part of a repository's 3.0 (or 4.0) release
+    """Check the Retrolarium part of a repository's 3.0 (or 3.x) release
     manifest against the descriptor and this kit: the descriptor, profile
     and revisions it names, the kit version it pins (which must be this kit's
     once the release is tag-ready; a development draft may leave it empty),
@@ -633,7 +634,7 @@ def check_release(descriptor: GameDescriptor, manifest: Path) -> dict[str, objec
     line = document.get("release_line")
     if RELEASE_LINES.get(str(line)) != document.get("release_kind"):
         problems.append(f"release_line {line!r} and release_kind {document.get('release_kind')!r} "
-                        "are not 3.0/retrolarium or 4.0/advanced")
+                        "are not 3.0 or 3.x with release_kind retrolarium")
     status = document.get("status")
     if status not in {"development", "tag-ready", "tagged"}:
         problems.append(f"status {status!r} is not development, tag-ready or tagged")
@@ -694,7 +695,9 @@ def _prepare_flicky(descriptor: GameDescriptor, revision: Revision, rom: Path, o
 
 def repository_catalog() -> Mapping[str, Any]:
     """The game repositories the kit knows: where each game's disassembly
-    is published and the descriptor at its root."""
+    is published, the Git ref to download (a release tag, refs/tags/...,
+    or a branch, refs/heads/..., for a game with no Retrolarium release
+    yet) and the descriptor at its root."""
     from importlib import resources
 
     path = resources.files("retrolarium_kit.core").joinpath("profiles", "repositories.json")
@@ -703,16 +706,16 @@ def repository_catalog() -> Mapping[str, Any]:
 
 def _archive_url(catalog: Mapping[str, Any], entry: Mapping[str, Any], source: str | None) -> str:
     template = source or os.environ.get("RETROLARIUM_GAMES_SOURCE") \
-        or "{organization}/{repository}/archive/refs/heads/{branch}.zip"
+        or "{organization}/{repository}/archive/refs/{ref}.zip"
     return template.format(organization=catalog["organization"], repository=entry["repository"],
-                           branch=catalog["branch"])
+                           ref=entry["ref"])
 
 
 def fetch_repository(game_id: str, games: Path, *, source: str | None = None) -> Path:
     """Download a game's repository as an archive (no Git needed) into
     games/<repository> and return its descriptor. `source` (or
     $RETROLARIUM_GAMES_SOURCE) is a URL or file template with {organization},
-    {repository} and {branch}."""
+    {repository} and {ref}."""
     import urllib.request
     import zipfile
 
@@ -749,7 +752,7 @@ def fetch_repository(game_id: str, games: Path, *, source: str | None = None) ->
                 bundle.extractall(unpacked)
         except zipfile.BadZipFile as exc:
             raise GameRepositoryError(f"{url} is not a zip archive: {exc}") from exc
-        # GitHub archives hold one folder, <repository>-<branch>.
+        # GitHub archives hold one folder, <repository>-<tag or branch>.
         entries = list(unpacked.iterdir())
         root = entries[0] if len(entries) == 1 and entries[0].is_dir() else unpacked
         if not (root / entry["descriptor"]).is_file():
