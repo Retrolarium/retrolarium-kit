@@ -9,7 +9,7 @@ param(
 # tools/toolchains/build.sh pins, into core/toolchains/payloads. The payloads
 # are not tracked: run this once in a checkout, and before packaging the
 # studio. The build is reproducible, so the result must match the digests in
-# core/toolchains/manifest.json; `rltool project build-tools status` checks.
+# core/toolchains/manifest.json; `rltool build-tools status` checks.
 
 $ErrorActionPreference = "Stop"
 
