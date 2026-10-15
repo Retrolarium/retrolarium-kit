@@ -2,9 +2,9 @@
 
 Commands are grouped by what they work on: project and build-tools
 (cli/project.py), game (cli/game.py), studio (cli/studio.py), audio
-(cli/audio.py) and lint (cli/lint.py). Each command imports the modules it runs, so `rltool --help`
-and the Studio's frequent short calls do not pay for loading every game's
-codecs.
+(cli/audio.py) and lint and hooks (cli/lint.py). Each command imports the
+modules it runs, so `rltool --help` and the Studio's frequent short calls do
+not pay for loading every game's codecs.
 """
 
 from __future__ import annotations

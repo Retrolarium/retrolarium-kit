@@ -108,5 +108,20 @@ class RunTests(unittest.TestCase):
             self.assertEqual((root / "src" / "main.asm").read_bytes(), b"start:\n    RTS\n")
 
 
+class HooksCommandTests(unittest.TestCase):
+    def test_the_hooks_reach_this_kit_through_rltool(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(main(["hooks", "install", "--project", str(root)]), 0)
+            hook = (root / ".git" / "hooks" / "pre-commit").read_text(encoding="utf-8")
+            self.assertIn("export RLTOOL=", hook)
+            self.assertIn("rltool.py", hook)
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(main(["hooks", "uninstall", "--project", str(root)]), 0)
+            self.assertFalse((root / ".git" / "hooks" / "pre-commit").exists())
+
+
 if __name__ == "__main__":
     unittest.main()
