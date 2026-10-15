@@ -85,7 +85,7 @@ The native gate currently rebuilds real modular emitter output byte-identically
 for NES, SNES and Mega Drive. This validates AS-specific `binclude` output as
 well as the compiler probes.
 
-The complete Castle Excellent source at commit `72e08e03...` was also copied to
+The complete Castle Excellent source at commit `7a04b408...` was also copied to
 an ignored clean workspace without its repository-local `bin/`, previous build
 directory or ROM inputs. The materialized NES suite passed the source project's
 own pinned-binary audit and produced the canonical 65,552-byte image with
