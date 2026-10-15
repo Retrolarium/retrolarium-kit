@@ -400,6 +400,13 @@ uv build --wheel --out-dir build/dist .
 An editable development install uses `python -m pip install -e .`. All forms
 expose the `rltool` entry point.
 
+## Checks before a commit
+
+`make hooks`, once per clone, makes Git check every commit and push for stop
+words and run `make lint` and `make format-check` first (see Retrolarium Core's
+README, "Stop words and Git hooks"). The hooks and the Makefile use the
+`retrolarium-core` checkout beside this one.
+
 ## Trademarks
 
 The games are named only to say which ones Retrolarium works with. Their titles

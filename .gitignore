@@ -23,3 +23,6 @@ Desktop.ini
 
 # Assemblers built by tools/build_toolchains.ps1 (pinned by the manifest)
 src/retrolarium_kit/core/toolchains/payloads/
+
+# The stop-word list (retrolarium_core.stop_words) never enters a repository
+/.stopwords
