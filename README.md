@@ -237,6 +237,11 @@ always skips `.git`, `build`, `.retrolarium` and `hack`. `"json": "indent"` also
 lays JSON out with two-space indentation, for games that write their JSON by
 machine.
 
+`rltool hooks install --project .` (a game's `make hooks`) installs the core's
+Git hooks: every commit and push is checked for stop words, and every commit
+runs the game's `make lint` first. The hooks remember this kit as `RLTOOL`, so
+they work without `rltool` on `PATH`.
+
 ## Castle Excellent / Castlequest authoring
 
 The first profile-driven authoring slice recognizes both supported revisions by
