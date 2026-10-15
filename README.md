@@ -373,6 +373,49 @@ SMB2 Japan additionally expose their ending-bank FDS waveforms and volume
 programs through a dedicated `audio.synthesis` Studio tab; see
 [`platform/nes/fds_synthesis.md`](docs/platform/nes/fds_synthesis.md).
 
+## Movies in MAME
+
+A game checks itself by playing recorded movies in MAME: FCEUX `.fm2` and Gens
+`.gmv` recordings play as they are, with no conversion step, and MAME needs no
+window or sound. Next to each recording a movie check (`retrolarium.movie-check`
+v1) names the RAM cells to read, the frames to read them after (`end` is the
+last frame) and the values the original ROM gives:
+
+```json
+{
+  "schema": "retrolarium.movie-check",
+  "schema_version": 1,
+  "movie": "pacman_j_longplay.fm2",
+  "cells": {"stage": {"address": "0x0068"}, "score": {"address": "0x0070", "length": 7}},
+  "frames": [30000, 60000, "end"],
+  "expected": {}
+}
+```
+
+```powershell
+rltool movie golden movies\pacman_j_longplay.check.json --rom original.nes --mame mame\consoles.exe
+rltool movie check movies\smb1_any_percent.check.json movies\smb1_longplay.check.json --rom build\relocated\smb.nes
+```
+
+`golden` plays the movie on the original ROM and writes `expected`; `check`
+plays it on a build and fails on any cell that differs. Both take several
+checks and play them in the order given; `check` stops at the first that
+fails, so a game names its TAS first and its longplay after it. A cell may
+carry a `tolerance` (with `endian`, `big` or `little`): on the NES a moved routine can
+cross a page boundary and cost the odd lag frame, so a position may trail by a
+few pixels without anything being wrong. `RETROLARIUM_MAME` names MAME when
+`--mame` does not. Frames are counted as the recording emulator counts them;
+MAME starts a frame earlier and reads the pads a frame later, which the kit
+evens out (measured on whole longplays: equal RAM at every frame checked).
+`rltool movie convert` writes a recording as a `.rlmovie` file, one line per run
+of equal frames.
+
+Every game runs its movies the same way: `make build-relocated` writes a copy
+of the source in which code and data move (bytes inserted between modules and
+absorbed by padding before the fixed parts) and builds it into
+`build/relocated/`, and `make test-full` plays the game's movies on that build,
+TAS first, then the longplay, then attract-mode or demo checks.
+
 ## Other commands
 
 ```powershell
