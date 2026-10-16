@@ -395,7 +395,14 @@ last frame) and the values the original ROM gives:
 ```powershell
 rltool movie golden movies\pacman_j_longplay.check.json --rom original.nes --mame mame\consoles.exe
 rltool movie check movies\smb1_any_percent.check.json movies\smb1_longplay.check.json --rom build\relocated\smb.nes
+rltool movie play movies\smb1_any_percent.check.json --rom build\relocated\smb.nes
 ```
+
+`play` is `check` you can watch: MAME opens a window with sound at the game's
+speed, stays open when the movie ends, and the cells are compared once you
+close it. `rltool movie mame <path>` remembers the MAME to use (in
+`%LOCALAPPDATA%\Retrolarium\settings.json`, or `~/.config/retrolarium/`), so
+neither `--mame` nor `RETROLARIUM_MAME` is needed after it.
 
 `golden` plays the movie on the original ROM and writes `expected`; `check`
 plays it on a build and fails on any cell that differs. Both take several

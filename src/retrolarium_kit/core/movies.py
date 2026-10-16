@@ -232,10 +232,11 @@ def _resolve_frames(check: Check, total: int) -> list[int]:
 
 
 def run_in_mame(movie: Movie, rom: Path, check: Check, *, mame: Path, machine: str | None = None,
-                timeout: float = 3600.0) -> dict[str, dict[str, str]]:
+                timeout: float = 3600.0, watch: bool = False) -> dict[str, dict[str, str]]:
     """Play the movie on rom in MAME (no window, no sound, unthrottled) and
     return {frame label: {cell: hex bytes}}; a frame label is the number, or
-    ``end`` for the movie's last frame."""
+    ``end`` for the movie's last frame. ``watch`` shows it instead: a window
+    with sound at the game's speed, left open at the end until it is closed."""
     total = len(movie.frames)
     frames = _resolve_frames(check, total)
     skip, trail = ALIGNMENT[movie.platform]
@@ -255,12 +256,14 @@ def run_in_mame(movie: Movie, rom: Path, check: Check, *, mame: Path, machine: s
                          encoding="utf-8", newline="\n")
         output = folder / "out.txt"
         environment = dict(os.environ, RL_MOVIE_INPUT=str(inputs), RL_MOVIE_READS=str(reads),
-                           RL_MOVIE_OUTPUT=str(output), RL_MOVIE_OFFSET="0", RL_MOVIE_FRAMES=str(len(played)))
-        command = [str(mame), machine or machine_for(movie.platform), "-cart", str(rom),
-                   "-video", "none", "-sound", "none", "-nothrottle", "-skip_gameinfo",
-                   "-nomouse", "-window", "-autoboot_delay", "0", "-autoboot_script", str(LUA)]
+                           RL_MOVIE_OUTPUT=str(output), RL_MOVIE_OFFSET="0", RL_MOVIE_FRAMES=str(len(played)),
+                           RL_MOVIE_STAY="1" if watch else "0")
+        headless = [] if watch else ["-video", "none", "-sound", "none", "-nothrottle"]
+        command = [str(mame), machine or machine_for(movie.platform), "-cart", str(rom), *headless,
+                   "-skip_gameinfo", "-nomouse", "-window", "-autoboot_delay", "0",
+                   "-autoboot_script", str(LUA)]
         result = subprocess.run(command, cwd=mame.parent, env=environment, capture_output=True, text=True,
-                                errors="replace", timeout=timeout)
+                                errors="replace", timeout=None if watch else timeout)
         error = Path(str(output) + ".error")
         if error.is_file():
             raise MovieError(f"the MAME movie script failed: {error.read_text(encoding='utf-8').strip()}")
