@@ -34,7 +34,6 @@ def _run(command: list[str], root: Path, env: dict[str, str]) -> None:
 
 
 def build_content(root: Path, *, as_bin: Path, p2bin: Path, level_writer: Path,
-                  original_rom: str = "Flicky (UE) [!].bin", asset_manifest: str = "assets/manifest.json",
                   as_args: str = "-maxerrors 2") -> Path:
     """Build the snapshot's documents into build/content/flicky.bin."""
     root = root.resolve()
@@ -80,8 +79,7 @@ def build_content(root: Path, *, as_bin: Path, p2bin: Path, level_writer: Path,
 
     rom_output = root / OUTPUT
     _run([sys.executable, "scripts/run.py", "build.build_rom", "--source", str(staged_main),
-          "--obj", str(build_dir / "main.p"), "--output", str(rom_output),
-          "--manifest", asset_manifest, "--original-rom", original_rom, *common], root, env)
+          "--obj", str(build_dir / "main.p"), "--output", str(rom_output), *common], root, env)
     return rom_output
 
 

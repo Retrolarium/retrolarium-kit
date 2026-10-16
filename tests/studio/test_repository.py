@@ -67,10 +67,27 @@ rom = "pacman11.nes"
 """
 
 
+# A revision the repository builds itself (the expanded NROM-256 image of
+# Source Reconstruction 3.0): the built-revision tests need one, and 3.1 keeps
+# none, so the profile copy gains it when the repository's lacks it.
+BUILT_REVISION = {
+    "id": "japan-v10-nrom256",
+    "name": "Pac-Man Japan v1.0 expanded (NROM-256)",
+    "size": 40976,
+    "sha1": "1a351d963c3e644aa8c59cb28406fb0d3029dbb2",
+    "sha256": "6ea0a5ce61c410aa77b48fb208b2793dcac18f6f9e6eef5b490cced630a61512",
+    "container": "ines",
+    "mapper": 0,
+}
+
+
 def write_repository(root: Path, descriptor: str = DESCRIPTOR) -> Path:
     """A Pac-Man repository: the descriptor and the game's profile."""
     (root / "config").mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(PROFILE, root / "config" / "game_profile.json")
+    profile = json.loads(PROFILE.read_text(encoding="utf-8"))
+    if BUILT_REVISION["id"] not in [item["id"] for item in profile["revisions"]]:
+        profile["revisions"].append(BUILT_REVISION)
+    (root / "config" / "game_profile.json").write_text(json.dumps(profile, indent=2), encoding="utf-8")
     (root / "pacman.rlj").write_text(descriptor, encoding="utf-8")
     return root / "pacman.rlj"
 
@@ -193,7 +210,7 @@ class DescriptorTests(unittest.TestCase):
         for game, entry in catalog["games"].items():
             self.assertRegex(entry["ref"], r"^(tags|heads)/[\w.-]+$", game)
         self.assertEqual(
-            "https://github.com/RetrolariumLab/pacman_src/archive/refs/tags/source-reconstruction-3.0.zip",
+            "https://github.com/RetrolariumLab/pacman_src/archive/refs/tags/source-reconstruction-3.1.zip",
             repository._archive_url(catalog, catalog["games"]["pacman"], None))
 
     def test_a_view_can_belong_to_some_revisions(self) -> None:
@@ -283,7 +300,9 @@ class DescriptorTests(unittest.TestCase):
             with self.subTest(build=build), self.assertRaisesRegex(GameRepositoryError, message):
                 self.built(build)
 
-    @unittest.skipUnless((PACMAN / "pacman.rlj").is_file(), "the Pac-Man repository is not available")
+    @unittest.skipUnless((PACMAN / "pacman.rlj").is_file()
+                         and "japan-v10-nrom256" in (PACMAN / "pacman.rlj").read_text(encoding="utf-8"),
+                         "the Pac-Man repository keeps no expanded revision")
     def test_the_repository_builds_its_expanded_revision(self) -> None:
         report = check_repository(load_descriptor(PACMAN / "pacman.rlj"), ["japan-v10-nrom256"])
         self.assertEqual(("ok", "ok"), (report["status"], report["revisions"][0]["status"]))

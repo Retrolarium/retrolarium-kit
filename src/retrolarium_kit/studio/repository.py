@@ -20,8 +20,10 @@ Flicky builds through its repository's own content pipeline instead: its
 revision gets a snapshot of the repository in .retrolarium/<revision>/
 flicky-source, and the edited documents are that snapshot's workspace.
 
-Opening a revision ("prepare") checks its ROM, runs the repository's split
-with the kit's own Python when its outputs are missing (no make needed),
+Opening a revision ("prepare") checks its ROM, splits the repository's
+assets when they are missing (no make needed): a [split] that names the
+assets manifest (retrolarium.assets, core/assets.py) is split by the kit
+itself, an older [split] command runs with the kit's own Python. It then
 creates hack/<revision> and writes the generated project the studio opens.
 """
 
@@ -178,14 +180,25 @@ def load_descriptor(path: Path) -> GameDescriptor:
             raise GameRepositoryError(f"{revision.id} must be built from a dumped revision of the descriptor")
     split = raw.get("split")
     if split is not None:
-        if not isinstance(split, Mapping) or not {"revision", "command"} <= set(split) \
-                or set(split) - {"revision", "command", "check"}:
-            raise GameRepositoryError("split needs revision and command, and may have check")
+        # Either the kit splits the repository's assets manifest
+        # (retrolarium.assets, core/assets.py), or the repository runs its own
+        # command (descriptors of releases before the manifest).
+        if not isinstance(split, Mapping) or "revision" not in split:
+            raise GameRepositoryError("split needs a revision")
+        if "manifest" in split:
+            if set(split) - {"revision", "manifest", "image"}:
+                raise GameRepositoryError("a manifest split has revision, manifest and may have image")
+            _relative(split["manifest"], "split.manifest")
+            if "image" in split:
+                _string(split["image"], "split.image")
+        elif not {"command"} <= set(split) or set(split) - {"revision", "command", "check"}:
+            raise GameRepositoryError("split needs manifest, or command and may have check")
+        else:
+            _command(split["command"], "split.command")
+            if "check" in split:
+                _command(split["check"], "split.check")
         if _string(split["revision"], "split.revision") not in {r.id for r in revisions}:
             raise GameRepositoryError("split.revision must be one of the revisions")
-        _command(split["command"], "split.command")
-        if "check" in split:
-            _command(split["check"], "split.check")
     if "workspace" in raw:
         raise GameRepositoryError(
             f"{path.name}: the studio views come from the kit now; remove [workspace] from the descriptor"
@@ -359,6 +372,20 @@ def _split_status(descriptor: GameDescriptor, *, run: bool) -> dict[str, object]
     rom = descriptor.root / reference.rom
     if _rom_status(descriptor, reference) != "ok":
         return {"status": "unavailable", "needs": reference.label, "rom": reference.rom}
+    if "manifest" in split:
+        from retrolarium_kit.core import assets
+
+        try:
+            manifest = assets.load(descriptor.root / split["manifest"], descriptor.root)
+            image = split.get("image", split["revision"])
+            if not assets.check(manifest, [image]):
+                return {"status": "ok"}
+            if not run:
+                return {"status": "needed"}
+            assets.split(manifest, [image], {image: rom})
+        except assets.AssetsError as exc:
+            return {"status": "failed", "output": str(exc)}
+        return {"status": "made"}
     if "check" in split and _run(descriptor, split["check"], rom).returncode == 0:
         return {"status": "ok"}
     if not run:
