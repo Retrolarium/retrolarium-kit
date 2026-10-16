@@ -7,6 +7,7 @@
 -- RL_MOVIE_OUTPUT  written when the movie ends: "<frame> <name> <hex>"
 -- RL_MOVIE_OFFSET  idle frames before the movie's first frame
 -- RL_MOVIE_FRAMES  the movie's length
+-- RL_MOVIE_STAY    1: keep MAME running after the movie (someone watches)
 --
 -- Frame n's input is set when frame n-1 is done, so the game reads it while
 -- frame n runs; frame 1's input is set before the first frame.
@@ -38,6 +39,8 @@ end
 local output_path = env("RL_MOVIE_OUTPUT")
 local offset = tonumber(env("RL_MOVIE_OFFSET"))
 local total = tonumber(env("RL_MOVIE_FRAMES"))
+local stay = os.getenv("RL_MOVIE_STAY") == "1"
+local done = false
 
 -- The pads' fields by mask: NES joypads or Mega Drive pads.
 local pads = {{}, {}}
@@ -81,7 +84,8 @@ local function finish()
     local file = io.open(output_path, "w")
     file:write(table.concat(results, "\n"), "\n")
     file:close()
-    machine:exit()
+    done = true
+    if not stay then machine:exit() end
 end
 
 -- Walk the runs frame by frame.
@@ -113,6 +117,7 @@ end
 if idle == 0 then apply_next() end
 
 local function step()
+    if done then return end
     if idle > 0 then
         idle = idle - 1
         if idle == 0 then apply_next() end
