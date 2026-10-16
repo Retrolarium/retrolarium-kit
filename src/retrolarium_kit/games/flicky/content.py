@@ -114,7 +114,9 @@ def _extract_assets(snapshot: Path, rom: Path) -> None:
     for asset in manifest["assets"]:
         try:
             relative = PurePosixPath(asset["path"])
-            address = int(asset["address"], 0)
+            # retrolarium.assets names the file offset; source 3.0 its address.
+            address = asset["offset"] if "offset" in asset else asset["address"]
+            address = int(address, 0) if isinstance(address, str) else address
             size = asset["size"]
             expected_sha1 = asset["sha1"]
         except (KeyError, TypeError, ValueError) as exc:

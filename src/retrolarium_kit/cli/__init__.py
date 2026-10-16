@@ -2,7 +2,8 @@
 
 Commands are grouped by what they work on: project and build-tools
 (cli/project.py), game (cli/game.py), studio (cli/studio.py), audio
-(cli/audio.py), lint and hooks (cli/lint.py) and movie (cli/movie.py). Each
+(cli/audio.py), lint and hooks (cli/lint.py), movie (cli/movie.py) and assets
+(cli/assets.py). Each
 command imports the modules it runs, so `rltool --help` and the Studio's
 frequent short calls do not pay for loading every game's codecs.
 """
@@ -13,13 +14,14 @@ import argparse
 import sys
 
 from retrolarium_kit import __version__
-from retrolarium_kit.cli import audio, game, lint, movie, project, studio
+from retrolarium_kit.cli import assets, audio, game, lint, movie, project, studio
 
 
 # The errors a command reports as a one-line message, by the module that
 # defines them. A module that was never imported cannot have raised.
 EXPECTED_ERRORS = {
     "retrolarium_core.contracts": "ContractError",
+    "retrolarium_kit.core.assets": "AssetsError",
     "retrolarium_kit.core.authoring": "AuthoringError",
     "retrolarium_kit.core.build_toolchains": "BuildToolchainError",
     "retrolarium_kit.core.lint.issues": "LintError",
@@ -33,7 +35,7 @@ def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(prog="rltool", description=__doc__.split("\n", 1)[0])
     root.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     commands = root.add_subparsers(dest="command", required=True)
-    for group in (project, game, studio, audio, lint, movie):
+    for group in (project, game, studio, audio, lint, movie, assets):
         group.add_parsers(commands)
     return root
 

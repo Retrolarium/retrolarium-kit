@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from helpers import game_repository
+from retrolarium_kit.core.game_profiles import repository_profile
 from retrolarium_kit.studio.project import (
     StudioProjectError,
     build_studio_project,
@@ -562,7 +564,12 @@ class StudioOperationTests(unittest.TestCase):
                 with self.assertRaisesRegex(StudioProjectError, "pacman.v1"):
                     studio_pacman_round_playtest_plan(root / "fixture.rlj", mame=mame, round=1)
 
+    @unittest.skipUnless((game_repository("solomon_no_kagi_src") / "config" / "game_profile.json").is_file(),
+                         "the Solomon's Key repository is not available")
     def test_solomon_point_playtest_uses_profile_hooks_without_rom_patch(self) -> None:
+        # The hooks come from the repository's profile, which the studio has
+        # opened by the time a playtest runs.
+        repository_profile(game_repository("solomon_no_kagi_src"))
         for revision, hook, machine in (
             ("usa", 0x9021, "nes"), ("europe", 0x9030, "nespal")
         ):

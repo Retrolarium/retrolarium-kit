@@ -6,17 +6,16 @@
     "pacman": {
       "repository": "pacman_src",
       "descriptor": "pacman.rlj",
-      "ref": "tags/source-reconstruction-3.0",
+      "ref": "tags/source-reconstruction-3.1",
       "revisions": [
         {"id": "japan-v10", "name": "Pac-Man Japan v1.0", "sha256": "c67e20d7144dac97ba9d4cef1ad90f13d6504e8492e60a6193c33695d68c4b22"},
-        {"id": "japan-v11", "name": "Pac-Man Japan v1.1", "sha256": "06ed4f706d87940728d623d289caa7fd0abd5c0d6466cb52d4c491ff3b8c0ed9"},
-        {"id": "japan-v10-nrom256", "name": "Pac-Man Japan v1.0 expanded (NROM-256)", "sha256": "6ea0a5ce61c410aa77b48fb208b2793dcac18f6f9e6eef5b490cced630a61512"}
+        {"id": "japan-v11", "name": "Pac-Man Japan v1.1", "sha256": "06ed4f706d87940728d623d289caa7fd0abd5c0d6466cb52d4c491ff3b8c0ed9"}
       ]
     },
     "castle-excellent": {
       "repository": "castle_excellent_src",
       "descriptor": "castle_excellent.rlj",
-      "ref": "tags/source-reconstruction-3.0",
+      "ref": "tags/source-reconstruction-3.1",
       "revisions": [
         {"id": "castle-excellent-japan-hsp-05", "name": "Castle Excellent (Japan), HSP-05", "sha256": "fd6214cdc441070b9edab74b9c31ad16007bd0873e32c0c883de4544ca69f261"},
         {"id": "castlequest-usa", "name": "Castlequest (USA)", "sha256": "35815cd107289a8273fb46dd7c49247a8217ca4e2a7f235fef3aa54566d0ba8c"}
@@ -25,7 +24,7 @@
     "doraemon": {
       "repository": "doraemon_src",
       "descriptor": "doraemon.rlj",
-      "ref": "tags/source-reconstruction-3.0",
+      "ref": "tags/source-reconstruction-3.1",
       "revisions": [
         {"id": "original", "name": "Doraemon (Japan, original revision)", "sha256": "6ed579c9c98a1f2db52fd3d2488a491953073e8ace1e3c1dc5884669cecca274"},
         {"id": "rev_a", "name": "Doraemon (Japan, Revision A)", "sha256": "c070fa0e07a4b8be107ecc2f514e4c64f5bbb2a15754b6c6214e7259a1b30920"}
@@ -34,7 +33,7 @@
     "smb1": {
       "repository": "smb1_src",
       "descriptor": "super_mario_bros.rlj",
-      "ref": "tags/source-reconstruction-3.0",
+      "ref": "tags/source-reconstruction-3.1",
       "revisions": [
         {"id": "ju", "name": "Super Mario Bros. (Japan, USA)", "sha256": "f61548fdf1670cffefcc4f0b7bdcdd9eaba0c226e3b74f8666071496988248de"},
         {"id": "pal", "name": "Super Mario Bros. (Europe, Rev A)", "sha256": "ec299b990e8bfee8ba46e3f61d63b2e1ae5b8a2e431de84e2e4bbd692dc53586"},
@@ -48,7 +47,7 @@
     "solomons-key": {
       "repository": "solomon_no_kagi_src",
       "descriptor": "solomons_key.rlj",
-      "ref": "tags/source-reconstruction-3.0",
+      "ref": "tags/source-reconstruction-3.1",
       "revisions": [
         {"id": "usa", "name": "Solomon's Key (USA)", "sha256": "3d9f3bee199a3fbc04bab38e1d9d5cdeae1c6691dcca463a13c25e42f77bb03d"},
         {"id": "europe", "name": "Solomon's Key (Europe)", "sha256": "e8dc7ad587133869eaf6101018be676e9c14c3b97b988d2e96f7e398b5c33acb"},
@@ -58,7 +57,7 @@
     "flicky": {
       "repository": "flicky_src",
       "descriptor": "flicky.rlj",
-      "ref": "tags/source-reconstruction-3.0",
+      "ref": "tags/source-reconstruction-3.1",
       "revisions": [
         {"id": "ue", "name": "Flicky (USA, Europe)", "sha256": "4df1a91e08376ae773a6eb8e5abe310f94ca39d8f81583b91a9477fedcb68c11"}
       ]
