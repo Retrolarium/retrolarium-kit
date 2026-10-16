@@ -9,10 +9,17 @@ power cycle) that comes before that frame's input. The neutral file
     # retrolarium movie 1
     platform nes
     source fm2 <sha1 of the recording>
+    title Any% with warps
+    kind tas
     frames 103652
     offset 0
     ---
     <count> <pad one hex> <pad two hex> [reset|power]
+
+``title``, ``kind`` (tas, longplay, attract, other), ``author``,
+``description`` and ``rom`` (the SHA-1 of the image it was recorded on) are
+optional, one line each. A movie recorded in MAME (Retrolarium Studio) says
+``source mame``: it plays back frame for frame with no alignment.
 
 Frames are numbered as the recording emulator counts them: frame n is the
 state after n emulated frames. A run in MAME (mame_movie.lua) feeds the frames
@@ -22,6 +29,11 @@ and takes a pad's input a frame later than FCEUX does; ALIGNMENT says how many
 leading frames MAME skips and how its frame count trails the recording's, as
 measured against FCEUX playing the same movie (equal RAM at every frame
 checked). A movie's ``offset`` adds to the skip.
+
+Work RAM starts as the recording emulator leaves it at power-on (POWER_ON):
+a game that reads RAM it never cleared (Solomon's Key seeds its random
+numbers so) plays differently otherwise. The kit's MAME plugin rlpoweron
+fills it before the first instruction.
 """
 
 from __future__ import annotations
@@ -41,8 +53,15 @@ MD_MASKS = {"U": 0x01, "D": 0x02, "L": 0x04, "R": 0x08, "B": 0x10, "C": 0x20, "A
 PLATFORMS = ("nes", "megadrive")
 # (leading frames MAME skips, frames MAME's count trails the recording's)
 ALIGNMENT = {"nes": (2, 1), "megadrive": (2, 1)}
+# The header lines a movie may describe itself with, in the order written.
+DESCRIPTION_KEYS = ("title", "kind", "author", "description", "rom")
+MOVIE_KINDS = ("tas", "longplay", "attract", "other")
 COMMANDS = ("reset", "power")
 LUA = Path(__file__).with_name("mame_movie.lua")
+PLUGINS = Path(__file__).with_name("mame_plugins")
+# Power-on work RAM by the recording's emulator: (fill repeated, bytes).
+# FCEUX's default is 00 00 00 00 FF FF FF FF over the 2 KiB.
+POWER_ON = {"fm2": ("00000000ffffffff", 0x800)}
 
 
 class MovieError(ValueError):
@@ -154,10 +173,20 @@ def read_movie(path: Path) -> Movie:
     raise MovieError(f"{path}: unknown movie format")
 
 
+def alignment(movie: Movie) -> tuple[int, int]:
+    """How the movie's frames line up with MAME's: none for a recording made
+    in MAME itself."""
+    return (0, 0) if movie.source.split(" ")[0] == "mame" else ALIGNMENT[movie.platform]
+
+
 def write_rlmovie(movie: Movie, path: Path) -> None:
     lines = ["# retrolarium movie 1", f"platform {movie.platform}"]
     if movie.source:
         lines.append(f"source {movie.source}")
+    for key in DESCRIPTION_KEYS:
+        value = " ".join(str(movie.notes.get(key, "")).split())
+        if value:
+            lines.append(f"{key} {value}")
     lines += [f"frames {len(movie.frames)}", f"offset {movie.offset}", "---"]
     for count, frame in movie.runs():
         line = f"{count} {frame.pad1:02x} {frame.pad2:02x}"
@@ -189,7 +218,8 @@ def read_rlmovie(path: Path) -> Movie:
         frames.extend([Frame(pad1, pad2)] * (count - 1))
     if "frames" in header and int(header["frames"]) != len(frames):
         raise MovieError(f"{path}: {len(frames)} frames, the header says {header['frames']}")
-    return Movie(platform, frames, header.get("source", ""), int(header.get("offset", "0")))
+    notes = {key: header[key] for key in DESCRIPTION_KEYS if header.get(key)}
+    return Movie(platform, frames, header.get("source", ""), int(header.get("offset", "0")), notes)
 
 
 @dataclass(frozen=True)
@@ -239,7 +269,7 @@ def run_in_mame(movie: Movie, rom: Path, check: Check, *, mame: Path, machine: s
     with sound at the game's speed, left open at the end until it is closed."""
     total = len(movie.frames)
     frames = _resolve_frames(check, total)
-    skip, trail = ALIGNMENT[movie.platform]
+    skip, trail = alignment(movie)
     skip += movie.offset
     played = movie.frames[skip:] if skip >= 0 else [Frame()] * -skip + movie.frames
     last = frames[-1] - trail
@@ -258,9 +288,14 @@ def run_in_mame(movie: Movie, rom: Path, check: Check, *, mame: Path, machine: s
         environment = dict(os.environ, RL_MOVIE_INPUT=str(inputs), RL_MOVIE_READS=str(reads),
                            RL_MOVIE_OUTPUT=str(output), RL_MOVIE_OFFSET="0", RL_MOVIE_FRAMES=str(len(played)),
                            RL_MOVIE_STAY="1" if watch else "0")
-        headless = [] if watch else ["-video", "none", "-sound", "none", "-nothrottle"]
+        headless = ["-nofilter"] if watch else ["-video", "none", "-sound", "none", "-nothrottle"]
+        power_on = POWER_ON.get(movie.source.split(" ")[0])
+        plugin = []
+        if power_on:
+            environment.update(RL_MOVIE_RAM_FILL=power_on[0], RL_MOVIE_RAM_SIZE=str(power_on[1]))
+            plugin = ["-pluginspath", f"{mame.parent / 'plugins'};{PLUGINS}", "-plugin", "rlpoweron"]
         command = [str(mame), machine or machine_for(movie.platform), "-cart", str(rom), *headless,
-                   "-skip_gameinfo", "-nomouse", "-window", "-autoboot_delay", "0",
+                   *plugin, "-skip_gameinfo", "-nomouse", "-window", "-autoboot_delay", "0",
                    "-autoboot_script", str(LUA)]
         result = subprocess.run(command, cwd=mame.parent, env=environment, capture_output=True, text=True,
                                 errors="replace", timeout=None if watch else timeout)
@@ -309,3 +344,48 @@ def compare(expected: dict[str, dict[str, str]], actual: dict[str, dict[str, str
                 continue
             problems.append(f"frame {label}: {name} is {got}, expected {value}")
     return problems
+
+
+MOVIE_SUFFIXES = (".rlmovie", ".fm2", ".gmv")
+# Frames a second, to tell a movie's length.
+FRAME_RATES = {"nes": 60.0988, "megadrive": 59.9227}
+
+
+def describe_movies(folder: Path) -> list[dict]:
+    """The movies in a folder, for a list to choose from: each one's path,
+    platform, length and description. A recording another emulator made is
+    described by the movie check that plays it (its ``title``, ``kind``,
+    ``author`` and ``description``), a Retrolarium movie by its own header
+    when it has one."""
+    checks: dict[str, dict] = {}
+    for check_path in sorted(folder.glob("*.check.json")):
+        try:
+            spec = json.loads(check_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(spec, dict) and isinstance(spec.get("movie"), str):
+            checks[spec["movie"]] = spec
+    result = []
+    for path in sorted(folder.iterdir()) if folder.is_dir() else []:
+        if path.suffix.lower() not in MOVIE_SUFFIXES or not path.is_file():
+            continue
+        try:
+            movie = read_movie(path)
+        except (OSError, ValueError, MovieError):
+            continue
+        check = checks.get(path.name, {})
+        notes = {key: str(check[key]) for key in DESCRIPTION_KEYS if check.get(key)}
+        if path.suffix.lower() == ".rlmovie":
+            notes = {**notes, **movie.notes}
+        frames = len(movie.frames)
+        result.append({
+            "path": str(path),
+            "file": path.name,
+            "platform": movie.platform,
+            "source": movie.source.split(" ")[0],
+            "frames": frames,
+            "seconds": round(frames / FRAME_RATES[movie.platform], 2),
+            "checked": path.name in checks,
+            **{key: notes.get(key, "") for key in DESCRIPTION_KEYS},
+        })
+    return result

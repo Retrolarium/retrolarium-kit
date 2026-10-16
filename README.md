@@ -414,6 +414,11 @@ few pixels without anything being wrong. `RETROLARIUM_MAME` names MAME when
 `--mame` does not. Frames are counted as the recording emulator counts them;
 MAME starts a frame earlier and reads the pads a frame later, which the kit
 evens out (measured on whole longplays: equal RAM at every frame checked).
+An FCEUX movie also starts from FCEUX's power-on RAM (`00 00 00 00 FF FF FF FF`
+repeated), which the kit's MAME plugin `rlpoweron` writes before the first
+instruction. A game whose work per frame depends on exact CPU timing (Solomon's
+Key runs a cooperative scheduler in its main loop) can still lag differently in
+MAME than in FCEUX, and a frame-exact TAS of it does not stay in sync.
 `rltool movie convert` writes a recording as a `.rlmovie` file, one line per run
 of equal frames.
 

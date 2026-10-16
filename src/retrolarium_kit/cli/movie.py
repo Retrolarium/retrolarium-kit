@@ -92,6 +92,83 @@ def command_mame(args: argparse.Namespace) -> None:
     print(f"[OK] movies play with {path} ({user_settings.put('mame', str(path))})")
 
 
+def command_plan(args: argparse.Namespace) -> None:
+    """How the Studio runs a ROM from power-on to record or play a movie: the
+    launch, the image's identity, where its movies go and those already there.
+    A game repository's revision (--descriptor and --revision) runs its own
+    ROM on its own machine (PAL, Vs. System) and keeps its movies in the
+    repository's movies/; any other ROM (--rom) keeps them where the Studio
+    says (--movies)."""
+    import hashlib
+
+    from retrolarium_kit.core import movies
+    from retrolarium_kit.core.project import launch_image_plan, vs_machine
+    from retrolarium_kit.studio.playtest import PAL_REVISIONS
+    from retrolarium_kit.studio.repository import load_descriptor
+
+    machine = args.machine
+    folder = args.movies
+    if args.descriptor is not None:
+        descriptor = load_descriptor(args.descriptor)
+        revision = descriptor.revision(args.revision)
+        rom = descriptor.root / revision.rom
+        platform = descriptor.platform
+        if machine is None:
+            machine = "nespal" if (descriptor.id, revision.id) in PAL_REVISIONS \
+                else vs_machine(descriptor.id, revision.id)
+        folder = descriptor.root / "movies"
+    else:
+        rom = args.rom
+        platform = args.platform or _platform_of(rom)
+    data = Path(rom).read_bytes()
+    if args.movies_root is not None:
+        folder = args.movies_root / hashlib.sha1(data).hexdigest()
+    mame = _mame(args)
+    plan = launch_image_plan(rom, platform=platform, mame=mame, machine=machine)
+    prepared = None
+    if args.movie is not None:
+        # The movie as MAME plays it from power-on: frame for frame, from the
+        # first frame after the script starts, on the work RAM its recording
+        # emulator starts with.
+        movie = movies.read_movie(args.movie)
+        skip, _trail = movies.alignment(movie)
+        skip += movie.offset
+        frames = movie.frames[skip:] if skip >= 0 else [movies.Frame()] * -skip + movie.frames
+        movies.write_rlmovie(movies.Movie(movie.platform, frames, movie.source, 0, movie.notes), args.prepared)
+        prepared = str(args.prepared.resolve())
+        power_on = movies.POWER_ON.get(movie.source.split(" ")[0])
+        if power_on:
+            plan["arguments"] += ["-pluginspath", f"{mame.parent / 'plugins'};{movies.PLUGINS}",
+                                  "-plugin", "rlpoweron"]
+            plan["environment"] = {**plan.get("environment", {}), "RL_MOVIE_RAM_FILL": power_on[0],
+                                   "RL_MOVIE_RAM_SIZE": str(power_on[1])}
+    print(json.dumps({
+        "schema": "retrolarium.movie-plan",
+        "schema_version": 1,
+        "plan": plan,
+        "platform": platform,
+        "rom": {"path": str(Path(rom).resolve()), "name": Path(rom).name,
+                "sha1": hashlib.sha1(data).hexdigest(), "size": len(data)},
+        "movies_dir": str(folder.resolve()) if folder is not None else None,
+        "movies": movies.describe_movies(folder) if folder is not None else [],
+        "prepared_movie": prepared,
+    }, indent=2))
+
+
+def _platform_of(rom: Path) -> str:
+    """NES for an iNES or Disk System image, else the Mega Drive."""
+    head = Path(rom).read_bytes()[:0x110]
+    if head[:4] in (b"NES\x1a", b"FDS\x1a") or head[:15] == b"\x01*NINTENDO-HVC*":
+        return "nes"
+    return "megadrive"
+
+
+def command_list(args: argparse.Namespace) -> None:
+    from retrolarium_kit.core import movies
+
+    print(json.dumps(movies.describe_movies(args.folder), indent=2))
+
+
 def command_convert(args: argparse.Namespace) -> None:
     from retrolarium_kit.core import movies
 
@@ -122,6 +199,24 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     remember = actions.add_parser("mame", help="remember the MAME movies play with (no path: show it)")
     remember.add_argument("path", type=Path, nargs="?")
     remember.set_defaults(handler=command_mame)
+    plan = actions.add_parser("plan", help="how the Studio runs a ROM from power-on for a movie (JSON)")
+    source = plan.add_mutually_exclusive_group(required=True)
+    source.add_argument("--rom", type=Path, help="any ROM or disk image")
+    source.add_argument("--descriptor", type=Path, help="a game repository's .rlj (with --revision)")
+    plan.add_argument("--revision", help="the repository revision")
+    plan.add_argument("--platform", choices=("nes", "megadrive"), help="for --rom (default: from the image)")
+    plan.add_argument("--machine", help="the MAME machine (default: the revision's or the platform's)")
+    plan.add_argument("--movies", type=Path, help="for --rom: the folder its movies are kept in")
+    plan.add_argument("--movies-root", type=Path,
+                      help="for --rom: keep its movies in <this>/<the image's SHA-1>")
+    plan.add_argument("--movie", type=Path, help="a movie to play or resume (.rlmovie, .fm2, .gmv)")
+    plan.add_argument("--prepared", type=Path, help="with --movie: where the movie as MAME plays it goes")
+    plan.add_argument("--mame", help="MAME executable (default: RETROLARIUM_MAME, "
+                      "else the one `rltool movie mame` remembers)")
+    plan.set_defaults(handler=command_plan)
+    listing = actions.add_parser("list", help="the movies in a folder and their descriptions (JSON)")
+    listing.add_argument("folder", type=Path)
+    listing.set_defaults(handler=command_list)
     convert = actions.add_parser("convert", help="convert an .fm2 or .gmv recording to .rlmovie")
     convert.add_argument("input", type=Path)
     convert.add_argument("output", type=Path)
