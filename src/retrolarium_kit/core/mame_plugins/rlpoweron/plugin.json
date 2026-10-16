@@ -1,0 +1,10 @@
+{
+	"plugin": {
+		"name": "rlpoweron",
+		"description": "Retrolarium: work RAM as the recording emulator left it at power-on",
+		"version": "1",
+		"author": "Retrolarium",
+		"type": "plugin",
+		"start": "false"
+	}
+}

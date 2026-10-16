@@ -86,6 +86,27 @@ class RecordingTests(unittest.TestCase):
         self.assertEqual((movie.platform, movie.frames, movie.source, movie.offset),
                          (again.platform, again.frames, again.source, again.offset))
 
+    def test_a_movie_keeps_its_description_and_a_studio_movie_needs_no_alignment(self) -> None:
+        movie = Movie("nes", [Frame(1, 0)] * 3, "mame",
+                      notes={"title": "All rooms", "kind": "longplay", "author": "D.", "comment": "dropped"})
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            movies.write_rlmovie(movie, folder / "all-rooms.rlmovie")
+            again = movies.read_rlmovie(folder / "all-rooms.rlmovie")
+            (folder / "tas.fm2").write_text(FM2, encoding="utf-8")
+            (folder / "tas.check.json").write_text('{"movie": "tas.fm2", "title": "Any%", "kind": "tas"}',
+                                                   encoding="utf-8")
+            listed = {item["file"]: item for item in movies.describe_movies(folder)}
+            recorded = movies.read_fm2(folder / "tas.fm2")
+        self.assertEqual({"title": "All rooms", "kind": "longplay", "author": "D."}, again.notes)
+        self.assertEqual((0, 0), movies.alignment(again))
+        self.assertEqual(movies.ALIGNMENT["nes"], movies.alignment(recorded))
+        self.assertEqual(("All rooms", "mame", 3), (listed["all-rooms.rlmovie"]["title"],
+                                                    listed["all-rooms.rlmovie"]["source"],
+                                                    listed["all-rooms.rlmovie"]["frames"]))
+        self.assertEqual(("Any%", "tas", True), (listed["tas.fm2"]["title"], listed["tas.fm2"]["kind"],
+                                                 listed["tas.fm2"]["checked"]))
+
     def test_snapshots_compare_cell_by_cell(self) -> None:
         expected = {"100": {"lives": "03"}, "end": {"lives": "01", "score": "0120"}}
         self.assertEqual([], movies.compare(expected, {"100": {"lives": "03"}, "end": {"lives": "01", "score": "0120"}}))

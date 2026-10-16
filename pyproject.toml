@@ -23,6 +23,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 "retrolarium_kit.core" = [
   "*.lua",
+  "mame_plugins/*/*",
   "opendisksys/*.json",
   "opendisksys/*.lua",
   "opendisksys/*.txt",
