@@ -152,7 +152,7 @@ def command_plan(args: argparse.Namespace) -> None:
         frames = movie.frames[skip:] if skip >= 0 else [movies.Frame()] * -skip + movie.frames
         movies.write_rlmovie(movies.Movie(movie.platform, frames, movie.source, 0, movie.notes), args.prepared)
         prepared = str(args.prepared.resolve())
-        power_on = movies.POWER_ON.get(movie.source.split(" ")[0])
+        power_on = movies.power_on(movie)
         if power_on:
             plan["arguments"] += ["-pluginspath", f"{mame.parent / 'plugins'};{movies.PLUGINS}",
                                   "-plugin", "rlpoweron"]

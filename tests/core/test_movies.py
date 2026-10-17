@@ -86,6 +86,13 @@ class RecordingTests(unittest.TestCase):
         self.assertEqual((movie.platform, movie.frames, movie.source, movie.offset),
                          (again.platform, again.frames, again.source, again.offset))
 
+    def test_a_movie_ported_to_mame_keeps_the_recording_emulators_power_on_ram(self) -> None:
+        self.assertEqual(movies.POWER_ON["fm2"], movies.power_on(Movie("nes", [], "fm2 FCEUX 2.1.3")))
+        self.assertEqual(movies.POWER_ON["fm2"], movies.power_on(Movie("nes", [], "mame from fm2 TASVideos 1795M")))
+        self.assertEqual((0, 0), movies.alignment(Movie("nes", [], "mame from fm2")))
+        self.assertIsNone(movies.power_on(Movie("nes", [], "mame")))
+        self.assertIsNone(movies.power_on(Movie("nes", [], "")))
+
     def test_a_movie_keeps_its_description_and_a_studio_movie_needs_no_alignment(self) -> None:
         movie = Movie("nes", [Frame(1, 0)] * 3, "mame",
                       notes={"title": "All rooms", "kind": "longplay", "author": "D.", "comment": "dropped"})
