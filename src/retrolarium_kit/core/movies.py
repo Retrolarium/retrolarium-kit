@@ -262,11 +262,13 @@ def _resolve_frames(check: Check, total: int) -> list[int]:
 
 
 def run_in_mame(movie: Movie, rom: Path, check: Check, *, mame: Path, machine: str | None = None,
-                timeout: float = 3600.0, watch: bool = False) -> dict[str, dict[str, str]]:
+                timeout: float = 3600.0, watch: bool = False, stay: bool | None = None) -> dict[str, dict[str, str]]:
     """Play the movie on rom in MAME (no window, no sound, unthrottled) and
     return {frame label: {cell: hex bytes}}; a frame label is the number, or
     ``end`` for the movie's last frame. ``watch`` shows it instead: a window
-    with sound at the game's speed, left open at the end until it is closed."""
+    with sound at the game's speed and the frame counted in a corner, left
+    open at the end until it is closed (``stay`` False: closed at the end)."""
+    stay = watch if stay is None else stay
     total = len(movie.frames)
     frames = _resolve_frames(check, total)
     skip, trail = alignment(movie)
@@ -287,7 +289,7 @@ def run_in_mame(movie: Movie, rom: Path, check: Check, *, mame: Path, machine: s
         output = folder / "out.txt"
         environment = dict(os.environ, RL_MOVIE_INPUT=str(inputs), RL_MOVIE_READS=str(reads),
                            RL_MOVIE_OUTPUT=str(output), RL_MOVIE_OFFSET="0", RL_MOVIE_FRAMES=str(len(played)),
-                           RL_MOVIE_STAY="1" if watch else "0")
+                           RL_MOVIE_STAY="1" if stay else "0", RL_MOVIE_DRAW="1" if watch else "0")
         headless = ["-nofilter"] if watch else ["-video", "none", "-sound", "none", "-nothrottle"]
         power_on = POWER_ON.get(movie.source.split(" ")[0])
         plugin = []
