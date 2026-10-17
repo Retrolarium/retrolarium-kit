@@ -33,7 +33,8 @@ checked). A movie's ``offset`` adds to the skip.
 Work RAM starts as the recording emulator leaves it at power-on (POWER_ON):
 a game that reads RAM it never cleared (Solomon's Key seeds its random
 numbers so) plays differently otherwise. The kit's MAME plugin rlpoweron
-fills it before the first instruction.
+fills it before the first instruction. A MAME movie ported from another
+emulator's says so (``source mame from fm2 ...``) and keeps that one's RAM.
 """
 
 from __future__ import annotations
@@ -173,6 +174,16 @@ def read_movie(path: Path) -> Movie:
     raise MovieError(f"{path}: unknown movie format")
 
 
+def power_on(movie: Movie) -> tuple[str, int] | None:
+    """The work RAM fill the movie starts from: its recording emulator's, or
+    for a MAME movie ported from another emulator's (``source mame from fm2``)
+    that emulator's; None for MAME's own."""
+    words = movie.source.split()
+    if words[:2] == ["mame", "from"] and len(words) > 2:
+        return POWER_ON.get(words[2])
+    return POWER_ON.get(words[0]) if words else None
+
+
 def alignment(movie: Movie) -> tuple[int, int]:
     """How the movie's frames line up with MAME's: none for a recording made
     in MAME itself."""
@@ -291,10 +302,10 @@ def run_in_mame(movie: Movie, rom: Path, check: Check, *, mame: Path, machine: s
                            RL_MOVIE_OUTPUT=str(output), RL_MOVIE_OFFSET="0", RL_MOVIE_FRAMES=str(len(played)),
                            RL_MOVIE_STAY="1" if stay else "0", RL_MOVIE_DRAW="1" if watch else "0")
         headless = ["-nofilter"] if watch else ["-video", "none", "-sound", "none", "-nothrottle"]
-        power_on = POWER_ON.get(movie.source.split(" ")[0])
+        fill = power_on(movie)
         plugin = []
-        if power_on:
-            environment.update(RL_MOVIE_RAM_FILL=power_on[0], RL_MOVIE_RAM_SIZE=str(power_on[1]))
+        if fill:
+            environment.update(RL_MOVIE_RAM_FILL=fill[0], RL_MOVIE_RAM_SIZE=str(fill[1]))
             plugin = ["-pluginspath", f"{mame.parent / 'plugins'};{PLUGINS}", "-plugin", "rlpoweron"]
         command = [str(mame), machine or machine_for(movie.platform), "-cart", str(rom), *headless,
                    *plugin, "-skip_gameinfo", "-nomouse", "-window", "-autoboot_delay", "0",
