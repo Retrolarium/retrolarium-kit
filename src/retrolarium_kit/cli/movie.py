@@ -38,8 +38,17 @@ def _play(args: argparse.Namespace, check_path: Path, *, watch: bool = False) ->
     spec, check = movies.load_check(spec_path)
     movie = movies.read_movie(spec_path.parent / spec["movie"])
     movie.offset = int(spec.get("offset", 0))
+    stop_at = getattr(args, "stop_at", None)
+    if stop_at:
+        # Only the start of the movie: the checkpoints up to that frame, and
+        # the run ends there.
+        kept = tuple(frame for frame in check.frames if frame != "end" and int(frame) < stop_at)
+        check = movies.Check(check.cells, kept + (stop_at,))
+        spec = {**spec, "expected": {label: values for label, values in spec.get("expected", {}).items()
+                                     if label != "end" and int(label) <= stop_at}}
+    stay = None if not watch else not (stop_at or getattr(args, "close", False))
     snapshot = movies.run_in_mame(movie, args.rom.resolve(), check, mame=_mame(args),
-                                  machine=spec.get("machine"), watch=watch)
+                                  machine=spec.get("machine"), watch=watch, stay=stay)
     return spec_path, spec, snapshot, check
 
 
@@ -56,11 +65,18 @@ def command_check(args: argparse.Namespace, *, watch: bool = False) -> None:
     first, then a longplay only once the TAS has passed."""
     from retrolarium_kit.core import movies
 
+    stop_at = getattr(args, "stop_at", None)
     for check_path in args.checks:
         if watch:
-            print(f"{check_path.name}: playing in a MAME window; close it after the movie ends")
+            ends = (f"it closes at frame {stop_at}" if stop_at
+                    else "it closes when the movie ends" if getattr(args, "close", False)
+                    else "close it after the movie ends")
+            print(f"{check_path.name}: playing in a MAME window; {ends}")
         spec_path, spec, snapshot, check = _play(args, check_path, watch=watch)
         expected = spec.get("expected")
+        if not expected and stop_at:
+            print(f"[OK] {spec_path.name}: played to frame {stop_at}, before its first checkpoint")
+            continue
         if not expected:
             raise movies.MovieError(f"{spec_path.name} has no expected values; run rltool movie golden first")
         problems = movies.compare(expected, snapshot, check.cells)
@@ -195,6 +211,11 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
         action.add_argument("--rom", type=Path, required=True, help="the ROM to play")
         action.add_argument("--mame", help="MAME executable (default: RETROLARIUM_MAME, "
                             "else the one `rltool movie mame` remembers)")
+        if name == "play":
+            action.add_argument("--stop-at", type=int, metavar="frame",
+                                help="close MAME at this frame (only the start of the movie)")
+            action.add_argument("--close", action="store_true",
+                                help="close MAME when the movie ends instead of leaving it to play on")
         action.set_defaults(handler=handler)
     remember = actions.add_parser("mame", help="remember the MAME movies play with (no path: show it)")
     remember.add_argument("path", type=Path, nargs="?")

@@ -8,6 +8,7 @@
 -- RL_MOVIE_OFFSET  idle frames before the movie's first frame
 -- RL_MOVIE_FRAMES  the movie's length
 -- RL_MOVIE_STAY    1: keep MAME running after the movie (someone watches)
+-- RL_MOVIE_DRAW    1: show the frame counter (someone watches)
 --
 -- Frame n's input is set when frame n-1 is done, so the game reads it while
 -- frame n runs; frame 1's input is set before the first frame.
@@ -129,6 +130,21 @@ local function step()
         return
     end
     apply_next()
+end
+
+-- Watched (RL_MOVIE_DRAW 1): the frame and the movie's length in a corner,
+-- as Gens shows them, drawn before each frame is.
+if os.getenv("RL_MOVIE_DRAW") == "1" then
+    local screen = nil
+    for _, candidate in pairs(machine.screens) do
+        screen = candidate
+        break
+    end
+    if screen ~= nil then
+        emu.register_frame_done(function()
+            screen:draw_text("left", screen.height - 9, string.format("%d/%d", frame, total), 0xffffffff, 0xc0000000)
+        end)
+    end
 end
 
 -- An error inside the notifier would only be logged while MAME runs on, so
