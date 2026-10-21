@@ -37,7 +37,9 @@ def _play(args: argparse.Namespace, check_path: Path, *, watch: bool = False) ->
     spec_path = check_path.resolve()
     spec, check = movies.load_check(spec_path)
     movie = movies.read_movie(spec_path.parent / spec["movie"])
-    movie.offset = int(spec.get("offset", 0))
+    # The movie's own offset (the one the Studio plays it with) and the
+    # check's on top of it.
+    movie.offset += int(spec.get("offset", 0))
     stop_at = getattr(args, "stop_at", None)
     if stop_at:
         # Only the start of the movie: the checkpoints up to that frame, and

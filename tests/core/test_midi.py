@@ -96,6 +96,22 @@ class MidiTests(unittest.TestCase):
         parsed = parse_midi(midi_file(monophonic, polyphonic), 0, 0)
         self.assertEqual((MidiNote(60, 0, 48),), parsed.notes)
 
+    def test_a_legato_note_on_before_the_note_off_on_the_same_tick(self) -> None:
+        legato = (
+            b"\x00\x90\x3c\x40" + variable(48) + b"\x90\x40\x40\x00\x80\x3c\x00"
+            + variable(48) + b"\x80\x40\x00\x00\xff\x2f\x00"
+        )
+        parsed = parse_midi(midi_file(legato), 0, 0)
+        self.assertEqual((MidiNote(60, 0, 48), MidiNote(64, 48, 96)), parsed.notes)
+
+    def test_chunks_other_than_tracks_are_skipped(self) -> None:
+        track = b"\x00\x90\x3c\x40\x30\x80\x3c\x00\x00\xff\x2f\x00"
+        data = midi_file(track)
+        header_end = 8 + 6
+        vendor = b"XFIH" + (3).to_bytes(4, "big") + b"abc"
+        with_vendor = data[:header_end] + vendor + data[header_end:] + vendor
+        self.assertEqual((MidiNote(60, 0, 48),), parse_midi(with_vendor, 0, 0).notes)
+
     def test_rejects_polyphony_smpte_and_trailing_data(self) -> None:
         polyphonic = (
             b"\x00\x90\x3c\x40\x00\x90\x40\x40"

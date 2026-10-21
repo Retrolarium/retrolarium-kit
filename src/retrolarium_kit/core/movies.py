@@ -54,6 +54,9 @@ MD_MASKS = {"U": 0x01, "D": 0x02, "L": 0x04, "R": 0x08, "B": 0x10, "C": 0x20, "A
 PLATFORMS = ("nes", "megadrive")
 # (leading frames MAME skips, frames MAME's count trails the recording's)
 ALIGNMENT = {"nes": (2, 1), "megadrive": (2, 1)}
+
+# The longest movie read: a day of play at 60 frames a second.
+MAX_FRAMES = 60 * 60 * 60 * 24
 # The header lines a movie may describe itself with, in the order written.
 DESCRIPTION_KEYS = ("title", "kind", "author", "description", "rom")
 MOVIE_KINDS = ("tas", "longplay", "attract", "other")
@@ -114,7 +117,10 @@ def read_fm2(path: Path) -> Movie:
         fields = line.split("|")
         if len(fields) < 4:
             raise MovieError(f"{path}:{number}: not an fm2 frame")
-        commands = int(fields[1] or "0")
+        try:
+            commands = int(fields[1] or "0")
+        except ValueError:
+            raise MovieError(f"{path}:{number}: not an fm2 frame") from None
         if commands & ~0x03:
             raise MovieError(f"{path}:{number}: FDS or VS commands are not supported")
         pads = []
@@ -223,14 +229,26 @@ def read_rlmovie(path: Path) -> Movie:
         parts = line.split()
         if len(parts) not in (3, 4) or (len(parts) == 4 and parts[3] not in COMMANDS):
             raise MovieError(f"{path}:{number}: not a run of frames")
-        count, pad1, pad2 = int(parts[0]), int(parts[1], 16), int(parts[2], 16)
+        try:
+            count, pad1, pad2 = int(parts[0]), int(parts[1], 16), int(parts[2], 16)
+        except ValueError:
+            raise MovieError(f"{path}:{number}: not a run of frames") from None
+        # Checked before the frames are made: a tiny file must not ask for
+        # more memory than a day of play.
+        if count < 1 or len(frames) + count > MAX_FRAMES or not (0 <= pad1 <= 0xFF and 0 <= pad2 <= 0xFF):
+            raise MovieError(f"{path}:{number}: not a run of frames")
         command = parts[3] if len(parts) == 4 else ""
         frames.append(Frame(pad1, pad2, command))
         frames.extend([Frame(pad1, pad2)] * (count - 1))
-    if "frames" in header and int(header["frames"]) != len(frames):
+    try:
+        declared = int(header["frames"]) if "frames" in header else len(frames)
+        offset = int(header.get("offset", "0"))
+    except ValueError:
+        raise MovieError(f"{path}: the frames and offset lines must be numbers") from None
+    if declared != len(frames):
         raise MovieError(f"{path}: {len(frames)} frames, the header says {header['frames']}")
     notes = {key: header[key] for key in DESCRIPTION_KEYS if header.get(key)}
-    return Movie(platform, frames, header.get("source", ""), int(header.get("offset", "0")), notes)
+    return Movie(platform, frames, header.get("source", ""), offset, notes)
 
 
 @dataclass(frozen=True)
@@ -283,6 +301,10 @@ def run_in_mame(movie: Movie, rom: Path, check: Check, *, mame: Path, machine: s
     total = len(movie.frames)
     frames = _resolve_frames(check, total)
     skip, trail = alignment(movie)
+    # MAME's count trails the recording's: a frame at or before the trail is
+    # one MAME never reads.
+    if frames and frames[0] <= trail:
+        raise MovieError(f"check frame {frames[0]} comes before MAME's first frame; check from {trail + 1} on")
     skip += movie.offset
     played = movie.frames[skip:] if skip >= 0 else [Frame()] * -skip + movie.frames
     last = frames[-1] - trail

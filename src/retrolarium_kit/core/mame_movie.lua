@@ -87,6 +87,9 @@ local function finish()
     file:close()
     done = true
     if not stay then machine:exit() end
+    -- Played on by hand: the last frame's buttons are let go.
+    set_pad(1, 0)
+    if next(pads[2]) ~= nil then set_pad(2, 0) end
 end
 
 -- Walk the runs frame by frame.
