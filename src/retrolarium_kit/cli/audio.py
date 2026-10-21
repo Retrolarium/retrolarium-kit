@@ -145,7 +145,11 @@ def command_audio_render_sfx(args: argparse.Namespace) -> None:
         # The project's unsaved state: effect tables edited in the studio.
         value = json.loads(args.document.read_text(encoding="utf-8"))
         profile = game_profiles().get(value.get("game"))
-        revision = next(r for r in profile.revisions if r.revision_id == value.get("revision"))
+        revision = next((r for r in profile.revisions if r.revision_id == value.get("revision")), None)
+        if revision is None:
+            from retrolarium_kit.core.authoring import AuthoringError
+
+            raise AuthoringError(f"{profile.game_id} has no version {value.get('revision')!r}")
         source, _report = build_resources(source, parse_resource_document(value, profile, revision), profile, revision)
     channels = args.channel or list(CHANNEL_NAMES)
     unknown = set(channels) - set(CHANNEL_NAMES)
