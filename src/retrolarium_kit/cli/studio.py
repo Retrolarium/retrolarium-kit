@@ -15,7 +15,11 @@ from retrolarium_kit.cli.common import print_json
 
 def command_studio_create(args: argparse.Namespace) -> None:
     from retrolarium_kit.studio.create import create_studio_project
+    from retrolarium_kit.studio.project import StudioProjectError
 
+    # A project keeps the user's tabs and comments: replaced only when asked.
+    if args.output.exists() and not args.force:
+        raise StudioProjectError(f"{args.output} exists; --force replaces it")
     print_json(
         create_studio_project(
             args.manifest,
@@ -100,7 +104,10 @@ def _plan_after_build(plan_json: str) -> dict[str, object]:
 
     from retrolarium_kit.cli import _expected_errors, parser
 
-    argv = json.loads(plan_json)
+    try:
+        argv = json.loads(plan_json)
+    except ValueError:
+        argv = None
     if not isinstance(argv, list) or not all(isinstance(item, str) for item in argv):
         return {"plan_error": "--plan-json must be a JSON array of strings"}
     usage = io.StringIO()
@@ -393,6 +400,7 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     )
     studio_create.add_argument("manifest", type=Path)
     studio_create.add_argument("--output", type=Path, required=True)
+    studio_create.add_argument("--force", action="store_true", help="replace an existing project file")
     studio_create.add_argument("--id", dest="project_id", required=True)
     studio_create.add_argument("--name", required=True)
     studio_create.add_argument("--profile", required=True)
@@ -498,7 +506,7 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     studio_open_rom.add_argument("rom", type=Path)
     studio_open_rom.add_argument("--games", type=Path, required=True, help="where downloaded repositories go")
     studio_open_rom.add_argument("--known", type=Path, action="append", help="a descriptor already on disk")
-    studio_open_rom.add_argument("--source", help="archive URL or path template ({organization}, {repository}, {branch})")
+    studio_open_rom.add_argument("--source", help="archive URL or path template ({organization}, {repository}, {ref})")
     studio_open_rom.set_defaults(handler=command_studio_open_rom)
     studio_identify = studio_commands.add_parser(
         "identify", help="name the game and revision a ROM file is"

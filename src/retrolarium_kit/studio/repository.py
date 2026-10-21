@@ -758,8 +758,13 @@ def repository_catalog() -> Mapping[str, Any]:
 def _archive_url(catalog: Mapping[str, Any], entry: Mapping[str, Any], source: str | None) -> str:
     template = source or os.environ.get("RETROLARIUM_GAMES_SOURCE") \
         or "{organization}/{repository}/archive/refs/{ref}.zip"
-    return template.format(organization=catalog["organization"], repository=entry["repository"],
-                           ref=entry["ref"])
+    try:
+        return template.format(organization=catalog["organization"], repository=entry["repository"],
+                               ref=entry["ref"])
+    except (KeyError, IndexError, ValueError) as exc:
+        raise GameRepositoryError(
+            f"the source template {template!r} may use {{organization}}, {{repository}} and {{ref}} only"
+        ) from exc
 
 
 def fetch_repository(game_id: str, games: Path, *, source: str | None = None) -> Path:

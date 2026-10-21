@@ -20,6 +20,15 @@ from retrolarium_kit.studio.playtest import (
 )
 
 
+
+def _resource(profile, revision, wanted):
+    """The version's resource `wanted` picks; an error the CLI prints when the
+    profile has none."""
+    found = next((item for item in profile.resources_for(revision) if wanted(item)), None)
+    if found is None:
+        raise StudioProjectError(f"{profile.game_id} {revision.revision_id} has no such resource for its demo")
+    return found
+
 def studio_flicky_demo_plan(
     path: Path, *, mame: Path, demo: int, record: Path | None = None,
 ) -> dict[str, Any]:
@@ -103,7 +112,7 @@ def studio_smb_demo_plan(path: Path, *, mame: Path, record: Path | None = None) 
     )
     if revision is None or revision.revision_id not in SMB_DEMO_RESET_TITLE:
         raise StudioProjectError("The demo does not play in MAME in this version.")
-    demo = next(item for item in profile.resources_for(revision) if item.codec == "smb.demo-input.v1")
+    demo = _resource(profile, revision, lambda item: item.codec == "smb.demo-input.v1")
     tables = demo.parameters
     executable = mame.resolve()
     if not executable.is_file():
@@ -172,7 +181,7 @@ def studio_castle_excellent_demo_plan(path: Path, *, mame: Path, record: Path | 
     )
     if revision is None:
         raise StudioProjectError("Castle Excellent demo playtest needs a known Castle Excellent source")
-    demo = next(item for item in profile.resources_for(revision) if item.codec == "castle-excellent.title-demo.v1")
+    demo = _resource(profile, revision, lambda item: item.codec == "castle-excellent.title-demo.v1")
     layout = demo.parameters
     executable = mame.resolve()
     if not executable.is_file():
@@ -229,7 +238,7 @@ def studio_pacman_demo_plan(path: Path, *, mame: Path, record: Path | None = Non
     )
     if revision is None:
         raise StudioProjectError("Pac-Man demo playtest needs a known Pac-Man source")
-    demo = next(item for item in profile.resources_for(revision) if item.codec == "pacman.attract-demo.v1")
+    demo = _resource(profile, revision, lambda item: item.codec == "pacman.attract-demo.v1")
     layout = demo.parameters
     executable = mame.resolve()
     if not executable.is_file():
@@ -285,7 +294,7 @@ def studio_doraemon_demo_plan(path: Path, *, mame: Path, record: Path | None = N
     )
     if revision is None:
         raise StudioProjectError("Doraemon demo playtest needs a known Doraemon source")
-    layout = next(item for item in profile.resources_for(revision) if item.codec == DEMO_CODEC).parameters
+    layout = _resource(profile, revision, lambda item: item.codec == DEMO_CODEC).parameters
     executable = mame.resolve()
     if not executable.is_file():
         raise StudioProjectError(f"MAME executable does not exist: {executable}")

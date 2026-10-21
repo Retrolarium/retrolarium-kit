@@ -26,7 +26,9 @@ def _load(path: Path) -> dict:
     except FileNotFoundError:
         return {}
     except (OSError, ValueError) as exc:
-        raise ValueError(f"cannot read {path}: {exc}") from exc
+        from retrolarium_kit.core.authoring import AuthoringError
+
+        raise AuthoringError(f"cannot read {path}: {exc}") from exc
     return document if isinstance(document, dict) else {}
 
 

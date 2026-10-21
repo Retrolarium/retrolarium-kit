@@ -144,6 +144,8 @@ def command_plan(args: argparse.Namespace) -> None:
     mame = _mame(args)
     plan = launch_image_plan(rom, platform=platform, mame=mame, machine=machine)
     prepared = None
+    if args.movie is not None and args.prepared is None:
+        raise movies.MovieError("--movie needs --prepared: where the movie as MAME plays it goes")
     if args.movie is not None:
         # The movie as MAME plays it from power-on: frame for frame, from the
         # first frame after the script starts, on the work RAM its recording
