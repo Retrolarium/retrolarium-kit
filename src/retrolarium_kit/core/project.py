@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 from typing import Any
 
@@ -134,14 +135,22 @@ def _run_build_process(
     project_directory: Path,
     environment: dict[str, str] | None = None,
 ) -> None:
+    # The build's own output goes to stderr: stdout is the kit's JSON answer,
+    # which callers (the Studio) parse.
     result = subprocess.run(
         command,
         cwd=project_directory,
         env=environment,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
     )
+    output = process_text(result.stdout)
+    if output:
+        sys.stderr.write(output if output.endswith("\n") else output + "\n")
     if result.returncode:
-        raise ProjectError(f"project build failed with exit code {result.returncode}")
+        tail = "\n".join(output.strip().splitlines()[-5:])
+        raise ProjectError(f"project build failed with exit code {result.returncode}"
+                           + (f":\n{tail}" if tail else ""))
 
 
 def _docker_build(

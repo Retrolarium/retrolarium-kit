@@ -7,6 +7,7 @@ and Unix executable bits can be restored deterministically.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 import hashlib
 from importlib import resources
@@ -16,6 +17,7 @@ from pathlib import Path
 import shutil
 import stat
 import tempfile
+import time
 from types import MappingProxyType
 from typing import Any, Mapping
 
@@ -134,6 +136,54 @@ def load_build_toolchain_manifest() -> dict[str, Any]:
                     f"suite {suite_id} references unknown component {member!r}"
                 )
     return manifest
+
+
+@contextmanager
+def _publishing(lock: Path, wait: float = 300.0):
+    """Holds `lock` (a file only one process can create) while a suite is
+    published; a lock left by a process that died is taken over after ten
+    minutes."""
+    deadline = time.monotonic() + wait
+    while True:
+        try:
+            descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            break
+        except FileExistsError:
+            try:
+                if time.time() - lock.stat().st_mtime > 600:
+                    lock.unlink(missing_ok=True)
+                    continue
+            except FileNotFoundError:
+                continue
+            if time.monotonic() > deadline:
+                raise BuildToolchainError(f"another kit is still installing the toolchain ({lock})") from None
+            time.sleep(0.2)
+    try:
+        yield
+    finally:
+        os.close(descriptor)
+        lock.unlink(missing_ok=True)
+
+
+def _publish_suite(destination: Path, components, suite_id: str) -> None:
+    staging = Path(tempfile.mkdtemp(prefix=f".{suite_id}-", dir=destination.parent))
+    try:
+        for component_id, component in components:
+            for record in _file_records(component, component_id):
+                relative = _relative_path(record["install_path"], "install_path")
+                target = staging.joinpath(*relative.parts)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(_packaged_payload(record))
+                if record.get("executable") and os.name != "nt":
+                    target.chmod(target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP)
+        if not _installed_suite_is_valid(staging, components):
+            raise BuildToolchainError("materialized toolchain failed identity checks")
+        if destination.exists():
+            shutil.rmtree(destination)
+        os.replace(staging, destination)
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging)
 
 
 def default_cache_root() -> Path:
@@ -338,24 +388,12 @@ def materialize_build_toolchain(
     destination.parent.mkdir(parents=True, exist_ok=True)
 
     if not _installed_suite_is_valid(destination, components):
-        staging = Path(tempfile.mkdtemp(prefix=f".{suite_id}-", dir=destination.parent))
-        try:
-            for component_id, component in components:
-                for record in _file_records(component, component_id):
-                    relative = _relative_path(record["install_path"], "install_path")
-                    target = staging.joinpath(*relative.parts)
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_bytes(_packaged_payload(record))
-                    if record.get("executable") and os.name != "nt":
-                        target.chmod(target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP)
-            if not _installed_suite_is_valid(staging, components):
-                raise BuildToolchainError("materialized toolchain failed identity checks")
-            if destination.exists():
-                shutil.rmtree(destination)
-            os.replace(staging, destination)
-        finally:
-            if staging.exists():
-                shutil.rmtree(staging)
+        # Two builds at once (make -j, the Studio beside a make) would each
+        # replace the suite the other runs: one publishes, the other waits
+        # and finds it in place.
+        with _publishing(destination.parent / f".{suite_id}.lock"):
+            if not _installed_suite_is_valid(destination, components):
+                _publish_suite(destination, components, suite_id)
 
     commands: dict[str, Path] = {}
     environment: dict[str, str] = {}
