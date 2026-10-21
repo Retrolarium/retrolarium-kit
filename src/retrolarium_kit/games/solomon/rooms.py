@@ -433,9 +433,16 @@ def _stream_changes(
     pointer, start, end = _stream_geometry(resource, count)
     encoded = bytearray()
     offsets = []
-    for record in records:
+    for index, record in enumerate(records):
         offsets.append(start + len(encoded) + 0x8000)
-        encoded.extend(encoder(record))
+        stream = encoder(record)
+        # Each room's stream on its own fits the decoders, which index it with Y.
+        if len(stream) > STREAM_LIMIT:
+            raise SolomonError(
+                f"{resource.resource_id}: room {index + 1}'s stream is {len(stream)} bytes; "
+                f"the decoder reads at most {STREAM_LIMIT}"
+            )
+        encoded.extend(stream)
     capacity = end - start
     used = len(encoded)
     if used > capacity:
