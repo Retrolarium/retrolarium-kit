@@ -174,16 +174,19 @@ def command_studio_fds_bios(args: argparse.Namespace) -> None:
 
 
 def command_studio_patch(args: argparse.Namespace) -> None:
-    from retrolarium_kit.studio.project import build_studio_project, load_studio_project
-
-    from retrolarium_kit.studio.repository import ips_patch
     from retrolarium_kit.studio.create import _project_source
-    from retrolarium_kit.studio.project import load_studio_project
+    from retrolarium_kit.studio.project import build_studio_project, load_studio_project, rom_as_is
+    from retrolarium_kit.studio.repository import ips_patch
 
-    report = build_studio_project(args.project)
-    root = Path(load_studio_project(args.project)["project_root"])
-    original = _project_source(load_studio_project(args.project)).read_bytes()
-    edited = (root / report["artifact"]["path"]).read_bytes()
+    as_is = rom_as_is(args.project)
+    if as_is is not None:
+        # A ROM the Studio opened as it is: edited in place, nothing to build.
+        original, edited = (path.read_bytes() for path in as_is)
+    else:
+        report = build_studio_project(args.project)
+        root = Path(load_studio_project(args.project)["project_root"])
+        original = _project_source(load_studio_project(args.project)).read_bytes()
+        edited = (root / report["artifact"]["path"]).read_bytes()
     payload = ips_patch(original, edited)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(payload)

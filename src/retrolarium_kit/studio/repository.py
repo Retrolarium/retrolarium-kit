@@ -863,10 +863,12 @@ def ips_patch(original: bytes, edited: bytes) -> bytes:
             index += 1
             continue
         start = index
+        # Offset 0x454F46 spells "EOF": a record starts one byte earlier
+        # there, so it holds one byte less of the run.
+        limit = 0xFFFE if start == 0x454F46 else 0xFFFF
         while index < size and (index >= len(original) or original[index] != edited[index]) \
-                and index - start < 0xFFFF:
+                and index - start < limit:
             index += 1
-        # Offset 0x454F46 spells "EOF": start one byte earlier there.
         if start == 0x454F46:
             start -= 1
         chunk = edited[start:index]
