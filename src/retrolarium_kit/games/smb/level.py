@@ -240,8 +240,13 @@ def _area_stream(value: Mapping[str, object], name: str) -> bytes:
             "column", "row", "page_advance", "object_control"
         }:
             raise SmbLevelError(f"{context} fields differ from contract")
-        output.append((_integer(raw["column"], f"{context}.column", maximum=15) << 4)
-                      | _integer(raw["row"], f"{context}.row", maximum=15))
+        first = (_integer(raw["column"], f"{context}.column", maximum=15) << 4) \
+            | _integer(raw["row"], f"{context}.row", maximum=15)
+        # The game ends an area's objects at a first byte of $FD: column 15,
+        # row 13 cannot be written.
+        if first == 0xFD:
+            raise SmbLevelError(f"{context}: column 15, row 13 reads as the end of the objects")
+        output.append(first)
         output.append((0x80 if _boolean(raw["page_advance"], f"{context}.page_advance") else 0)
                       | _integer(raw["object_control"], f"{context}.object_control", maximum=127))
     output.append(0xFD)
@@ -281,7 +286,12 @@ def _enemy_stream(value: Mapping[str, object], name: str) -> bytes:
         expected_kind = "entrance" if row == 14 else "page" if row == 15 else "enemy"
         if kind != expected_kind:
             raise SmbLevelError(f"{context}.kind does not match its row")
-        output.append((_integer(raw["column"], f"{context}.column", maximum=15) << 4) | row)
+        first = (_integer(raw["column"], f"{context}.column", maximum=15) << 4) | row
+        # The game ends an area's enemies at a first byte of $FF: column 15,
+        # row 15 cannot be written.
+        if first == 0xFF:
+            raise SmbLevelError(f"{context}: column 15, row 15 reads as the end of the enemies")
+        output.append(first)
         output.append((0x80 if _boolean(raw["page_advance"], f"{context}.page_advance") else 0)
                       | (0x40 if _boolean(raw["hard_mode"], f"{context}.hard_mode") else 0)
                       | _integer(raw["object_or_page"], f"{context}.object_or_page", maximum=63))

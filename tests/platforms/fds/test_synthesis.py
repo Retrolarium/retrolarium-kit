@@ -127,6 +127,15 @@ class FdsSynthesisTests(unittest.TestCase):
         )
         self.assertEqual(source, encode_synthesis(document, parameters()))
 
+    def test_a_direct_step_keeps_its_ignored_bit_six(self) -> None:
+        source = bytearray(payload())
+        source[70] = 0xDF   # direct, value $1F, with bit 6 set
+        document = decode_synthesis(bytes(source), parameters())
+        self.assertEqual("direct", document["volume_programs"][1]["steps"][1]["mode"])
+        self.assertEqual(bytes(source), encode_synthesis(document, parameters()))
+        document["volume_programs"][1]["steps"][1]["value"] = 3
+        self.assertEqual(0xC3, encode_synthesis(document, parameters())[70])
+
     def test_known_edits_change_only_owned_bytes(self) -> None:
         source = payload()
         document = decode_synthesis(source, parameters())

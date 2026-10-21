@@ -235,6 +235,11 @@ def encode_synthesis(
             register = modes[mode] | _integer(
                 step.get("value"), f"{context}.value", maximum=0x3F
             )
+            # The hardware ignores bit 6 in direct mode; a byte that had it
+            # keeps it, so an unedited step encodes to its own byte.
+            previous = output[offset + step_index * 2]
+            if mode == "direct" and previous & 0x80:
+                register |= previous & 0x40
             frames = _integer(
                 step.get("frames"), f"{context}.frames", minimum=1, maximum=0xFF
             )
