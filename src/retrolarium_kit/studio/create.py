@@ -181,7 +181,12 @@ def _add_bundle_resources(path: Path, *, profile: str, codec: str) -> list[str]:
     for item in fresh["resources"]:
         if item["id"] in refreshed:
             by_id[item["id"]] = item
-    document["resources"] = [by_id.get(item["id"], item) for item in fresh["resources"]]
+    # Resources the newer kit no longer has stay, after the rest: they hold
+    # the user's edits.
+    known = {item["id"] for item in fresh["resources"]}
+    document["resources"] = [by_id.get(item["id"], item) for item in fresh["resources"]] + [
+        item for item in document["resources"] if item.get("id") not in known
+    ]
     payload = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
     descriptor, temporary_name = tempfile.mkstemp(prefix=".bundle-upgrade-", suffix=".json", dir=document_path.parent)
     temporary = Path(temporary_name)

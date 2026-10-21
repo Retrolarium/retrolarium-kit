@@ -51,6 +51,8 @@ SCHEMA = "retrolarium.game"
 SCHEMA_VERSION = 1
 WORKSPACE_DIRECTORY = ".retrolarium"
 HACK_DIRECTORY = "hack"
+# How long a repository's split, check or build script may run, in seconds.
+SCRIPT_TIMEOUT = 15 * 60
 PLATFORMS = frozenset({"nes", "snes", "megadrive"})
 FLICKY_PROFILE = "flicky-ue.v1"
 FLICKY_REVISION = "ue"
@@ -245,25 +247,42 @@ def _extraction_stamp(descriptor: GameDescriptor) -> str:
 
     profile = _profile_by_id(descriptor.root, descriptor.profile)
     resources = [(item.resource_id, item.codec, item.kind, item.parameters) for item in profile.resources]
-    digest = hashlib.sha256(json.dumps(resources, sort_keys=True, default=repr).encode("utf-8")).hexdigest()
+    # A version's own resources, overrides and payloads count too.
+    revisions = [(item.revision_id, item.resources, item.resource_overrides, item.payloads)
+                 for item in profile.revisions]
+    digest = hashlib.sha256(json.dumps([resources, revisions], sort_keys=True, default=repr)
+                            .encode("utf-8")).hexdigest()
     return f"{__version__} {digest}\n"
 
 
 def _add_new_resources(edited: Path, pristine: Path) -> bool:
     """Give an edited resource bundle the resources a newer kit added to the
-    pristine one, in the pristine order; the edited resources stay."""
+    pristine one, in the pristine order. Every edited resource stays, those
+    the pristine one no longer has after the rest, and the file is replaced
+    whole: an interrupted write leaves the edits as they were."""
     try:
         document = json.loads(edited.read_text(encoding="utf-8"))
         fresh = json.loads(pristine.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return False
-    if not isinstance(document, dict) or not isinstance(fresh, dict)             or not isinstance(document.get("resources"), list) or not isinstance(fresh.get("resources"), list):
+    if not isinstance(document, dict) or not isinstance(fresh, dict) \
+            or not isinstance(document.get("resources"), list) or not isinstance(fresh.get("resources"), list):
         return False
     present = {item.get("id"): item for item in document["resources"] if isinstance(item, dict)}
     if all(item.get("id") in present for item in fresh["resources"]):
         return False
-    document["resources"] = [present.get(item.get("id"), item) for item in fresh["resources"]]
-    edited.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+    known = {item.get("id") for item in fresh["resources"]}
+    document["resources"] = [present.get(item.get("id"), item) for item in fresh["resources"]] + [
+        item for item in document["resources"] if not isinstance(item, dict) or item.get("id") not in known
+    ]
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".bundle-upgrade-", suffix=".json", dir=edited.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
+            stream.write(json.dumps(document, indent=2, ensure_ascii=False) + "\n")
+        os.replace(temporary, edited)
+    finally:
+        temporary.unlink(missing_ok=True)
     return True
 
 
@@ -368,8 +387,13 @@ def _edited(descriptor: GameDescriptor, revision: Revision) -> bool:
 def _run(descriptor: GameDescriptor, command: list[str], rom: Path) -> subprocess.CompletedProcess[str]:
     # The game's scripts ask this kit for its assemblers through RLTOOL.
     arguments = [part.replace("{rom}", str(rom)) for part in command]
-    return subprocess.run([sys.executable, str(descriptor.root / arguments[0]), *arguments[1:]],
-                          cwd=descriptor.root, capture_output=True, text=True, env=child_environment())
+    # Bounded: a script that hangs must not hold the Studio's task queue.
+    try:
+        return subprocess.run([sys.executable, str(descriptor.root / arguments[0]), *arguments[1:]],
+                              cwd=descriptor.root, capture_output=True, text=True, env=child_environment(),
+                              timeout=SCRIPT_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise GameRepositoryError(f"{arguments[0]} did not finish in {SCRIPT_TIMEOUT // 60} minutes") from None
 
 
 def _split_status(descriptor: GameDescriptor, *, run: bool) -> dict[str, object]:
