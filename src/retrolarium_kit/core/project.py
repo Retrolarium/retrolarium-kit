@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 from typing import Any
 
-from retrolarium_kit.core.build_toolchains import ResolvedToolchain, materialize_build_toolchain
+from retrolarium_kit.core.build_toolchains import ResolvedToolchain, default_cache_root, materialize_build_toolchain
 from retrolarium_core.contracts import artifact_path, load_disassembly_manifest
 from retrolarium_core.fds import FdsError, parse_fds_side
 from retrolarium_core.ines import InesError, load_ines, parse_ines_prefix
@@ -705,7 +705,11 @@ def _vs_rom_set(image: Any, rom: Path, machine: str) -> Path:
     palette = bytes(int(level) for colour in levels.split(",") for level in colour)
     if hashlib.sha1(palette).hexdigest() != digest:
         raise ProjectError(f"the kit's {board['palette']} palette table is damaged")
-    root = rom.parent / "mame-roms"
+    # In the user's cache, one set per image: beside the ROM, in a game
+    # repository, the chips would be files Git could pick up.
+    override = os.environ.get("RETROLARIUM_MAME_ROMS")
+    cache = Path(override).expanduser() if override else default_cache_root().parent / "mame-roms"
+    root = cache / hashlib.sha1(chips).hexdigest()[:16]
     if ";" in str(root):
         raise ProjectError(f"MAME cannot use a folder with ';' in its name: {root}")
     folder = root / machine

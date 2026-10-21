@@ -33,6 +33,7 @@ from dataclasses import dataclass
 import hashlib
 import json
 import os
+import re
 from pathlib import Path, PurePosixPath
 import shutil
 import subprocess
@@ -97,6 +98,15 @@ def _string(value: object, context: str) -> str:
     return value
 
 
+def _identifier(value: object, context: str) -> str:
+    """An id that names files (the generated project): letters, digits, '-'
+    and '_' only, so it cannot lead out of its folder."""
+    text = _string(value, context)
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", text):
+        raise GameRepositoryError(f"{context} must be letters, digits, '-' and '_': {text!r}")
+    return text
+
+
 def _relative(value: object, context: str) -> str:
     text = _string(value, context)
     path = PurePosixPath(text)
@@ -158,7 +168,7 @@ def load_descriptor(path: Path) -> GameDescriptor:
         if not isinstance(item, Mapping) or not {"id", "label", "rom"} <= set(item) \
                 or set(item) - {"id", "label", "rom", "build"}:
             raise GameRepositoryError(f"revisions[{index}] needs id, label and rom, and may have build")
-        revision_id = _string(item["id"], f"revisions[{index}].id")
+        revision_id = _identifier(item["id"], f"revisions[{index}].id")
         if revision_id not in shas:
             raise GameRepositoryError(f"revisions[{index}].id {revision_id!r} is not a {profile_id} revision")
         built_from, build = None, ()
@@ -208,7 +218,7 @@ def load_descriptor(path: Path) -> GameDescriptor:
         only = tab.get("revisions") if isinstance(tab, Mapping) else None
         if only is not None and (not isinstance(only, list) or not only or not set(only) <= set(shas)):
             raise GameRepositoryError(f"{profile_id} view {tab.get('id')!r}: revisions must list revisions of the profile")
-    return GameDescriptor(path, path.parent, _string(game.get("id"), "game.id"),
+    return GameDescriptor(path, path.parent, _identifier(game.get("id"), "game.id"),
                           _string(game.get("name"), "game.name"), platform, profile_id,
                           tuple(revisions), split, workspace,
                           "flicky-content" if profile_id == FLICKY_PROFILE else "rom")

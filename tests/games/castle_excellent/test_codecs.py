@@ -403,6 +403,19 @@ class CastleExcellentCodecTests(unittest.TestCase):
                     image_path,
                     custom_profile=profile_path,
                 )
+            # The report may not land on an input or on the built image either,
+            # and nothing is written before that is known.
+            before = image_path.read_bytes()
+            for report in (image_path, document_path, root / "elsewhere.nes"):
+                with self.assertRaisesRegex(AuthoringError, "must not overwrite"):
+                    build_game(
+                        image_path,
+                        document_path,
+                        root / "elsewhere.nes",
+                        custom_profile=profile_path,
+                        report_path=report,
+                    )
+            self.assertEqual(before, image_path.read_bytes())
 
             unknown_path = root / "unknown-revision.nes"
             unknown = bytearray(image)

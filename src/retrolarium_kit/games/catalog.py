@@ -896,6 +896,21 @@ def validate_game(
     }
 
 
+def _check_build_paths(
+    path: Path, document_paths: Sequence[Path], output: Path, report_path: Path | None
+) -> None:
+    """Refuse a build that would write over what it reads, or write its two
+    outputs to one file, before anything is written."""
+    inputs = {path.resolve(): "the source image"}
+    for document in document_paths:
+        inputs.setdefault(document.resolve(), f"the document {document}")
+    for target, name in ((output, "output"), (report_path, "report")):
+        if target is not None and target.resolve() in inputs:
+            raise AuthoringError(f"game build {name} must not overwrite {inputs[target.resolve()]}")
+    if report_path is not None and report_path.resolve() == output.resolve():
+        raise AuthoringError("game build report must not overwrite the built image")
+
+
 def build_game(
     path: Path,
     document_path: Path,
@@ -904,8 +919,7 @@ def build_game(
     custom_profile: Path | None = None,
     report_path: Path | None = None,
 ) -> dict[str, object]:
-    if path.resolve() == output.resolve():
-        raise AuthoringError("game build output must not overwrite the source image")
+    _check_build_paths(path, [document_path], output, report_path)
     payload, profile, revision = _read_image(path, custom_profile)
     value = _load_json(document_path)
     adapter = _adapter_for_document(value, profile, revision)
@@ -933,8 +947,7 @@ def build_game_documents(
 ) -> dict[str, object]:
     """Build several typed documents against one source and merge their edits."""
 
-    if path.resolve() == output.resolve():
-        raise AuthoringError("game build output must not overwrite the source image")
+    _check_build_paths(path, document_paths, output, report_path)
     if not document_paths:
         raise AuthoringError("composed game build needs at least one document")
     payload, profile, revision = _read_image(path, custom_profile)
