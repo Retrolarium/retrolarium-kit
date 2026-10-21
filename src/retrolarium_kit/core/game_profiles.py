@@ -220,8 +220,31 @@ def repository_profile(root: Path) -> GameProfile | None:
     return profile
 
 
+def discover_profiles(*places: Path) -> None:
+    """Makes usable the profile of the game repository each place (a file or
+    a folder) lies in, at any depth: a document in hack/, a generated project
+    in .retrolarium/, the repository's ROM. A place outside any repository
+    adds nothing."""
+    seen: set[Path] = set()
+    for place in places:
+        try:
+            folder = Path(place).resolve()
+        except (OSError, RuntimeError, ValueError):
+            continue
+        if not folder.is_dir():
+            folder = folder.parent
+        for candidate in (folder, *folder.parents):
+            if candidate in seen:
+                break
+            seen.add(candidate)
+            if (candidate / PROFILE_PATH).is_file():
+                repository_profile(candidate)
+                break
+
+
 def game_profiles() -> Registry[GameProfile]:
-    """The profiles of the game repositories this process opened."""
+    """The profiles of the game repositories this process opened, or found
+    around the files it was given (discover_profiles)."""
     registry: Registry[GameProfile] = Registry("game profile")
     for game_id in sorted(_OPENED):
         registry.register(game_id, _OPENED[game_id])

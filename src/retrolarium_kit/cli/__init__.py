@@ -11,6 +11,7 @@ frequent short calls do not pay for loading every game's codecs.
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 import sys
 
 from retrolarium_kit import __version__
@@ -21,12 +22,20 @@ from retrolarium_kit.cli import assets, audio, game, lint, movie, project, studi
 # defines them. A module that was never imported cannot have raised.
 EXPECTED_ERRORS = {
     "retrolarium_core.contracts": "ContractError",
+    "retrolarium_core.fds": "FdsError",
+    "retrolarium_core.ines": "InesError",
+    "retrolarium_core.megadrive": "MegaDriveError",
+    "retrolarium_core.snes": "SnesError",
     "retrolarium_kit.core.assets": "AssetsError",
     "retrolarium_kit.core.authoring": "AuthoringError",
     "retrolarium_kit.core.build_toolchains": "BuildToolchainError",
+    "retrolarium_kit.core.game_names": "GameNamesError",
     "retrolarium_kit.core.lint.issues": "LintError",
     "retrolarium_kit.core.movies": "MovieError",
     "retrolarium_kit.core.project": "ProjectError",
+    "retrolarium_kit.games.doraemon.sound_synth": "SynthError",
+    "retrolarium_kit.games.flicky.content": "FlickyContentError",
+    "retrolarium_kit.games.flicky.workspace.content": "FlickyWorkspaceError",
     "retrolarium_kit.studio.project": "StudioProjectError",
 }
 
@@ -50,9 +59,23 @@ def _expected_errors() -> tuple[type[BaseException], ...]:
     return tuple(errors)
 
 
+def _places(args: argparse.Namespace) -> list[Path]:
+    """The files and folders a command was given, and the current folder."""
+    places = [Path.cwd()]
+    for value in vars(args).values():
+        items = value if isinstance(value, (list, tuple)) else [value]
+        places.extend(item for item in items if isinstance(item, Path))
+    return places
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
+        # A command on a game's documents or ROM uses the profile its game
+        # repository keeps, as the commands that open the repository do.
+        from retrolarium_kit.core.game_profiles import discover_profiles
+
+        discover_profiles(*_places(args))
         args.handler(args)
     except Exception as exc:
         if not isinstance(exc, _expected_errors()):

@@ -249,6 +249,11 @@ exact hash and validates the complete room/object layout before exposing an
 editable document. The source image is immutable; `build` writes a new image and
 may also write a machine-readable capacity/diff report.
 
+The profiles live in the game repositories (`config/game_profile.json`): a
+command uses the profile of the repository the current folder or the files it
+names lie in, so the commands below run from the game's repository (or take
+`--profile`).
+
 ```powershell
 rltool game profiles
 rltool game inspect "Castle Excellent (J).nes"
