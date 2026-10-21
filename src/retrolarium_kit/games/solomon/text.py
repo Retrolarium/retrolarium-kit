@@ -289,7 +289,8 @@ def decode_text(
         message, size = _decode_message(prg, cursor, 2)
         initial.append(message)
         cursor += size
-    if cursor > layout["ending_initial_end_cpu"]             or any(_read(prg, cursor, layout["ending_initial_end_cpu"] - cursor)):
+    if cursor > layout["ending_initial_end_cpu"] \
+            or any(_read(prg, cursor, layout["ending_initial_end_cpu"] - cursor)):
         raise SolomonTextError("initial ending messages do not fill their region")
 
     offsets = _read(prg, layout["ending_offsets_cpu"], MESSAGE_COUNT)

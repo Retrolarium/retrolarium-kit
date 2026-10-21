@@ -38,7 +38,9 @@ def studio_flicky_demo_plan(
     inspection = load_studio_project(path)
     _require_declared_operation(inspection, "launch")
     project = inspection["project"]
-    if project["source_mode"] != "flicky-content"             or project["platform"] != "megadrive"             or project["profile"] != "flicky-ue.v1":
+    if project["source_mode"] != "flicky-content" \
+            or project["platform"] != "megadrive" \
+            or project["profile"] != "flicky-ue.v1":
         raise StudioProjectError(
             "Flicky demo playtest requires the canonical flicky-ue.v1 source profile"
         )
@@ -230,7 +232,8 @@ def studio_pacman_demo_plan(path: Path, *, mame: Path, record: Path | None = Non
 
     inspection = load_studio_project(path)
     _require_declared_operation(inspection, "launch")
-    if inspection["project"]["platform"] != "nes"             or inspection["project"]["profile"] != "pacman.v1":
+    if inspection["project"]["platform"] != "nes" \
+            or inspection["project"]["profile"] != "pacman.v1":
         raise StudioProjectError("Pac-Man demo playtest requires the pacman.v1 NES profile")
     profile = game_profiles().get("pacman")
     revision = next(
@@ -365,7 +368,8 @@ def studio_solomon_demo_plan(
     # An expanded build (solomon_expansion) runs the game from its second bank.
     if len(source) == 16 + 0x10000 + 0x8000 and ((source[6] >> 4) | (source[7] & 0xF0)) == 66:
         offset += 0x8000
-    if source[offset:offset + len(SOLOMON_DEMO_RUN_GUARD)] != SOLOMON_DEMO_RUN_GUARD             or source[offset + 0x1A] != 0xBD or source[offset + 0x21] != 0xE0:
+    if source[offset:offset + len(SOLOMON_DEMO_RUN_GUARD)] != SOLOMON_DEMO_RUN_GUARD \
+            or source[offset + 0x1A] != 0xBD or source[offset + 0x21] != 0xE0:
         raise StudioProjectError("Solomon build does not match the guarded demo layout")
     # The demo's step tables as this build has them (LDA durations,X and
     # CPX #count in the playback loop).
