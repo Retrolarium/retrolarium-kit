@@ -782,7 +782,8 @@ def studio_pacman_round_playtest_plan(path: Path, *, mame: Path, round: int) -> 
 
     inspection = load_studio_project(path)
     _require_declared_operation(inspection, "launch")
-    if inspection["project"]["platform"] != "nes"             or inspection["project"]["profile"] != "pacman.v1":
+    if inspection["project"]["platform"] != "nes" \
+            or inspection["project"]["profile"] != "pacman.v1":
         raise StudioProjectError("Pac-Man round playtest requires the pacman.v1 NES profile")
     round = _bounded_integer(round, "round", 1, 23)
     executable = mame.resolve()

@@ -723,11 +723,13 @@ def create_studio_project(
                 raise StudioProjectError("Doraemon music requires the doraemon.v1 profile")
             resources = [{"id": "music", "kind": "doraemon-music", "codec": "doraemon.music@1"}]
         elif document_schema == "retrolarium.doraemon-text":
-            if profile != "doraemon.v1" or resource_root.get("game") != "doraemon"                     or not isinstance(resource_root.get("ending_credit_rows"), list):
+            if profile != "doraemon.v1" or resource_root.get("game") != "doraemon" \
+                    or not isinstance(resource_root.get("ending_credit_rows"), list):
                 raise StudioProjectError("Doraemon text requires the doraemon.v1 profile")
             resources = [{"id": "text", "kind": "doraemon-text", "codec": "doraemon.text@1"}]
         elif document_schema == "retrolarium.pacman-demo":
-            if profile != "pacman.v1" or resource_root.get("game") != "pacman"                     or not isinstance(resource_root.get("steps"), list):
+            if profile != "pacman.v1" or resource_root.get("game") != "pacman" \
+                    or not isinstance(resource_root.get("steps"), list):
                 raise StudioProjectError("Pac-Man demo requires the pacman.v1 profile")
             resources = [{"id": "attract-demo", "kind": "pacman-demo", "codec": "pacman.demo@1"}]
         elif document_schema == "retrolarium.smb-demo":

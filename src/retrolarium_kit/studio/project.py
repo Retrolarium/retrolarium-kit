@@ -950,7 +950,8 @@ def _expand_solomon_build(
             value = json.loads(document_path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as exc:
             raise StudioProjectError(f"cannot read {document_path}: {exc}") from exc
-        if not isinstance(value, Mapping) or value.get("schema") != "retrolarium.solomon-rooms"                 or value.get("expanded_rom") is not True:
+        if not isinstance(value, Mapping) or value.get("schema") != "retrolarium.solomon-rooms" \
+                or value.get("expanded_rom") is not True:
             continue
         _payload, profile, revision = _read_image(base_artifact, None)
         document = parse_room_document(value, profile, revision)
