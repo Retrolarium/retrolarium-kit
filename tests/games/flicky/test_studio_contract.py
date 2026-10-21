@@ -13,8 +13,8 @@ from retrolarium_kit.studio.project import StudioProjectError, load_studio_proje
 from retrolarium_kit.studio.create import upgrade_flicky_studio_project
 
 
-FIXTURE = (Path(__file__).resolve().parents[4] / "retrolarium-core" / "tests"
-           / "fixtures" / "project" / "studio_projects")
+# A Flicky content project with its five documents (no ROM in it).
+FIXTURE = Path(__file__).resolve().parents[2] / "fixtures" / "flicky_project"
 
 
 class FlickyStudioContractTests(unittest.TestCase):

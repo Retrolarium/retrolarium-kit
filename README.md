@@ -207,6 +207,12 @@ environment = sega.process_environment()
 AS is GPL-2.0-or-later: its source snapshot ships beside the binaries built from
 it, with the license. cc65 (zlib) and p2bin (ISC) notices ship as well.
 
+The Mega Drive compressions (Nemesis, Enigma) are the core's C++, which the kit
+runs as `rlcore` (Flicky's graphics need it). The Studio ships it and names it
+in `RETROLARIUM_CORE`; a source checkout uses the one built in
+`retrolarium-core` (`cmake -S . -B build` there, then
+`cmake --build build --target rlcore`).
+
 ## Shared linter
 
 Every game repository keeps one house style, checked and applied by the kit: the

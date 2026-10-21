@@ -6,10 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from retrolarium_core.oracles import enigma as enigma_dec
-from retrolarium_core.oracles import enigma_encode as enigma_enc
-from retrolarium_core.oracles import nemesis as nemesis_dec
-from retrolarium_core.oracles import nemesis_encode as nemesis_enc
+# Nemesis and Enigma are the core's C++, run as rlcore.
+from retrolarium_core.tool import enigma_decode, enigma_encode, nemesis_decode, nemesis_encode
 
 
 ASSETS = (
@@ -152,13 +150,13 @@ def export_document(root: Path) -> dict[str, Any]:
             raise ValueError(f"{identifier} is {len(data)} bytes, expected {capacity}")
         entry: dict[str, Any] = {"id": identifier, "kind": kind, "capacity": capacity}
         if kind == "tiles_4bpp":
-            entry["tiles"] = packed_4bpp_to_tiles(nemesis_dec.decompress(data))
+            entry["tiles"] = packed_4bpp_to_tiles(nemesis_decode(data))
         elif kind == "tiles_1bpp":
             entry["tiles"] = font_to_tiles(data)
         elif kind == "palette_compact":
             entry["entries"] = decode_palette_compact(data)
         elif kind == "enigma_tilemap":
-            plain = enigma_dec.decompress(data)
+            plain = enigma_decode(data)
             entry["width"] = 12
             entry["height"] = 4
             entry["words"] = [
@@ -178,10 +176,10 @@ def encode_asset(asset: dict[str, Any], root: Path) -> bytes:
     reference = (root / relative).read_bytes()
     if expected_kind == "tiles_4bpp":
         plain = tiles_to_packed_4bpp(asset.get("tiles"))
-        original_plain = nemesis_dec.decompress(reference)
+        original_plain = nemesis_decode(reference)
         if len(plain) != len(original_plain):
             raise ValueError(f"{identifier}: tile count cannot change")
-        packed = reference if plain == original_plain else nemesis_enc.compress(plain, reference)
+        packed = reference if plain == original_plain else nemesis_encode(plain, reference)
     elif expected_kind == "tiles_1bpp":
         packed = tiles_to_font(asset.get("tiles"))
     elif expected_kind == "palette_compact":
@@ -207,8 +205,8 @@ def encode_asset(asset: dict[str, Any], root: Path) -> bytes:
         ):
             raise ValueError("sega_tilemap must contain 12x4 valid words")
         plain = b"".join(word.to_bytes(2, "big") for word in words)
-        original_plain = enigma_dec.decompress(reference)
-        packed = reference if plain == original_plain else enigma_enc.encode(plain)
+        original_plain = enigma_decode(reference)
+        packed = reference if plain == original_plain else enigma_encode(plain)
     if len(packed) > capacity:
         raise ValueError(f"{identifier}: encoded size {len(packed)} exceeds {capacity}-byte slot")
     return packed + bytes((0xFF,)) * (capacity - len(packed))
