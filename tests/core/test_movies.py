@@ -86,6 +86,17 @@ class RecordingTests(unittest.TestCase):
         self.assertEqual((movie.platform, movie.frames, movie.source, movie.offset),
                          (again.platform, again.frames, again.source, again.offset))
 
+    def test_bad_runs_are_refused_before_frames_are_made(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "movie.rlmovie"
+            for run in ("999999999999 00 00", "0 00 00", "x 00 00", "1 100 00"):
+                path.write_text(f"# retrolarium movie 1\nplatform nes\n---\n{run}\n", encoding="utf-8")
+                with self.assertRaises(MovieError, msg=run):
+                    movies.read_rlmovie(path)
+            path.write_text("# retrolarium movie 1\nplatform nes\noffset two\n---\n1 00 00\n", encoding="utf-8")
+            with self.assertRaises(MovieError):
+                movies.read_rlmovie(path)
+
     def test_a_movie_ported_to_mame_keeps_the_recording_emulators_power_on_ram(self) -> None:
         self.assertEqual(movies.POWER_ON["fm2"], movies.power_on(Movie("nes", [], "fm2 FCEUX 2.1.3")))
         self.assertEqual(movies.POWER_ON["fm2"], movies.power_on(Movie("nes", [], "mame from fm2 TASVideos 1795M")))

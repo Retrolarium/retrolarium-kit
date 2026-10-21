@@ -48,12 +48,17 @@ def _track_events(
     tick = 0
     running_status: int | None = None
     active: dict[int, int] = {}
+    # A note that starts on the tick the sounding one ends, written before
+    # that one's note-off (legato, as some programs order them).
+    waiting: tuple[int, int] | None = None
     notes: list[MidiNote] = []
     tempos: list[tuple[int, int]] = []
     discarded: dict[str, int] = {}
     while cursor < len(data):
         delta, cursor = _varlen(data, cursor)
         tick += delta
+        if waiting is not None and tick > waiting[1]:
+            raise MidiError("MIDI import requires a monophonic channel")
         if cursor >= len(data):
             raise MidiError("truncated MIDI event")
         status = data[cursor]
@@ -120,14 +125,20 @@ def _track_events(
         is_on = event == 0x90 and payload[1] != 0
         if is_on:
             if active:
-                raise MidiError("MIDI import requires a monophonic channel")
+                if waiting is not None:
+                    raise MidiError("MIDI import requires a monophonic channel")
+                waiting = (note, tick)
+                continue
             active[note] = tick
         elif note in active:
             start = active.pop(note)
             if tick <= start:
                 raise MidiError("MIDI notes must have positive duration")
             notes.append(MidiNote(note, start, tick))
-    if active:
+            if waiting is not None and not active:
+                active[waiting[0]] = waiting[1]
+                waiting = None
+    if active or waiting is not None:
         raise MidiError("MIDI note remains active at end of track")
     if notes:
         discarded["velocity"] = len(notes)
@@ -155,10 +166,17 @@ def parse_midi(data: bytes, track_index: int, channel: int) -> MidiTrack:
     selected_discarded: dict[str, int] = {}
     selected_end_tick = 0
     tempos: list[tuple[int, int]] = []
-    for index in range(track_count):
-        if cursor + 8 > len(data) or data[cursor : cursor + 4] != b"MTrk":
+    index = 0
+    while index < track_count:
+        if cursor + 8 > len(data):
             raise MidiError("missing MIDI track chunk")
         length = int.from_bytes(data[cursor + 4 : cursor + 8], "big")
+        if data[cursor : cursor + 4] != b"MTrk":
+            # Another kind of chunk: readers skip what they do not know.
+            if cursor + 8 + length > len(data):
+                raise MidiError("truncated MIDI chunk")
+            cursor += 8 + length
+            continue
         payload = data[cursor + 8 : cursor + 8 + length]
         if len(payload) != length:
             raise MidiError("truncated MIDI track")
@@ -171,6 +189,9 @@ def parse_midi(data: bytes, track_index: int, channel: int) -> MidiTrack:
             selected_discarded = discarded
             selected_end_tick = end_tick
         cursor += 8 + length
+        index += 1
+    while cursor + 8 <= len(data) and data[cursor : cursor + 4] != b"MTrk":
+        cursor += 8 + int.from_bytes(data[cursor + 4 : cursor + 8], "big")
     if cursor != len(data):
         raise MidiError("MIDI file has trailing data")
     return MidiTrack(
