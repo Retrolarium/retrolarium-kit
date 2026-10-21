@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 from pathlib import Path
 import shutil
@@ -111,9 +113,41 @@ class IpsTests(unittest.TestCase):
         self.assertEqual(b"\x45\x4F\x45", patch[5:8])
         self.assertEqual(bytes(edited), apply_ips(original, patch))
 
+    def test_a_longest_run_at_eof_offset_still_fits_a_record(self) -> None:
+        original = bytes(0x454F46 + 0x10000)
+        edited = bytearray(original)
+        edited[0x454F46:0x454F46 + 0xFFFF] = b"\x01" * 0xFFFF
+        patch = ips_patch(original, bytes(edited))
+        self.assertEqual(bytes(edited), apply_ips(original, patch))
+
     def test_shrinking_is_refused(self) -> None:
         with self.assertRaises(GameRepositoryError):
             ips_patch(bytes(4), bytes(2))
+
+    def test_a_rom_opened_as_it_is_patches_without_a_build(self) -> None:
+        from retrolarium_kit.cli import main
+        from retrolarium_kit.studio.project import rom_as_is
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "original").mkdir()
+            original = bytes(range(256)) * 2
+            edited = bytearray(original)
+            edited[10] = 0xEE
+            (root / "original" / "game.bin").write_bytes(original)
+            (root / "game.bin").write_bytes(bytes(edited))
+            project = root / "game.rlj"
+            project.write_text(
+                'schema = "retrolarium.project"\nschema_version = 1\n\n[project]\nid = "game"\n'
+                'name = "game"\nplatform = "unknown"\nprofile = "rom.v1"\nsource_mode = "rom"\n\n'
+                '[source]\nrom = "game.bin"\noriginal = "original/game.bin"\nsha256 = "00"\n',
+                encoding="utf-8")
+            self.assertEqual(((root / "original" / "game.bin").resolve(), (root / "game.bin").resolve()),
+                             rom_as_is(project))
+            output = root / "game.ips"
+            with contextlib.redirect_stdout(io.StringIO()):
+                main(["studio", "patch", str(project), "--output", str(output)])
+            self.assertEqual(bytes(edited), apply_ips(original, output.read_bytes()))
 
 
 @unittest.skipUnless(V10.is_file() and V11.is_file() and PROFILE.is_file(), "the Pac-Man ROMs are not available")

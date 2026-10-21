@@ -448,6 +448,30 @@ def _validate_dependency_graph(tabs: list[dict[str, Any]]) -> None:
         visit(tab_id)
 
 
+def rom_as_is(path: Path) -> tuple[Path, Path] | None:
+    """The original and the edited ROM of a project the Studio made by opening
+    a ROM as it is (profile ``rom.v1``: no documents, no build), or None for
+    any other project. Both live in the project's folder."""
+
+    project_file = path.resolve()
+    root = project_file.parent
+    source = _read_toml(project_file)
+    project = source.get("project")
+    if not isinstance(project, Mapping) or project.get("profile") != "rom.v1":
+        return None
+    table = source.get("source")
+    if not isinstance(table, Mapping):
+        raise _error("source", "must be a table")
+    files = []
+    for key in ("original", "rom"):
+        relative = PurePosixPath(_string(table.get(key), f"source.{key}"))
+        resolved = root.joinpath(*relative.parts).resolve()
+        if relative.is_absolute() or ":" in str(relative) or not resolved.is_relative_to(root):
+            raise _error(f"source.{key}", "must name a file in the project's folder")
+        files.append(resolved)
+    return files[0], files[1]
+
+
 def load_studio_project(path: Path) -> dict[str, Any]:
     """Validate and return the stable normalized projection consumed by the GUI."""
 
