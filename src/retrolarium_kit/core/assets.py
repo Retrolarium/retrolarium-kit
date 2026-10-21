@@ -72,7 +72,11 @@ class Manifest:
         return tuple(asset for asset in self.assets if asset.image == image_id)
 
     def output_path(self, asset: Asset) -> Path:
-        return self.root / self.output / asset.path
+        path = self.root / self.output / asset.path
+        # A link inside the repository must not carry a write out of it.
+        if not path.resolve().is_relative_to(self.root.resolve()):
+            raise AssetsError(f"{asset.path} leads out of the repository")
+        return path
 
 
 def sha1(data: bytes) -> str:
@@ -83,7 +87,9 @@ def _relative(value: object, field: str) -> str:
     if not isinstance(value, str) or not value:
         raise AssetsError(f"{field} must be a path")
     path = PurePosixPath(value)
-    if path.is_absolute() or ".." in path.parts or "\\" in value:
+    # "C:/x" and "C:x" are not absolute to POSIX, but leave the repository on
+    # Windows: no drive, no backslash.
+    if path.is_absolute() or ".." in path.parts or "\\" in value or ":" in value:
         raise AssetsError(f"{field} must stay inside the repository: {value}")
     return value
 

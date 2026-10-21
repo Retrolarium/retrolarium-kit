@@ -190,14 +190,19 @@ class ProjectOperationTests(unittest.TestCase):
 
             self.assertEqual("suprmrio", vs_machine("smb1", "vs_smb"))
             self.assertIsNone(vs_machine("smb1", "ju"))
-            plan = launch_image_plan(rom, platform="nes", mame=mame, machine="suprmrio")
+            cache = root / "cache"
+            with patch.dict(os.environ, {"RETROLARIUM_MAME_ROMS": str(cache)}):
+                plan = launch_image_plan(rom, platform="nes", mame=mame, machine="suprmrio")
             arguments = plan["arguments"]
-            self.assertEqual(["suprmrio", "-rompath", str(root / "mame-roms")], arguments[:3])
+            sets = list(cache.iterdir())
+            self.assertEqual(1, len(sets))
+            self.assertEqual(["suprmrio", "-rompath", str(sets[0])], arguments[:3])
+            self.assertFalse((root / "mame-roms").exists())
             self.assertNotIn("-cart", arguments)
             self.assertEqual("299", arguments[arguments.index("-seconds_to_run") + 1])
             self.assertEqual(str(MAME_VS_START), arguments[arguments.index("-autoboot_script") + 1])
             self.assertTrue(MAME_VS_START.is_file())
-            folder = root / "mame-roms" / "suprmrio"
+            folder = sets[0] / "suprmrio"
             self.assertEqual(chips[:0x2000], (folder / "mds-sm4-4__1dor6d_e.1d or 6d").read_bytes())
             self.assertEqual(chips[0x6000:0x8000], (folder / "mds-sm4-4__1aor6a_e.1a or 6a").read_bytes())
             self.assertEqual(chips[0xA000:], (folder / "mds-sm4-4__2aor8a_e.2a or 8a").read_bytes())
@@ -205,8 +210,9 @@ class ProjectOperationTests(unittest.TestCase):
             palette = (folder / "rp2c04-0004.pal").read_bytes()
             self.assertEqual("0f9090225eb1f08ae5072d40af3e95547cbce05f", hashlib.sha1(palette).hexdigest())
 
-            headless = launch_image_plan(rom, platform="nes", mame=mame, machine="suprmrio",
-                                         interactive=False)
+            with patch.dict(os.environ, {"RETROLARIUM_MAME_ROMS": str(cache)}):
+                headless = launch_image_plan(rom, platform="nes", mame=mame, machine="suprmrio",
+                                             interactive=False)
             self.assertNotIn("-seconds_to_run", headless["arguments"])
             # A Vs. image needs its arcade machine; a console image cannot use one.
             with self.assertRaisesRegex(ProjectError, "Vs. System"):
