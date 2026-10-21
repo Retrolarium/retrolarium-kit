@@ -71,6 +71,37 @@ def split_comment(line: str) -> tuple[str, str | None]:
     return line, None
 
 
+def expand_tabs(line: str, width: int = 4) -> str:
+    """Tabs to spaces up to the next tab stop, except inside a quoted string,
+    where a tab is a byte of the data."""
+    out: list[str] = []
+    quote: str | None = None
+    escaped = False
+    column = 0
+    for index, character in enumerate(line):
+        if quote is None and character == ";":
+            # The comment: no strings in it.
+            rest = line[index:]
+            return "".join(out) + (" " * column + rest).expandtabs(width)[column:]
+        if quote is None and character == "\t":
+            pad = width - column % width
+            out.append(" " * pad)
+            column += pad
+            continue
+        if escaped:
+            escaped = False
+        elif character == "\\" and quote is not None:
+            escaped = True
+        elif quote is not None:
+            if character == quote:
+                quote = None
+        elif character in {'"', "'"}:
+            quote = character
+        out.append(character)
+        column += 1
+    return "".join(out)
+
+
 def is_opener(directive: str) -> bool:
     return directive in BLOCK_OPENERS or directive.startswith(".if")
 
@@ -254,7 +285,7 @@ def format_text(original: str, style: Ca65Style = Ca65Style()) -> str:
     """The house-style form of a ca65 source."""
     logical: list[tuple[str, str | None]] = []
     for raw in original.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
-        before, comment = split_comment(raw.expandtabs(4).rstrip())
+        before, comment = split_comment(expand_tabs(raw).rstrip())
         statement = before.strip()
         label = LABEL_RE.match(statement)
         if label and label.group("tail").strip():

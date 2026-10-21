@@ -35,6 +35,12 @@ def check_lines(path: Path, lines: list[str], issues: list) -> None:
 
 
 class NormalizeLine(unittest.TestCase):
+    def test_a_tab_inside_a_string_is_data_and_stays(self):
+        formatted = normalize_line('\tdc.b\t"A\tB"\t; one\ttwo', 0)
+        self.assertTrue(formatted.startswith(" " * 16 + 'dc.b    "A\tB"'))
+        self.assertTrue(formatted.endswith("; one two"))
+        self.assertEqual(1, formatted.count("\t"))
+
     def test_instruction_reaches_the_operand_column(self):
         self.assertEqual(
             normalize_line("  move.w  #$B000,d2", 0),
