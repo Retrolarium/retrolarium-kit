@@ -97,11 +97,12 @@ def patched_manifest(value):
 
 
 def game_repository(name: str) -> Path:
-    """A game disassembly (smb1_src, ...) for the tests that read its data.
+    """A game repository (smb1_src, ...) for the tests that read its data.
 
-    RETROLARIUM_GAME_SOURCES names the folder holding them; otherwise an
-    oranguthang folder beside one of the folders above the kit is used. The
-    path may not exist: the tests that need it skip.
+    RETROLARIUM_GAME_SOURCES names the folder holding them; otherwise a
+    retrolariumlab (or older oranguthang) folder holding that game beside one
+    of the folders above the kit is used. The path may not exist: the tests
+    that need it skip, or fail when RETROLARIUM_REQUIRE_GAMES is set.
     """
     import os
 
@@ -109,10 +110,11 @@ def game_repository(name: str) -> Path:
     if configured:
         return Path(configured) / name
     for folder in Path(__file__).resolve().parents[1:]:
-        candidate = folder.parent / "oranguthang"
-        if candidate.is_dir():
-            return candidate / name
-    return Path(__file__).resolve().parents[1] / "oranguthang-not-found" / name
+        for sibling in ("retrolariumlab", "oranguthang"):
+            candidate = folder.parent / sibling / name
+            if candidate.is_dir():
+                return candidate
+    return Path(__file__).resolve().parents[1] / "game-repositories-not-found" / name
 
 
 # The repositories keeping the profiles of the games the kit edits.
@@ -132,6 +134,7 @@ HONKEYPONG_PROFILE = Path(__file__).resolve().parent / "fixtures" / "game_honkey
 def game_profile(game_id: str):
     """A game's profile, from its repository's config/game_profile.json
     (see game_repository); the test is skipped without it."""
+    import os
     import unittest
 
     from retrolarium_kit.core.game_profiles import load_game_profile, repository_profile
@@ -140,7 +143,12 @@ def game_profile(game_id: str):
         return load_game_profile(HONKEYPONG_PROFILE)
     profile = repository_profile(game_repository(GAME_REPOSITORIES[game_id]))
     if profile is None:
-        raise unittest.SkipTest(f"{GAME_REPOSITORIES[game_id]} with its game profile is not present")
+        missing = f"{GAME_REPOSITORIES[game_id]} with its game profile is not present"
+        # A run that must cover the games (RETROLARIUM_REQUIRE_GAMES) fails
+        # instead of passing with them skipped.
+        if os.environ.get("RETROLARIUM_REQUIRE_GAMES"):
+            raise AssertionError(missing)
+        raise unittest.SkipTest(missing)
     return profile
 
 

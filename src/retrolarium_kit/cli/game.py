@@ -98,8 +98,10 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     )
     game_commands = game.add_subparsers(dest="game_command", required=True)
     game_profiles = game_commands.add_parser(
-        "profiles", help="list game profiles carried by the package"
+        "profiles", help="list the game profiles found: those of the game repositories the current folder or the files named lie in"
     )
+    game_profiles.add_argument("places", type=Path, nargs="*",
+                               help="files or folders whose game repositories to look in")
     game_profiles.set_defaults(handler=command_game_profiles)
     game_inspect = game_commands.add_parser(
         "inspect", help="recognize a revision and validate its resource layout"
