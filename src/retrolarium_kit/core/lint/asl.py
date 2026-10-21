@@ -55,6 +55,16 @@ def split_comment(text: str) -> tuple[str, str]:
     return text, ""
 
 
+def untab(text: str) -> str:
+    """Tabs to single spaces, except inside a quoted string, where a tab is
+    a byte of the data."""
+    code, comment = split_comment(text)
+    parts = code.split('"')
+    # Even parts lie outside strings.
+    return '"'.join(part.replace("\t", " ") if index % 2 == 0 else part
+                    for index, part in enumerate(parts)) + comment.replace("\t", " ")
+
+
 def _normalize_comment(comment: str) -> str:
     """One space after the semicolon, no trailing period; runs of semicolons,
     dashes or equals signs are banner lines and stay as they are."""
@@ -146,7 +156,7 @@ def _collapse_operand_spacing(code: str, style: AslStyle) -> str:
 
 
 def _normalize_line(line: str, depth: int, column: int | None, style: AslStyle) -> str:
-    line = line.replace("\t", " ").rstrip()
+    line = untab(line).rstrip()
     if not line.strip():
         return ""
     code, comment = split_comment(line)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import os
 from pathlib import Path
+import stat
 import tempfile
 
 
@@ -31,11 +32,14 @@ class Issue:
 
 
 def write_text(path: Path, text: str) -> None:
-    """Replace a file's text with LF endings, atomically."""
+    """Replace a file's text with LF endings, atomically, keeping its mode
+    (an executable script stays executable)."""
     descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
             stream.write(text)
+        if path.exists():
+            os.chmod(temporary, stat.S_IMODE(path.stat().st_mode))
         os.replace(temporary, path)
     finally:
         if os.path.exists(temporary):

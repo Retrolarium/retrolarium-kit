@@ -16,6 +16,11 @@ def lint(source: str) -> set[str]:
 
 
 class Ca65StyleTests(unittest.TestCase):
+    def test_formatting_keeps_a_tab_inside_a_string(self) -> None:
+        formatted = ca65.format_text('Label:\n\t.byte "A\tB"\t; one\ttwo\n')
+        self.assertTrue(formatted.startswith('Label:\n    .byte "A\tB"  ; one'))
+        self.assertEqual(1, formatted.count("\t"))
+
     def test_nested_source_passes(self) -> None:
         source = (
             ".if ENABLE_DEMO\n"
