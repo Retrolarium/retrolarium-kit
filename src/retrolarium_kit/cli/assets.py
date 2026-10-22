@@ -60,6 +60,17 @@ def command_images(args: argparse.Namespace) -> None:
     sys.stdout.flush()
 
 
+def command_path(args: argparse.Namespace) -> None:
+    from retrolarium_kit.core import assets
+
+    manifest = _manifest(args)
+    image = next((image for image in manifest.images if image.id == args.image), None)
+    if image is None:
+        raise assets.AssetsError(f"the manifest has no image {args.image!r}")
+    sys.stdout.buffer.write(f"{(manifest.root / image.file).as_posix()}\n".encode("utf-8"))
+    sys.stdout.flush()
+
+
 def add_parsers(commands: argparse._SubParsersAction) -> None:
     group = commands.add_parser("assets", help="cut a game's assets out of its ROMs and verify builds")
     actions = group.add_subparsers(dest="assets_command", required=True)
@@ -86,6 +97,11 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     common(images)
     images.add_argument("--present", action="store_true", help="only those whose file is here")
     images.set_defaults(handler=command_images)
+
+    path = actions.add_parser("path", help="print the file an image is read from")
+    common(path)
+    path.add_argument("--image", required=True)
+    path.set_defaults(handler=command_path)
 
     verify = actions.add_parser("verify", help="compare a built file with an image byte for byte")
     common(verify)
