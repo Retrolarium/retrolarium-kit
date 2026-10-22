@@ -8,7 +8,11 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from retrolarium_kit.games.doraemon.demo import (
-    DoraemonDemoError, build_demo, capacity, decode_demo, parse_demo_document,
+    DoraemonDemoError,
+    build_demo,
+    capacity,
+    decode_demo,
+    parse_demo_document,
 )
 from helpers import game_profile
 from helpers import game_repository
@@ -28,8 +32,9 @@ class DoraemonDemoTests(unittest.TestCase):
         self.revision = self.profile.revisions[0]
 
     def build(self, value: dict) -> bytes:
-        return build_demo(self.source, parse_demo_document(value, self.profile, self.revision),
-                          self.profile, self.revision)[0]
+        return build_demo(
+            self.source, parse_demo_document(value, self.profile, self.revision), self.profile, self.revision
+        )[0]
 
     def test_decodes_the_stream_and_builds_it_back(self) -> None:
         document = decode_demo(self.source, self.profile, self.revision)
@@ -45,13 +50,13 @@ class DoraemonDemoTests(unittest.TestCase):
         value["steps"][0] = {"index": 0, "frames": 30, "buttons": ["right", "a"]}
         value["steps"].append({"index": 50, "frames": 256, "buttons": ["left"]})
         output = self.build(value)
-        self.assertEqual(bytes((30, 0x81)), output[STREAM:STREAM + 2])
-        self.assertEqual(bytes((0, 0x02, 0xFF, 0xFF)), output[STREAM + 100:STREAM + 104])
+        self.assertEqual(bytes((30, 0x81)), output[STREAM : STREAM + 2])
+        self.assertEqual(bytes((0, 0x02, 0xFF, 0xFF)), output[STREAM + 100 : STREAM + 104])
         rebuilt = decode_demo(output, self.profile, self.revision, _verify_identity=False)
         self.assertEqual(["a", "right"], rebuilt.steps[0]["buttons"])
         value["steps"] = value["steps"][:3]
         output = self.build(value)
-        self.assertEqual(b"\xFF" * 100, output[STREAM + 6:STREAM + 106])
+        self.assertEqual(b"\xff" * 100, output[STREAM + 6 : STREAM + 106])
 
     def test_rejects_what_the_stream_cannot_hold(self) -> None:
         value = decode_demo(self.source, self.profile, self.revision).as_dict()

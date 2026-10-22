@@ -7,8 +7,16 @@ import hashlib
 from typing import Mapping
 
 from retrolarium_kit.core.authoring import (
-    Address, AddressRange, AuthoringError, BuildPlan, Change, ChangeSet,
-    GameProfile, Provenance, ResourceSpec, RevisionSpec,
+    Address,
+    AddressRange,
+    AuthoringError,
+    BuildPlan,
+    Change,
+    ChangeSet,
+    GameProfile,
+    Provenance,
+    ResourceSpec,
+    RevisionSpec,
 )
 from retrolarium_core.ines import parse_ines
 
@@ -66,9 +74,7 @@ class SolomonRoomArtDocument:
 
 
 def _resource(profile: GameProfile, revision: RevisionSpec) -> ResourceSpec:
-    matches = [
-        item for item in profile.resources_for(revision) if item.codec == CODEC
-    ]
+    matches = [item for item in profile.resources_for(revision) if item.codec == CODEC]
     if len(matches) != 1:
         raise SolomonRoomArtError("Solomon profile needs one room-art resource")
     return matches[0]
@@ -85,8 +91,7 @@ def _offsets(resource: ResourceSpec) -> tuple[int, int]:
             raise SolomonRoomArtError(f"{name} escapes the 32 KiB PRG")
         result.append(raw)
     group, patterns = result
-    if group < patterns + PATTERN_COUNT * PATTERN_SIZE \
-            and patterns < group + GROUP_COUNT:
+    if group < patterns + PATTERN_COUNT * PATTERN_SIZE and patterns < group + GROUP_COUNT:
         raise SolomonRoomArtError("Solomon room-art tables overlap")
     return group, patterns
 
@@ -115,12 +120,10 @@ def _tile(value: object, context: str, *, first: bool = False) -> int:
     return value
 
 
-def decode_room_art(
-    source: bytes, profile: GameProfile, revision: RevisionSpec
-) -> SolomonRoomArtDocument:
+def decode_room_art(source: bytes, profile: GameProfile, revision: RevisionSpec) -> SolomonRoomArtDocument:
     image = _source(source, revision)
     group_offset, pattern_offset = _offsets(_resource(profile, revision))
-    colors = tuple(image.prg[group_offset:group_offset + GROUP_COUNT])
+    colors = tuple(image.prg[group_offset : group_offset + GROUP_COUNT])
     if len(colors) != GROUP_COUNT:
         raise SolomonRoomArtError("room-group color table is truncated")
     for index, value in enumerate(colors):
@@ -128,30 +131,35 @@ def decode_room_art(
     patterns = []
     for index in range(PATTERN_COUNT):
         first, right, left_bottom, right_bottom = image.prg[
-            pattern_offset + index * PATTERN_SIZE:
-            pattern_offset + (index + 1) * PATTERN_SIZE
+            pattern_offset + index * PATTERN_SIZE : pattern_offset + (index + 1) * PATTERN_SIZE
         ]
-        patterns.append(RoomMapPattern(
-            index, first & 3, first & 0xFC, right, left_bottom, right_bottom
-        ))
+        patterns.append(RoomMapPattern(index, first & 3, first & 0xFC, right, left_bottom, right_bottom))
     return SolomonRoomArtDocument(
-        profile.game_id, revision.revision_id, revision.sha256,
-        colors, tuple(patterns),
+        profile.game_id,
+        revision.revision_id,
+        revision.sha256,
+        colors,
+        tuple(patterns),
     )
 
 
-def parse_room_art_document(
-    value: object, profile: GameProfile, revision: RevisionSpec
-) -> SolomonRoomArtDocument:
+def parse_room_art_document(value: object, profile: GameProfile, revision: RevisionSpec) -> SolomonRoomArtDocument:
     _offsets(_resource(profile, revision))
     if not isinstance(value, Mapping) or set(value) != {
-        "schema", "schema_version", "game", "revision", "source_sha256",
-        "room_group_colors", "room_map_patterns",
+        "schema",
+        "schema_version",
+        "game",
+        "revision",
+        "source_sha256",
+        "room_group_colors",
+        "room_map_patterns",
     }:
         raise SolomonRoomArtError("room-art document fields differ")
     for name, expected in (
-        ("schema", SCHEMA), ("schema_version", VERSION),
-        ("game", profile.game_id), ("revision", revision.revision_id),
+        ("schema", SCHEMA),
+        ("schema_version", VERSION),
+        ("game", profile.game_id),
+        ("revision", revision.revision_id),
         ("source_sha256", revision.sha256),
     ):
         if value.get(name) != expected:
@@ -159,51 +167,68 @@ def parse_room_art_document(
     colors = value["room_group_colors"]
     if not isinstance(colors, list) or len(colors) != GROUP_COUNT:
         raise SolomonRoomArtError("room art needs 14 group colors")
-    checked_colors = tuple(
-        _color(item, f"room_group_colors[{index}]")
-        for index, item in enumerate(colors)
-    )
+    checked_colors = tuple(_color(item, f"room_group_colors[{index}]") for index, item in enumerate(colors))
     raw_patterns = value["room_map_patterns"]
     if not isinstance(raw_patterns, list) or len(raw_patterns) != PATTERN_COUNT:
         raise SolomonRoomArtError("room art needs 58 RoomMap patterns")
     patterns = []
     required = {
-        "index", "palette", "top_left", "top_right",
-        "bottom_left", "bottom_right",
+        "index",
+        "palette",
+        "top_left",
+        "top_right",
+        "bottom_left",
+        "bottom_right",
     }
     for index, raw in enumerate(raw_patterns):
-        if not isinstance(raw, Mapping) or set(raw) != required \
-                or type(raw["index"]) is not int or raw["index"] != index:
+        if (
+            not isinstance(raw, Mapping)
+            or set(raw) != required
+            or type(raw["index"]) is not int
+            or raw["index"] != index
+        ):
             raise SolomonRoomArtError(f"RoomMap pattern {index} has invalid fields")
         palette = raw["palette"]
         if type(palette) is not int or not 0 <= palette <= 3:
             raise SolomonRoomArtError(f"RoomMap pattern {index} palette must be 0..3")
-        patterns.append(RoomMapPattern(
-            index, palette,
-            _tile(raw["top_left"], f"pattern {index}.top_left", first=True),
-            _tile(raw["top_right"], f"pattern {index}.top_right"),
-            _tile(raw["bottom_left"], f"pattern {index}.bottom_left"),
-            _tile(raw["bottom_right"], f"pattern {index}.bottom_right"),
-        ))
+        patterns.append(
+            RoomMapPattern(
+                index,
+                palette,
+                _tile(raw["top_left"], f"pattern {index}.top_left", first=True),
+                _tile(raw["top_right"], f"pattern {index}.top_right"),
+                _tile(raw["bottom_left"], f"pattern {index}.bottom_left"),
+                _tile(raw["bottom_right"], f"pattern {index}.bottom_right"),
+            )
+        )
     return SolomonRoomArtDocument(
-        profile.game_id, revision.revision_id, revision.sha256,
-        checked_colors, tuple(patterns),
+        profile.game_id,
+        revision.revision_id,
+        revision.sha256,
+        checked_colors,
+        tuple(patterns),
     )
 
 
 def build_room_art(
-    source: bytes, document: SolomonRoomArtDocument,
-    profile: GameProfile, revision: RevisionSpec,
+    source: bytes,
+    document: SolomonRoomArtDocument,
+    profile: GameProfile,
+    revision: RevisionSpec,
 ) -> tuple[bytes, dict[str, object]]:
     image = _source(source, revision)
     checked = parse_room_art_document(document.as_dict(), profile, revision)
     group_offset, pattern_offset = _offsets(_resource(profile, revision))
     encoded_patterns = bytearray()
     for pattern in checked.patterns:
-        encoded_patterns.extend((
-            pattern.top_left | pattern.palette, pattern.top_right,
-            pattern.bottom_left, pattern.bottom_right,
-        ))
+        encoded_patterns.extend(
+            (
+                pattern.top_left | pattern.palette,
+                pattern.top_right,
+                pattern.bottom_left,
+                pattern.bottom_right,
+            )
+        )
     base = len(image.header) + len(image.trainer)
     changes = []
     for name, offset, payload in (
@@ -211,11 +236,14 @@ def build_room_art(
         ("room-map-patterns", pattern_offset, bytes(encoded_patterns)),
     ):
         file_offset = base + offset
-        changes.append(Change(
-            AddressRange(Address("file", file_offset), len(payload)),
-            source[file_offset:file_offset + len(payload)], payload,
-            Provenance(revision.sha256, name, "encode"),
-        ))
+        changes.append(
+            Change(
+                AddressRange(Address("file", file_offset), len(payload)),
+                source[file_offset : file_offset + len(payload)],
+                payload,
+                Provenance(revision.sha256, name, "encode"),
+            )
+        )
     output = BuildPlan(revision.sha256, ChangeSet(tuple(changes))).apply(source)
     return output, {
         "schema": "retrolarium.solomon-room-art-build",

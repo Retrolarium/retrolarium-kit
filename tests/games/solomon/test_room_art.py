@@ -10,7 +10,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from retrolarium_kit.core.authoring import GameProfile, ResourceSpec, RevisionSpec
 from retrolarium_kit.games.solomon.room_art import (
-    SolomonRoomArtError, build_room_art, decode_room_art, parse_room_art_document,
+    SolomonRoomArtError,
+    build_room_art,
+    decode_room_art,
+    parse_room_art_document,
 )
 
 
@@ -21,17 +24,29 @@ def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
     prg[0x200:0x204] = bytes((0xA3, 0x12, 0x34, 0x56))
     source = header + bytes(prg) + bytes(0x8000)
     revision = RevisionSpec(
-        "probe", "Solomon probe", len(source),
+        "probe",
+        "Solomon probe",
+        len(source),
         hashlib.sha1(source).hexdigest(),
-        hashlib.sha256(source).hexdigest(), "ines", 3,
+        hashlib.sha256(source).hexdigest(),
+        "ines",
+        3,
     )
     resource = ResourceSpec(
-        "room-art", "room-art", "solomon.room-art.v1", "fixed",
+        "room-art",
+        "room-art",
+        "solomon.room-art.v1",
+        "fixed",
         {"room_group_colors_prg": 0x100, "room_map_patterns_prg": 0x200},
     )
     profile = GameProfile(
-        "solomons-key", 1, "Solomon probe", "nes", ("graphics",),
-        (revision,), (resource,),
+        "solomons-key",
+        1,
+        "Solomon probe",
+        "nes",
+        ("graphics",),
+        (revision,),
+        (resource,),
     )
     return source, profile, revision
 
@@ -43,18 +58,13 @@ class SolomonRoomArtTests(unittest.TestCase):
         self.assertEqual(0x80, decoded.group_colors[0])
         self.assertEqual(0xA0, decoded.patterns[0].top_left)
         self.assertEqual(3, decoded.patterns[0].palette)
-        self.assertEqual(
-            source, build_room_art(source, decoded, profile, revision)[0]
-        )
+        self.assertEqual(source, build_room_art(source, decoded, profile, revision)[0])
         value = decoded.as_dict()
         value["room_group_colors"][0] = 0x3F
         value["room_map_patterns"][0]["palette"] = 2
         edited = parse_room_art_document(value, profile, revision)
         output, report = build_room_art(source, edited, profile, revision)
-        self.assertEqual([0x110, 0x210], [
-            index for index, (old, new) in enumerate(zip(source, output))
-            if old != new
-        ])
+        self.assertEqual([0x110, 0x210], [index for index, (old, new) in enumerate(zip(source, output)) if old != new])
         self.assertEqual(2, report["changed_bytes"])
         self.assertEqual(0x3F, output[0x110])
         self.assertEqual(0xA2, output[0x210])

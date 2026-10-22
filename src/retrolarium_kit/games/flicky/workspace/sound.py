@@ -11,9 +11,7 @@ SOURCE = "src/sound/z80/data.asm"
 LABEL_RE = re.compile(r"^(?P<label>[A-Za-z_][A-Za-z0-9_]*):", re.MULTILINE)
 BYTE_LINE_RE = re.compile(r"^\s*dc\.b\s+(?P<values>[^;]+?)(?:\s*;.*)?$")
 NUMBER_RE = re.compile(r"^(?:\$[0-9A-Fa-f]+|[0-9]+)$")
-SFX_HEADER_RE = re.compile(
-    r"^\s*sfxheader\s+(?P<voices>\w+),(?P<scale>[^,]+),(?P<count>[^\s]+)\s*$"
-)
+SFX_HEADER_RE = re.compile(r"^\s*sfxheader\s+(?P<voices>\w+),(?P<scale>[^,]+),(?P<count>[^\s]+)\s*$")
 SFX_TRACK_RE = re.compile(
     r"^\s*sfxtrack\s+(?P<flags>[^,]+),(?P<channel>[^,]+),(?P<sequence>\w+),"
     r"(?P<transpose>[^,]+),(?P<volume>[^\s]+)\s*$"
@@ -22,46 +20,86 @@ MUSIC_HEADER_RE = re.compile(
     r"^\s*musicheader\s+(?P<voices>\w+),(?P<fmcount>[^,]+),(?P<psgcount>[^,]+),"
     r"(?P<scale>[^,]+),(?P<tempo>[^\s]+)\s*$"
 )
-MUSIC_FM_RE = re.compile(
-    r"^\s*musicfm\s+(?P<sequence>\w+),(?P<transpose>[^,]+),(?P<volume>[^\s]+)\s*$"
-)
+MUSIC_FM_RE = re.compile(r"^\s*musicfm\s+(?P<sequence>\w+),(?P<transpose>[^,]+),(?P<volume>[^\s]+)\s*$")
 MUSIC_PSG_RE = re.compile(
     r"^\s*musicpsg\s+(?P<sequence>\w+),(?P<transpose>[^,]+),(?P<volume>[^,]+),"
     r"(?P<pitchenv>[^,]+),(?P<volumeenv>[^\s]+)\s*$"
 )
 
 COMMANDS = {
-    0xE0: ("set_ams_fms", 1), 0xE1: ("set_frequency_offset", 1),
-    0xE2: ("set_coord_value", 1), 0xE3: ("stop_track_command", 0),
-    0xE4: ("setup_modulation", 5), 0xE5: ("add_frequency", 2),
-    0xE6: ("add_volume", 1), 0xE7: ("hold", 0),
-    0xE8: ("set_note_fill", 1), 0xE9: ("set_lfo", 2),
-    0xEA: ("set_rom_bank", 3), 0xEB: ("add_rom_bank", 3),
-    0xEC: ("adjust_psg_volume", 1), 0xED: ("write_fm_channel", 2),
-    0xEE: ("write_fm_port0", 2), 0xEF: ("set_voice", 1),
-    0xF0: ("set_pitch_envelope", 4), 0xF1: ("set_pitch_slide", 2),
-    0xF2: ("stop_track", 0), 0xF3: ("set_psg_noise", 1),
-    0xF4: ("pitch_slide_value", 1), 0xF5: ("set_psg_volume_envelope", 1),
-    0xF6: ("jump", 2), 0xF7: ("loop", 4),
-    0xF8: ("call", 2), 0xF9: ("return", 0),
-    0xFA: ("set_duration_multiplier", 1), 0xFB: ("add_transpose", 1),
-    0xFC: ("set_raw_frequency_mode", 1), 0xFD: ("set_pitch_mode", 1),
-    0xFE: ("set_fm3_special_mode", 4), 0xFF: ("fm_operator_command", 2),
+    0xE0: ("set_ams_fms", 1),
+    0xE1: ("set_frequency_offset", 1),
+    0xE2: ("set_coord_value", 1),
+    0xE3: ("stop_track_command", 0),
+    0xE4: ("setup_modulation", 5),
+    0xE5: ("add_frequency", 2),
+    0xE6: ("add_volume", 1),
+    0xE7: ("hold", 0),
+    0xE8: ("set_note_fill", 1),
+    0xE9: ("set_lfo", 2),
+    0xEA: ("set_rom_bank", 3),
+    0xEB: ("add_rom_bank", 3),
+    0xEC: ("adjust_psg_volume", 1),
+    0xED: ("write_fm_channel", 2),
+    0xEE: ("write_fm_port0", 2),
+    0xEF: ("set_voice", 1),
+    0xF0: ("set_pitch_envelope", 4),
+    0xF1: ("set_pitch_slide", 2),
+    0xF2: ("stop_track", 0),
+    0xF3: ("set_psg_noise", 1),
+    0xF4: ("pitch_slide_value", 1),
+    0xF5: ("set_psg_volume_envelope", 1),
+    0xF6: ("jump", 2),
+    0xF7: ("loop", 4),
+    0xF8: ("call", 2),
+    0xF9: ("return", 0),
+    0xFA: ("set_duration_multiplier", 1),
+    0xFB: ("add_transpose", 1),
+    0xFC: ("set_raw_frequency_mode", 1),
+    0xFD: ("set_pitch_mode", 1),
+    0xFE: ("set_fm3_special_mode", 4),
+    0xFF: ("fm_operator_command", 2),
 }
 
 VOICE_FIELDS = (
     "algorithm_feedback",
-    "detune_multiple_op1", "detune_multiple_op2", "detune_multiple_op3", "detune_multiple_op4",
-    "rate_scale_attack_op1", "rate_scale_attack_op2", "rate_scale_attack_op3", "rate_scale_attack_op4",
-    "am_decay1_op1", "am_decay1_op2", "am_decay1_op3", "am_decay1_op4",
-    "decay2_op1", "decay2_op2", "decay2_op3", "decay2_op4",
-    "decay_level_release_op1", "decay_level_release_op2", "decay_level_release_op3", "decay_level_release_op4",
-    "total_level_op1", "total_level_op2", "total_level_op3", "total_level_op4",
+    "detune_multiple_op1",
+    "detune_multiple_op2",
+    "detune_multiple_op3",
+    "detune_multiple_op4",
+    "rate_scale_attack_op1",
+    "rate_scale_attack_op2",
+    "rate_scale_attack_op3",
+    "rate_scale_attack_op4",
+    "am_decay1_op1",
+    "am_decay1_op2",
+    "am_decay1_op3",
+    "am_decay1_op4",
+    "decay2_op1",
+    "decay2_op2",
+    "decay2_op3",
+    "decay2_op4",
+    "decay_level_release_op1",
+    "decay_level_release_op2",
+    "decay_level_release_op3",
+    "decay_level_release_op4",
+    "total_level_op1",
+    "total_level_op2",
+    "total_level_op3",
+    "total_level_op4",
 )
 
 OPERATOR_FIELDS = (
-    "detune", "multiple", "rate_scale", "attack", "amplitude_modulation",
-    "decay_1", "decay_2", "sustain_level", "release", "total_level",
+    "detune",
+    "multiple",
+    "rate_scale",
+    "attack",
+    "amplitude_modulation",
+    "decay_1",
+    "decay_2",
+    "sustain_level",
+    "release",
+    "total_level",
 )
 
 
@@ -75,18 +113,20 @@ def decode_fm_voice(data: list[int]) -> dict[str, Any]:
         rate_scale_attack = data[5 + operator]
         am_decay = data[9 + operator]
         sustain_release = data[17 + operator]
-        operators.append({
-            "detune": (detune_multiple >> 4) & 7,
-            "multiple": detune_multiple & 15,
-            "rate_scale": (rate_scale_attack >> 6) & 3,
-            "attack": rate_scale_attack & 31,
-            "amplitude_modulation": (am_decay >> 7) & 1,
-            "decay_1": am_decay & 31,
-            "decay_2": data[13 + operator] & 31,
-            "sustain_level": sustain_release >> 4,
-            "release": sustain_release & 15,
-            "total_level": data[21 + operator] & 127,
-        })
+        operators.append(
+            {
+                "detune": (detune_multiple >> 4) & 7,
+                "multiple": detune_multiple & 15,
+                "rate_scale": (rate_scale_attack >> 6) & 3,
+                "attack": rate_scale_attack & 31,
+                "amplitude_modulation": (am_decay >> 7) & 1,
+                "decay_1": am_decay & 31,
+                "decay_2": data[13 + operator] & 31,
+                "sustain_level": sustain_release >> 4,
+                "release": sustain_release & 15,
+                "total_level": data[21 + operator] & 127,
+            }
+        )
     return {
         "algorithm": data[0] & 7,
         "feedback": (data[0] >> 3) & 7,
@@ -136,7 +176,7 @@ def _blocks(source: str) -> dict[str, tuple[int, int, str]]:
     result = {}
     for index, match in enumerate(labels):
         end = labels[index + 1].start() if index + 1 < len(labels) else len(source)
-        result[match.group("label")] = (match.start(), end, source[match.start():end])
+        result[match.group("label")] = (match.start(), end, source[match.start() : end])
     return result
 
 
@@ -167,14 +207,16 @@ def _parse_sfx_header(label: str, match: re.Match[str], lines: list[str]) -> dic
         track = SFX_TRACK_RE.fullmatch(line)
         if not track:
             continue
-        tracks.append({
-            "type": "sfx",
-            "flags": parse_number(track.group("flags")),
-            "channel": parse_number(track.group("channel")),
-            "sequence": track.group("sequence"),
-            "transpose": parse_number(track.group("transpose")),
-            "volume": parse_number(track.group("volume")),
-        })
+        tracks.append(
+            {
+                "type": "sfx",
+                "flags": parse_number(track.group("flags")),
+                "channel": parse_number(track.group("channel")),
+                "sequence": track.group("sequence"),
+                "transpose": parse_number(track.group("transpose")),
+                "volume": parse_number(track.group("volume")),
+            }
+        )
         if len(tracks) == count:
             break
     if len(tracks) != count:
@@ -206,11 +248,13 @@ def export_document(path: Path) -> dict[str, Any]:
         if data is None:
             raise ValueError(f"{identifier}: voice bank is not a numeric byte block")
         count = len(data) // 25
-        voice_banks.append({
-            "id": identifier,
-            "voices": [data[index * 25:(index + 1) * 25] for index in range(count)],
-            "tail": data[count * 25:],
-        })
+        voice_banks.append(
+            {
+                "id": identifier,
+                "voices": [data[index * 25 : (index + 1) * 25] for index in range(count)],
+                "tail": data[count * 25 :],
+            }
+        )
     priority_envelopes = _byte_block(blocks["zPriorityAndEnvelopeData"][2])
     if priority_envelopes is None:
         raise ValueError("priority/envelope area is not a numeric byte block")
@@ -268,7 +312,11 @@ def validate_document(document: dict[str, Any], baseline_path: Path) -> None:
             raise ValueError(f"{bank['id']}: every FM voice must contain 25 bytes")
         if any(not _valid_byte(value) for voice in voices for value in voice):
             raise ValueError(f"{bank['id']}: FM voice contains an invalid byte")
-        if not isinstance(tail, list) or len(tail) != len(expected["tail"]) or any(not _valid_byte(value) for value in tail):
+        if (
+            not isinstance(tail, list)
+            or len(tail) != len(expected["tail"])
+            or any(not _valid_byte(value) for value in tail)
+        ):
             raise ValueError(f"{bank['id']}: voice-bank tail differs")
     priority = document.get("priority_envelopes")
     if (
@@ -324,12 +372,14 @@ def describe_sequence(data: list[int]) -> list[dict[str, Any]]:
                 subcommand = data[offset + 1] & 7
                 count = 3 if subcommand == 7 else 2
         end = min(len(data), offset + 1 + count)
-        events.append({
-            "offset": offset,
-            "size": end - offset,
-            "name": name,
-            "bytes": data[offset:end],
-        })
+        events.append(
+            {
+                "offset": offset,
+                "size": end - offset,
+                "name": name,
+                "bytes": data[offset:end],
+            }
+        )
         offset = end
     return events
 
@@ -366,15 +416,17 @@ def piano_roll_notes(data: list[int]) -> list[dict[str, Any]]:
                 duration_source = offset
                 offset += 1
             duration = saved_duration or 1
-            result.append({
-                "offset": note_offset,
-                "duration_offset": duration_source,
-                "duration_is_shared": not explicit,
-                "start": tick,
-                "duration": duration,
-                "note": None if value == 0x80 else value - 0x81,
-                "rest": value == 0x80,
-            })
+            result.append(
+                {
+                    "offset": note_offset,
+                    "duration_offset": duration_source,
+                    "duration_is_shared": not explicit,
+                    "start": tick,
+                    "duration": duration,
+                    "note": None if value == 0x80 else value - 0x81,
+                    "rest": value == 0x80,
+                }
+            )
             tick += duration
             continue
         _name, count = COMMANDS[value]
@@ -387,7 +439,7 @@ def piano_roll_notes(data: list[int]) -> list[dict[str, Any]]:
 
 
 def _render_byte_block(identifier: str, data: list[int]) -> str:
-    chunks = [data[index:index + 16] for index in range(0, len(data), 16)] or [[]]
+    chunks = [data[index : index + 16] for index in range(0, len(data), 16)] or [[]]
     lines = []
     for index, chunk in enumerate(chunks):
         prefix = f"{identifier}:" if index == 0 else ""
@@ -407,8 +459,7 @@ def _rewrite_header(block: str, header: dict[str, Any]) -> str:
     for index, line in enumerate(lines):
         if SFX_HEADER_RE.fullmatch(line):
             lines[index] = (
-                f"                sfxheader {header['voices']},"
-                f"{format_number(header['scale'])},{len(header['tracks'])}"
+                f"                sfxheader {header['voices']},{format_number(header['scale'])},{len(header['tracks'])}"
             )
         elif MUSIC_HEADER_RE.fullmatch(line):
             fmcount = sum(track["type"] == "fm" for track in header["tracks"])
@@ -451,21 +502,25 @@ def _parse_music_header(label: str, match: re.Match[str], lines: list[str]) -> d
         fm = MUSIC_FM_RE.fullmatch(line)
         psg = MUSIC_PSG_RE.fullmatch(line)
         if fm:
-            tracks.append({
-                "type": "fm",
-                "sequence": fm.group("sequence"),
-                "transpose": parse_number(fm.group("transpose")),
-                "volume": parse_number(fm.group("volume")),
-            })
+            tracks.append(
+                {
+                    "type": "fm",
+                    "sequence": fm.group("sequence"),
+                    "transpose": parse_number(fm.group("transpose")),
+                    "volume": parse_number(fm.group("volume")),
+                }
+            )
         elif psg:
-            tracks.append({
-                "type": "psg",
-                "sequence": psg.group("sequence"),
-                "transpose": parse_number(psg.group("transpose")),
-                "volume": parse_number(psg.group("volume")),
-                "pitch_envelope": parse_number(psg.group("pitchenv")),
-                "volume_envelope": parse_number(psg.group("volumeenv")),
-            })
+            tracks.append(
+                {
+                    "type": "psg",
+                    "sequence": psg.group("sequence"),
+                    "transpose": parse_number(psg.group("transpose")),
+                    "volume": parse_number(psg.group("volume")),
+                    "pitch_envelope": parse_number(psg.group("pitchenv")),
+                    "volume_envelope": parse_number(psg.group("volumeenv")),
+                }
+            )
         if len(tracks) == fmcount + psgcount:
             break
     if len(tracks) != fmcount + psgcount:
@@ -526,11 +581,13 @@ def apply_document(document: dict[str, Any], baseline_path: Path, workspace_path
 
     if document["priority_envelopes"] != baseline["priority_envelopes"]:
         start, end, _block = blocks["zPriorityAndEnvelopeData"]
-        replacements.append((
-            start,
-            end,
-            _render_byte_block("zPriorityAndEnvelopeData", document["priority_envelopes"]),
-        ))
+        replacements.append(
+            (
+                start,
+                end,
+                _render_byte_block("zPriorityAndEnvelopeData", document["priority_envelopes"]),
+            )
+        )
 
     for start, end, replacement in sorted(replacements, reverse=True):
         source = source[:start] + replacement + source[end:]

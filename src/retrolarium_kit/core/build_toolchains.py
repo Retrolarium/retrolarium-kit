@@ -46,9 +46,7 @@ class ResolvedToolchain:
         try:
             return self.commands[name]
         except KeyError as exc:
-            raise BuildToolchainError(
-                f"toolchain suite {self.suite!r} has no command {name!r}"
-            ) from exc
+            raise BuildToolchainError(f"toolchain suite {self.suite!r} has no command {name!r}") from exc
 
     def process_environment(self, base: Mapping[str, str] | None = None) -> dict[str, str]:
         result = dict(os.environ if base is None else base)
@@ -79,8 +77,10 @@ def _mapping(value: object, name: str) -> dict[str, Any]:
 
 
 def _identifier(value: object, name: str) -> str:
-    if not isinstance(value, str) or not value or any(
-        character not in "abcdefghijklmnopqrstuvwxyz0123456789._-" for character in value
+    if (
+        not isinstance(value, str)
+        or not value
+        or any(character not in "abcdefghijklmnopqrstuvwxyz0123456789._-" for character in value)
     ):
         raise BuildToolchainError(f"{name} is not a stable lowercase identifier")
     return value
@@ -109,9 +109,7 @@ def _sha256_file(path: Path) -> str:
 
 def load_build_toolchain_manifest() -> dict[str, Any]:
     try:
-        document = json.loads(
-            _package_root().joinpath(MANIFEST_NAME).read_text(encoding="utf-8")
-        )
+        document = json.loads(_package_root().joinpath(MANIFEST_NAME).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise BuildToolchainError(f"cannot read bundled toolchain manifest: {exc}") from exc
     manifest = _mapping(document, "toolchain manifest")
@@ -132,9 +130,7 @@ def load_build_toolchain_manifest() -> dict[str, Any]:
             raise BuildToolchainError(f"suite {suite_id} has no components")
         for member in members:
             if member not in components:
-                raise BuildToolchainError(
-                    f"suite {suite_id} references unknown component {member!r}"
-                )
+                raise BuildToolchainError(f"suite {suite_id} references unknown component {member!r}")
     return manifest
 
 
@@ -200,9 +196,7 @@ def default_cache_root() -> Path:
     return Path.home() / ".cache" / "retrolarium" / "toolchains"
 
 
-def _host_component(
-    manifest: dict[str, Any], component_id: str, host: str
-) -> dict[str, Any] | None:
+def _host_component(manifest: dict[str, Any], component_id: str, host: str) -> dict[str, Any] | None:
     component = _mapping(manifest["components"].get(component_id), component_id)
     hosts = _mapping(component.get("hosts"), f"component {component_id} hosts")
     value = hosts.get(host)
@@ -248,9 +242,7 @@ def _suite_definition(
         else:
             selected.append((component_id, host_component))
     if missing:
-        raise BuildToolchainError(
-            f"suite {suite_id!r} is unavailable for {host}; missing: {', '.join(missing)}"
-        )
+        raise BuildToolchainError(f"suite {suite_id!r} is unavailable for {host}; missing: {', '.join(missing)}")
     return suite, selected
 
 
@@ -258,43 +250,29 @@ def _packaged_payload(record: dict[str, Any]) -> bytes:
     relative = _relative_path(record["package_path"], "package_path")
     payload = _package_root().joinpath(*relative.parts).read_bytes()
     if len(payload) != record["size"] or _sha256_bytes(payload) != record["sha256"]:
-        raise BuildToolchainError(
-            f"bundled payload fails identity check: {relative.as_posix()}"
-        )
+        raise BuildToolchainError(f"bundled payload fails identity check: {relative.as_posix()}")
     return payload
 
 
-def _verify_component_documents(
-    component: dict[str, Any], component_id: str, host: str
-) -> None:
+def _verify_component_documents(component: dict[str, Any], component_id: str, host: str) -> None:
     license_record = {
         "package_path": component.get("license_file"),
         "size": component.get("license_size"),
         "sha256": component.get("license_sha256"),
     }
     _file_records(
-        {
-            "files": [
-                {"install_path": license_record["package_path"], **license_record}
-            ]
-        },
+        {"files": [{"install_path": license_record["package_path"], **license_record}]},
         f"component {component_id} license",
     )
     _packaged_payload(license_record)
     sources = component.get("corresponding_sources")
     if sources is not None:
-        source_map = _mapping(
-            sources, f"component {component_id} corresponding sources"
-        )
+        source_map = _mapping(sources, f"component {component_id} corresponding sources")
         try:
             source = source_map[host]
         except KeyError as exc:
-            raise BuildToolchainError(
-                f"component {component_id} has no corresponding source for {host}"
-            ) from exc
-        source_record = _mapping(
-            source, f"component {component_id} corresponding source for {host}"
-        )
+            raise BuildToolchainError(f"component {component_id} has no corresponding source for {host}") from exc
+        source_record = _mapping(source, f"component {component_id} corresponding source for {host}")
         _file_records(
             {
                 "files": [
@@ -348,16 +326,10 @@ def packaged_toolchain_status(host: str | None = None) -> dict[str, object]:
 
 
 def _installed_file_is_valid(path: Path, record: dict[str, Any]) -> bool:
-    return (
-        path.is_file()
-        and path.stat().st_size == record["size"]
-        and _sha256_file(path) == record["sha256"]
-    )
+    return path.is_file() and path.stat().st_size == record["size"] and _sha256_file(path) == record["sha256"]
 
 
-def _installed_suite_is_valid(
-    root: Path, components: list[tuple[str, dict[str, Any]]]
-) -> bool:
+def _installed_suite_is_valid(root: Path, components: list[tuple[str, dict[str, Any]]]) -> bool:
     for component_id, component in components:
         for record in _file_records(component, component_id):
             relative = _relative_path(record["install_path"], "install_path")

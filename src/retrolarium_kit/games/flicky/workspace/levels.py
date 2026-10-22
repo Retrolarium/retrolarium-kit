@@ -70,7 +70,7 @@ def named_blocks(text: str, prefix: str, end_marker: str, width: int) -> list[li
         finish = matches[index + 1].start() if index + 1 < len(matches) else text.find(end_marker, match.end())
         if finish < 0:
             raise ValueError(f"end marker not found after {prefix}{number}: {end_marker}")
-        blocks[number] = directive_values(text[match.start():finish], width)
+        blocks[number] = directive_values(text[match.start() : finish], width)
     if set(blocks) != set(range(LEVEL_COUNT)):
         raise ValueError(f"{prefix} blocks differ from 0..{LEVEL_COUNT - 1}")
     return [blocks[index] for index in range(LEVEL_COUNT)]
@@ -87,10 +87,7 @@ def pointer_indices(text: str, table: str, next_label: str, prefix: str) -> list
 
 
 def decode_collision(stream: list[int]) -> list[list[int]]:
-    if not isinstance(stream, list) or any(
-        type(command) is not int or not 0 <= command <= 0xFF
-        for command in stream
-    ):
+    if not isinstance(stream, list) or any(type(command) is not int or not 0 <= command <= 0xFF for command in stream):
         raise ValueError("collision stream must contain byte integers")
     grid = [0] * MAP_SIZE
     cursor = MAP_STREAM_START
@@ -98,7 +95,7 @@ def decode_collision(stream: list[int]) -> list[list[int]]:
         if command == 0:
             if index != len(stream) - 1:
                 raise ValueError("collision stream contains data after its terminator")
-            return [grid[row * MAP_WIDTH:(row + 1) * MAP_WIDTH] for row in range(MAP_HEIGHT)]
+            return [grid[row * MAP_WIDTH : (row + 1) * MAP_WIDTH] for row in range(MAP_HEIGHT)]
         if command & 0x80:
             length = command & 0x3F
             if not length:
@@ -151,7 +148,7 @@ def encode_collision(grid_rows: list[list[int]]) -> list[int]:
 def take_pair(data: list[int], cursor: int, field: str) -> tuple[list[int], int]:
     if cursor + 2 > len(data):
         raise ValueError(f"level data ends inside {field}")
-    pair = data[cursor:cursor + 2]
+    pair = data[cursor : cursor + 2]
     if any(not 0 <= value < MAP_WIDTH for value in pair):
         raise ValueError(f"{field} coordinate is outside 0..31")
     return pair, cursor + 2
@@ -174,7 +171,7 @@ def decode_level(data: list[int]) -> dict[str, Any]:
         terminator = data.index(0)
     except ValueError as error:
         raise ValueError("level collision stream has no terminator") from error
-    collision_stream = data[:terminator + 1]
+    collision_stream = data[: terminator + 1]
     cursor = terminator + 1
     fields: dict[str, Any] = {}
     for field in ("player", "entry_arrow", "cat_door", "exit_door"):
@@ -263,9 +260,17 @@ def encode_level(level: dict[str, Any]) -> list[int]:
     if baseline_bytes:
         decoded = decode_level(baseline_bytes)
         compared_fields = (
-            "collision", "player", "entry_arrow", "cat_door", "exit_door",
-            "background_group_3", "background_group_4", "background_group_5",
-            "spawners", "chicks_a", "chicks_b",
+            "collision",
+            "player",
+            "entry_arrow",
+            "cat_door",
+            "exit_door",
+            "background_group_3",
+            "background_group_4",
+            "background_group_5",
+            "spawners",
+            "chicks_a",
+            "chicks_b",
         )
         if all(decoded[field] == level[field] for field in compared_fields):
             return baseline_bytes
@@ -301,22 +306,21 @@ def export_document(root: Path) -> dict[str, Any]:
     special_text = (root / "src/data/level_layout.s").read_text(encoding="utf-8")
     level_blocks = named_blocks(tables_text, "Level_Data", "Unused_Block2:", 1)
     special_words = named_blocks(special_text, "Level_SpecialTiles", "Tiger_JumpArcTable:", 2)
-    special_blocks = [
-        [byte for word in words for byte in (word >> 8, word & 0xFF)]
-        for words in special_words
-    ]
+    special_blocks = [[byte for word in words for byte in (word >> 8, word & 0xFF)] for words in special_words]
     layouts = []
     for identifier, (level_bytes, special_bytes) in enumerate(zip(level_blocks, special_blocks)):
         level = decode_level(level_bytes)
         special = decode_special(special_bytes)
-        layouts.append({
-            "id": identifier,
-            **level,
-            "flag_7": special["flag_7"],
-            "flag_7_6": special["flag_7_6"],
-            "flag_5": special["flag_5"],
-            "baseline_special_bytes": special_bytes,
-        })
+        layouts.append(
+            {
+                "id": identifier,
+                **level,
+                "flag_7": special["flag_7"],
+                "flag_7_6": special["flag_7_6"],
+                "flag_5": special["flag_5"],
+                "baseline_special_bytes": special_bytes,
+            }
+        )
     # The original leaves $465F bytes of $FF between the last level and the
     # fixed ROM-end marker. Edited layouts may consume that declared slack;
     # p2bin fills whatever remains with the canonical $FF byte.
@@ -328,9 +332,7 @@ def export_document(root: Path) -> dict[str, Any]:
         "special_tiles_bytes": special_capacity,
     }
     if source_capacities != capacities:
-        raise ValueError(
-            "source-derived level capacities differ from the authoring manifest"
-        )
+        raise ValueError("source-derived level capacities differ from the authoring manifest")
     return {
         "schema_version": 1,
         "profile": "canonical",
@@ -379,8 +381,7 @@ def validate_document(
         raise ValueError(f"level data uses {level_used} bytes, capacity is {capacities.get('level_data_bytes')}")
     if special_used > capacities.get("special_tiles_bytes", 0):
         raise ValueError(
-            f"special-tile data uses {special_used} bytes, capacity is "
-            f"{capacities.get('special_tiles_bytes')}"
+            f"special-tile data uses {special_used} bytes, capacity is {capacities.get('special_tiles_bytes')}"
         )
     return levels, specials
 
@@ -392,7 +393,7 @@ def hex_byte(value: int) -> str:
 def render_values(label: str, directive: str, values: list[int], per_line: int) -> list[str]:
     lines = []
     for offset in range(0, len(values), per_line):
-        chunk = values[offset:offset + per_line]
+        chunk = values[offset : offset + per_line]
         prefix = f"{label}:".ljust(16) if offset == 0 else " " * 16
         if directive == "dc.b":
             operands = ", ".join(hex_byte(value) for value in chunk)
@@ -404,10 +405,7 @@ def render_values(label: str, directive: str, values: list[int], per_line: int) 
 
 
 def render_level_section(document: dict[str, Any], levels: list[list[int]]) -> str:
-    lines = [
-        "Level_DataPointers:".ljust(24)
-        + f"dc.w    Level_Data{document['round_layouts'][0]}-Sys_GameEntryPoint"
-    ]
+    lines = ["Level_DataPointers:".ljust(24) + f"dc.w    Level_Data{document['round_layouts'][0]}-Sys_GameEntryPoint"]
     for index in document["round_layouts"][1:]:
         lines.append(" " * 16 + f"dc.w    Level_Data{index}-Sys_GameEntryPoint")
     for index, values in enumerate(levels):

@@ -125,21 +125,15 @@ class ProjectOperationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             rom = root / "edited.nes"
-            rom.write_bytes(
-                b"NES\x1a" + bytes((1, 0, 0, 0)) + bytes(8) + bytes(0x4000)
-            )
+            rom.write_bytes(b"NES\x1a" + bytes((1, 0, 0, 0)) + bytes(8) + bytes(0x4000))
             mame = root / "consoles.exe"
             mame.write_bytes(b"mame")
-            plan = launch_image_plan(
-                rom, platform="nes", mame=mame, machine="famicom"
-            )
+            plan = launch_image_plan(rom, platform="nes", mame=mame, machine="famicom")
             self.assertEqual("retrolarium.game.launch", plan["operation"])
             self.assertEqual("famicom", plan["arguments"][0])
             self.assertEqual(str(rom), plan["arguments"][2])
             with self.assertRaises(ProjectError):
-                launch_image_plan(
-                    rom, platform="nes", mame=mame, machine="genesis"
-                )
+                launch_image_plan(rom, platform="nes", mame=mame, machine="genesis")
 
     def test_disk_launch_plan_falls_back_to_open_disk_sys(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -211,8 +205,7 @@ class ProjectOperationTests(unittest.TestCase):
             self.assertEqual("0f9090225eb1f08ae5072d40af3e95547cbce05f", hashlib.sha1(palette).hexdigest())
 
             with patch.dict(os.environ, {"RETROLARIUM_MAME_ROMS": str(cache)}):
-                headless = launch_image_plan(rom, platform="nes", mame=mame, machine="suprmrio",
-                                             interactive=False)
+                headless = launch_image_plan(rom, platform="nes", mame=mame, machine="suprmrio", interactive=False)
             self.assertNotIn("-seconds_to_run", headless["arguments"])
             # A Vs. image needs its arcade machine; a console image cannot use one.
             with self.assertRaisesRegex(ProjectError, "Vs. System"):
@@ -265,15 +258,11 @@ class ProjectOperationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             rom = root / "edited.nes"
-            rom.write_bytes(
-                b"NES\x1a" + bytes((1, 0, 0, 0)) + bytes(8) + bytes(0x4000)
-            )
+            rom.write_bytes(b"NES\x1a" + bytes((1, 0, 0, 0)) + bytes(8) + bytes(0x4000))
             mame = root / "consoles.exe"
             mame.write_bytes(b"mame")
             completed = subprocess.CompletedProcess([], 0, "out", "err")
-            with patch(
-                "retrolarium_kit.core.project.subprocess.run", return_value=completed
-            ) as run:
+            with patch("retrolarium_kit.core.project.subprocess.run", return_value=completed) as run:
                 result = launch_image_smoke(
                     rom,
                     platform="nes",
@@ -284,9 +273,7 @@ class ProjectOperationTests(unittest.TestCase):
                 )
             self.assertEqual("completed", result["status"])
             self.assertIn("-seconds_to_run", run.call_args.args[0])
-            self.assertTrue(
-                (Path(result["run_directory"]) / "run-result.json").is_file()
-            )
+            self.assertTrue((Path(result["run_directory"]) / "run-result.json").is_file())
 
     def test_launch_plan_is_explicit_argv_and_restricts_machine(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -295,9 +282,7 @@ class ProjectOperationTests(unittest.TestCase):
             mame = root / "consoles.exe"
             mame.write_bytes(b"mame")
 
-            plan = launch_plan(
-                manifest, mame=mame, machine="nespal", attach_window="0x1234"
-            )
+            plan = launch_plan(manifest, mame=mame, machine="nespal", attach_window="0x1234")
             self.assertEqual("retrolarium.process-spec", plan["schema"])
             self.assertEqual("nespal", plan["arguments"][0])
             self.assertIn("-attach_window", plan["arguments"])
@@ -312,9 +297,7 @@ class ProjectOperationTests(unittest.TestCase):
             mame = root / "consoles.exe"
             mame.write_bytes(b"mame")
             completed = subprocess.CompletedProcess([], 0, "out", "err")
-            with patch(
-                "retrolarium_kit.core.project.subprocess.run", return_value=completed
-            ) as run:
+            with patch("retrolarium_kit.core.project.subprocess.run", return_value=completed) as run:
                 result = launch_project_smoke(
                     manifest,
                     mame=mame,
@@ -333,12 +316,8 @@ class ProjectOperationTests(unittest.TestCase):
             manifest = write_project(root)
             mame = root / "consoles.exe"
             mame.write_bytes(b"mame")
-            timeout = subprocess.TimeoutExpired(
-                [str(mame)], 1, output=b"partial output", stderr=b"partial error"
-            )
-            with patch(
-                "retrolarium_kit.core.project.subprocess.run", side_effect=timeout
-            ):
+            timeout = subprocess.TimeoutExpired([str(mame)], 1, output=b"partial output", stderr=b"partial error")
+            with patch("retrolarium_kit.core.project.subprocess.run", side_effect=timeout):
                 result = launch_project_smoke(
                     manifest,
                     mame=mame,
@@ -349,12 +328,8 @@ class ProjectOperationTests(unittest.TestCase):
 
             self.assertEqual("timeout", result["status"])
             run_directory = next((root / "runs").iterdir())
-            self.assertEqual(
-                "partial output", (run_directory / "stdout.log").read_text()
-            )
-            self.assertEqual(
-                "partial error", (run_directory / "stderr.log").read_text()
-            )
+            self.assertEqual("partial output", (run_directory / "stdout.log").read_text())
+            self.assertEqual("partial error", (run_directory / "stderr.log").read_text())
 
     def test_smoke_launch_classifies_missing_mame_device_rom(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -369,9 +344,7 @@ class ProjectOperationTests(unittest.TestCase):
                 "spc700.rom NOT FOUND (tried in s_smp snes)\n"
                 "Fatal error: Required files are missing, the machine cannot be run.\n",
             )
-            with patch(
-                "retrolarium_kit.core.project.subprocess.run", return_value=completed
-            ):
+            with patch("retrolarium_kit.core.project.subprocess.run", return_value=completed):
                 result = launch_project_smoke(
                     manifest,
                     mame=mame,
@@ -384,9 +357,7 @@ class ProjectOperationTests(unittest.TestCase):
             self.assertEqual(
                 {
                     "kind": "mame-required-roms",
-                    "message": (
-                        "MAME cannot start because required device ROMs are missing"
-                    ),
+                    "message": ("MAME cannot start because required device ROMs are missing"),
                     "files": ["spc700.rom"],
                 },
                 result["failure"],

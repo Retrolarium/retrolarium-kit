@@ -100,7 +100,7 @@ class NormalizeLine(unittest.TestCase):
         self.assertEqual(normalize_line(source, 0, 16), source)
 
     def test_tabs_become_spaces(self):
-        self.assertNotIn("\t", normalize_line("Art:\tbinclude\t\"a.bin\"", 0))
+        self.assertNotIn("\t", normalize_line('Art:\tbinclude\t"a.bin"', 0))
 
 
 class Comments(unittest.TestCase):
@@ -143,7 +143,7 @@ class LabelColumns(unittest.TestCase):
     def test_a_bare_label_does_not_break_a_run(self):
         # art.s alternates `Name: binclude ...` with `Name_End:`; treating the
         # end markers as separators would leave every include on its own.
-        lines = ["A: binclude \"a\"", "A_End:", "LongerName: binclude \"b\"", "LongerName_End:"]
+        lines = ['A: binclude "a"', "A_End:", 'LongerName: binclude "b"', "LongerName_End:"]
         columns = label_columns(lines, 16)
         self.assertEqual(columns[0], columns[2])
 
@@ -171,12 +171,7 @@ class NormalizeFile(unittest.TestCase):
     def test_the_line_count_never_changes(self):
         # Formatting is whitespace and comment text only. Adding or dropping a
         # line would mean it is rewriting the program.
-        source = (
-            "; header.\n"
-            "Label:  dc.w 1  ; was: word_1\n"
-            "Label_End:\n"
-            "        rts   ; done.\n"
-        )
+        source = "; header.\nLabel:  dc.w 1  ; was: word_1\nLabel_End:\n        rts   ; done.\n"
         self.assertEqual(
             len(normalize_file(source).splitlines()),
             len(source.splitlines()),

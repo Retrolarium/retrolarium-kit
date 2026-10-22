@@ -63,7 +63,7 @@ class DoraemonTableTests(unittest.TestCase):
         damage = 16 + 0x8000 + (0xA511 - 0x8000)
         self.assertEqual(0x10, built[damage + 3])
         route = 16 + (0xE316 - 0x8000)
-        self.assertEqual(self.source[route + 1:route + 3][::-1], built[route + 1:route + 3])
+        self.assertEqual(self.source[route + 1 : route + 3][::-1], built[route + 1 : route + 3])
         self.assertEqual(sum(a != b for a, b in zip(self.source, built)), 3)
         # Two requests cannot play one effect, and request 0 stays the reset.
         routing[3]["effect"] = routing[4]["effect"]
@@ -74,9 +74,12 @@ class DoraemonTableTests(unittest.TestCase):
         resource = self.resources["world3-behavior"]
         streams = resource["streams"]
         self.assertEqual(532, sum(len(stream["instructions"]) for stream in streams))
-        self.assertEqual(42, sum(item["command"] == "conditional_branch"
-                                 for stream in streams for item in stream["instructions"]))
-        sizes = next(item for item in self.profile.resources if item.resource_id == "world3-behavior").parameters["stream_sizes"]
+        self.assertEqual(
+            42, sum(item["command"] == "conditional_branch" for stream in streams for item in stream["instructions"])
+        )
+        sizes = next(item for item in self.profile.resources if item.resource_id == "world3-behavior").parameters[
+            "stream_sizes"
+        ]
         payload = encode_behavior(streams, sizes)
         self.assertEqual(streams, decode_behavior(payload, sizes))
         # A rate's parameter nibble is free.

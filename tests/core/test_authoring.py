@@ -60,12 +60,8 @@ class AuthoringContractTests(unittest.TestCase):
         source = b"1234"
         digest = hashlib.sha256(source).hexdigest()
         provenance = Provenance(digest, "rooms", "encode")
-        first = Change(
-            AddressRange(Address("file", 1), 2), b"23", b"AB", provenance
-        )
-        second = Change(
-            AddressRange(Address("file", 2), 1), b"3", b"C", provenance
-        )
+        first = Change(AddressRange(Address("file", 1), 2), b"23", b"AB", provenance)
+        second = Change(AddressRange(Address("file", 2), 1), b"3", b"C", provenance)
         with self.assertRaisesRegex(AuthoringError, "conflicting"):
             BuildPlan(digest, ChangeSet((first, second))).apply(source)
 

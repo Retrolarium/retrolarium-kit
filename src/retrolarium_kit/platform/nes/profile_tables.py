@@ -77,8 +77,8 @@ class DebugInfo:
                 self.files[int(item["id"])] = root / Path(item["name"].replace("\\", "/"))
             elif kind == "seg":
                 self.segments[int(item["id"])] = Segment(
-                    int(item["start"], 16), int(item["size"], 16),
-                    int(item["ooffs"]) if "ooffs" in item else None)
+                    int(item["start"], 16), int(item["size"], 16), int(item["ooffs"]) if "ooffs" in item else None
+                )
             elif kind == "span":
                 self.spans[int(item["id"])] = (int(item["seg"]), int(item["start"]), int(item["size"]))
             elif kind == "line":
@@ -172,7 +172,7 @@ def match(settings: dict, resolved: dict, game_root: Path) -> dict[str, dict[str
     for name, place in resolved[settings["revision"]].items():
         if place["size"] < 4:
             raise ProfileTablesError(f"{name}: a constant this short cannot be found by its bytes")
-        needle = reference[place["file_offset"]:place["file_offset"] + place["size"]]
+        needle = reference[place["file_offset"] : place["file_offset"] + place["size"]]
         found = image.find(needle)
         if found < 0 or image.find(needle, found + 1) >= 0:
             raise ProfileTablesError(f"{name} is not in {settings['image']} exactly once")
@@ -201,8 +201,11 @@ def resolve_all(game_root: Path, spec: dict, revisions: set[str] | None = None) 
         if "match" not in settings or (revisions is not None and revision not in revisions):
             continue
         found = settings["match"]
-        if found["revision"] in output and (game_root / found["image"]).is_file() \
-                and (game_root / found["reference_image"]).is_file():
+        if (
+            found["revision"] in output
+            and (game_root / found["image"]).is_file()
+            and (game_root / found["reference_image"]).is_file()
+        ):
             output[revision] = match(found, output, game_root)
     return output
 
@@ -222,11 +225,13 @@ def _profile_tables(profile: dict, revision_id: str, names: set[str]) -> dict:
     if revision is None:
         raise ProfileTablesError(f"{revision_id} is not a revision of the profile")
     own = revision.get("resources")
-    resources = [r for r in (own if own is not None else profile.get("resources", []))
-                 if r.get("codec") == CODEC and names <= set(r.get("parameters", {}).get("tables", {}))]
+    resources = [
+        r
+        for r in (own if own is not None else profile.get("resources", []))
+        if r.get("codec") == CODEC and names <= set(r.get("parameters", {}).get("tables", {}))
+    ]
     if len(resources) != 1:
-        raise ProfileTablesError(
-            f"{revision_id}: the profile has {len(resources)} {CODEC} resources with these tables")
+        raise ProfileTablesError(f"{revision_id}: the profile has {len(resources)} {CODEC} resources with these tables")
     resource = resources[0]
     tables = resource["parameters"]["tables"]
     if own is None:

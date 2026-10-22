@@ -8,7 +8,12 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from retrolarium_kit.core.authoring import GameProfile, ResourceSpec, RevisionSpec
-from retrolarium_kit.games.castle_excellent.demo import CastleExcellentDemoError, build_demo, decode_demo, parse_demo_document
+from retrolarium_kit.games.castle_excellent.demo import (
+    CastleExcellentDemoError,
+    build_demo,
+    decode_demo,
+    parse_demo_document,
+)
 
 
 def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
@@ -16,7 +21,7 @@ def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
     prg = bytearray(0x8000)
 
     def put(address: int, payload: bytes) -> None:
-        prg[address - 0x8000:address - 0x8000 + len(payload)] = payload
+        prg[address - 0x8000 : address - 0x8000 + len(payload)] = payload
 
     put(init, bytes((0xA9, script & 0xFF, 0x85, 0xFD, 0xA9, script >> 8, 0x85, 0xFE)))
     put(reader, bytes((0xE6, 0xFF, 0xA5, 0xFF, 0xC9, 0x0C)))
@@ -24,14 +29,35 @@ def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
     header = b"NES\x1a" + bytes((2, 1, 0x31, 0)) + bytes(8)
     source = header + bytes(prg) + bytes(0x2000)
     revision = RevisionSpec(
-        "probe", "Castle Excellent probe", len(source), hashlib.sha1(source).hexdigest(),
-        hashlib.sha256(source).hexdigest(), "ines", 3,
+        "probe",
+        "Castle Excellent probe",
+        len(source),
+        hashlib.sha1(source).hexdigest(),
+        hashlib.sha256(source).hexdigest(),
+        "ines",
+        3,
     )
     profile = GameProfile(
-        "castle-excellent", 1, "Castle Excellent probe", "nes", ("demo",), (revision,),
-        (ResourceSpec("title-demo", "demo", "castle-excellent.title-demo.v1", "fixed", {
-            "script_cpu": script, "init_cpu": init, "reader_cpu": reader, "capacity": 8,
-        }),),
+        "castle-excellent",
+        1,
+        "Castle Excellent probe",
+        "nes",
+        ("demo",),
+        (revision,),
+        (
+            ResourceSpec(
+                "title-demo",
+                "demo",
+                "castle-excellent.title-demo.v1",
+                "fixed",
+                {
+                    "script_cpu": script,
+                    "init_cpu": init,
+                    "reader_cpu": reader,
+                    "capacity": 8,
+                },
+            ),
+        ),
     )
     return source, profile, revision
 
@@ -40,21 +66,24 @@ class CastleExcellentDemoTests(unittest.TestCase):
     def test_round_trip_and_edit(self) -> None:
         source, profile, revision = fixture()
         document = decode_demo(source, profile, revision)
-        self.assertEqual([(2, ["RIGHT"]), (1, ["A"]), (2, ["A", "LEFT"])],
-                         [(s["commands"], s["buttons"]) for s in document.steps])
+        self.assertEqual(
+            [(2, ["RIGHT"]), (1, ["A"]), (2, ["A", "LEFT"])], [(s["commands"], s["buttons"]) for s in document.steps]
+        )
         self.assertEqual(source, build_demo(source, document, profile, revision)[0])
         value = document.as_dict()
-        value["steps"] = [{"index": 0, "commands": 3, "buttons": ["B", "DOWN"]},
-                          {"index": 1, "commands": 5, "buttons": []}]
+        value["steps"] = [
+            {"index": 0, "commands": 3, "buttons": ["B", "DOWN"]},
+            {"index": 1, "commands": 5, "buttons": []},
+        ]
         output, report = build_demo(source, parse_demo_document(value, profile, revision), profile, revision)
         self.assertEqual(value, decode_demo(output, profile, revision, _verify_identity=False).as_dict())
         self.assertEqual(8, report["commands"])
         # Equal neighbours are allowed and decode as one step.
-        value["steps"] = [{"index": 0, "commands": 1, "buttons": []},
-                          {"index": 1, "commands": 1, "buttons": []}]
+        value["steps"] = [{"index": 0, "commands": 1, "buttons": []}, {"index": 1, "commands": 1, "buttons": []}]
         output, _ = build_demo(source, parse_demo_document(value, profile, revision), profile, revision)
-        self.assertEqual([2], [s["commands"] for s in decode_demo(
-            output, profile, revision, _verify_identity=False).steps])
+        self.assertEqual(
+            [2], [s["commands"] for s in decode_demo(output, profile, revision, _verify_identity=False).steps]
+        )
 
     def test_limits(self) -> None:
         source, profile, revision = fixture()

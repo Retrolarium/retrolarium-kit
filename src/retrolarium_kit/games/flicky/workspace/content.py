@@ -28,10 +28,20 @@ ARTIFACTS: tuple[Mapping[str, Any], ...] = (
     {"id": "graphics_assets", "kind": "graphics_document", "workspace": "graphics/graphics.json"},
     {"id": "graphics_semantics", "kind": "graphics_semantics_document", "workspace": "graphics/semantics.json"},
     {"id": "graphics_sequences", "kind": "graphics_sequences_document", "workspace": "graphics/sequences.json"},
-    {"id": "level_layouts", "kind": "level_document", "workspace": "level/levels.json",
-     "capacities": {"level_data_bytes": 21101, "special_tiles_bytes": 1676}},
-    {"id": "z80_sound_banks", "kind": "assembly_source", "baseline": "src/sound/z80/data.asm",
-     "workspace": "sound/z80_sound_data.asm", "output": "build/content/z80_sound_data.bin", "capacity": 2804},
+    {
+        "id": "level_layouts",
+        "kind": "level_document",
+        "workspace": "level/levels.json",
+        "capacities": {"level_data_bytes": 21101, "special_tiles_bytes": 1676},
+    },
+    {
+        "id": "z80_sound_banks",
+        "kind": "assembly_source",
+        "baseline": "src/sound/z80/data.asm",
+        "workspace": "sound/z80_sound_data.asm",
+        "output": "build/content/z80_sound_data.bin",
+        "capacity": 2804,
+    },
 )
 
 
@@ -61,8 +71,12 @@ def initialize(root: Path, force: bool = False) -> int:
                 raise FlickyWorkspaceError(f"baseline artifact not found: {baseline}")
             atomic_copy(baseline, workspace)
         else:
-            model = {"level_document": levels, "graphics_document": graphics,
-                     "graphics_semantics_document": semantics, "graphics_sequences_document": sequences}[item["kind"]]
+            model = {
+                "level_document": levels,
+                "graphics_document": graphics,
+                "graphics_semantics_document": semantics,
+                "graphics_sequences_document": sequences,
+            }[item["kind"]]
             model.atomic_write_json(workspace, model.export_document(root))
         created += 1
     return created
@@ -91,8 +105,12 @@ def validate_workspace(root: Path, zero_edit: bool = False, overrides: Mapping[s
                 raise FlickyWorkspaceError(f"zero-edit check found a modified artifact: {workspace}")
             sound.validate_document(sound.export_document(workspace), baseline)
             continue
-        model = {"level_document": levels, "graphics_document": graphics,
-                 "graphics_semantics_document": semantics, "graphics_sequences_document": sequences}[item["kind"]]
+        model = {
+            "level_document": levels,
+            "graphics_document": graphics,
+            "graphics_semantics_document": semantics,
+            "graphics_sequences_document": sequences,
+        }[item["kind"]]
         model.validate_document(model.load_document(workspace), root)
 
 
@@ -103,15 +121,21 @@ def stage_sources(root: Path, destination: Path, driver_binary: Path, sound_bina
         shutil.rmtree(destination)
     shutil.copytree(root / "src", destination)
     replacements = {
-        destination / "data" / "bank0.s": [(
-            'binclude "build/z80_driver.bin"',
-            f'binclude "{driver_binary.as_posix()}"',
-        )],
+        destination / "data" / "bank0.s": [
+            (
+                'binclude "build/z80_driver.bin"',
+                f'binclude "{driver_binary.as_posix()}"',
+            )
+        ],
         destination / "sound" / "z80" / "load_data.s": [
-            ('binclude "build/z80_sound_data_sfx.bin"',
-             f'binclude "{sound_binary.with_name(sound_binary.stem + "_sfx.bin").as_posix()}"'),
-            ('binclude "build/z80_sound_data_music.bin"',
-             f'binclude "{sound_binary.with_name(sound_binary.stem + "_music.bin").as_posix()}"'),
+            (
+                'binclude "build/z80_sound_data_sfx.bin"',
+                f'binclude "{sound_binary.with_name(sound_binary.stem + "_sfx.bin").as_posix()}"',
+            ),
+            (
+                'binclude "build/z80_sound_data_music.bin"',
+                f'binclude "{sound_binary.with_name(sound_binary.stem + "_music.bin").as_posix()}"',
+            ),
         ],
     }
     for path, pairs in replacements.items():

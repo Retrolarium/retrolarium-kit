@@ -68,17 +68,14 @@ def stream(slot: int) -> dict[str, object]:
 def document(capacity: int = 256) -> dict[str, object]:
     return {
         "capacity": capacity,
-        "slots": [
-            {"slot": slot, "label": f"Sound {slot:02X}", "stream": stream(slot)}
-            for slot in range(16)
-        ],
+        "slots": [{"slot": slot, "label": f"Sound {slot:02X}", "stream": stream(slot)} for slot in range(16)],
     }
 
 
 def image_for_document(value: dict[str, object], config: dict[str, object]) -> bytes:
     result = bytearray(48 + int(config["capacity"]))
     for offset, payload in encode_sound_bundle(value, config):
-        result[offset:offset + len(payload)] = payload
+        result[offset : offset + len(payload)] = payload
     return bytes(result)
 
 
@@ -86,7 +83,10 @@ def midi_file(events: bytes, division: int = 96) -> bytes:
     track = events + b"\x00\xff\x2f\x00"
     return (
         b"MThd\x00\x00\x00\x06\x00\x00\x00\x01"
-        + division.to_bytes(2, "big") + b"MTrk" + len(track).to_bytes(4, "big") + track
+        + division.to_bytes(2, "big")
+        + b"MTrk"
+        + len(track).to_bytes(4, "big")
+        + track
     )
 
 
@@ -100,18 +100,15 @@ class PacmanSoundTests(unittest.TestCase):
         self.assertEqual(image_for_document(decoded, config), image)
 
         edited = copy.deepcopy(decoded)
-        edited["slots"][2]["stream"]["commands"].insert(
-            1, {"kind": "note", "value": 0x10, "duration": 4}
-        )
+        edited["slots"][2]["stream"]["commands"].insert(1, {"kind": "note", "value": 0x10, "duration": 4})
         spans = encode_sound_bundle(edited, config)
-        pointers = [int.from_bytes(spans[0][1][index:index + 2], "little")
-                    for index in range(0, 32, 2)]
+        pointers = [int.from_bytes(spans[0][1][index : index + 2], "little") for index in range(0, 32, 2)]
         self.assertEqual(pointers[2], 0xF000)
         self.assertEqual(pointers[6], 0xF009)
         self.assertTrue(spans[1][1].endswith(b"\xff"))
         rebuilt = bytearray(image)
         for offset, payload in spans:
-            rebuilt[offset:offset + len(payload)] = payload
+            rebuilt[offset : offset + len(payload)] = payload
         self.assertEqual(decode_sound_bundle(bytes(rebuilt), config), edited)
 
     def test_rejects_capacity_metadata_and_non_ff_padding_errors(self) -> None:
@@ -130,16 +127,12 @@ class PacmanSoundTests(unittest.TestCase):
     def test_note_mapping_midi_import_and_capacity_summary(self) -> None:
         for note in (45, 57, 69, 80, 127):
             self.assertEqual(sound_byte_to_midi(midi_to_sound_byte(note)), note)
-        events = (
-            b"\x00\x90\x2d\x64\x60\x80\x2d\x00"
-            b"\x00\x90\x2e\x40\x60\x80\x2e\x00"
-        )
+        events = b"\x00\x90\x2d\x64\x60\x80\x2d\x00\x00\x90\x2e\x40\x60\x80\x2e\x00"
         commands, report = import_midi_commands(midi_file(events), 0, 0)
         self.assertEqual([item["duration"] for item in commands[:-1]], [30, 30])
         self.assertEqual(report["source_notes"], 2)
         self.assertEqual(report["output_frames"], 60)
-        self.assertEqual(report["quantization"]["method"],
-                         "nearest NTSC frame; minimum one frame")
+        self.assertEqual(report["quantization"]["method"], "nearest NTSC frame; minimum one frame")
         self.assertEqual(report["discarded"][0]["feature"], "velocity")
         self.assertEqual(report["discarded"][0]["events"], 2)
         summary = sound_summary(document(), parameters())
@@ -174,22 +167,26 @@ class PacmanSoundTests(unittest.TestCase):
     def test_nes_resource_bundle_rebuilds_pointer_table_and_arena(self) -> None:
         config = parameters()
         raw_image = image_for_document(document(), config)
-        source = (
-            b"NES\x1a" + bytes((1, 0, 0, 0)) + bytes(8) + raw_image[16:]
-        ).ljust(0x4010, b"\0")
+        source = (b"NES\x1a" + bytes((1, 0, 0, 0)) + bytes(8) + raw_image[16:]).ljust(0x4010, b"\0")
         revision = RevisionSpec(
-            "probe", "Sound probe", len(source), hashlib.sha1(source).hexdigest(),
-            hashlib.sha256(source).hexdigest(), "ines", 0,
+            "probe",
+            "Sound probe",
+            len(source),
+            hashlib.sha1(source).hexdigest(),
+            hashlib.sha256(source).hexdigest(),
+            "ines",
+            0,
         )
         profile = GameProfile(
-            "sound-probe", 1, "Sound probe", "nes", ("audio",), (revision,),
+            "sound-probe",
+            1,
+            "Sound probe",
+            "nes",
+            ("audio",),
+            (revision,),
             (
-                ResourceSpec(
-                    "bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"
-                ),
-                ResourceSpec(
-                    "sounds", "audio", "pacman.sound-streams.v1", "fixed", config
-                ),
+                ResourceSpec("bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"),
+                ResourceSpec("sounds", "audio", "pacman.sound-streams.v1", "fixed", config),
             ),
         )
         decoded = decode_resources(source, profile, revision)
@@ -207,8 +204,13 @@ class PacmanSoundTests(unittest.TestCase):
                 rebuilt,
                 profile,
                 RevisionSpec(
-                    "probe", "Sound probe", len(rebuilt), hashlib.sha1(rebuilt).hexdigest(),
-                    hashlib.sha256(rebuilt).hexdigest(), "ines", 0,
+                    "probe",
+                    "Sound probe",
+                    len(rebuilt),
+                    hashlib.sha1(rebuilt).hexdigest(),
+                    hashlib.sha256(rebuilt).hexdigest(),
+                    "ines",
+                    0,
                 ),
             ).resources[0]["slots"][2]["stream"]["commands"][1]["value"],
             0x10,
@@ -223,10 +225,7 @@ class PacmanSoundTests(unittest.TestCase):
             "game": "sound-probe",
             "revision": "probe",
             "source_sha256": digest,
-            "resources": [
-                {"id": "sounds", "kind": "audio", "codec": "pacman.sound-streams.v1",
-                 **document()}
-            ],
+            "resources": [{"id": "sounds", "kind": "audio", "codec": "pacman.sound-streams.v1", **document()}],
         }
         profile = {
             "schema": "retrolarium.game-profile",
@@ -236,14 +235,26 @@ class PacmanSoundTests(unittest.TestCase):
             "name": "Sound probe",
             "platform": "nes",
             "capabilities": ["audio"],
-            "revisions": [{
-                "id": "probe", "name": "Probe", "size": 1,
-                "sha1": "1" * 40, "sha256": digest, "container": "ines", "mapper": 0,
-            }],
-            "resources": [{
-                "id": "sounds", "kind": "audio", "codec": "pacman.sound-streams.v1",
-                "capacity_policy": "fixed", "parameters": config,
-            }],
+            "revisions": [
+                {
+                    "id": "probe",
+                    "name": "Probe",
+                    "size": 1,
+                    "sha1": "1" * 40,
+                    "sha256": digest,
+                    "container": "ines",
+                    "mapper": 0,
+                }
+            ],
+            "resources": [
+                {
+                    "id": "sounds",
+                    "kind": "audio",
+                    "codec": "pacman.sound-streams.v1",
+                    "capacity_policy": "fixed",
+                    "parameters": config,
+                }
+            ],
         }
         events = b"\x00\x90\x2d\x64\x60\x80\x2d\x00"
         with tempfile.TemporaryDirectory() as directory:
@@ -258,14 +269,21 @@ class PacmanSoundTests(unittest.TestCase):
             profile_path.write_text(json.dumps(profile), encoding="utf-8")
             midi_path.write_bytes(midi_file(events))
             preview_report = preview_midi_import(
-                document_path, midi_path, resource_id="sounds", slot=3,
+                document_path,
+                midi_path,
+                resource_id="sounds",
+                slot=3,
                 profile_path=profile_path,
             )
             self.assertEqual(preview_report["operation"], "preview")
             self.assertEqual(preview_report["after"]["notes"], 16)
             self.assertFalse(edited_path.exists())
             report = import_midi_into_document(
-                document_path, midi_path, edited_path, resource_id="sounds", slot=3,
+                document_path,
+                midi_path,
+                edited_path,
+                resource_id="sounds",
+                slot=3,
                 profile_path=profile_path,
             )
             self.assertEqual(report["source_notes"], 1)
@@ -277,20 +295,32 @@ class PacmanSoundTests(unittest.TestCase):
             )
             # The project's render-tables resource gives the preview the
             # engine's note periods.
-            edited["resources"].append({
-                "id": "render-tables", "kind": "tables", "codec": "nes.byte-tables.v1",
-                "tables": {"note_period_base_pairs": [byte for period in PERIODS
-                                                      for byte in (period >> 8, period & 0xFF)]},
-            })
+            edited["resources"].append(
+                {
+                    "id": "render-tables",
+                    "kind": "tables",
+                    "codec": "nes.byte-tables.v1",
+                    "tables": {
+                        "note_period_base_pairs": [byte for period in PERIODS for byte in (period >> 8, period & 0xFF)]
+                    },
+                }
+            )
             edited_path.write_text(json.dumps(edited), encoding="utf-8")
             preview = render_document_wav(
-                edited_path, wav_path, resource_id="sounds", slot=3,
-                sample_rate=8_000, profile_path=profile_path,
+                edited_path,
+                wav_path,
+                resource_id="sounds",
+                slot=3,
+                sample_rate=8_000,
+                profile_path=profile_path,
             )
             self.assertEqual(preview["size"], wav_path.stat().st_size)
             self.assertEqual(wav_path.read_bytes()[:4], b"RIFF")
             exported = export_document_midi(
-                edited_path, exported_midi_path, resource_id="sounds", slot=3,
+                edited_path,
+                exported_midi_path,
+                resource_id="sounds",
+                slot=3,
                 profile_path=profile_path,
             )
             parsed_midi = parse_midi(exported_midi_path.read_bytes(), 0, 0)

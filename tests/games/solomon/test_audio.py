@@ -9,7 +9,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from retrolarium_kit.core.authoring import GameProfile, ResourceSpec, RevisionSpec
 from retrolarium_kit.games.solomon.audio import (
-    SolomonAudioError, build_audio, decode_audio, parse_audio_document,
+    SolomonAudioError,
+    build_audio,
+    decode_audio,
+    parse_audio_document,
 )
 
 
@@ -27,7 +30,7 @@ def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
     prg = bytearray(0x8000)
 
     def put(address: int, data: bytes) -> None:
-        prg[address - 0x8000:address - 0x8000 + len(data)] = data
+        prg[address - 0x8000 : address - 0x8000 + len(data)] = data
 
     for index in range(12):
         put(0xE000 + 2 * index, (index + 1).to_bytes(2, "little"))
@@ -41,19 +44,26 @@ def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
     put(0xE0D4, b"\xff")
     for index in range(113):
         next_address = 0xE0D5 + 4 * (index + 1)
-        put(0xE0D5 + 4 * index,
-            b"\xf3" + next_address.to_bytes(2, "little") + b"\xf9")
+        put(0xE0D5 + 4 * index, b"\xf3" + next_address.to_bytes(2, "little") + b"\xf9")
     put(0xE299, b"\xf9")
     header = b"NES\x1a" + bytes((2, 4, 0x30, 0)) + bytes(8)
     source = header + bytes(prg) + bytes(0x8000)
     revision = RevisionSpec(
-        "probe", "Solomon audio probe", len(source),
+        "probe",
+        "Solomon audio probe",
+        len(source),
         hashlib.sha1(source).hexdigest(),
-        hashlib.sha256(source).hexdigest(), "ines", 3,
+        hashlib.sha256(source).hexdigest(),
+        "ines",
+        3,
     )
     profile = GameProfile(
-        "solomons-key", 1, "Solomon audio probe", "nes",
-        ("audio", "exact-round-trip"), (revision,),
+        "solomons-key",
+        1,
+        "Solomon audio probe",
+        "nes",
+        ("audio", "exact-round-trip"),
+        (revision,),
         (ResourceSpec("audio", "audio", "solomon.audio.v1", "fixed", addresses),),
     )
     return source, profile, revision

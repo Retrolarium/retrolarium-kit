@@ -9,7 +9,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from retrolarium_kit.core.authoring import GameProfile, ResourceSpec, RevisionSpec
 from retrolarium_kit.games.solomon.text import (
-    SolomonTextError, build_text, decode_text, parse_text_document, static_order,
+    SolomonTextError,
+    build_text,
+    decode_text,
+    parse_text_document,
+    static_order,
 )
 
 
@@ -22,8 +26,11 @@ def program(address: int, tiles: list[int]) -> bytes:
 
 
 def message(tiles: list[int], *addresses: int) -> bytes:
-    return bytes((0x40 | (len(tiles) - 1),)) + bytes(tiles) + b"\0" + b"".join(
-        bytes((a & 0xFF, a >> 8)) for a in addresses
+    return (
+        bytes((0x40 | (len(tiles) - 1),))
+        + bytes(tiles)
+        + b"\0"
+        + b"".join(bytes((a & 0xFF, a >> 8)) for a in addresses)
     )
 
 
@@ -31,11 +38,9 @@ def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
     prg = bytearray(0x8000)
 
     def put(address: int, payload: bytes) -> None:
-        prg[address - 0x8000:address - 0x8000 + len(payload)] = payload
+        prg[address - 0x8000 : address - 0x8000 + len(payload)] = payload
 
-    programs = {
-        index: program(0x2040 + index * 0x20, text(f"LINE {index:02d}")) for index in range(18)
-    }
+    programs = {index: program(0x2040 + index * 0x20, text(f"LINE {index:02d}")) for index in range(18)}
     programs[5] = program(0x3F00, list(range(16)))
     cursor = 0xE024
     pointers = [0] * 18
@@ -64,31 +69,48 @@ def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
         data += message(text(f"MESSAGE {chr(65 + index)}"), *addresses)
     put(0xF100, bytes(offsets))
     put(0xF110, bytes(data))
-    data_end = 0xF110 + len(data) + 6     # room to grow
+    data_end = 0xF110 + len(data) + 6  # room to grow
 
-    intro = program(0x216B, text("SHRINE"))[:-1] + program(0x21CB, text(" ROOM 00"))[:-1] \
-        + program(0x226F, [0x98, 0, 0])
+    intro = (
+        program(0x216B, text("SHRINE"))[:-1] + program(0x21CB, text(" ROOM 00"))[:-1] + program(0x226F, [0x98, 0, 0])
+    )
     put(0xF300, intro)
     put(0xF320, bytes(text("PRINSESS") + text(" SOLOMON") + text(" HIDDEN ")))
 
     header = b"NES\x1a" + bytes((2, 4, 0x30, 0)) + bytes(8)
     source = header + bytes(prg) + bytes(0x8000)
     revision = RevisionSpec(
-        "probe", "Solomon text probe", len(source),
-        hashlib.sha1(source).hexdigest(), hashlib.sha256(source).hexdigest(), "ines", 3,
+        "probe",
+        "Solomon text probe",
+        len(source),
+        hashlib.sha1(source).hexdigest(),
+        hashlib.sha256(source).hexdigest(),
+        "ines",
+        3,
     )
     parameters = {
-        "static_pointer_low_cpu": 0xE000, "static_pointer_high_cpu": 0xE012,
-        "static_region_cpu": 0xE024, "static_region_end_cpu": static_end,
+        "static_pointer_low_cpu": 0xE000,
+        "static_pointer_high_cpu": 0xE012,
+        "static_region_cpu": 0xE024,
+        "static_region_end_cpu": static_end,
         "static_05_reference_cpu": 0xF000,
-        "ending_initial_cpu": 0xF010, "ending_initial_end_cpu": initial_end,
+        "ending_initial_cpu": 0xF010,
+        "ending_initial_end_cpu": initial_end,
         "ending_initial_second_operand_cpu": 0xF002,
-        "ending_offsets_cpu": 0xF100, "ending_data_cpu": 0xF110, "ending_data_end_cpu": data_end,
+        "ending_offsets_cpu": 0xF100,
+        "ending_data_cpu": 0xF110,
+        "ending_data_end_cpu": data_end,
         "ending_single_address_operand_cpu": 0xF003,
-        "room_intro_cpu": 0xF300, "special_names_cpu": 0xF320,
+        "room_intro_cpu": 0xF300,
+        "special_names_cpu": 0xF320,
     }
     profile = GameProfile(
-        "solomons-key", 1, "Solomon text probe", "nes", ("text",), (revision,),
+        "solomons-key",
+        1,
+        "Solomon text probe",
+        "nes",
+        ("text",),
+        (revision,),
         (ResourceSpec("text", "text", "solomon.text.v1", "fixed", parameters),),
     )
     return source, profile, revision

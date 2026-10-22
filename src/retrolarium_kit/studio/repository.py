@@ -167,8 +167,11 @@ def load_descriptor(path: Path) -> GameDescriptor:
         shas = {revision.revision_id: revision.sha256 for revision in profile.revisions}
     revisions = []
     for index, item in enumerate(raw.get("revisions") or []):
-        if not isinstance(item, Mapping) or not {"id", "label", "rom"} <= set(item) \
-                or set(item) - {"id", "label", "rom", "build"}:
+        if (
+            not isinstance(item, Mapping)
+            or not {"id", "label", "rom"} <= set(item)
+            or set(item) - {"id", "label", "rom", "build"}
+        ):
             raise GameRepositoryError(f"revisions[{index}] needs id, label and rom, and may have build")
         revision_id = _identifier(item["id"], f"revisions[{index}].id")
         if revision_id not in shas:
@@ -180,15 +183,24 @@ def load_descriptor(path: Path) -> GameDescriptor:
                 raise GameRepositoryError(f"revisions[{index}].build needs from and command")
             built_from = _string(spec["from"], f"revisions[{index}].build.from")
             build = tuple(_command(spec["command"], f"revisions[{index}].build.command"))
-        revisions.append(Revision(revision_id, _string(item["label"], f"revisions[{index}].label"),
-                                  _relative(item["rom"], f"revisions[{index}].rom"), shas[revision_id],
-                                  built_from, build))
+        revisions.append(
+            Revision(
+                revision_id,
+                _string(item["label"], f"revisions[{index}].label"),
+                _relative(item["rom"], f"revisions[{index}].rom"),
+                shas[revision_id],
+                built_from,
+                build,
+            )
+        )
     if not revisions:
         raise GameRepositoryError("the descriptor lists no revisions")
     known_ids = {revision.id for revision in revisions}
     for revision in revisions:
-        if revision.built_from is not None and (revision.built_from not in known_ids or next(
-                r for r in revisions if r.id == revision.built_from).built_from is not None):
+        if revision.built_from is not None and (
+            revision.built_from not in known_ids
+            or next(r for r in revisions if r.id == revision.built_from).built_from is not None
+        ):
             raise GameRepositoryError(f"{revision.id} must be built from a dumped revision of the descriptor")
     split = raw.get("split")
     if split is not None:
@@ -219,11 +231,21 @@ def load_descriptor(path: Path) -> GameDescriptor:
     for tab in workspace["tabs"]:
         only = tab.get("revisions") if isinstance(tab, Mapping) else None
         if only is not None and (not isinstance(only, list) or not only or not set(only) <= set(shas)):
-            raise GameRepositoryError(f"{profile_id} view {tab.get('id')!r}: revisions must list revisions of the profile")
-    return GameDescriptor(path, path.parent, _identifier(game.get("id"), "game.id"),
-                          _string(game.get("name"), "game.name"), platform, profile_id,
-                          tuple(revisions), split, workspace,
-                          "flicky-content" if profile_id == FLICKY_PROFILE else "rom")
+            raise GameRepositoryError(
+                f"{profile_id} view {tab.get('id')!r}: revisions must list revisions of the profile"
+            )
+    return GameDescriptor(
+        path,
+        path.parent,
+        _identifier(game.get("id"), "game.id"),
+        _string(game.get("name"), "game.name"),
+        platform,
+        profile_id,
+        tuple(revisions),
+        split,
+        workspace,
+        "flicky-content" if profile_id == FLICKY_PROFILE else "rom",
+    )
 
 
 def _profile_by_id(root: Path, profile_id: str):
@@ -235,8 +257,10 @@ def _profile_by_id(root: Path, profile_id: str):
     if profile is None:
         raise GameRepositoryError(f"the repository has no {PROFILE_PATH.as_posix()}, the profile of {profile_id}")
     if f"{profile.game_id}.v{profile.profile_version}" != profile_id:
-        raise GameRepositoryError(f"{PROFILE_PATH.as_posix()} is the profile of "
-                                  f"{profile.game_id}.v{profile.profile_version}, not {profile_id}")
+        raise GameRepositoryError(
+            f"{PROFILE_PATH.as_posix()} is the profile of "
+            f"{profile.game_id}.v{profile.profile_version}, not {profile_id}"
+        )
     return profile
 
 
@@ -248,10 +272,12 @@ def _extraction_stamp(descriptor: GameDescriptor) -> str:
     profile = _profile_by_id(descriptor.root, descriptor.profile)
     resources = [(item.resource_id, item.codec, item.kind, item.parameters) for item in profile.resources]
     # A version's own resources, overrides and payloads count too.
-    revisions = [(item.revision_id, item.resources, item.resource_overrides, item.payloads)
-                 for item in profile.revisions]
-    digest = hashlib.sha256(json.dumps([resources, revisions], sort_keys=True, default=repr)
-                            .encode("utf-8")).hexdigest()
+    revisions = [
+        (item.revision_id, item.resources, item.resource_overrides, item.payloads) for item in profile.revisions
+    ]
+    digest = hashlib.sha256(
+        json.dumps([resources, revisions], sort_keys=True, default=repr).encode("utf-8")
+    ).hexdigest()
     return f"{__version__} {digest}\n"
 
 
@@ -265,8 +291,12 @@ def _add_new_resources(edited: Path, pristine: Path) -> bool:
         fresh = json.loads(pristine.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return False
-    if not isinstance(document, dict) or not isinstance(fresh, dict) \
-            or not isinstance(document.get("resources"), list) or not isinstance(fresh.get("resources"), list):
+    if (
+        not isinstance(document, dict)
+        or not isinstance(fresh, dict)
+        or not isinstance(document.get("resources"), list)
+        or not isinstance(fresh.get("resources"), list)
+    ):
         return False
     present = {item.get("id"): item for item in document["resources"] if isinstance(item, dict)}
     if all(item.get("id") in present for item in fresh["resources"]):
@@ -297,9 +327,12 @@ def _sha256(path: Path) -> str:
 def identify_rom(path: Path) -> list[dict[str, str]]:
     """Every revision of the repository catalog whose image this file is."""
     digest = _sha256(path)
-    return [{"game": game_id, "revision": revision["id"], "name": revision["name"]}
-            for game_id, entry in repository_catalog()["games"].items()
-            for revision in entry["revisions"] if revision["sha256"] == digest]
+    return [
+        {"game": game_id, "revision": revision["id"], "name": revision["name"]}
+        for game_id, entry in repository_catalog()["games"].items()
+        for revision in entry["revisions"]
+        if revision["sha256"] == digest
+    ]
 
 
 def _build_revision(descriptor: GameDescriptor, revision: Revision) -> dict[str, object] | None:
@@ -309,8 +342,13 @@ def _build_revision(descriptor: GameDescriptor, revision: Revision) -> dict[str,
         return None
     base = descriptor.revision(revision.built_from)
     if _rom_status(descriptor, base) != "ok":
-        return {"status": "needs-rom", "revision": revision.id, "label": base.label, "rom": base.rom,
-                "message": f"{descriptor.name} [{revision.label}] is built from {base.label}: it needs {base.rom}."}
+        return {
+            "status": "needs-rom",
+            "revision": revision.id,
+            "label": base.label,
+            "rom": base.rom,
+            "message": f"{descriptor.name} [{revision.label}] is built from {base.label}: it needs {base.rom}.",
+        }
     split = _split_status(descriptor, run=True)
     if split["status"] == "failed":
         return {"status": "build-failed", "revision": revision.id, "message": str(split.get("output", ""))}
@@ -319,8 +357,11 @@ def _build_revision(descriptor: GameDescriptor, revision: Revision) -> dict[str,
     command = [part.replace("{output}", str(target)) for part in revision.build]
     result = _run(descriptor, command, descriptor.root / base.rom)
     if result.returncode != 0 or _rom_status(descriptor, revision) != "ok":
-        return {"status": "build-failed", "revision": revision.id,
-                "message": f"building {revision.rom} failed: " + (result.stdout + result.stderr)[-2000:]}
+        return {
+            "status": "build-failed",
+            "revision": revision.id,
+            "message": f"building {revision.rom} failed: " + (result.stdout + result.stderr)[-2000:],
+        }
     return None
 
 
@@ -337,8 +378,7 @@ def _project_path(descriptor: GameDescriptor, revision: Revision) -> Path:
 
 def _tabs(descriptor: GameDescriptor, revision: Revision) -> list[Mapping[str, Any]]:
     """The views of one revision: a tab with `revisions` shows only in those."""
-    return [tab for tab in descriptor.workspace["tabs"]
-            if revision.id in tab.get("revisions", [revision.id])]
+    return [tab for tab in descriptor.workspace["tabs"] if revision.id in tab.get("revisions", [revision.id])]
 
 
 def _documents(descriptor: GameDescriptor, revision: Revision) -> list[tuple[str, str | None]]:
@@ -389,9 +429,14 @@ def _run(descriptor: GameDescriptor, command: list[str], rom: Path) -> subproces
     arguments = [part.replace("{rom}", str(rom)) for part in command]
     # Bounded: a script that hangs must not hold the Studio's task queue.
     try:
-        return subprocess.run([sys.executable, str(descriptor.root / arguments[0]), *arguments[1:]],
-                              cwd=descriptor.root, capture_output=True, text=True, env=child_environment(),
-                              timeout=SCRIPT_TIMEOUT)
+        return subprocess.run(
+            [sys.executable, str(descriptor.root / arguments[0]), *arguments[1:]],
+            cwd=descriptor.root,
+            capture_output=True,
+            text=True,
+            env=child_environment(),
+            timeout=SCRIPT_TIMEOUT,
+        )
     except subprocess.TimeoutExpired:
         raise GameRepositoryError(f"{arguments[0]} did not finish in {SCRIPT_TIMEOUT // 60} minutes") from None
 
@@ -451,8 +496,13 @@ def revision_statuses(descriptor: GameDescriptor) -> dict[str, object]:
             if status != "ok" and _rom_status(descriptor, base) == "ok":
                 entry["rom_status"] = "buildable"
         revisions.append(entry)
-    return {"schema": "retrolarium.game-revisions", "game": {"id": descriptor.id, "name": descriptor.name},
-            "descriptor": str(descriptor.path), "split": split, "revisions": revisions}
+    return {
+        "schema": "retrolarium.game-revisions",
+        "game": {"id": descriptor.id, "name": descriptor.name},
+        "descriptor": str(descriptor.path),
+        "split": split,
+        "revisions": revisions,
+    }
 
 
 def _toml(value: object) -> str:
@@ -485,8 +535,11 @@ def _project_text(descriptor: GameDescriptor, revision: Revision) -> str:
         f"source_mode = {_toml(descriptor.source_mode)}",
         "",
         "[source]",
-        *(['manifest = "flicky-source/retrolarium-flicky-snapshot.json"'] if flicky else
-          [f"rom = {_toml(up + '/' + revision.rom)}"]),
+        *(
+            ['manifest = "flicky-source/retrolarium-flicky-snapshot.json"']
+            if flicky
+            else [f"rom = {_toml(up + '/' + revision.rom)}"]
+        ),
         f"sha256 = {_toml(revision.sha256)}",
         *([] if flicky else [f"repository = {_toml(up)}"]),
         "",
@@ -505,8 +558,15 @@ def _project_text(descriptor: GameDescriptor, revision: Revision) -> str:
                 document = _relative(value, "workspace.tabs.document")
                 value = f"flicky-source/{document}" if flicky else f"{up}/{HACK_DIRECTORY}/{revision.id}/{document}"
             lines.append(f"{key} = {_toml(value)}")
-    lines += ["", "[operations]", 'validate = "project.validate"', 'build = "project.build"',
-              'verify = "project.verify"', 'launch = "project.launch"', ""]
+    lines += [
+        "",
+        "[operations]",
+        'validate = "project.validate"',
+        'build = "project.build"',
+        'verify = "project.verify"',
+        'launch = "project.launch"',
+        "",
+    ]
     return "\n".join(lines)
 
 
@@ -521,9 +581,16 @@ def prepare_revision(descriptor: GameDescriptor, revision_id: str, *, rom: Path 
         given = descriptor.revision(revision.built_from) if revision.build else revision
         if _sha256(rom) != given.sha256:
             matches = identify_rom(rom)
-            return {"status": "rom-mismatch", "revision": revision.id, "identified": matches,
-                    "message": (f"This file is {matches[0]['name']}, not {descriptor.name} [{given.label}]."
-                                if matches else "This file is not a ROM the kit knows (or it was changed).")}
+            return {
+                "status": "rom-mismatch",
+                "revision": revision.id,
+                "identified": matches,
+                "message": (
+                    f"This file is {matches[0]['name']}, not {descriptor.name} [{given.label}]."
+                    if matches
+                    else "This file is not a ROM the kit knows (or it was changed)."
+                ),
+            }
         if rom.resolve() != (descriptor.root / given.rom).resolve():
             shutil.copyfile(rom, descriptor.root / given.rom)
     built = _build_revision(descriptor, revision)
@@ -531,10 +598,17 @@ def prepare_revision(descriptor: GameDescriptor, revision_id: str, *, rom: Path 
         return built
     status = _rom_status(descriptor, revision)
     if status != "ok":
-        return {"status": "needs-rom" if status == "missing" else "rom-mismatch", "revision": revision.id,
-                "label": revision.label, "rom": revision.rom,
-                "message": (f"{descriptor.name} [{revision.label}] needs its ROM ({revision.rom})."
-                            if status == "missing" else f"{revision.rom} is not {descriptor.name} [{revision.label}].")}
+        return {
+            "status": "needs-rom" if status == "missing" else "rom-mismatch",
+            "revision": revision.id,
+            "label": revision.label,
+            "rom": revision.rom,
+            "message": (
+                f"{descriptor.name} [{revision.label}] needs its ROM ({revision.rom})."
+                if status == "missing"
+                else f"{revision.rom} is not {descriptor.name} [{revision.label}]."
+            ),
+        }
     split = _split_status(descriptor, run=True)
     hack = _edits(descriptor, revision)
     original = descriptor.root / WORKSPACE_DIRECTORY / revision.id / "original"
@@ -566,8 +640,14 @@ def prepare_revision(descriptor: GameDescriptor, revision_id: str, *, rom: Path 
     text = _project_text(descriptor, revision)
     if not project.is_file() or project.read_text(encoding="utf-8") != text:
         project.write_text(text, encoding="utf-8", newline="\n")
-    return {"status": "ready", "revision": revision.id, "label": revision.label, "project": str(project),
-            "split": split, "created_documents": created}
+    return {
+        "status": "ready",
+        "revision": revision.id,
+        "label": revision.label,
+        "project": str(project),
+        "split": split,
+        "created_documents": created,
+    }
 
 
 def reset_revision(descriptor: GameDescriptor, revision_id: str) -> dict[str, object]:
@@ -580,8 +660,9 @@ def reset_revision(descriptor: GameDescriptor, revision_id: str) -> dict[str, ob
     for document, _resource in _documents(descriptor, revision):
         pristine, path = original / document, edits / document
         if not pristine.is_file():
-            raise GameRepositoryError(f"{descriptor.name} [{revision.label}] has no original of {document}; "
-                                      "open the version once first")
+            raise GameRepositoryError(
+                f"{descriptor.name} [{revision.label}] has no original of {document}; open the version once first"
+            )
         if path.is_file() and path.read_bytes() == pristine.read_bytes():
             continue
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -597,18 +678,27 @@ _UNTRACKED = frozenset({".git", WORKSPACE_DIRECTORY, HACK_DIRECTORY, "build", "_
 
 def _repository_files(root: Path) -> list[str]:
     if (root / ".git").exists():
-        result = subprocess.run(["git", "ls-files", "-z", "--cached"], cwd=root,
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        result = subprocess.run(
+            ["git", "ls-files", "-z", "--cached"], cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
         if result.returncode:
             raise GameRepositoryError(f"cannot list the files of {root}: {result.stderr.decode(errors='replace')}")
         return [os.fsdecode(raw) for raw in result.stdout.split(b"\0") if raw]
-    return sorted(path.relative_to(root).as_posix() for path in root.rglob("*")
-                  if path.is_file() and not _UNTRACKED & set(path.relative_to(root).parts))
+    return sorted(
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*")
+        if path.is_file() and not _UNTRACKED & set(path.relative_to(root).parts)
+    )
 
 
-def check_repository(descriptor: GameDescriptor, revision_ids: list[str] | None = None, *,
-                     flicky_level_writer: Path | None = None,
-                     release: Path | None = None, present: bool = False) -> dict[str, object]:
+def check_repository(
+    descriptor: GameDescriptor,
+    revision_ids: list[str] | None = None,
+    *,
+    flicky_level_writer: Path | None = None,
+    release: Path | None = None,
+    present: bool = False,
+) -> dict[str, object]:
     """Prove that the kit opens every revision of a repository and gives its
     ROM back unchanged: in a throwaway copy of the repository, each revision
     is prepared from its ROM, validated, built with no edits and compared
@@ -618,14 +708,24 @@ def check_repository(descriptor: GameDescriptor, revision_ids: list[str] | None 
     written."""
     from retrolarium_kit.studio.project import build_studio_project, validate_studio_project
 
-    chosen = [descriptor.revision(revision_id) for revision_id in revision_ids] \
-        if revision_ids else list(descriptor.revisions)
+    chosen = (
+        [descriptor.revision(revision_id) for revision_id in revision_ids]
+        if revision_ids
+        else list(descriptor.revisions)
+    )
     results = []
     if present:
-        here = [revision for revision in chosen
-                if revision.build or (descriptor.root / revision.rom).is_file()]
-        results += [{"revision": revision.id, "label": revision.label, "status": "skipped",
-                     "reason": f"{revision.rom} is not here"} for revision in chosen if revision not in here]
+        here = [revision for revision in chosen if revision.build or (descriptor.root / revision.rom).is_file()]
+        results += [
+            {
+                "revision": revision.id,
+                "label": revision.label,
+                "status": "skipped",
+                "reason": f"{revision.rom} is not here",
+            }
+            for revision in chosen
+            if revision not in here
+        ]
         chosen = here
     with tempfile.TemporaryDirectory(prefix="rltool-check-") as directory:
         copy = Path(directory) / descriptor.root.name
@@ -651,8 +751,8 @@ def check_repository(descriptor: GameDescriptor, revision_ids: list[str] | None 
                 project = Path(str(ready["project"]))
                 validate_studio_project(project)
                 report = build_studio_project(
-                    project, flicky_level_writer=flicky_level_writer
-                    if shadow.source_mode == "flicky-content" else None)
+                    project, flicky_level_writer=flicky_level_writer if shadow.source_mode == "flicky-content" else None
+                )
             except ValueError as exc:  # every kit refusal is a ValueError
                 entry.update(status="failed", reason=str(exc))
                 continue
@@ -665,8 +765,13 @@ def check_repository(descriptor: GameDescriptor, revision_ids: list[str] | None 
     failed = [entry["revision"] for entry in results if entry["status"] not in ("ok", "skipped")]
     if not chosen:
         failed.append("none")
-    report = {"schema": "retrolarium.game-check", "game": {"id": descriptor.id, "name": descriptor.name},
-              "profile": descriptor.profile, "status": "failed" if failed else "ok", "revisions": results}
+    report = {
+        "schema": "retrolarium.game-check",
+        "game": {"id": descriptor.id, "name": descriptor.name},
+        "profile": descriptor.profile,
+        "status": "failed" if failed else "ok",
+        "revisions": results,
+    }
     if release is not None:
         report["release"] = check_release(descriptor, release)
         if report["release"]["status"] != "ok":
@@ -693,8 +798,10 @@ def check_release(descriptor: GameDescriptor, manifest: Path) -> dict[str, objec
         raise GameRepositoryError(f"cannot read the release manifest {manifest}: {exc}") from exc
     line = document.get("release_line")
     if RELEASE_LINES.get(str(line)) != document.get("release_kind"):
-        problems.append(f"release_line {line!r} and release_kind {document.get('release_kind')!r} "
-                        "are not 3.0 or 3.x with release_kind retrolarium")
+        problems.append(
+            f"release_line {line!r} and release_kind {document.get('release_kind')!r} "
+            "are not 3.0 or 3.x with release_kind retrolarium"
+        )
     status = document.get("status")
     if status not in {"development", "tag-ready", "tagged"}:
         problems.append(f"status {status!r} is not development, tag-ready or tagged")
@@ -703,8 +810,7 @@ def check_release(descriptor: GameDescriptor, manifest: Path) -> dict[str, objec
         return {"status": "failed", "problems": problems + ["the manifest has no retrolarium section"]}
     named = descriptor.root / str(section.get("descriptor", ""))
     if not named.is_file() or named.resolve() != descriptor.path.resolve():
-        problems.append(f"retrolarium.descriptor names {section.get('descriptor')!r}, "
-                        f"not {descriptor.path.name}")
+        problems.append(f"retrolarium.descriptor names {section.get('descriptor')!r}, not {descriptor.path.name}")
     if section.get("profile") != descriptor.profile:
         problems.append(f"retrolarium.profile is {section.get('profile')!r}, the descriptor's is {descriptor.profile}")
     listed = section.get("revisions")
@@ -727,10 +833,17 @@ def check_release(descriptor: GameDescriptor, manifest: Path) -> dict[str, objec
                 problems.append(f"removed_authoring[{index}] needs path and replaced_by")
             elif (descriptor.root / str(item["path"])).exists():
                 problems.append(f"removed_authoring[{index}] {item['path']} is still in the repository")
-    if (descriptor.root / "scripts" / "authoring").is_dir() and any((descriptor.root / "scripts" / "authoring").rglob("*.py")):
+    if (descriptor.root / "scripts" / "authoring").is_dir() and any(
+        (descriptor.root / "scripts" / "authoring").rglob("*.py")
+    ):
         problems.append("scripts/authoring/ still holds tools")
-    return {"status": "failed" if problems else "ok", "manifest": str(manifest), "release_status": status,
-            "kit": {"pinned": pinned, "running": __version__}, "problems": problems}
+    return {
+        "status": "failed" if problems else "ok",
+        "manifest": str(manifest),
+        "release_status": status,
+        "kit": {"pinned": pinned, "running": __version__},
+        "problems": problems,
+    }
 
 
 def _prepare_flicky(descriptor: GameDescriptor, revision: Revision, rom: Path, original: Path) -> list[str]:
@@ -743,8 +856,10 @@ def _prepare_flicky(descriptor: GameDescriptor, revision: Revision, rom: Path, o
     created = []
     if not snapshot.is_dir():
         import_flicky_source(descriptor.root, rom, workspace)
-        created = [f"{WORKSPACE_DIRECTORY}/{revision.id}/{snapshot.name}/{document}"
-                   for document, _resource in _documents(descriptor, revision)]
+        created = [
+            f"{WORKSPACE_DIRECTORY}/{revision.id}/{snapshot.name}/{document}"
+            for document, _resource in _documents(descriptor, revision)
+        ]
     for document, _resource in _documents(descriptor, revision):
         pristine = original / document
         if not pristine.is_file():
@@ -766,11 +881,11 @@ def repository_catalog() -> Mapping[str, Any]:
 
 
 def _archive_url(catalog: Mapping[str, Any], entry: Mapping[str, Any], source: str | None) -> str:
-    template = source or os.environ.get("RETROLARIUM_GAMES_SOURCE") \
-        or "{organization}/{repository}/archive/refs/{ref}.zip"
+    template = (
+        source or os.environ.get("RETROLARIUM_GAMES_SOURCE") or "{organization}/{repository}/archive/refs/{ref}.zip"
+    )
     try:
-        return template.format(organization=catalog["organization"], repository=entry["repository"],
-                               ref=entry["ref"])
+        return template.format(organization=catalog["organization"], repository=entry["repository"], ref=entry["ref"])
     except (KeyError, IndexError, ValueError) as exc:
         raise GameRepositoryError(
             f"the source template {template!r} may use {{organization}}, {{repository}} and {{ref}} only"
@@ -848,8 +963,12 @@ def open_rom(rom: Path, games: Path, *, known: list[Path] = (), source: str | No
             continue
         revision = next((item for item in descriptor.revisions if item.sha256 == digest), None)
         if revision is not None:
-            return {**prepare_revision(descriptor, revision.id, rom=rom), "descriptor": str(descriptor.path),
-                    "name": match["name"], "downloaded": False}
+            return {
+                **prepare_revision(descriptor, revision.id, rom=rom),
+                "descriptor": str(descriptor.path),
+                "name": match["name"],
+                "downloaded": False,
+            }
     if match["game"] not in repository_catalog()["games"]:
         return {"status": "unsupported", "game": match["game"], "name": match["name"]}
     entry = repository_catalog()["games"][match["game"]]
@@ -857,10 +976,18 @@ def open_rom(rom: Path, games: Path, *, known: list[Path] = (), source: str | No
     descriptor = load_descriptor(fetch_repository(match["game"], games, source=source))
     revision = next((item for item in descriptor.revisions if item.sha256 == digest), None)
     if revision is None:
-        return {"status": "unsupported", "game": match["game"], "name": match["name"],
-                "descriptor": str(descriptor.path)}
-    return {**prepare_revision(descriptor, revision.id, rom=rom), "descriptor": str(descriptor.path),
-            "name": match["name"], "downloaded": downloaded}
+        return {
+            "status": "unsupported",
+            "game": match["game"],
+            "name": match["name"],
+            "descriptor": str(descriptor.path),
+        }
+    return {
+        **prepare_revision(descriptor, revision.id, rom=rom),
+        "descriptor": str(descriptor.path),
+        "name": match["name"],
+        "downloaded": downloaded,
+    }
 
 
 def ips_patch(original: bytes, edited: bytes) -> bytes:
@@ -881,8 +1008,7 @@ def ips_patch(original: bytes, edited: bytes) -> bytes:
         # Offset 0x454F46 spells "EOF": a record starts one byte earlier
         # there, so it holds one byte less of the run.
         limit = 0xFFFE if start == 0x454F46 else 0xFFFF
-        while index < size and (index >= len(original) or original[index] != edited[index]) \
-                and index - start < limit:
+        while index < size and (index >= len(original) or original[index] != edited[index]) and index - start < limit:
             index += 1
         if start == 0x454F46:
             start -= 1

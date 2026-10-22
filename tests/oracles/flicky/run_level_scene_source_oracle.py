@@ -25,10 +25,10 @@ def main() -> int:
     parser.add_argument("--source-root", type=Path, required=True)
     parser.add_argument("--rom", type=Path, required=True)
     parser.add_argument("--native-renderer", type=Path, required=True)
-    parser.add_argument("--native-editor", type=Path,
-                        help="also verify live Qt Level view and dependency refresh")
-    parser.add_argument("--native-factory", type=Path,
-                        help="also open the copied .rlj through the Studio editor factory")
+    parser.add_argument("--native-editor", type=Path, help="also verify live Qt Level view and dependency refresh")
+    parser.add_argument(
+        "--native-factory", type=Path, help="also open the copied .rlj through the Studio editor factory"
+    )
     args = parser.parse_args()
     scratch = Path(__file__).resolve().parents[3] / "build"
     scratch.mkdir(exist_ok=True)
@@ -47,11 +47,19 @@ def compare(project: Path, args: argparse.Namespace) -> int:
     graphics_path = source / "content/workspace/graphics/graphics.json"
     semantics_path = source / "content/workspace/graphics/semantics.json"
     sequences_path = source / "content/workspace/graphics/sequences.json"
-    native = subprocess.run([
-        str(args.native_renderer.resolve()), "--source", str(source),
-        str(level_path), str(graphics_path), str(semantics_path),
-        str(sequences_path),
-    ], text=True, capture_output=True)
+    native = subprocess.run(
+        [
+            str(args.native_renderer.resolve()),
+            "--source",
+            str(source),
+            str(level_path),
+            str(graphics_path),
+            str(semantics_path),
+            str(sequences_path),
+        ],
+        text=True,
+        capture_output=True,
+    )
     if native.returncode:
         raise RuntimeError(native.stderr or native.stdout)
     reported = {}
@@ -65,8 +73,7 @@ def compare(project: Path, args: argparse.Namespace) -> int:
     # to both VDP planes. The upstream preview's Plane A=0 is a source-preview
     # discrepancy, proven by independent MAME screenshots; do not edit source.
     level_preview.PLANE_A_SCROLL_X = -1
-    preview = level_preview.LevelPreview.load(
-        source, graphics_path, semantics_path, sequences_path)
+    preview = level_preview.LevelPreview.load(source, graphics_path, semantics_path, sequences_path)
     for round_number in range(1, 49):
         # Upstream level_preview has no Bonus_Init scene path; its bonus slots
         # still render the aliased normal layout. That is not a parity oracle.
@@ -74,30 +81,41 @@ def compare(project: Path, args: argparse.Namespace) -> int:
             continue
         layout = document["layouts"][document["round_layouts"][round_number - 1]]
         frame = preview.render(layout, round_number)
-        rgb = bytes.fromhex("".join(
-            level_preview.md_color(word)[1:] for row in frame for word in row))
+        rgb = bytes.fromhex("".join(level_preview.md_color(word)[1:] for row in frame for word in row))
         expected = hashlib.sha256(rgb).hexdigest()
         actual = reported[round_number]
         assert actual == expected, (
-            f"round {round_number} native VDP scene differs from runtime-corrected source: "
-            f"{actual} != {expected}"
+            f"round {round_number} native VDP scene differs from runtime-corrected source: {actual} != {expected}"
         )
     if args.native_editor:
-        subprocess.run([
-            str(args.native_editor.resolve()), "--scene", str(source),
-            str(level_path), str(graphics_path), str(semantics_path),
-            str(sequences_path),
-        ], check=True)
+        subprocess.run(
+            [
+                str(args.native_editor.resolve()),
+                "--scene",
+                str(source),
+                str(level_path),
+                str(graphics_path),
+                str(semantics_path),
+                str(sequences_path),
+            ],
+            check=True,
+        )
     if args.native_factory:
-        subprocess.run([
-            str(args.native_factory.resolve()), str(project / "flicky-ue.rlj"),
-            "--flicky-scene",
-        ], check=True)
-    print("Flicky native VDP scene: all 36 normal rounds pixel-exact against "
-          "runtime-corrected source preview; 12 bonus scenes rendered "
-          "from Bonus_Init without false normal-layout parity"
-          + ("; Qt Level view refresh verified" if args.native_editor else "")
-          + ("; .rlj factory verified" if args.native_factory else ""))
+        subprocess.run(
+            [
+                str(args.native_factory.resolve()),
+                str(project / "flicky-ue.rlj"),
+                "--flicky-scene",
+            ],
+            check=True,
+        )
+    print(
+        "Flicky native VDP scene: all 36 normal rounds pixel-exact against "
+        "runtime-corrected source preview; 12 bonus scenes rendered "
+        "from Bonus_Init without false normal-layout parity"
+        + ("; Qt Level view refresh verified" if args.native_editor else "")
+        + ("; .rlj factory verified" if args.native_factory else "")
+    )
     return 0
 
 

@@ -5,11 +5,7 @@
   "profile_version": 1,
   "name": "HonkeyPong",
   "platform": "nes",
-  "capabilities": [
-    "screens",
-    "palettes",
-    "graphics"
-  ],
+  "capabilities": ["screens", "palettes", "graphics"],
   "revisions": [
     {
       "id": "honkeypong-f9ab7ad",

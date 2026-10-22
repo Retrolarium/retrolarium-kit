@@ -8,8 +8,16 @@
       "descriptor": "pacman.rlj",
       "ref": "tags/source-reconstruction-3.1",
       "revisions": [
-        {"id": "japan-v10", "name": "Pac-Man Japan v1.0", "sha256": "c67e20d7144dac97ba9d4cef1ad90f13d6504e8492e60a6193c33695d68c4b22"},
-        {"id": "japan-v11", "name": "Pac-Man Japan v1.1", "sha256": "06ed4f706d87940728d623d289caa7fd0abd5c0d6466cb52d4c491ff3b8c0ed9"}
+        {
+          "id": "japan-v10",
+          "name": "Pac-Man Japan v1.0",
+          "sha256": "c67e20d7144dac97ba9d4cef1ad90f13d6504e8492e60a6193c33695d68c4b22"
+        },
+        {
+          "id": "japan-v11",
+          "name": "Pac-Man Japan v1.1",
+          "sha256": "06ed4f706d87940728d623d289caa7fd0abd5c0d6466cb52d4c491ff3b8c0ed9"
+        }
       ]
     },
     "castle-excellent": {
@@ -17,8 +25,16 @@
       "descriptor": "castle_excellent.rlj",
       "ref": "tags/source-reconstruction-3.1",
       "revisions": [
-        {"id": "castle-excellent-japan-hsp-05", "name": "Castle Excellent (Japan), HSP-05", "sha256": "fd6214cdc441070b9edab74b9c31ad16007bd0873e32c0c883de4544ca69f261"},
-        {"id": "castlequest-usa", "name": "Castlequest (USA)", "sha256": "35815cd107289a8273fb46dd7c49247a8217ca4e2a7f235fef3aa54566d0ba8c"}
+        {
+          "id": "castle-excellent-japan-hsp-05",
+          "name": "Castle Excellent (Japan), HSP-05",
+          "sha256": "fd6214cdc441070b9edab74b9c31ad16007bd0873e32c0c883de4544ca69f261"
+        },
+        {
+          "id": "castlequest-usa",
+          "name": "Castlequest (USA)",
+          "sha256": "35815cd107289a8273fb46dd7c49247a8217ca4e2a7f235fef3aa54566d0ba8c"
+        }
       ]
     },
     "doraemon": {
@@ -26,7 +42,11 @@
       "descriptor": "doraemon.rlj",
       "ref": "tags/source-reconstruction-3.1",
       "revisions": [
-        {"id": "original", "name": "Doraemon (Japan, original revision)", "sha256": "6ed579c9c98a1f2db52fd3d2488a491953073e8ace1e3c1dc5884669cecca274"}
+        {
+          "id": "original",
+          "name": "Doraemon (Japan, original revision)",
+          "sha256": "6ed579c9c98a1f2db52fd3d2488a491953073e8ace1e3c1dc5884669cecca274"
+        }
       ]
     },
     "smb1": {
@@ -34,13 +54,41 @@
       "descriptor": "super_mario_bros.rlj",
       "ref": "tags/source-reconstruction-3.1",
       "revisions": [
-        {"id": "ju", "name": "Super Mario Bros. (Japan, USA)", "sha256": "f61548fdf1670cffefcc4f0b7bdcdd9eaba0c226e3b74f8666071496988248de"},
-        {"id": "pal", "name": "Super Mario Bros. (Europe, Rev A)", "sha256": "ec299b990e8bfee8ba46e3f61d63b2e1ae5b8a2e431de84e2e4bbd692dc53586"},
-        {"id": "pc10", "name": "Super Mario Bros. (PlayChoice-10 container)", "sha256": "f586afeaaaa7a6cf2e3b69e5b17f2f0f1eb3fd9aa1de1e3e14b75f90dc21ae87"},
-        {"id": "vs_smb", "name": "Vs. Super Mario Bros.", "sha256": "60098a93322a9e07a2b164a02e5517bc22664ca33f6323c2ae23a62941ad393b"},
-        {"id": "fds_smb", "name": "Super Mario Bros. (Famicom Disk System reissue)", "sha256": "56ba4c39fd7f9628bffac4c6ee0d5364f86de36d27c904ffc70f0abc97ae0d3a"},
-        {"id": "ann_fds", "name": "All Night Nippon Super Mario Bros.", "sha256": "a762d0a90d16c84b5f2b014816b37675cf5115320be7e815effbb64d91b2014d"},
-        {"id": "smb2_jp_fds", "name": "Super Mario Bros. 2 / The Lost Levels", "sha256": "ff8afb9ae6b705b4e51dbcb193dcebadf4c049800a71003d3a45052648e52eda"}
+        {
+          "id": "ju",
+          "name": "Super Mario Bros. (Japan, USA)",
+          "sha256": "f61548fdf1670cffefcc4f0b7bdcdd9eaba0c226e3b74f8666071496988248de"
+        },
+        {
+          "id": "pal",
+          "name": "Super Mario Bros. (Europe, Rev A)",
+          "sha256": "ec299b990e8bfee8ba46e3f61d63b2e1ae5b8a2e431de84e2e4bbd692dc53586"
+        },
+        {
+          "id": "pc10",
+          "name": "Super Mario Bros. (PlayChoice-10 container)",
+          "sha256": "f586afeaaaa7a6cf2e3b69e5b17f2f0f1eb3fd9aa1de1e3e14b75f90dc21ae87"
+        },
+        {
+          "id": "vs_smb",
+          "name": "Vs. Super Mario Bros.",
+          "sha256": "60098a93322a9e07a2b164a02e5517bc22664ca33f6323c2ae23a62941ad393b"
+        },
+        {
+          "id": "fds_smb",
+          "name": "Super Mario Bros. (Famicom Disk System reissue)",
+          "sha256": "56ba4c39fd7f9628bffac4c6ee0d5364f86de36d27c904ffc70f0abc97ae0d3a"
+        },
+        {
+          "id": "ann_fds",
+          "name": "All Night Nippon Super Mario Bros.",
+          "sha256": "a762d0a90d16c84b5f2b014816b37675cf5115320be7e815effbb64d91b2014d"
+        },
+        {
+          "id": "smb2_jp_fds",
+          "name": "Super Mario Bros. 2 / The Lost Levels",
+          "sha256": "ff8afb9ae6b705b4e51dbcb193dcebadf4c049800a71003d3a45052648e52eda"
+        }
       ]
     },
     "solomons-key": {
@@ -48,9 +96,21 @@
       "descriptor": "solomons_key.rlj",
       "ref": "tags/source-reconstruction-3.1",
       "revisions": [
-        {"id": "usa", "name": "Solomon's Key (USA)", "sha256": "3d9f3bee199a3fbc04bab38e1d9d5cdeae1c6691dcca463a13c25e42f77bb03d"},
-        {"id": "europe", "name": "Solomon's Key (Europe)", "sha256": "e8dc7ad587133869eaf6101018be676e9c14c3b97b988d2e96f7e398b5c33acb"},
-        {"id": "japan", "name": "Solomon no Kagi (Japan)", "sha256": "b90bb344eff516863bc5278d9efba7ffd2a83a1e6cf27a6b2a9ab57ec094ae83"}
+        {
+          "id": "usa",
+          "name": "Solomon's Key (USA)",
+          "sha256": "3d9f3bee199a3fbc04bab38e1d9d5cdeae1c6691dcca463a13c25e42f77bb03d"
+        },
+        {
+          "id": "europe",
+          "name": "Solomon's Key (Europe)",
+          "sha256": "e8dc7ad587133869eaf6101018be676e9c14c3b97b988d2e96f7e398b5c33acb"
+        },
+        {
+          "id": "japan",
+          "name": "Solomon no Kagi (Japan)",
+          "sha256": "b90bb344eff516863bc5278d9efba7ffd2a83a1e6cf27a6b2a9ab57ec094ae83"
+        }
       ]
     },
     "flicky": {
@@ -58,7 +118,11 @@
       "descriptor": "flicky.rlj",
       "ref": "tags/source-reconstruction-3.1",
       "revisions": [
-        {"id": "ue", "name": "Flicky (USA, Europe)", "sha256": "4df1a91e08376ae773a6eb8e5abe310f94ca39d8f81583b91a9477fedcb68c11"}
+        {
+          "id": "ue",
+          "name": "Flicky (USA, Europe)",
+          "sha256": "4df1a91e08376ae773a6eb8e5abe310f94ca39d8f81583b91a9477fedcb68c11"
+        }
       ]
     }
   }

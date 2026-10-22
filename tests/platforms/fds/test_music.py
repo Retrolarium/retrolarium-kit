@@ -102,19 +102,28 @@ class FdsMusicTests(unittest.TestCase):
         source = b"NES\x1a" + bytes((1, 0, 0, 0)) + bytes(8) + payload
         source += bytes(16 + 16_384 - len(source))
         revision = RevisionSpec(
-            "probe", "FDS music probe", len(source),
-            hashlib.sha1(source).hexdigest(), hashlib.sha256(source).hexdigest(),
-            "ines", 0,
+            "probe",
+            "FDS music probe",
+            len(source),
+            hashlib.sha1(source).hexdigest(),
+            hashlib.sha256(source).hexdigest(),
+            "ines",
+            0,
         )
         profile = GameProfile(
-            "fds-music-probe", 1, "FDS music probe", "nes", ("audio",),
+            "fds-music-probe",
+            1,
+            "FDS music probe",
+            "nes",
+            ("audio",),
             (revision,),
             (
+                ResourceSpec("bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"),
                 ResourceSpec(
-                    "bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"
-                ),
-                ResourceSpec(
-                    "music", "audio", "fds.music.v1", "fixed",
+                    "music",
+                    "audio",
+                    "fds.music.v1",
+                    "fixed",
                     {**parameters, "file_offset": 16},
                 ),
             ),

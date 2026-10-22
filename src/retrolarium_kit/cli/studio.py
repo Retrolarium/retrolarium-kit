@@ -66,12 +66,13 @@ def command_studio_inspect(args: argparse.Namespace) -> None:
 def command_studio_migrate(args: argparse.Namespace) -> None:
     from retrolarium_kit.studio.project import migrate_studio_project
 
-    print_json(migrate_studio_project(
-        args.project,
-        output=args.output,
-        **({} if args.target_version is None
-           else {"target_version": args.target_version}),
-    ))
+    print_json(
+        migrate_studio_project(
+            args.project,
+            output=args.output,
+            **({} if args.target_version is None else {"target_version": args.target_version}),
+        )
+    )
 
 
 def command_studio_validate(args: argparse.Namespace) -> None:
@@ -149,9 +150,13 @@ def command_studio_reset(args: argparse.Namespace) -> None:
 def command_studio_check(args: argparse.Namespace) -> None:
     from retrolarium_kit.studio.repository import check_repository, load_descriptor
 
-    report = check_repository(load_descriptor(args.descriptor), args.revision or None,
-                              flicky_level_writer=args.flicky_level_writer,
-                              release=args.release, present=args.present)
+    report = check_repository(
+        load_descriptor(args.descriptor),
+        args.revision or None,
+        flicky_level_writer=args.flicky_level_writer,
+        release=args.release,
+        present=args.present,
+    )
     print_json(report)
     if report["status"] != "ok":
         raise SystemExit(1)
@@ -176,8 +181,7 @@ def command_studio_fds_bios(args: argparse.Namespace) -> None:
         print_json(install_fds_bios(args.install, args.mame))
         return
     found = fds_bios(args.mame)
-    print_json({"schema": "retrolarium.fds-bios", "schema_version": 1,
-                "path": None if found is None else str(found)})
+    print_json({"schema": "retrolarium.fds-bios", "schema_version": 1, "path": None if found is None else str(found)})
 
 
 def command_studio_patch(args: argparse.Namespace) -> None:
@@ -197,9 +201,15 @@ def command_studio_patch(args: argparse.Namespace) -> None:
     payload = ips_patch(original, edited)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(payload)
-    print_json({"schema": "retrolarium.patch", "format": "ips", "output": str(args.output.resolve()),
-                "bytes": len(payload), "changed_bytes": sum(a != b for a, b in zip(original, edited))
-                + max(0, len(edited) - len(original))})
+    print_json(
+        {
+            "schema": "retrolarium.patch",
+            "format": "ips",
+            "output": str(args.output.resolve()),
+            "bytes": len(payload),
+            "changed_bytes": sum(a != b for a, b in zip(original, edited)) + max(0, len(edited) - len(original)),
+        }
+    )
 
 
 def command_studio_verify(args: argparse.Namespace) -> None:
@@ -227,48 +237,63 @@ def command_studio_launch_plan(args: argparse.Namespace) -> None:
 def command_studio_smb_point_playtest_plan(args: argparse.Namespace) -> None:
     from retrolarium_kit.studio.playtest import studio_smb_point_playtest_plan
 
-    print_json(studio_smb_point_playtest_plan(
-        args.project,
-        mame=args.mame,
-        course_bank=args.course_bank,
-        area=args.area,
-        world=args.world,
-        course=args.course,
-        column=args.column,
-        row=args.row,
-        theme=args.theme,
-        infinite_time=not args.no_infinite_time,
-        invincible=not args.no_invincible,
-        wrap_pits=not args.no_wrap_pits,
-        sfx_channel=args.sfx_channel,
-        sfx_value=args.sfx_value,
-    ))
+    print_json(
+        studio_smb_point_playtest_plan(
+            args.project,
+            mame=args.mame,
+            course_bank=args.course_bank,
+            area=args.area,
+            world=args.world,
+            course=args.course,
+            column=args.column,
+            row=args.row,
+            theme=args.theme,
+            infinite_time=not args.no_infinite_time,
+            invincible=not args.no_invincible,
+            wrap_pits=not args.no_wrap_pits,
+            sfx_channel=args.sfx_channel,
+            sfx_value=args.sfx_value,
+        )
+    )
 
 
 def command_studio_flicky_round_playtest_plan(args: argparse.Namespace) -> None:
     from retrolarium_kit.studio.playtest import studio_flicky_round_playtest_plan
 
-    print_json(studio_flicky_round_playtest_plan(
-        args.project, mame=args.mame, round=args.round,
-    ))
+    print_json(
+        studio_flicky_round_playtest_plan(
+            args.project,
+            mame=args.mame,
+            round=args.round,
+        )
+    )
 
 
 def command_studio_flicky_demo_plan(args: argparse.Namespace) -> None:
     from retrolarium_kit.studio.demo import studio_flicky_demo_plan
 
-    print_json(studio_flicky_demo_plan(
-        args.project, mame=args.mame, demo=args.demo, record=args.record,
-    ))
+    print_json(
+        studio_flicky_demo_plan(
+            args.project,
+            mame=args.mame,
+            demo=args.demo,
+            record=args.record,
+        )
+    )
 
 
 def command_studio_flicky_sound_preview(args: argparse.Namespace) -> None:
     from retrolarium_kit.studio.playtest import studio_flicky_sound_preview
 
-    print_json(studio_flicky_sound_preview(
-        args.project, header=args.header, seconds=args.seconds,
-        enabled_channels=tuple(args.channel) if args.channel else None,
-        document_override=args.document_override,
-    ))
+    print_json(
+        studio_flicky_sound_preview(
+            args.project,
+            header=args.header,
+            seconds=args.seconds,
+            enabled_channels=tuple(args.channel) if args.channel else None,
+            document_override=args.document_override,
+        )
+    )
 
 
 def command_studio_doraemon_world2_view(args: argparse.Namespace) -> None:
@@ -280,12 +305,19 @@ def command_studio_doraemon_world2_view(args: argparse.Namespace) -> None:
         for item in document["resources"]
     }
     view = route_view(
-        resources["world2-screens"], resources["world2-stage"],
-        resources["world2-branches"], resources["world2-chapters"],
+        resources["world2-screens"],
+        resources["world2-stage"],
+        resources["world2-branches"],
+        resources["world2-chapters"],
     )
     args.output.write_text(json.dumps(view, separators=(",", ":")), encoding="utf-8")
-    print_json({"status": "written", "output": str(args.output.resolve()),
-                "routes": [route["name"] for route in view["routes"]]})
+    print_json(
+        {
+            "status": "written",
+            "output": str(args.output.resolve()),
+            "routes": [route["name"] for route in view["routes"]],
+        }
+    )
 
 
 def command_studio_pacman_demo_plan(args: argparse.Namespace) -> None:
@@ -303,10 +335,17 @@ def command_studio_doraemon_demo_plan(args: argparse.Namespace) -> None:
 def command_studio_doraemon_playtest_plan(args: argparse.Namespace) -> None:
     from retrolarium_kit.studio.playtest import studio_doraemon_playtest_plan
 
-    print_json(studio_doraemon_playtest_plan(
-        args.project, mame=args.mame, world=args.world,
-        block=tuple(args.block) if args.block else None, stage=args.stage, room=args.room,
-        underground=tuple(args.underground) if args.underground else None))
+    print_json(
+        studio_doraemon_playtest_plan(
+            args.project,
+            mame=args.mame,
+            world=args.world,
+            block=tuple(args.block) if args.block else None,
+            stage=args.stage,
+            room=args.room,
+            underground=tuple(args.underground) if args.underground else None,
+        )
+    )
 
 
 def command_studio_doraemon_upgrade(args: argparse.Namespace) -> None:
@@ -330,17 +369,27 @@ def command_studio_pacman_round_playtest_plan(args: argparse.Namespace) -> None:
 def command_studio_castle_excellent_point_playtest_plan(args: argparse.Namespace) -> None:
     from retrolarium_kit.studio.playtest import studio_castle_excellent_point_playtest_plan
 
-    print_json(studio_castle_excellent_point_playtest_plan(
-        args.project, mame=args.mame, room=args.room, x=args.x, y=args.y,
-    ))
+    print_json(
+        studio_castle_excellent_point_playtest_plan(
+            args.project,
+            mame=args.mame,
+            room=args.room,
+            x=args.x,
+            y=args.y,
+        )
+    )
 
 
 def command_studio_solomon_point_playtest_plan(args: argparse.Namespace) -> None:
     from retrolarium_kit.studio.playtest import studio_solomon_point_playtest_plan
 
-    print_json(studio_solomon_point_playtest_plan(
-        args.project, mame=args.mame, room=args.room,
-    ))
+    print_json(
+        studio_solomon_point_playtest_plan(
+            args.project,
+            mame=args.mame,
+            room=args.room,
+        )
+    )
 
 
 def command_studio_smb_upgrade(args: argparse.Namespace) -> None:
@@ -391,13 +440,9 @@ def command_studio_launch(args: argparse.Namespace) -> None:
 
 
 def add_parsers(commands: argparse._SubParsersAction) -> None:
-    studio = commands.add_parser(
-        "studio", help="create and inspect human-editable .rlj projects"
-    )
+    studio = commands.add_parser("studio", help="create and inspect human-editable .rlj projects")
     studio_commands = studio.add_subparsers(dest="studio_command", required=True)
-    studio_create = studio_commands.add_parser(
-        "create", help="create a minimal Studio workspace for a disassembly"
-    )
+    studio_create = studio_commands.add_parser("create", help="create a minimal Studio workspace for a disassembly")
     studio_create.add_argument("manifest", type=Path)
     studio_create.add_argument("--output", type=Path, required=True)
     studio_create.add_argument("--force", action="store_true", help="replace an existing project file")
@@ -428,7 +473,8 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     )
     studio_flicky_upgrade.add_argument("project", type=Path)
     studio_flicky_upgrade.add_argument(
-        "--output", type=Path,
+        "--output",
+        type=Path,
         help="write a sibling .rlj; it still shares the migrated source documents",
     )
     studio_flicky_upgrade.set_defaults(handler=command_studio_flicky_upgrade)
@@ -438,9 +484,7 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     )
     studio_solomon_upgrade.add_argument("project", type=Path)
     studio_solomon_upgrade.set_defaults(handler=command_studio_solomon_upgrade)
-    studio_inspect = studio_commands.add_parser(
-        "inspect", help="emit the normalized GUI projection as JSON"
-    )
+    studio_inspect = studio_commands.add_parser("inspect", help="emit the normalized GUI projection as JSON")
     studio_inspect.add_argument("project", type=Path)
     studio_inspect.set_defaults(handler=command_studio_inspect)
     studio_migrate = studio_commands.add_parser(
@@ -449,13 +493,10 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     studio_migrate.add_argument("project", type=Path)
     studio_migrate.add_argument("--output", type=Path)
     studio_migrate.add_argument(
-        "--target-version", type=int,
-        help="the schema version to reach (default: the current one)"
+        "--target-version", type=int, help="the schema version to reach (default: the current one)"
     )
     studio_migrate.set_defaults(handler=command_studio_migrate)
-    studio_validate = studio_commands.add_parser(
-        "validate", help="validate a Studio project and all referenced inputs"
-    )
+    studio_validate = studio_commands.add_parser("validate", help="validate a Studio project and all referenced inputs")
     studio_validate.add_argument("project", type=Path)
     studio_validate.set_defaults(handler=command_studio_validate)
     studio_build = studio_commands.add_parser(
@@ -464,12 +505,12 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     studio_build.add_argument("project", type=Path)
     studio_build.add_argument("--container")
     studio_build.add_argument("--toolchain-cache", type=Path)
-    studio_build.add_argument("--flicky-level-writer", type=Path,
-                              help="native Flicky level writer executable")
+    studio_build.add_argument("--flicky-level-writer", type=Path, help="native Flicky level writer executable")
     studio_build.add_argument(
         "--plan-json",
         help="a launch or playtest plan command (argv as a JSON array) to run "
-             "after the build; its document is returned as \"plan\"")
+        'after the build; its document is returned as "plan"',
+    )
     studio_build.set_defaults(handler=command_studio_build)
     studio_revisions = studio_commands.add_parser(
         "revisions", help="list a game repository's revisions with their ROM and split state"
@@ -493,14 +534,18 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
         "check", help="prove every revision opens and builds back to its ROM, in a throwaway copy"
     )
     studio_check.add_argument("descriptor", type=Path, help="the .rlj at the repository root")
-    studio_check.add_argument("--revision", action="append",
-                              help="check only this revision (repeatable); default: all of them")
-    studio_check.add_argument("--present", action="store_true",
-                              help="check only the revisions whose ROM is here; skip the others")
-    studio_check.add_argument("--flicky-level-writer", type=Path,
-                              help="the studio's retrolarium-flicky-level-writer, for Flicky")
-    studio_check.add_argument("--release", type=Path,
-                              help="also check the Retrolarium part of this 3.0/4.0 release manifest")
+    studio_check.add_argument(
+        "--revision", action="append", help="check only this revision (repeatable); default: all of them"
+    )
+    studio_check.add_argument(
+        "--present", action="store_true", help="check only the revisions whose ROM is here; skip the others"
+    )
+    studio_check.add_argument(
+        "--flicky-level-writer", type=Path, help="the studio's retrolarium-flicky-level-writer, for Flicky"
+    )
+    studio_check.add_argument(
+        "--release", type=Path, help="also check the Retrolarium part of this 3.0/4.0 release manifest"
+    )
     studio_check.set_defaults(handler=command_studio_check)
     studio_open_rom = studio_commands.add_parser(
         "open-rom", help="identify a ROM, find or download its game's repository and ready its version"
@@ -510,9 +555,7 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     studio_open_rom.add_argument("--known", type=Path, action="append", help="a descriptor already on disk")
     studio_open_rom.add_argument("--source", help="archive URL or path template ({organization}, {repository}, {ref})")
     studio_open_rom.set_defaults(handler=command_studio_open_rom)
-    studio_identify = studio_commands.add_parser(
-        "identify", help="name the game and revision a ROM file is"
-    )
+    studio_identify = studio_commands.add_parser("identify", help="name the game and revision a ROM file is")
     studio_identify.add_argument("rom", type=Path)
     studio_identify.set_defaults(handler=command_studio_identify)
     studio_fds_bios = studio_commands.add_parser(
@@ -552,20 +595,17 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     studio_point_playtest.add_argument("--course", type=int, required=True)
     studio_point_playtest.add_argument("--column", type=int, required=True)
     studio_point_playtest.add_argument("--row", type=int, required=True)
-    studio_point_playtest.add_argument(
-        "--theme", choices=("day", "night"), required=True
-    )
+    studio_point_playtest.add_argument("--theme", choices=("day", "night"), required=True)
     studio_point_playtest.add_argument("--no-infinite-time", action="store_true")
     studio_point_playtest.add_argument("--no-invincible", action="store_true")
     studio_point_playtest.add_argument("--no-wrap-pits", action="store_true")
     studio_point_playtest.add_argument(
-        "--sfx-channel", choices=("none", "square1", "square2", "noise"),
+        "--sfx-channel",
+        choices=("none", "square1", "square2", "noise"),
         default="none",
     )
     studio_point_playtest.add_argument("--sfx-value", type=int, default=0)
-    studio_point_playtest.set_defaults(
-        handler=command_studio_smb_point_playtest_plan
-    )
+    studio_point_playtest.set_defaults(handler=command_studio_smb_point_playtest_plan)
     flicky_round_playtest = studio_commands.add_parser(
         "flicky-round-playtest-plan",
         help="emit the canonical Flicky round MAME/Lua process specification",
@@ -573,9 +613,7 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     flicky_round_playtest.add_argument("project", type=Path)
     flicky_round_playtest.add_argument("--mame", type=Path, required=True)
     flicky_round_playtest.add_argument("--round", type=int, required=True)
-    flicky_round_playtest.set_defaults(
-        handler=command_studio_flicky_round_playtest_plan
-    )
+    flicky_round_playtest.set_defaults(handler=command_studio_flicky_round_playtest_plan)
     flicky_demo = studio_commands.add_parser(
         "flicky-demo-plan",
         help="emit the MAME process that loops a Flicky attract demo or records a new one",
@@ -583,8 +621,7 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     flicky_demo.add_argument("project", type=Path)
     flicky_demo.add_argument("--mame", type=Path, required=True)
     flicky_demo.add_argument("--demo", type=int, required=True, help="the attract demo, 1-4")
-    flicky_demo.add_argument("--record", type=Path,
-                             help="play the demo with the controller and write its steps here")
+    flicky_demo.add_argument("--record", type=Path, help="play the demo with the controller and write its steps here")
     flicky_demo.set_defaults(handler=command_studio_flicky_demo_plan)
     flicky_sound_preview = studio_commands.add_parser(
         "flicky-sound-preview",
@@ -626,20 +663,28 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     doraemon_playtest.add_argument("project", type=Path)
     doraemon_playtest.add_argument("--mame", type=Path, required=True)
     doraemon_playtest.add_argument("--world", type=int, choices=(1, 2, 3), required=True)
-    doraemon_playtest.add_argument("--block", type=int, nargs=2, metavar=("X", "Y"),
-                                   help="World 1: start at this city block (0-63 each)")
-    doraemon_playtest.add_argument("--underground", type=int, nargs=2, metavar=("X", "Y"),
-                                   help="World 1: start at this underground block (0-63, 0-24)")
+    doraemon_playtest.add_argument(
+        "--block", type=int, nargs=2, metavar=("X", "Y"), help="World 1: start at this city block (0-63 each)"
+    )
+    doraemon_playtest.add_argument(
+        "--underground",
+        type=int,
+        nargs=2,
+        metavar=("X", "Y"),
+        help="World 1: start at this underground block (0-63, 0-24)",
+    )
     doraemon_playtest.add_argument("--stage", type=int, help="World 2: start at stage 0-2")
     doraemon_playtest.add_argument("--room", type=int, help="World 3: start in room 1-63")
     doraemon_playtest.set_defaults(handler=command_studio_doraemon_playtest_plan)
     doraemon_upgrade = studio_commands.add_parser(
-        "doraemon-upgrade", help="add the documents newer kits edit to a Doraemon project",
+        "doraemon-upgrade",
+        help="add the documents newer kits edit to a Doraemon project",
     )
     doraemon_upgrade.add_argument("project", type=Path)
     doraemon_upgrade.set_defaults(handler=command_studio_doraemon_upgrade)
     pacman_upgrade = studio_commands.add_parser(
-        "pacman-upgrade", help="add the attract demo document to a Pac-Man project",
+        "pacman-upgrade",
+        help="add the attract demo document to a Pac-Man project",
     )
     pacman_upgrade.add_argument("project", type=Path)
     pacman_upgrade.set_defaults(handler=command_studio_pacman_upgrade)
@@ -660,9 +705,7 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     castle_excellent_point_playtest.add_argument("--room", type=int, required=True)
     castle_excellent_point_playtest.add_argument("--x", type=int, required=True)
     castle_excellent_point_playtest.add_argument("--y", type=int, required=True)
-    castle_excellent_point_playtest.set_defaults(
-        handler=command_studio_castle_excellent_point_playtest_plan
-    )
+    castle_excellent_point_playtest.set_defaults(handler=command_studio_castle_excellent_point_playtest_plan)
     solomon_point_playtest = studio_commands.add_parser(
         "solomon-point-playtest-plan",
         help="emit the USA/Europe Solomon MAME room-playtest process specification",
@@ -670,9 +713,7 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     solomon_point_playtest.add_argument("project", type=Path)
     solomon_point_playtest.add_argument("--mame", type=Path, required=True)
     solomon_point_playtest.add_argument("--room", type=int, required=True)
-    solomon_point_playtest.set_defaults(
-        handler=command_studio_solomon_point_playtest_plan
-    )
+    solomon_point_playtest.set_defaults(handler=command_studio_solomon_point_playtest_plan)
     solomon_demo = studio_commands.add_parser(
         "solomon-demo-plan",
         help="emit the MAME process that loops the Solomon attract demo or records a new one",
@@ -680,7 +721,8 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     solomon_demo.add_argument("project", type=Path)
     solomon_demo.add_argument("--mame", type=Path, required=True)
     solomon_demo.add_argument(
-        "--record", type=Path,
+        "--record",
+        type=Path,
         help="play the demo room with the controller and write its buttons here",
     )
     solomon_demo.set_defaults(handler=command_studio_solomon_demo_plan)
@@ -693,7 +735,8 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     smb_demo.add_argument("--record", type=Path, help="play the demo with the controller and write its steps here")
     smb_demo.set_defaults(handler=command_studio_smb_demo_plan)
     smb_upgrade = studio_commands.add_parser(
-        "smb-upgrade", help="add the documents newer kits edit (title demo) to an SMB project",
+        "smb-upgrade",
+        help="add the documents newer kits edit (title demo) to an SMB project",
     )
     smb_upgrade.add_argument("project", type=Path)
     smb_upgrade.set_defaults(handler=command_studio_smb_upgrade)
@@ -703,7 +746,9 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     )
     castle_excellent_demo.add_argument("project", type=Path)
     castle_excellent_demo.add_argument("--mame", type=Path, required=True)
-    castle_excellent_demo.add_argument("--record", type=Path, help="play the demo with the controller and write its commands here")
+    castle_excellent_demo.add_argument(
+        "--record", type=Path, help="play the demo with the controller and write its commands here"
+    )
     castle_excellent_demo.set_defaults(handler=command_studio_castle_excellent_demo_plan)
     castle_excellent_upgrade = studio_commands.add_parser(
         "castle-excellent-upgrade",

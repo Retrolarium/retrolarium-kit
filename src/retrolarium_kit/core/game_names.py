@@ -52,8 +52,10 @@ class GameNames:
         document = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(document, dict) or document.get("schema") != SCHEMA:
             raise GameNamesError(f"{path} is not a {SCHEMA} document")
-        names = {str(category): {str(key): str(value) for key, value in entries.items()}
-                 for category, entries in document.get("names", {}).items()}
+        names = {
+            str(category): {str(key): str(value) for key, value in entries.items()}
+            for category, entries in document.get("names", {}).items()
+        }
         return cls(names, dict(document.get("catalogs", {})))
 
     def name(self, category: str, key: str | int, fallback: str = "") -> str:

@@ -8,8 +8,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from retrolarium_kit.games.doraemon.metasprites import WORLD2_CODEC, decode_world2
 from retrolarium_kit.games.doraemon.objects import (
-    DoraemonObjectError, decode_descriptors, decode_placements, decode_registry, decode_schedule,
-    encode_placements, encode_registry, encode_schedule,
+    DoraemonObjectError,
+    decode_descriptors,
+    decode_placements,
+    decode_registry,
+    decode_schedule,
+    encode_placements,
+    encode_registry,
+    encode_schedule,
 )
 from helpers import game_profile
 from helpers import game_repository
@@ -30,9 +36,11 @@ class DoraemonRomTableTests(unittest.TestCase):
         profile = game_profile("doraemon")
         resource = next(item for item in profile.resources_for(profile.revisions[0]) if item.codec == WORLD2_CODEC)
         p = resource.parameters
-        value = decode_world2(source[p["file_offset"]:p["file_offset"] + p["size"]],
-                              source[p["descriptors_file_offset"]:p["descriptors_file_offset"] + 58],
-                              source[p["attributes_file_offset"]:p["attributes_file_offset"] + 36])
+        value = decode_world2(
+            source[p["file_offset"] : p["file_offset"] + p["size"]],
+            source[p["descriptors_file_offset"] : p["descriptors_file_offset"] + 58],
+            source[p["attributes_file_offset"] : p["attributes_file_offset"] + 36],
+        )
         self.assertEqual([0x80, 0x81, 0x90, 0x91], value["tiles"][0])
         self.assertEqual([0x4D, 0x4E, 0x5D, 0x5E], value["tiles"][36])
         # Enemy state $0B's first frame: palette 3, the lower row flipped both ways.
@@ -41,10 +49,10 @@ class DoraemonRomTableTests(unittest.TestCase):
 
     def test_world1_placements_round_trip_and_keep_their_order(self) -> None:
         source = ROM.read_bytes()
-        city = decode_placements(source[22937:22937 + 337])
-        underground = decode_placements(source[22837:22837 + 100])
+        city = decode_placements(source[22937 : 22937 + 337])
+        underground = decode_placements(source[22837 : 22837 + 100])
         self.assertEqual((112, 33), (len(city), len(underground)))
-        self.assertEqual(source[22937:22937 + 337], encode_placements(city, 337, sorted_tail=True))
+        self.assertEqual(source[22937 : 22937 + 337], encode_placements(city, 337, sorted_tail=True))
         # A manhole (descriptor 0) draws metasprite $29; type $C5 is a weapon
         # upgrade hidden until shot.
         self.assertEqual(0x29, decode_descriptors(source[19482:19534])[0]["metasprite"])
@@ -58,14 +66,14 @@ class DoraemonRomTableTests(unittest.TestCase):
 
     def test_world3_registry_round_trips(self) -> None:
         source = ROM.read_bytes()
-        registry = decode_registry(source[88443:88443 + 65])
+        registry = decode_registry(source[88443 : 88443 + 65])
         self.assertEqual({"room": 7, "type": 0x18, "x": 160, "y": 64, "state": 0}, registry[0])
         self.assertEqual(0x3F, registry[12]["room"])
-        self.assertEqual(source[88443:88443 + 65], encode_registry(registry))
+        self.assertEqual(source[88443 : 88443 + 65], encode_registry(registry))
 
     def test_world3_schedule_round_trips(self) -> None:
         source = ROM.read_bytes()
-        payload = source[87675:87675 + 768]
+        payload = source[87675 : 87675 + 768]
         rooms = decode_schedule(payload)
         # Room 0: channel 0 spawns one type $00 every 15, channel 3 one $05.
         self.assertEqual({"type": 0, "count": 1, "delay": 15}, rooms[0]["channels"][0])

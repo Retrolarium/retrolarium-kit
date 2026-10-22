@@ -36,8 +36,9 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.sections, ("assembly", "text", "code"))
         self.assertEqual(parse_config({**CONFIG, "code": False}).sections, ("assembly", "text"))
         self.assertEqual((config.dialect, config.paths, config.json_layout), ("ca65", ("src",), "indent"))
-        asl = parse_config({"schema": "retrolarium.lint", "schema_version": 1,
-                            "assembly": {"dialect": "asl", "comment_column": 48}})
+        asl = parse_config(
+            {"schema": "retrolarium.lint", "schema_version": 1, "assembly": {"dialect": "asl", "comment_column": 48}}
+        )
         self.assertEqual(asl.style.comment_column, 48)
 
     def test_unknown_settings_are_refused(self) -> None:
@@ -66,8 +67,9 @@ class RunTests(unittest.TestCase):
             codes = {issue.code for issue in run(root, config, report=lambda line: None)}
             self.assertEqual(codes, {"label-line", "text-format"})
             self.assertEqual(run(root, config, fix=True, report=lambda line: None), [])
-            self.assertEqual((root / "data.json").read_text(encoding="utf-8"),
-                             '{\n  "b": 1,\n  "a": [\n    1,\n    2\n  ]\n}\n')
+            self.assertEqual(
+                (root / "data.json").read_text(encoding="utf-8"), '{\n  "b": 1,\n  "a": [\n    1,\n    2\n  ]\n}\n'
+            )
             self.assertEqual((root / "references" / "loose.txt").read_bytes(), b"left alone  \r\n")
 
     def test_valid_json_keeps_its_layout(self) -> None:
@@ -104,8 +106,9 @@ class RunTests(unittest.TestCase):
                 self.assertEqual(main(["lint", "--project", str(root)]), 1)
             self.assertIn("src/main.asm:1: [label-line]", errors.getvalue())
             with contextlib.redirect_stdout(io.StringIO()):
-                self.assertEqual(main(["lint", "--project", str(root), "--fix", "--only", "assembly",
-                                       "src/main.asm"]), 0)
+                self.assertEqual(
+                    main(["lint", "--project", str(root), "--fix", "--only", "assembly", "src/main.asm"]), 0
+                )
             self.assertEqual((root / "src" / "main.asm").read_bytes(), b"start:\n    RTS\n")
 
 

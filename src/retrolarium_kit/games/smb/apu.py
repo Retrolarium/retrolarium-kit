@@ -25,14 +25,56 @@ PULSE_DUTY_SEQUENCES = (
     (1, 0, 0, 1, 1, 1, 1, 1),
 )
 NOISE_PERIODS = (
-    4, 8, 16, 32, 64, 96, 128, 160,
-    202, 254, 380, 508, 762, 1016, 2034, 4068,
+    4,
+    8,
+    16,
+    32,
+    64,
+    96,
+    128,
+    160,
+    202,
+    254,
+    380,
+    508,
+    762,
+    1016,
+    2034,
+    4068,
 )
 LENGTH_COUNTER_TABLE = (
-    10, 254, 20, 2, 40, 4, 80, 6,
-    160, 8, 60, 10, 14, 12, 26, 14,
-    12, 16, 24, 18, 48, 20, 96, 22,
-    192, 24, 72, 26, 16, 28, 32, 30,
+    10,
+    254,
+    20,
+    2,
+    40,
+    4,
+    80,
+    6,
+    160,
+    8,
+    60,
+    10,
+    14,
+    12,
+    26,
+    14,
+    12,
+    16,
+    24,
+    18,
+    48,
+    20,
+    96,
+    22,
+    192,
+    24,
+    72,
+    26,
+    16,
+    28,
+    32,
+    30,
 )
 NOISE_REGISTER_SETTINGS = {
     "short": (0x03, 0x18),
@@ -71,9 +113,7 @@ class SmbApuLayout:
 
     @property
     def leading_envelope_size(self) -> int:
-        return sum(
-            item.size for item in self.envelopes if item.location == "leading"
-        )
+        return sum(item.size for item in self.envelopes if item.location == "leading")
 
     @property
     def selector_offset(self) -> int:
@@ -105,19 +145,11 @@ class SmbApuLayout:
 
     @property
     def encoded_size(self) -> int:
-        return self.envelope_offset + sum(
-            item.size for item in self.envelopes if item.location == "trailing"
-        )
+        return self.envelope_offset + sum(item.size for item in self.envelopes if item.location == "trailing")
 
 
-def _integer(
-    value: object, name: str, *, minimum: int = 0, maximum: int = 0xFFFFFFFF
-) -> int:
-    if (
-        not isinstance(value, int)
-        or isinstance(value, bool)
-        or not minimum <= value <= maximum
-    ):
+def _integer(value: object, name: str, *, minimum: int = 0, maximum: int = 0xFFFFFFFF) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or not minimum <= value <= maximum:
         raise SmbApuError(f"{name} must be an integer in {minimum}..{maximum}")
     return value
 
@@ -129,23 +161,13 @@ def _name(value: object, context: str) -> str:
 
 
 def _positive_number(value: object, name: str) -> float:
-    if (
-        not isinstance(value, (int, float))
-        or isinstance(value, bool)
-        or not math.isfinite(value)
-        or value <= 0
-    ):
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value) or value <= 0:
         raise SmbApuError(f"{name} must be a positive finite number")
     return float(value)
 
 
 def _nonnegative_number(value: object, name: str) -> float:
-    if (
-        not isinstance(value, (int, float))
-        or isinstance(value, bool)
-        or not math.isfinite(value)
-        or value < 0
-    ):
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value) or value < 0:
         raise SmbApuError(f"{name} must be a non-negative finite number")
     return float(value)
 
@@ -153,10 +175,7 @@ def _nonnegative_number(value: object, name: str) -> float:
 def _bytes(value: object, count: int, context: str) -> bytes:
     if not isinstance(value, list) or len(value) != count:
         raise SmbApuError(f"{context} must contain {count} bytes")
-    return bytes(
-        _integer(item, f"{context}[{index}]", maximum=0xFF)
-        for index, item in enumerate(value)
-    )
+    return bytes(_integer(item, f"{context}[{index}]", maximum=0xFF) for index, item in enumerate(value))
 
 
 def decode_channel_byte(value: int, channel: str) -> dict[str, object]:
@@ -265,8 +284,10 @@ def _header_layouts(value: object) -> tuple[HeaderLayout, ...]:
             raise SmbApuError(f"{item_context}.name is duplicated")
         names.add(item_name)
         size = _integer(
-            raw.get("size"), f"{item_context}.size",
-            minimum=4, maximum=6,
+            raw.get("size"),
+            f"{item_context}.size",
+            minimum=4,
+            maximum=6,
         )
         result.append(HeaderLayout(item_name, size))
     return tuple(result)
@@ -279,19 +300,13 @@ def _envelope_layouts(value: object) -> tuple[EnvelopeLayout, ...]:
     names: set[str] = set()
     for index, raw in enumerate(value):
         context = f"envelopes[{index}]"
-        if not isinstance(raw, Mapping) or set(raw) not in (
-            {"name", "size"}, {"name", "size", "location"}
-        ):
-            raise SmbApuError(
-                f"{context} must contain name, size and optional location"
-            )
+        if not isinstance(raw, Mapping) or set(raw) not in ({"name", "size"}, {"name", "size", "location"}):
+            raise SmbApuError(f"{context} must contain name, size and optional location")
         name = _name(raw.get("name"), f"{context}.name")
         if name in names:
             raise SmbApuError(f"{context}.name is duplicated")
         names.add(name)
-        size = _integer(
-            raw.get("size"), f"{context}.size", minimum=1, maximum=0xFFFF
-        )
+        size = _integer(raw.get("size"), f"{context}.size", minimum=1, maximum=0xFFFF)
         location = raw.get("location", "trailing")
         if location not in {"leading", "trailing"}:
             raise SmbApuError(f"{context}.location must be leading or trailing")
@@ -312,21 +327,19 @@ def parse_layout(parameters: Mapping[str, object]) -> SmbApuLayout:
         "envelopes",
     }
     optional = {
-        "file_offset", "size", "frame_rate", "cpu_frequency",
+        "file_offset",
+        "size",
+        "frame_rate",
+        "cpu_frequency",
         "hardware_envelope_event_mask",
     }
     if set(parameters) - required - optional or required - set(parameters):
         raise SmbApuError("SMB APU layout parameters have the wrong shape")
-    cpu_address = _integer(
-        parameters.get("cpu_address"), "cpu_address", maximum=0xFFFF
-    )
+    cpu_address = _integer(parameters.get("cpu_address"), "cpu_address", maximum=0xFFFF)
     raw_selector_names = parameters.get("selector_names")
     if not isinstance(raw_selector_names, list) or not raw_selector_names:
         raise SmbApuError("selector_names must be a non-empty array")
-    selector_names = tuple(
-        _name(item, f"selector_names[{index}]")
-        for index, item in enumerate(raw_selector_names)
-    )
+    selector_names = tuple(_name(item, f"selector_names[{index}]") for index, item in enumerate(raw_selector_names))
     if len(set(selector_names)) != len(selector_names):
         raise SmbApuError("selector_names must be unique")
     headers = _header_layouts(parameters.get("headers"))
@@ -335,35 +348,39 @@ def parse_layout(parameters: Mapping[str, object]) -> SmbApuLayout:
         cpu_address=cpu_address,
         selector_names=selector_names,
         ground_schedule_count=_integer(
-            parameters.get("ground_schedule_count"), "ground_schedule_count",
-            minimum=1, maximum=0xFFFF,
+            parameters.get("ground_schedule_count"),
+            "ground_schedule_count",
+            minimum=1,
+            maximum=0xFFFF,
         ),
         headers=tuple(headers),
         shared_stream_size=_integer(
-            parameters.get("shared_stream_size"), "shared_stream_size",
-            minimum=1, maximum=0xFFFF,
+            parameters.get("shared_stream_size"),
+            "shared_stream_size",
+            minimum=1,
+            maximum=0xFFFF,
         ),
         note_period_count=_integer(
-            parameters.get("note_period_count"), "note_period_count",
-            minimum=1, maximum=0x7FFF,
+            parameters.get("note_period_count"),
+            "note_period_count",
+            minimum=1,
+            maximum=0x7FFF,
         ),
         note_length_count=_integer(
-            parameters.get("note_length_count"), "note_length_count",
-            minimum=1, maximum=0xFFFF,
+            parameters.get("note_length_count"),
+            "note_length_count",
+            minimum=1,
+            maximum=0xFFFF,
         ),
         envelopes=tuple(envelopes),
     )
-    if layout.header_relative_start + sum(
-        item.size for item in layout.headers
-    ) > 0x100:
+    if layout.header_relative_start + sum(item.size for item in layout.headers) > 0x100:
         raise SmbApuError("SMB music headers exceed their one-byte offset range")
     if layout.cpu_address < layout.leading_envelope_size or (
         layout.cpu_address + layout.encoded_size - layout.selector_offset > 0x10000
     ):
         raise SmbApuError("SMB APU resource exceeds the CPU address space")
-    if "size" in parameters and _integer(
-        parameters.get("size"), "size", minimum=1
-    ) != layout.encoded_size:
+    if "size" in parameters and _integer(parameters.get("size"), "size", minimum=1) != layout.encoded_size:
         raise SmbApuError("SMB APU resource size differs from its layout")
     for timing_name in ("frame_rate", "cpu_frequency"):
         if timing_name in parameters:
@@ -371,7 +388,8 @@ def parse_layout(parameters: Mapping[str, object]) -> SmbApuLayout:
     if "hardware_envelope_event_mask" in parameters:
         _integer(
             parameters.get("hardware_envelope_event_mask"),
-            "hardware_envelope_event_mask", maximum=0xFF,
+            "hardware_envelope_event_mask",
+            maximum=0xFF,
         )
     return layout
 
@@ -388,23 +406,22 @@ def _header_offsets(layout: SmbApuLayout) -> dict[str, int]:
 
 
 def _decode_references(
-    payload: bytes, start: int, count: int, names_by_offset: Mapping[int, str],
+    payload: bytes,
+    start: int,
+    count: int,
+    names_by_offset: Mapping[int, str],
     context: str,
 ) -> list[str]:
     result = []
     for index, offset in enumerate(payload[start : start + count]):
         if offset not in names_by_offset:
-            raise SmbApuError(
-                f"{context}[{index}] references unknown header offset {offset}"
-            )
+            raise SmbApuError(f"{context}[{index}] references unknown header offset {offset}")
         result.append(names_by_offset[offset])
     return result
 
 
 def _header_fields(size: int) -> set[str]:
-    fields = {
-        "name", "length_table_offset", "stream_offset", "triangle_offset"
-    }
+    fields = {"name", "length_table_offset", "stream_offset", "triangle_offset"}
     if size >= 5:
         fields.add("square1_offset")
     if size == 6:
@@ -416,57 +433,46 @@ def _validate_channel_offsets(
     header: Mapping[str, object], layout: SmbApuLayout, context: str
 ) -> tuple[int, int, int | None, int | None]:
     stream = _integer(
-        header.get("stream_offset"), f"{context}.stream_offset",
+        header.get("stream_offset"),
+        f"{context}.stream_offset",
         maximum=layout.shared_stream_size - 1,
     )
-    triangle = _integer(
-        header.get("triangle_offset"), f"{context}.triangle_offset", maximum=0xFF
-    )
+    triangle = _integer(header.get("triangle_offset"), f"{context}.triangle_offset", maximum=0xFF)
     square1 = None
     noise = None
     if "square1_offset" in header:
         square1 = _integer(
-            header.get("square1_offset"), f"{context}.square1_offset",
+            header.get("square1_offset"),
+            f"{context}.square1_offset",
             maximum=0xFF,
         )
     if "noise_offset" in header:
-        noise = _integer(
-            header.get("noise_offset"), f"{context}.noise_offset", maximum=0xFF
-        )
-    for channel, relative in (
-        ("triangle", triangle), ("square1", square1), ("noise", noise)
-    ):
+        noise = _integer(header.get("noise_offset"), f"{context}.noise_offset", maximum=0xFF)
+    for channel, relative in (("triangle", triangle), ("square1", square1), ("noise", noise)):
         if relative is not None and stream + relative >= layout.shared_stream_size:
-            raise SmbApuError(
-                f"{context}.{channel}_offset leaves the shared stream arena"
-            )
+            raise SmbApuError(f"{context}.{channel}_offset leaves the shared stream arena")
     return stream, triangle, square1, noise
 
 
-def decode_music(
-    payload: bytes, parameters: Mapping[str, object]
-) -> dict[str, object]:
+def decode_music(payload: bytes, parameters: Mapping[str, object]) -> dict[str, object]:
     """Decode selectors, headers and the single shared SMB channel arena."""
     layout = parse_layout(parameters)
     if len(payload) != layout.encoded_size:
-        raise SmbApuError(
-            f"SMB APU resource has {len(payload)} bytes, expected {layout.encoded_size}"
-        )
+        raise SmbApuError(f"SMB APU resource has {len(payload)} bytes, expected {layout.encoded_size}")
     offsets = _header_offsets(layout)
     names_by_offset = {offset: name for name, offset in offsets.items()}
     selectors = _decode_references(
-        payload, layout.selector_offset, len(layout.selector_names),
-        names_by_offset, "selectors"
+        payload, layout.selector_offset, len(layout.selector_names), names_by_offset, "selectors"
     )
     schedule = _decode_references(
-        payload, layout.selector_offset + len(layout.selector_names),
+        payload,
+        layout.selector_offset + len(layout.selector_names),
         layout.ground_schedule_count,
-        names_by_offset, "ground_schedule",
+        names_by_offset,
+        "ground_schedule",
     )
     cursor = layout.header_start
-    arena_address = (
-        layout.cpu_address + layout.shared_stream_offset - layout.selector_offset
-    )
+    arena_address = layout.cpu_address + layout.shared_stream_offset - layout.selector_offset
     headers: list[dict[str, object]] = []
     for specification in layout.headers:
         raw = payload[cursor : cursor + specification.size]
@@ -489,44 +495,33 @@ def decode_music(
     period_start = layout.note_period_offset
     periods = [
         payload[index] << 8 | payload[index + 1]
-        for index in range(
-            period_start, period_start + layout.note_period_count * 2, 2
-        )
+        for index in range(period_start, period_start + layout.note_period_count * 2, 2)
     ]
     envelope_cursors = {"leading": 0, "trailing": layout.envelope_offset}
     envelopes = []
     for specification in layout.envelopes:
         envelope_cursor = envelope_cursors[specification.location]
-        envelopes.append({
-            "name": specification.name,
-            "values": list(
-                payload[envelope_cursor : envelope_cursor + specification.size]
-            ),
-        })
+        envelopes.append(
+            {
+                "name": specification.name,
+                "values": list(payload[envelope_cursor : envelope_cursor + specification.size]),
+            }
+        )
         envelope_cursors[specification.location] += specification.size
     result: dict[str, object] = {
-        "selectors": [
-            {"name": name, "header": header}
-            for name, header in zip(layout.selector_names, selectors)
-        ],
+        "selectors": [{"name": name, "header": header} for name, header in zip(layout.selector_names, selectors)],
         "ground_schedule": schedule,
         "headers": headers,
-        "shared_stream_arena": list(payload[
-            layout.shared_stream_offset : layout.note_period_offset
-        ]),
+        "shared_stream_arena": list(payload[layout.shared_stream_offset : layout.note_period_offset]),
         "note_periods": periods,
-        "note_lengths": list(payload[
-            layout.note_length_offset : layout.envelope_offset
-        ]),
+        "note_lengths": list(payload[layout.note_length_offset : layout.envelope_offset]),
         "envelopes": envelopes,
     }
     encode_music(result, parameters)
     return result
 
 
-def _encode_references(
-    value: object, count: int, offsets: Mapping[str, int], context: str
-) -> bytes:
+def _encode_references(value: object, count: int, offsets: Mapping[str, int], context: str) -> bytes:
     if not isinstance(value, list) or len(value) != count:
         raise SmbApuError(f"{context} must contain {count} entries")
     result = bytearray()
@@ -538,31 +533,28 @@ def _encode_references(
     return bytes(result)
 
 
-def encode_music(
-    value: object, parameters: Mapping[str, object]
-) -> bytes:
+def encode_music(value: object, parameters: Mapping[str, object]) -> bytes:
     """Validate and encode one fixed-size SMB shared-stream music region."""
     layout = parse_layout(parameters)
     if not isinstance(value, Mapping):
         raise SmbApuError("SMB APU resource must be an object")
     expected = {
-        "selectors", "ground_schedule", "headers", "shared_stream_arena",
-        "note_periods", "note_lengths", "envelopes",
+        "selectors",
+        "ground_schedule",
+        "headers",
+        "shared_stream_arena",
+        "note_periods",
+        "note_lengths",
+        "envelopes",
     }
     if set(value) != expected:
         raise SmbApuError("SMB APU resource fields differ from codec v1")
     offsets = _header_offsets(layout)
     raw_selectors = value.get("selectors")
-    if not isinstance(raw_selectors, list) or len(raw_selectors) != len(
-        layout.selector_names
-    ):
-        raise SmbApuError(
-            f"selectors must contain {len(layout.selector_names)} entries"
-        )
+    if not isinstance(raw_selectors, list) or len(raw_selectors) != len(layout.selector_names):
+        raise SmbApuError(f"selectors must contain {len(layout.selector_names)} entries")
     selector_headers = []
-    for index, (raw, expected_name) in enumerate(
-        zip(raw_selectors, layout.selector_names)
-    ):
+    for index, (raw, expected_name) in enumerate(zip(raw_selectors, layout.selector_names)):
         context = f"selectors[{index}]"
         if not isinstance(raw, Mapping) or set(raw) != {"name", "header"}:
             raise SmbApuError(f"{context} must contain name and header")
@@ -577,7 +569,9 @@ def encode_music(
     )
     schedule_start = selector_end
     output[schedule_start : layout.header_start] = _encode_references(
-        value.get("ground_schedule"), layout.ground_schedule_count, offsets,
+        value.get("ground_schedule"),
+        layout.ground_schedule_count,
+        offsets,
         "ground_schedule",
     )
 
@@ -585,24 +579,19 @@ def encode_music(
     if not isinstance(raw_headers, list) or len(raw_headers) != len(layout.headers):
         raise SmbApuError(f"headers must contain {len(layout.headers)} records")
     cursor = layout.header_start
-    arena_address = (
-        layout.cpu_address + layout.shared_stream_offset - layout.selector_offset
-    )
+    arena_address = layout.cpu_address + layout.shared_stream_offset - layout.selector_offset
     for index, (raw, specification) in enumerate(zip(raw_headers, layout.headers)):
         context = f"headers[{index}]"
-        if not isinstance(raw, Mapping) or set(raw) != _header_fields(
-            specification.size
-        ):
+        if not isinstance(raw, Mapping) or set(raw) != _header_fields(specification.size):
             raise SmbApuError(f"{context} has the wrong shape")
         if raw.get("name") != specification.name:
             raise SmbApuError(f"{context}.name differs from the profile")
         length_offset = _integer(
-            raw.get("length_table_offset"), f"{context}.length_table_offset",
+            raw.get("length_table_offset"),
+            f"{context}.length_table_offset",
             maximum=0xFF,
         )
-        stream, triangle, square1, noise = _validate_channel_offsets(
-            raw, layout, context
-        )
+        stream, triangle, square1, noise = _validate_channel_offsets(raw, layout, context)
         pointer = arena_address + stream
         encoded = [length_offset, pointer & 0xFF, pointer >> 8, triangle]
         if square1 is not None:
@@ -613,14 +602,13 @@ def encode_music(
         cursor += specification.size
 
     output[layout.shared_stream_offset : layout.note_period_offset] = _bytes(
-        value.get("shared_stream_arena"), layout.shared_stream_size,
+        value.get("shared_stream_arena"),
+        layout.shared_stream_size,
         "shared_stream_arena",
     )
     raw_periods = value.get("note_periods")
     if not isinstance(raw_periods, list) or len(raw_periods) != layout.note_period_count:
-        raise SmbApuError(
-            f"note_periods must contain {layout.note_period_count} entries"
-        )
+        raise SmbApuError(f"note_periods must contain {layout.note_period_count} entries")
     period_bytes = bytearray()
     for index, period in enumerate(raw_periods):
         number = _integer(period, f"note_periods[{index}]", maximum=0xFFFF)
@@ -631,14 +619,10 @@ def encode_music(
     )
 
     raw_envelopes = value.get("envelopes")
-    if not isinstance(raw_envelopes, list) or len(raw_envelopes) != len(
-        layout.envelopes
-    ):
+    if not isinstance(raw_envelopes, list) or len(raw_envelopes) != len(layout.envelopes):
         raise SmbApuError(f"envelopes must contain {len(layout.envelopes)} tables")
     envelope_cursors = {"leading": 0, "trailing": layout.envelope_offset}
-    for index, (raw, specification) in enumerate(
-        zip(raw_envelopes, layout.envelopes)
-    ):
+    for index, (raw, specification) in enumerate(zip(raw_envelopes, layout.envelopes)):
         context = f"envelopes[{index}]"
         if not isinstance(raw, Mapping) or set(raw) != {"name", "values"}:
             raise SmbApuError(f"{context} must contain name and values")
@@ -651,9 +635,7 @@ def encode_music(
     return bytes(output)
 
 
-def music_channel_spans(
-    value: object, parameters: Mapping[str, object]
-) -> list[dict[str, object]]:
+def music_channel_spans(value: object, parameters: Mapping[str, object]) -> list[dict[str, object]]:
     """Partition the shared arena by channel entry point and retain aliases."""
     layout = parse_layout(parameters)
     encode_music(value, parameters)
@@ -665,9 +647,7 @@ def music_channel_spans(
     for raw_header in raw_headers:
         assert isinstance(raw_header, Mapping)
         header_name = str(raw_header["name"])
-        stream, triangle, square1, noise = _validate_channel_offsets(
-            raw_header, layout, f"headers.{header_name}"
-        )
+        stream, triangle, square1, noise = _validate_channel_offsets(raw_header, layout, f"headers.{header_name}")
         entries = [("square2", stream)]
         if square1 not in (None, 0):
             entries.append(("square1", stream + square1))
@@ -675,33 +655,33 @@ def music_channel_spans(
         if noise is not None:
             entries.append(("noise", stream + noise))
         for channel, offset in entries:
-            owners_by_offset.setdefault(offset, []).append({
-                "header": header_name,
-                "channel": channel,
-            })
+            owners_by_offset.setdefault(offset, []).append(
+                {
+                    "header": header_name,
+                    "channel": channel,
+                }
+            )
 
     starts = sorted(owners_by_offset)
     return [
         {
             "offset": start,
-            "size": (starts[index + 1] if index + 1 < len(starts)
-                     else layout.shared_stream_size) - start,
+            "size": (starts[index + 1] if index + 1 < len(starts) else layout.shared_stream_size) - start,
             "owners": owners_by_offset[start],
         }
         for index, start in enumerate(starts)
     ]
 
 
-def music_selector_context(
-    value: object, parameters: Mapping[str, object], selector_name: str
-) -> dict[str, object]:
+def music_selector_context(value: object, parameters: Mapping[str, object], selector_name: str) -> dict[str, object]:
     """Resolve engine flags, envelope mode and timing for one logical selector."""
     encode_music(value, parameters)
     assert isinstance(value, Mapping)
     selectors = value["selectors"]
     assert isinstance(selectors, list)
     matches = [
-        (index, item) for index, item in enumerate(selectors)
+        (index, item)
+        for index, item in enumerate(selectors)
         if isinstance(item, Mapping) and item.get("name") == selector_name
     ]
     if len(matches) != 1:
@@ -712,7 +692,8 @@ def music_selector_context(
         mask = 1 << index
         hardware_mask = _integer(
             parameters.get("hardware_envelope_event_mask", 0x91),
-            "hardware_envelope_event_mask", maximum=0xFF,
+            "hardware_envelope_event_mask",
+            maximum=0xFF,
         )
         if mask & hardware_mask:
             envelope = "hardware"
@@ -735,9 +716,7 @@ def music_selector_context(
     }
 
 
-def music_byte_readers(
-    value: object, parameters: Mapping[str, object]
-) -> list[dict[str, object]]:
+def music_byte_readers(value: object, parameters: Mapping[str, object]) -> list[dict[str, object]]:
     """Describe every arena byte fetched by current selectors and schedule entries."""
     encode_music(value, parameters)
     assert isinstance(value, Mapping)
@@ -751,9 +730,7 @@ def music_byte_readers(
         selector_name = str(raw_selector["name"])
         context = music_selector_context(value, parameters, selector_name)
         key = (str(context["header"]), int(context["length_table_adder"]))
-        logical_by_context.setdefault(key, []).append(
-            f"selector:{selector_name}"
-        )
+        logical_by_context.setdefault(key, []).append(f"selector:{selector_name}")
     for index, header_name in enumerate(schedule):
         key = (str(header_name), 0)
         logical_by_context.setdefault(key, []).append(f"ground_schedule:{index}")
@@ -761,7 +738,9 @@ def music_byte_readers(
     readers_by_offset: dict[int, list[dict[str, object]]] = {}
     for (header_name, length_adder), logical_owners in logical_by_context.items():
         timeline = music_header_timeline(
-            value, parameters, header_name,
+            value,
+            parameters,
+            header_name,
             length_table_adder=length_adder,
         )
         raw_channels = timeline["channels"]
@@ -770,10 +749,7 @@ def music_byte_readers(
             assert isinstance(raw_channel, Mapping)
             events = raw_channel["events"]
             assert isinstance(events, list)
-            offsets = sorted({
-                int(event["byte_offset"])
-                for event in events if isinstance(event, Mapping)
-            })
+            offsets = sorted({int(event["byte_offset"]) for event in events if isinstance(event, Mapping)})
             reader = {
                 "header": header_name,
                 "channel": raw_channel["channel"],
@@ -782,10 +758,7 @@ def music_byte_readers(
             }
             for offset in offsets:
                 readers_by_offset.setdefault(offset, []).append(reader)
-    return [
-        {"offset": offset, "readers": readers_by_offset[offset]}
-        for offset in sorted(readers_by_offset)
-    ]
+    return [{"offset": offset, "readers": readers_by_offset[offset]} for offset in sorted(readers_by_offset)]
 
 
 def lower_midi_channel_commands(
@@ -803,17 +776,10 @@ def lower_midi_channel_commands(
     """Lower guarded monophonic MIDI notes to canonical SMB channel bytes."""
     if target_channel not in CHANNELS:
         raise SmbApuError("unknown SMB MIDI target channel")
-    pitch_limit = _nonnegative_number(
-        max_pitch_error_cents, "max_pitch_error_cents"
-    )
-    duration_limit = _nonnegative_number(
-        max_duration_error_frames, "max_duration_error_frames"
-    )
+    pitch_limit = _nonnegative_number(max_pitch_error_cents, "max_pitch_error_cents")
+    duration_limit = _nonnegative_number(max_duration_error_frames, "max_duration_error_frames")
     try:
-        parsed = (
-            parse_midi_channel(data, midi_channel)
-            if track < 0 else parse_midi(data, track, midi_channel)
-        )
+        parsed = parse_midi_channel(data, midi_channel) if track < 0 else parse_midi(data, track, midi_channel)
     except MidiError as exc:
         raise SmbApuError(str(exc)) from exc
     if not parsed.notes:
@@ -827,63 +793,48 @@ def lower_midi_channel_commands(
     assert isinstance(headers, list)
     assert isinstance(periods, list)
     assert isinstance(lengths, list)
-    header = next(
-        item for item in headers
-        if isinstance(item, Mapping) and item.get("name") == context["header"]
-    )
+    header = next(item for item in headers if isinstance(item, Mapping) and item.get("name") == context["header"])
     if target_channel == "square1" and header.get("square1_offset") in (None, 0):
-        raise SmbApuError(
-            f"SMB music header {context['header']!r} has no square1 channel"
-        )
+        raise SmbApuError(f"SMB music header {context['header']!r} has no square1 channel")
     if target_channel == "noise" and header.get("noise_offset") is None:
-        raise SmbApuError(
-            f"SMB music header {context['header']!r} has no noise channel"
-        )
+        raise SmbApuError(f"SMB music header {context['header']!r} has no noise channel")
     length_base = _integer(
-        header.get("length_table_offset"), "length_table_offset",
+        header.get("length_table_offset"),
+        "length_table_offset",
         maximum=len(lengths) - 1,
     ) + int(context["length_table_adder"])
     duration_choices = [
-        (_integer(lengths[length_base + index], "note length", minimum=1,
-                  maximum=0xFF), index)
-        for index in range(8) if length_base + index < len(lengths)
+        (_integer(lengths[length_base + index], "note length", minimum=1, maximum=0xFF), index)
+        for index in range(8)
+        if length_base + index < len(lengths)
     ]
     if not duration_choices:
         raise SmbApuError("SMB MIDI target has no accessible note lengths")
 
-    frame_rate = _positive_number(
-        parameters.get("frame_rate", NTSC_FRAME_RATE), "frame_rate"
-    )
+    frame_rate = _positive_number(parameters.get("frame_rate", NTSC_FRAME_RATE), "frame_rate")
     if target_channel == "noise":
         commands: list[int] = []
         duration_errors: list[float] = []
         output_frames = 0
 
-        def append_noise_segment(
-            start_tick: int, end_tick: int, beat: str, note_index: int
-        ) -> None:
+        def append_noise_segment(start_tick: int, end_tick: int, beat: str, note_index: int) -> None:
             nonlocal output_frames
-            seconds = (
-                tick_seconds(end_tick, parsed.division, parsed.tempos)
-                - tick_seconds(start_tick, parsed.division, parsed.tempos)
+            seconds = tick_seconds(end_tick, parsed.division, parsed.tempos) - tick_seconds(
+                start_tick, parsed.division, parsed.tempos
             )
             exact_frames = seconds * frame_rate
             choices = []
             for duration, length_index in duration_choices:
                 try:
-                    command = encode_channel_command(
-                        "noise", "beat", length_index=length_index, beat=beat
-                    )
+                    command = encode_channel_command("noise", "beat", length_index=length_index, beat=beat)
                 except SmbApuError:
                     continue
                 choices.append((duration, length_index, command))
             if not choices:
                 raise SmbApuError(f"SMB noise has no encoding for {beat}")
-            maximum_total = max(1, math.ceil(
-                exact_frames + duration_limit + max(
-                    duration for duration, _index, _command in choices
-                )
-            ))
+            maximum_total = max(
+                1, math.ceil(exact_frames + duration_limit + max(duration for duration, _index, _command in choices))
+            )
             paths: dict[int, list[int]] = {0: []}
             for total in range(1, maximum_total + 1):
                 candidates = [
@@ -909,40 +860,42 @@ def lower_midi_channel_commands(
 
         previous_end = 0
         percussion = {
-            35: "strong", 36: "strong", 38: "strong", 40: "strong",
-            42: "short", 44: "short", 46: "short",
-            49: "long", 51: "long", 52: "long", 55: "long", 57: "long",
+            35: "strong",
+            36: "strong",
+            38: "strong",
+            40: "strong",
+            42: "short",
+            44: "short",
+            46: "short",
+            49: "long",
+            51: "long",
+            52: "long",
+            55: "long",
+            57: "long",
         }
         for note_index, note in enumerate(parsed.notes):
             if note.start_tick < previous_end:
                 raise SmbApuError("SMB noise MIDI events must not overlap")
             if note.start_tick > previous_end:
-                append_noise_segment(
-                    previous_end, note.start_tick, "rest", note_index
-                )
+                append_noise_segment(previous_end, note.start_tick, "rest", note_index)
             append_noise_segment(
-                note.start_tick, note.end_tick,
-                percussion.get(note.note, "short"), note_index,
+                note.start_tick,
+                note.end_tick,
+                percussion.get(note.note, "short"),
+                note_index,
             )
             previous_end = note.end_tick
         if parsed.end_tick > previous_end:
-            append_noise_segment(
-                previous_end, parsed.end_tick, "rest", len(parsed.notes)
-            )
+            append_noise_segment(previous_end, parsed.end_tick, "rest", len(parsed.notes))
 
         uncompressed = list(commands)
         for size in range(1, len(uncompressed)):
             if len(uncompressed) % size == 0 and all(
-                command == uncompressed[index % size]
-                for index, command in enumerate(uncompressed)
+                command == uncompressed[index % size] for index, command in enumerate(uncompressed)
             ):
-                commands = uncompressed[:size] + [
-                    encode_channel_command("noise", "loop")
-                ]
+                commands = uncompressed[:size] + [encode_channel_command("noise", "loop")]
                 break
-        source_seconds = tick_seconds(
-            parsed.end_tick, parsed.division, parsed.tempos
-        )
+        source_seconds = tick_seconds(parsed.end_tick, parsed.division, parsed.tempos)
         return commands, {
             "schema": "retrolarium.smb-midi-lowering",
             "schema_version": 1,
@@ -957,22 +910,15 @@ def lower_midi_channel_commands(
             "output_frames": output_frames,
             "source_seconds": round(source_seconds, 6),
             "maximum_pitch_error_cents": 0.0,
-            "maximum_duration_error_frames": round(
-                max(duration_errors, default=0.0), 3
-            ),
-            "discarded": [
-                {"feature": feature, "events": count}
-                for feature, count in parsed.discarded_events
-            ],
+            "maximum_duration_error_frames": round(max(duration_errors, default=0.0), 3),
+            "discarded": [{"feature": feature, "events": count} for feature, count in parsed.discarded_events],
         }
 
     divider = 32.0 if target_channel == "triangle" else 16.0
-    cpu_frequency = _positive_number(
-        parameters.get("cpu_frequency", NTSC_CPU_FREQUENCY), "cpu_frequency"
-    )
+    cpu_frequency = _positive_number(parameters.get("cpu_frequency", NTSC_CPU_FREQUENCY), "cpu_frequency")
     maximum_period_index = 31 if target_channel == "square1" else 63
     pitch_choices = []
-    for index, raw_period in enumerate(periods[:maximum_period_index + 1]):
+    for index, raw_period in enumerate(periods[: maximum_period_index + 1]):
         period = _integer(raw_period, f"note_periods[{index}]", maximum=0xFFFF)
         if period < 8 or (period & 0xFF) == 0:
             continue
@@ -990,22 +936,16 @@ def lower_midi_channel_commands(
     duration_errors = []
     for note_index, note in enumerate(parsed.notes):
         if note.start_tick != previous_end:
-            raise SmbApuError(
-                "SMB MIDI lowering requires contiguous notes without rests"
-            )
-        seconds = (
-            tick_seconds(note.end_tick, parsed.division, parsed.tempos)
-            - tick_seconds(note.start_tick, parsed.division, parsed.tempos)
+            raise SmbApuError("SMB MIDI lowering requires contiguous notes without rests")
+        seconds = tick_seconds(note.end_tick, parsed.division, parsed.tempos) - tick_seconds(
+            note.start_tick, parsed.division, parsed.tempos
         )
         exact_frames = seconds * frame_rate
-        duration, length_index = min(
-            duration_choices, key=lambda item: (abs(item[0] - exact_frames), item[1])
-        )
+        duration, length_index = min(duration_choices, key=lambda item: (abs(item[0] - exact_frames), item[1]))
         duration_error = abs(duration - exact_frames)
         if duration_error > duration_limit:
             raise SmbApuError(
-                f"MIDI note {note_index} duration differs from the nearest SMB "
-                f"length by {duration_error:.3f} frames"
+                f"MIDI note {note_index} duration differs from the nearest SMB length by {duration_error:.3f} frames"
             )
         target_frequency = 440.0 * math.pow(2.0, (note.note - 69) / 12.0)
         frequency, period_index = min(
@@ -1014,24 +954,21 @@ def lower_midi_channel_commands(
         )
         pitch_error = abs(1200.0 * math.log2(frequency / target_frequency))
         if pitch_error > pitch_limit:
-            raise SmbApuError(
-                f"MIDI note {note_index} differs from the nearest SMB period "
-                f"by {pitch_error:.3f} cents"
-            )
+            raise SmbApuError(f"MIDI note {note_index} differs from the nearest SMB period by {pitch_error:.3f} cents")
         if target_channel in {"square2", "triangle"}:
             if current_length != length_index:
-                commands.append(encode_channel_command(
-                    target_channel, "length", length_index=length_index
-                ))
+                commands.append(encode_channel_command(target_channel, "length", length_index=length_index))
                 current_length = length_index
-            commands.append(encode_channel_command(
-                target_channel, "note", period_index=period_index
-            ))
+            commands.append(encode_channel_command(target_channel, "note", period_index=period_index))
         else:
-            commands.append(encode_channel_command(
-                target_channel, "note", period_index=period_index,
-                length_index=length_index,
-            ))
+            commands.append(
+                encode_channel_command(
+                    target_channel,
+                    "note",
+                    period_index=period_index,
+                    length_index=length_index,
+                )
+            )
         source_seconds += seconds
         output_frames += duration
         duration_errors.append(duration_error)
@@ -1054,10 +991,7 @@ def lower_midi_channel_commands(
         "source_seconds": round(source_seconds, 6),
         "maximum_pitch_error_cents": round(max(pitch_errors), 3),
         "maximum_duration_error_frames": round(max(duration_errors), 3),
-        "discarded": [
-            {"feature": feature, "events": count}
-            for feature, count in parsed.discarded_events
-        ],
+        "discarded": [{"feature": feature, "events": count} for feature, count in parsed.discarded_events],
     }
 
 
@@ -1072,16 +1006,12 @@ def apply_midi_channel_commands(
     **options: object,
 ) -> tuple[dict[str, object], dict[str, object]]:
     """Apply MIDI only when existing timing and physical byte ownership are safe."""
-    commands, lowering = lower_midi_channel_commands(
-        data, value, parameters, selector_name, target_channel, **options
-    )
+    commands, lowering = lower_midi_channel_commands(data, value, parameters, selector_name, target_channel, **options)
     assert isinstance(value, Mapping)
     context = music_selector_context(value, parameters, selector_name)
     length_adder = int(context["length_table_adder"])
     header_name = str(context["header"])
-    timeline = music_header_timeline(
-        value, parameters, header_name, length_table_adder=length_adder
-    )
+    timeline = music_header_timeline(value, parameters, header_name, length_table_adder=length_adder)
     if int(lowering["output_frames"]) != int(timeline["duration"]):
         raise SmbApuError(
             "SMB MIDI output duration must equal the existing header duration "
@@ -1090,47 +1020,38 @@ def apply_midi_channel_commands(
     raw_channels = timeline["channels"]
     assert isinstance(raw_channels, list)
     channel = next(
-        (item for item in raw_channels
-         if isinstance(item, Mapping) and item.get("channel") == target_channel),
+        (item for item in raw_channels if isinstance(item, Mapping) and item.get("channel") == target_channel),
         None,
     )
     if channel is None:
-        raise SmbApuError(
-            f"SMB music header {header_name!r} has no {target_channel} channel"
-        )
+        raise SmbApuError(f"SMB music header {header_name!r} has no {target_channel} channel")
     entry_offset = int(channel["entry_offset"])
     raw_events = channel["events"]
     assert isinstance(raw_events, list)
-    existing_offsets = {
-        int(event["byte_offset"])
-        for event in raw_events if isinstance(event, Mapping)
-    }
+    existing_offsets = {int(event["byte_offset"]) for event in raw_events if isinstance(event, Mapping)}
     replacement_offsets = list(range(entry_offset, entry_offset + len(commands)))
     if any(offset not in existing_offsets for offset in replacement_offsets):
-        raise SmbApuError(
-            "SMB MIDI bytes exceed the channel's currently consumed prefix"
-        )
+        raise SmbApuError("SMB MIDI bytes exceed the channel's currently consumed prefix")
 
-    readers = {
-        int(item["offset"]): item["readers"]
-        for item in music_byte_readers(value, parameters)
-    }
+    readers = {int(item["offset"]): item["readers"] for item in music_byte_readers(value, parameters)}
     target_identity = (header_name, target_channel, length_adder)
     logical_owners: list[str] = []
     for offset in replacement_offsets:
         raw_readers = readers.get(offset, [])
         assert isinstance(raw_readers, list)
         foreign = [
-            reader for reader in raw_readers
-            if isinstance(reader, Mapping) and (
-                reader.get("header"), reader.get("channel"),
+            reader
+            for reader in raw_readers
+            if isinstance(reader, Mapping)
+            and (
+                reader.get("header"),
+                reader.get("channel"),
                 reader.get("length_table_adder"),
-            ) != target_identity
+            )
+            != target_identity
         ]
         disallowed = [
-            reader for reader in foreign
-            if not allow_same_channel_sharing
-            or reader.get("channel") != target_channel
+            reader for reader in foreign if not allow_same_channel_sharing or reader.get("channel") != target_channel
         ]
         if disallowed:
             reader = disallowed[0]
@@ -1140,17 +1061,21 @@ def apply_midi_channel_commands(
                 f"(length adder {reader['length_table_adder']})"
             )
         target_reader = next(
-            (reader for reader in raw_readers
-             if isinstance(reader, Mapping) and (
-                 reader.get("header"), reader.get("channel"),
-                 reader.get("length_table_adder"),
-             ) == target_identity),
+            (
+                reader
+                for reader in raw_readers
+                if isinstance(reader, Mapping)
+                and (
+                    reader.get("header"),
+                    reader.get("channel"),
+                    reader.get("length_table_adder"),
+                )
+                == target_identity
+            ),
             None,
         )
         if target_reader is None:
-            raise SmbApuError(
-                f"SMB MIDI byte {offset} is not read by the target channel"
-            )
+            raise SmbApuError(f"SMB MIDI byte {offset} is not read by the target channel")
         for owner in target_reader["logical_owners"]:
             if owner not in logical_owners:
                 logical_owners.append(str(owner))
@@ -1176,9 +1101,9 @@ def apply_midi_channel_commands(
         "changed_bytes": len(changed_offsets),
         "changed_offsets": changed_offsets,
         "affected_logical_owners": logical_owners,
-        "shared_channel_edit": bool(allow_same_channel_sharing and any(
-            len(readers.get(offset, [])) > 1 for offset in replacement_offsets
-        )),
+        "shared_channel_edit": bool(
+            allow_same_channel_sharing and any(len(readers.get(offset, [])) > 1 for offset in replacement_offsets)
+        ),
     }
 
 
@@ -1196,56 +1121,45 @@ def apply_midi_song_commands(
     encode_music(value, parameters)
     context = music_selector_context(value, parameters, selector_name)
     timeline = music_header_timeline(
-        value, parameters, str(context["header"]),
+        value,
+        parameters,
+        str(context["header"]),
         length_table_adder=int(context["length_table_adder"]),
     )
-    available = {
-        str(channel["channel"])
-        for channel in timeline["channels"]
-        if isinstance(channel, Mapping)
-    }
-    mappings = (
-        ("square2", 0), ("square1", 1), ("triangle", 2), ("noise", 9)
-    )
+    available = {str(channel["channel"]) for channel in timeline["channels"] if isinstance(channel, Mapping)}
+    mappings = (("square2", 0), ("square1", 1), ("triangle", 2), ("noise", 9))
     edited = copy.deepcopy(dict(value))
     reports: list[dict[str, object]] = []
     for target_channel, midi_channel in mappings:
         try:
-            parsed = (
-                parse_midi_channel(data, midi_channel)
-                if track < 0 else parse_midi(data, track, midi_channel)
-            )
+            parsed = parse_midi_channel(data, midi_channel) if track < 0 else parse_midi(data, track, midi_channel)
         except MidiError as exc:
             raise SmbApuError(str(exc)) from exc
         if not parsed.notes:
             continue
         if target_channel not in available:
-            raise SmbApuError(
-                f"MIDI channel {midi_channel + 1} targets unavailable SMB "
-                f"channel {target_channel}"
-            )
+            raise SmbApuError(f"MIDI channel {midi_channel + 1} targets unavailable SMB channel {target_channel}")
         edited, report = apply_midi_channel_commands(
-            data, edited, parameters, selector_name, target_channel,
+            data,
+            edited,
+            parameters,
+            selector_name,
+            target_channel,
             allow_same_channel_sharing=True,
-            track=track, midi_channel=midi_channel,
+            track=track,
+            midi_channel=midi_channel,
             max_pitch_error_cents=max_pitch_error_cents,
             max_duration_error_frames=max_duration_error_frames,
         )
         reports.append(report)
     if not reports:
-        raise SmbApuError(
-            "SMB song MIDI contains no notes on channels 1, 2, 3 or 10"
-        )
+        raise SmbApuError("SMB song MIDI contains no notes on channels 1, 2, 3 or 10")
     assert isinstance(value, Mapping)
     before_arena = value["shared_stream_arena"]
     after_arena = edited["shared_stream_arena"]
     assert isinstance(before_arena, list)
     assert isinstance(after_arena, list)
-    changed_offsets = [
-        index for index, (before, after) in enumerate(
-            zip(before_arena, after_arena)
-        ) if before != after
-    ]
+    changed_offsets = [index for index, (before, after) in enumerate(zip(before_arena, after_arena)) if before != after]
     return edited, {
         "schema": "retrolarium.smb-midi-song-lowering",
         "schema_version": 1,
@@ -1282,22 +1196,21 @@ def music_header_timeline(
     assert isinstance(periods, list)
     assert isinstance(lengths, list)
     header = next(
-        (item for item in headers
-         if isinstance(item, Mapping) and item.get("name") == header_name),
+        (item for item in headers if isinstance(item, Mapping) and item.get("name") == header_name),
         None,
     )
     if header is None:
         raise SmbApuError(f"unknown SMB music header {header_name!r}")
-    adder = _integer(
-        length_table_adder, "length_table_adder", maximum=len(lengths) - 1
+    adder = _integer(length_table_adder, "length_table_adder", maximum=len(lengths) - 1)
+    base = (
+        _integer(
+            header.get("length_table_offset"),
+            "length_table_offset",
+            maximum=len(lengths) - 1,
+        )
+        + adder
     )
-    base = _integer(
-        header.get("length_table_offset"), "length_table_offset",
-        maximum=len(lengths) - 1,
-    ) + adder
-    stream = _integer(
-        header.get("stream_offset"), "stream_offset", maximum=len(arena) - 1
-    )
+    stream = _integer(header.get("stream_offset"), "stream_offset", maximum=len(arena) - 1)
     event_limit = max(1024, len(arena) * 512)
 
     def duration(index: int) -> int:
@@ -1307,11 +1220,10 @@ def music_header_timeline(
         result = _integer(lengths[position], "note length", minimum=1, maximum=0xFF)
         return result
 
-    def note_event(command: Mapping[str, object], tick: int,
-                   event_duration: int, byte_offset: int) -> dict[str, object]:
-        period_index = _integer(
-            command.get("period_index"), "period_index", maximum=len(periods) - 1
-        )
+    def note_event(
+        command: Mapping[str, object], tick: int, event_duration: int, byte_offset: int
+    ) -> dict[str, object]:
+        period_index = _integer(command.get("period_index"), "period_index", maximum=len(periods) - 1)
         return {
             "kind": "note",
             "byte_offset": byte_offset,
@@ -1332,22 +1244,22 @@ def music_header_timeline(
         kind = command["kind"]
         if kind == "length":
             current_duration = duration(int(command["length_index"]))
-            square2_events.append({
-                "kind": "length", "byte_offset": cursor, "tick": tick,
-                "length_index": command["length_index"],
-                "duration": current_duration,
-            })
+            square2_events.append(
+                {
+                    "kind": "length",
+                    "byte_offset": cursor,
+                    "tick": tick,
+                    "length_index": command["length_index"],
+                    "duration": current_duration,
+                }
+            )
         elif kind == "note":
             if current_duration is None:
                 raise SmbApuError("square2 note precedes its length command")
-            square2_events.append(note_event(
-                command, tick, current_duration, cursor
-            ))
+            square2_events.append(note_event(command, tick, current_duration, cursor))
             tick += current_duration
         else:
-            square2_events.append({
-                "kind": "end", "byte_offset": cursor, "tick": tick
-            })
+            square2_events.append({"kind": "end", "byte_offset": cursor, "tick": tick})
             break
         cursor += 1
     else:
@@ -1366,58 +1278,71 @@ def music_header_timeline(
             kind = str(command["kind"])
             if kind == "length":
                 channel_duration = duration(int(command["length_index"]))
-                events.append({
-                    "kind": "length", "byte_offset": channel_cursor,
-                    "tick": channel_tick,
-                    "length_index": command["length_index"],
-                    "duration": channel_duration,
-                })
+                events.append(
+                    {
+                        "kind": "length",
+                        "byte_offset": channel_cursor,
+                        "tick": channel_tick,
+                        "length_index": command["length_index"],
+                        "duration": channel_duration,
+                    }
+                )
             elif kind == "control":
-                events.append({
-                    "kind": "control", "byte_offset": channel_cursor,
-                    "tick": channel_tick,
-                })
+                events.append(
+                    {
+                        "kind": "control",
+                        "byte_offset": channel_cursor,
+                        "tick": channel_tick,
+                    }
+                )
             else:
                 if channel == "square1":
                     event_duration = duration(int(command["length_index"]))
                 else:
                     if channel_duration is None:
-                        raise SmbApuError(
-                            f"{channel} event precedes its length command"
-                        )
+                        raise SmbApuError(f"{channel} event precedes its length command")
                     event_duration = channel_duration
                 if kind == "note":
-                    events.append(note_event(
-                        command, channel_tick, event_duration, channel_cursor
-                    ))
+                    events.append(note_event(command, channel_tick, event_duration, channel_cursor))
                 else:
-                    events.append({
-                        "kind": "rest", "byte_offset": channel_cursor,
-                        "tick": channel_tick, "duration": event_duration,
-                    })
+                    events.append(
+                        {
+                            "kind": "rest",
+                            "byte_offset": channel_cursor,
+                            "tick": channel_tick,
+                            "duration": event_duration,
+                        }
+                    )
                 channel_tick += event_duration
             channel_cursor += 1
         if channel_tick < total_ticks:
             raise SmbApuError(f"{channel} stream exceeds the timeline event limit")
         return events
 
-    channels: list[dict[str, object]] = [{
-        "channel": "square2", "entry_offset": stream,
-        "events": square2_events,
-    }]
+    channels: list[dict[str, object]] = [
+        {
+            "channel": "square2",
+            "entry_offset": stream,
+            "events": square2_events,
+        }
+    ]
     square1 = header.get("square1_offset")
     if isinstance(square1, int) and not isinstance(square1, bool) and square1 != 0:
-        channels.append({
-            "channel": "square1", "entry_offset": stream + square1,
-            "events": timed_channel("square1", stream + square1),
-        })
-    triangle = _integer(
-        header.get("triangle_offset"), "triangle_offset", maximum=0xFF
+        channels.append(
+            {
+                "channel": "square1",
+                "entry_offset": stream + square1,
+                "events": timed_channel("square1", stream + square1),
+            }
+        )
+    triangle = _integer(header.get("triangle_offset"), "triangle_offset", maximum=0xFF)
+    channels.append(
+        {
+            "channel": "triangle",
+            "entry_offset": stream + triangle,
+            "events": timed_channel("triangle", stream + triangle),
+        }
     )
-    channels.append({
-        "channel": "triangle", "entry_offset": stream + triangle,
-        "events": timed_channel("triangle", stream + triangle),
-    })
 
     noise = header.get("noise_offset")
     if isinstance(noise, int) and not isinstance(noise, bool):
@@ -1433,38 +1358,43 @@ def music_header_timeline(
             if command["kind"] == "loop":
                 if beats_since_loop == 0:
                     raise SmbApuError("noise stream has an empty loop")
-                noise_events.append({
-                    "kind": "loop", "byte_offset": noise_cursor,
-                    "tick": noise_tick,
-                })
+                noise_events.append(
+                    {
+                        "kind": "loop",
+                        "byte_offset": noise_cursor,
+                        "tick": noise_tick,
+                    }
+                )
                 noise_cursor = noise_start
                 beats_since_loop = 0
                 continue
             beat_duration = duration(int(command["length_index"]))
             beat = str(command["beat"])
-            period_register, length_register = NOISE_REGISTER_SETTINGS.get(
-                beat, (0, 0)
+            period_register, length_register = NOISE_REGISTER_SETTINGS.get(beat, (0, 0))
+            noise_events.append(
+                {
+                    "kind": "beat",
+                    "byte_offset": noise_cursor,
+                    "tick": noise_tick,
+                    "duration": beat_duration,
+                    "beat": beat,
+                    "length_index": command["length_index"],
+                    "period_index": period_register & 0x0F,
+                    "length_counter": (LENGTH_COUNTER_TABLE[length_register >> 3] if length_register else 0),
+                }
             )
-            noise_events.append({
-                "kind": "beat", "byte_offset": noise_cursor,
-                "tick": noise_tick, "duration": beat_duration,
-                "beat": beat,
-                "length_index": command["length_index"],
-                "period_index": period_register & 0x0F,
-                "length_counter": (
-                    LENGTH_COUNTER_TABLE[length_register >> 3]
-                    if length_register else 0
-                ),
-            })
             noise_tick += beat_duration
             noise_cursor += 1
             beats_since_loop += 1
         if noise_tick < total_ticks:
             raise SmbApuError("noise stream exceeds the timeline event limit")
-        channels.append({
-            "channel": "noise", "entry_offset": noise_start,
-            "events": noise_events,
-        })
+        channels.append(
+            {
+                "channel": "noise",
+                "entry_offset": noise_start,
+                "events": noise_events,
+            }
+        )
 
     return {
         "header": header_name,
@@ -1489,66 +1419,51 @@ def render_music_header_pcm(
     """Render a deterministic mono authoring preview for one SMB music header."""
     rate = _integer(sample_rate, "sample_rate", minimum=1, maximum=384_000)
     resolved_frame_rate = _positive_number(
-        parameters.get("frame_rate", NTSC_FRAME_RATE)
-        if frame_rate is None else frame_rate,
+        parameters.get("frame_rate", NTSC_FRAME_RATE) if frame_rate is None else frame_rate,
         "frame_rate",
     )
     resolved_cpu_frequency = _positive_number(
-        parameters.get("cpu_frequency", NTSC_CPU_FREQUENCY)
-        if cpu_frequency is None else cpu_frequency,
+        parameters.get("cpu_frequency", NTSC_CPU_FREQUENCY) if cpu_frequency is None else cpu_frequency,
         "cpu_frequency",
     )
-    if not isinstance(muted_channels, tuple) or any(
-        channel not in CHANNELS for channel in muted_channels
-    ):
+    if not isinstance(muted_channels, tuple) or any(channel not in CHANNELS for channel in muted_channels):
         raise SmbApuError("muted_channels must contain known channel names")
-    selector_context = (
-        music_selector_context(value, parameters, selector_name)
-        if selector_name is not None else None
-    )
-    if (
-        selector_context is not None
-        and selector_context["header"] != header_name
-    ):
-        raise SmbApuError(
-            f"SMB music selector {selector_name!r} does not select "
-            f"header {header_name!r}"
-        )
+    selector_context = music_selector_context(value, parameters, selector_name) if selector_name is not None else None
+    if selector_context is not None and selector_context["header"] != header_name:
+        raise SmbApuError(f"SMB music selector {selector_name!r} does not select header {header_name!r}")
     resolved_length_adder = (
         int(selector_context["length_table_adder"])
         if length_table_adder is None and selector_context is not None
-        else 0 if length_table_adder is None else length_table_adder
+        else 0
+        if length_table_adder is None
+        else length_table_adder
     )
     timeline = music_header_timeline(
-        value, parameters, header_name,
+        value,
+        parameters,
+        header_name,
         length_table_adder=resolved_length_adder,
     )
     assert isinstance(value, Mapping)
     raw_envelopes = value["envelopes"]
     assert isinstance(raw_envelopes, list)
-    envelopes = {
-        str(item["name"]): item["values"]
-        for item in raw_envelopes if isinstance(item, Mapping)
-    }
+    envelopes = {str(item["name"]): item["values"] for item in raw_envelopes if isinstance(item, Mapping)}
 
     def pulse_control(age_samples: int) -> tuple[int, int]:
         if selector_context is None:
             return 2, 15
         envelope_name = str(selector_context["envelope"])
         if envelope_name == "hardware":
-            quarter_ticks = int(
-                age_samples * resolved_frame_rate * 4.0 / rate
-            )
+            quarter_ticks = int(age_samples * resolved_frame_rate * 4.0 / rate)
             return 2, max(0, 15 - quarter_ticks // 3)
         raw_values = envelopes.get(envelope_name)
         if not isinstance(raw_values, list) or not raw_values:
-            raise SmbApuError(
-                f"SMB music envelope {envelope_name!r} is unavailable"
-            )
+            raise SmbApuError(f"SMB music envelope {envelope_name!r} is unavailable")
         age_frames = int(age_samples * resolved_frame_rate / rate)
         register = _integer(
             raw_values[max(0, len(raw_values) - 1 - age_frames)],
-            f"{envelope_name} envelope value", maximum=0xFF,
+            f"{envelope_name} envelope value",
+            maximum=0xFF,
         )
         return (register >> 6) & 3, register & 0x0F
 
@@ -1572,26 +1487,23 @@ def render_music_header_pcm(
             if kind not in {"note", "rest", "beat"}:
                 continue
             start = round(int(event["tick"]) * rate / resolved_frame_rate)
-            end = min(sample_count, round(
-                (int(event["tick"]) + int(event["duration"]))
-                * rate / resolved_frame_rate
-            ))
+            end = min(sample_count, round((int(event["tick"]) + int(event["duration"])) * rate / resolved_frame_rate))
             if kind == "rest":
                 continue
             if kind == "beat":
                 beat = str(event["beat"])
                 period_index = _integer(
-                    event.get("period_index"), "noise period index",
+                    event.get("period_index"),
+                    "noise period index",
                     maximum=len(NOISE_PERIODS) - 1,
                 )
                 length_counter = _integer(
-                    event.get("length_counter"), "noise length counter",
+                    event.get("length_counter"),
+                    "noise length counter",
                     maximum=0xFF,
                 )
                 shift_rate = resolved_cpu_frequency / NOISE_PERIODS[period_index]
-                gate_samples = round(
-                    length_counter * rate / (resolved_frame_rate * 2.0)
-                )
+                gate_samples = round(length_counter * rate / (resolved_frame_rate * 2.0))
                 gate_end = min(end, start + gate_samples)
                 for sample in range(start, end):
                     noise_phase += shift_rate / rate
@@ -1604,12 +1516,10 @@ def render_music_header_pcm(
                 continue
 
             period = int(event["period"])
-            if (period & 0xff) == 0:
+            if (period & 0xFF) == 0:
                 continue
             divider = 32.0 if channel == "triangle" else 16.0
-            frequency = (
-                resolved_cpu_frequency / (divider * ((period & 0x7ff) + 1))
-            )
+            frequency = resolved_cpu_frequency / (divider * ((period & 0x7FF) + 1))
             phase = triangle_phase if channel == "triangle" else 0.0
             for sample in range(start, end):
                 if channel == "triangle":
@@ -1618,9 +1528,7 @@ def render_music_header_pcm(
                     duty, volume = pulse_control(sample - start)
                     sequence = PULSE_DUTY_SEQUENCES[duty]
                     level = 0.18 * volume / 15.0
-                    amplitude = (
-                        level if sequence[int(phase * 8.0) % 8] else -level
-                    )
+                    amplitude = level if sequence[int(phase * 8.0) % 8] else -level
                 mix[sample] += amplitude
                 phase = math.fmod(phase + frequency / rate, 1.0)
             if channel == "triangle":

@@ -39,11 +39,8 @@ def main() -> int:
         transient = preview_dir / ".flicky-unsaved-test.asm"
         transient.write_bytes(edited)
 
-        saved = studio_flicky_sound_preview(
-            project, header="zSFX90Header", seconds=1)
-        unsaved = studio_flicky_sound_preview(
-            project, header="zSFX90Header", seconds=1,
-            document_override=transient)
+        saved = studio_flicky_sound_preview(project, header="zSFX90Header", seconds=1)
+        unsaved = studio_flicky_sound_preview(project, header="zSFX90Header", seconds=1, document_override=transient)
         assert saved["document_origin"] == "saved"
         assert unsaved["document_origin"] == "unsaved"
         assert saved["document_sha256"] == sha256(original).hexdigest()
@@ -51,19 +48,30 @@ def main() -> int:
         assert saved["wav"]["sha256"] != unsaved["wav"]["sha256"]
         assert saved["vgm"]["sha256"] != unsaved["vgm"]["sha256"]
         assert source.read_bytes() == original, "preview saved unsaved source changes"
-        command = subprocess.run([
-            sys.executable,
-            str(Path(__file__).resolve().parents[3] / "rltool.py"),
-            "studio", "flicky-sound-preview", str(project),
-            "--header", "zSFX90Header", "--seconds", "1",
-            "--document-override", str(transient),
-        ], check=True, capture_output=True, text=True, timeout=120)
+        command = subprocess.run(
+            [
+                sys.executable,
+                str(Path(__file__).resolve().parents[3] / "rltool.py"),
+                "studio",
+                "flicky-sound-preview",
+                str(project),
+                "--header",
+                "zSFX90Header",
+                "--seconds",
+                "1",
+                "--document-override",
+                str(transient),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
         cli_report = json.loads(command.stdout)
         assert cli_report["document_origin"] == "unsaved"
         assert cli_report["document_sha256"] == unsaved["document_sha256"]
         assert cli_report["wav"]["sha256"] == unsaved["wav"]["sha256"]
-        again = studio_flicky_sound_preview(
-            project, header="zSFX90Header", seconds=1)
+        again = studio_flicky_sound_preview(project, header="zSFX90Header", seconds=1)
         assert again["wav"]["sha256"] == saved["wav"]["sha256"]
         assert again["document_origin"] == "saved"
 
@@ -75,16 +83,16 @@ def main() -> int:
             if candidate != source:
                 candidate.write_bytes(edited)
             try:
-                studio_flicky_sound_preview(
-                    project, header="zSFX90Header", seconds=1,
-                    document_override=candidate)
+                studio_flicky_sound_preview(project, header="zSFX90Header", seconds=1, document_override=candidate)
             except StudioProjectError as error:
                 assert "transient Flicky Sound document" in str(error)
             else:
                 raise AssertionError(f"unsafe preview override accepted: {candidate}")
         assert source.read_bytes() == original
-        print("Flicky unsaved audio preview: changed WAV/VGM through API and CLI, "
-              "unchanged source, saved preview restored, unsafe overrides rejected")
+        print(
+            "Flicky unsaved audio preview: changed WAV/VGM through API and CLI, "
+            "unchanged source, saved preview restored, unsafe overrides rejected"
+        )
     return 0
 
 

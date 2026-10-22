@@ -39,8 +39,11 @@ PARAMETERS = {
     },
     "text_fields": [
         {
-            "key": "logo", "label": "Logo", "screen": "title",
-            "address": 0x2080, "width": 3,
+            "key": "logo",
+            "label": "Logo",
+            "screen": "title",
+            "address": 0x2080,
+            "width": 3,
         },
     ],
     "screens": [
@@ -48,32 +51,54 @@ PARAMETERS = {
         {"key": "menu", "label": "Menu", "file_offset": 40, "size": 6},
     ],
 }
-TITLE = bytes((
-    0x20, 0x80, 0x03, 1, 2, 3,
-    0x23, 0xC0, 0x42, 0xAA,
-    0, 0xFF, 0xEE,
-))
+TITLE = bytes(
+    (
+        0x20,
+        0x80,
+        0x03,
+        1,
+        2,
+        3,
+        0x23,
+        0xC0,
+        0x42,
+        0xAA,
+        0,
+        0xFF,
+        0xEE,
+    )
+)
 MENU = bytes((0x20, 0x85, 0x82, 4, 5, 0))
 
 
 def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
     image = bytearray(b"NES\x1a" + bytes((1, 1, 0, 0)) + bytes(8) + bytes(0x6000))
-    image[16:16 + len(TITLE)] = TITLE
-    image[40:40 + len(MENU)] = MENU
+    image[16 : 16 + len(TITLE)] = TITLE
+    image[40 : 40 + len(MENU)] = MENU
     source = bytes(image)
     revision = RevisionSpec(
-        "probe", "PPU screen probe", len(source), hashlib.sha1(source).hexdigest(),
-        hashlib.sha256(source).hexdigest(), "ines", 0,
+        "probe",
+        "PPU screen probe",
+        len(source),
+        hashlib.sha1(source).hexdigest(),
+        hashlib.sha256(source).hexdigest(),
+        "ines",
+        0,
     )
     profile = GameProfile(
-        "ppu-screen-probe", 1, "PPU screen probe", "nes", ("screens",),
+        "ppu-screen-probe",
+        1,
+        "PPU screen probe",
+        "nes",
+        ("screens",),
         (revision,),
         (
+            ResourceSpec("bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"),
             ResourceSpec(
-                "bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"
-            ),
-            ResourceSpec(
-                "screens", "screen", "nes.ppu-screen-packets.v1", "fixed",
+                "screens",
+                "screen",
+                "nes.ppu-screen-packets.v1",
+                "fixed",
                 PARAMETERS,
             ),
         ),
@@ -97,20 +122,29 @@ def pooled_fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
     """Both screens back to back behind an engine offset table."""
     _source, profile, _revision = fixture()
     image = bytearray(b"NES" + bytes((1, 1, 0, 0)) + bytes(8) + bytes(0x6000))
-    image[16:16 + len(TITLE)] = TITLE
-    image[29:29 + len(MENU)] = MENU
+    image[16 : 16 + len(TITLE)] = TITLE
+    image[29 : 29 + len(MENU)] = MENU
     image[60:63] = bytes((0, 13, 6))
     source = bytes(image)
     revision = RevisionSpec(
-        "probe", "PPU screen probe", len(source), hashlib.sha1(source).hexdigest(),
-        hashlib.sha256(source).hexdigest(), "ines", 0,
+        "probe",
+        "PPU screen probe",
+        len(source),
+        hashlib.sha1(source).hexdigest(),
+        hashlib.sha256(source).hexdigest(),
+        "ines",
+        0,
     )
     parameters = copy.deepcopy(PARAMETERS)
     parameters["screens"][1]["file_offset"] = 29
     parameters["packet_pool"] = POOL
     profile = GameProfile(
-        profile.game_id, profile.profile_version, profile.name, profile.platform,
-        profile.capabilities, (revision,),
+        profile.game_id,
+        profile.profile_version,
+        profile.name,
+        profile.platform,
+        profile.capabilities,
+        (revision,),
         (
             profile.resources[0],
             ResourceSpec("screens", "screen", "nes.ppu-screen-packets.v1", "fixed", parameters),
@@ -124,7 +158,7 @@ def grow_logo(raw: dict, text: list[int]) -> None:
     command = resource["screens"][0]["commands"][0]
     command["length"] = len(text)
     command["values"] = list(text)
-    resource["screens"][0]["tiles"][4][0:len(text)] = list(text)
+    resource["screens"][0]["tiles"][4][0 : len(text)] = list(text)
     resource["text_fields"][0]["width"] = len(text)
 
 
@@ -143,12 +177,27 @@ class NesScreenPacketTests(unittest.TestCase):
         # put and the second title entry follows its command.
         raw = copy.deepcopy(document.as_dict())
         grow_logo(raw, [1, 2, 3, 1, 2])
-        edited, _report = build_resources(
-            source, parse_resource_document(raw, profile, revision), profile, revision
+        edited, _report = build_resources(source, parse_resource_document(raw, profile, revision), profile, revision)
+        self.assertEqual(
+            edited[16:29],
+            bytes(
+                (
+                    0x20,
+                    0x80,
+                    0x05,
+                    1,
+                    2,
+                    3,
+                    1,
+                    2,
+                    0x23,
+                    0xC0,
+                    0x42,
+                    0xAA,
+                    0,
+                )
+            ),
         )
-        self.assertEqual(edited[16:29], bytes((
-            0x20, 0x80, 0x05, 1, 2, 3, 1, 2, 0x23, 0xC0, 0x42, 0xAA, 0,
-        )))
         self.assertEqual(edited[29:35], MENU)
         self.assertEqual(edited[60:63], bytes((0, 13, 8)))
 
@@ -156,9 +205,7 @@ class NesScreenPacketTests(unittest.TestCase):
         raw = copy.deepcopy(document.as_dict())
         grow_logo(raw, [1, 2])
         raw["resources"][0]["screens"][0]["tiles"][4][2] = 0x24
-        edited, _report = build_resources(
-            source, parse_resource_document(raw, profile, revision), profile, revision
-        )
+        edited, _report = build_resources(source, parse_resource_document(raw, profile, revision), profile, revision)
         self.assertEqual(edited[60:63], bytes((0, 12, 5)))
         self.assertEqual(edited[28:34], MENU)
         self.assertEqual(edited[34:35], bytes((0,)))
@@ -178,28 +225,42 @@ class NesScreenPacketTests(unittest.TestCase):
         source, _profile, _revision = fixture()
         value = decode_screen_packets(source, PARAMETERS)
         self.assertEqual([item["key"] for item in value["screens"]], ["title", "menu"])
-        self.assertEqual(value["screens"][0]["commands"][0], {
-            "address": 0x2080,
-            "vertical": False,
-            "repeat": False,
-            "length": 3,
-            "values": [1, 2, 3],
-        })
-        self.assertEqual(value["screens"][0]["commands"][1], {
-            "address": 0x23C0,
-            "vertical": False,
-            "repeat": True,
-            "length": 2,
-            "values": [0xAA],
-        })
+        self.assertEqual(
+            value["screens"][0]["commands"][0],
+            {
+                "address": 0x2080,
+                "vertical": False,
+                "repeat": False,
+                "length": 3,
+                "values": [1, 2, 3],
+            },
+        )
+        self.assertEqual(
+            value["screens"][0]["commands"][1],
+            {
+                "address": 0x23C0,
+                "vertical": False,
+                "repeat": True,
+                "length": 2,
+                "values": [0xAA],
+            },
+        )
         self.assertEqual(value["screens"][0]["trailing"], [0xFF, 0xEE])
         self.assertEqual(value["screens"][0]["tiles"][4][0:3], [1, 2, 3])
         self.assertEqual(value["screens"][0]["attributes"][0:2], [0xAA, 0xAA])
         self.assertEqual(value["encoding"], PARAMETERS["encoding"])
-        self.assertEqual(value["text_fields"], [{
-            "key": "logo", "label": "Logo", "screen": "title",
-            "start": 0x80, "width": 3,
-        }])
+        self.assertEqual(
+            value["text_fields"],
+            [
+                {
+                    "key": "logo",
+                    "label": "Logo",
+                    "screen": "title",
+                    "start": 0x80,
+                    "width": 3,
+                }
+            ],
+        )
         self.assertTrue(value["screens"][1]["commands"][0]["vertical"])
         encoded = encode_screen_packets(value, PARAMETERS)
         self.assertEqual(encoded, ((16, TITLE), (40, MENU)))
@@ -216,11 +277,9 @@ class NesScreenPacketTests(unittest.TestCase):
 
         raw = copy.deepcopy(document.as_dict())
         raw["resources"][0]["screens"][1]["tiles"][4][5] = 9
-        edited, report = build_resources(
-            source, parse_resource_document(raw, profile, revision), profile, revision
-        )
+        edited, report = build_resources(source, parse_resource_document(raw, profile, revision), profile, revision)
         self.assertEqual(edited[43], 9)
-        self.assertEqual(edited[16:16 + len(TITLE)], TITLE)
+        self.assertEqual(edited[16 : 16 + len(TITLE)], TITLE)
         self.assertEqual(report["changed_bytes"], 1)
 
     def test_resource_pipeline_rebuilds_embedded_text_from_screen_tiles(self) -> None:
@@ -229,9 +288,7 @@ class NesScreenPacketTests(unittest.TestCase):
         screen = raw["resources"][0]["screens"][0]
         screen["tiles"][4][0:3] = [3, 1, 2]
 
-        edited, report = build_resources(
-            source, parse_resource_document(raw, profile, revision), profile, revision
-        )
+        edited, report = build_resources(source, parse_resource_document(raw, profile, revision), profile, revision)
 
         self.assertEqual(edited[19:22], bytes((3, 1, 2)))
         self.assertEqual(report["changed_bytes"], 3)
@@ -244,13 +301,13 @@ class NesScreenPacketTests(unittest.TestCase):
         missing_terminator = bytearray(TITLE)
         missing_terminator[10] = 1
         with self.assertRaisesRegex(Exception, "outside PPU memory|no terminator"):
-            decode_screen_packets(bytes(missing_terminator), {
-                **{key: value for key, value in PARAMETERS.items() if key != "screens"},
-                "screens": [
-                    {"key": "title", "label": "Title", "file_offset": 0,
-                     "size": len(missing_terminator)}
-                ],
-            })
+            decode_screen_packets(
+                bytes(missing_terminator),
+                {
+                    **{key: value for key, value in PARAMETERS.items() if key != "screens"},
+                    "screens": [{"key": "title", "label": "Title", "file_offset": 0, "size": len(missing_terminator)}],
+                },
+            )
 
         raw = copy.deepcopy(decode_resources(source, profile, revision).as_dict())
         raw["resources"][0]["screens"][0]["commands"][0]["values"].pop()
@@ -270,12 +327,19 @@ class NesScreenPacketTests(unittest.TestCase):
         overlapping = copy.deepcopy(PARAMETERS)
         overlapping["screens"][1]["file_offset"] = 20
         invalid_profile = GameProfile(
-            profile.game_id, profile.profile_version, profile.name,
-            profile.platform, profile.capabilities, profile.revisions,
+            profile.game_id,
+            profile.profile_version,
+            profile.name,
+            profile.platform,
+            profile.capabilities,
+            profile.revisions,
             (
                 profile.resources[0],
                 ResourceSpec(
-                    "screens", "screen", "nes.ppu-screen-packets.v1", "fixed",
+                    "screens",
+                    "screen",
+                    "nes.ppu-screen-packets.v1",
+                    "fixed",
                     overlapping,
                 ),
             ),

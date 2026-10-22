@@ -121,8 +121,8 @@ what a repository's `make studio-check` runs: in a throwaway copy of the
 repository it prepares every revision from its ROM, validates it, builds it with
 no edits and compares the result with that ROM byte for byte. It needs every
 revision's ROM at the root and never touches the user's folders; with
-`--present` it checks the revisions whose ROM is there and reports the others
-as skipped (a check that finds none fails).
+`--present` it checks the revisions whose ROM is there and reports the others as
+skipped (a check that finds none fails).
 
 With `--release`, `check` also checks the `retrolarium` section of the
 repository's 3.0 or 3.x release manifest: the descriptor, profile and revisions
@@ -424,22 +424,22 @@ rltool movie play movies\smb1_any_percent.check.json --rom build\relocated\smb.n
 ```
 
 `play` is `check` you can watch: MAME opens a window with sound at the game's
-speed, stays open when the movie ends, and the cells are compared once you
-close it. `rltool movie mame <path>` remembers the MAME to use (in
+speed, stays open when the movie ends, and the cells are compared once you close
+it. `rltool movie mame <path>` remembers the MAME to use (in
 `%LOCALAPPDATA%\Retrolarium\settings.json`, or `~/.config/retrolarium/`), so
 neither `--mame` nor `RETROLARIUM_MAME` is needed after it.
 
 `golden` plays the movie on the original ROM and writes `expected`; `check`
-plays it on a build and fails on any cell that differs. Both take several
-checks and play them in the order given; `check` stops at the first that
-fails, so a game names its TAS first and its longplay after it. A cell may
-carry a `tolerance` (with `endian`, `big` or `little`): on the NES a moved routine can
+plays it on a build and fails on any cell that differs. Both take several checks
+and play them in the order given; `check` stops at the first that fails, so a
+game names its TAS first and its longplay after it. A cell may carry a
+`tolerance` (with `endian`, `big` or `little`): on the NES a moved routine can
 cross a page boundary and cost the odd lag frame, so a position may trail by a
 few pixels without anything being wrong. `RETROLARIUM_MAME` names MAME when
 `--mame` does not. Frames are counted as the recording emulator counts them;
 MAME starts a frame earlier and reads the pads a frame later, which the kit
-evens out (measured on whole longplays: equal RAM at every frame checked).
-An FCEUX movie also starts from FCEUX's power-on RAM (`00 00 00 00 FF FF FF FF`
+evens out (measured on whole longplays: equal RAM at every frame checked). An
+FCEUX movie also starts from FCEUX's power-on RAM (`00 00 00 00 FF FF FF FF`
 repeated), which the kit's MAME plugin `rlpoweron` writes before the first
 instruction. A game whose work per frame depends on exact CPU timing (Solomon's
 Key runs a cooperative scheduler in its main loop) can still lag differently in
@@ -447,8 +447,8 @@ MAME than in FCEUX, and a frame-exact TAS of it does not stay in sync.
 `rltool movie convert` writes a recording as a `.rlmovie` file, one line per run
 of equal frames.
 
-Every game runs its movies the same way: `make build-relocated` writes a copy
-of the source in which code and data move (bytes inserted between modules and
+Every game runs its movies the same way: `make build-relocated` writes a copy of
+the source in which code and data move (bytes inserted between modules and
 absorbed by padding before the fixed parts) and builds it into
 `build/relocated/`, and `make test-full` plays the game's movies on that build,
 TAS first, then the longplay, then attract-mode or demo checks.

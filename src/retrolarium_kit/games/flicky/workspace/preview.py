@@ -37,6 +37,11 @@ def render_preview(
             raise FileNotFoundError(f"the YMFM renderer is missing: {renderer}")
         wav_path.parent.mkdir(parents=True, exist_ok=True)
         # The renderer reports on stdout; the kit's own output is JSON.
-        subprocess.run([str(renderer), str(vgm_path), str(wav_path)], cwd=project, check=True,
-                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        subprocess.run(
+            [str(renderer), str(vgm_path), str(wav_path)],
+            cwd=project,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
     return vgm_path, wav_path

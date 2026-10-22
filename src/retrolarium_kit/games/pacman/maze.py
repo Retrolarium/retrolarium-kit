@@ -32,23 +32,17 @@ def _grid(value: object, rows: int, columns: int) -> tuple[tuple[int, ...], ...]
     result = []
     for row_index, row in enumerate(value):
         if not isinstance(row, list) or len(row) != columns:
-            raise PacmanMazeError(
-                f"maze tiles[{row_index}] must contain exactly {columns} columns"
-            )
+            raise PacmanMazeError(f"maze tiles[{row_index}] must contain exactly {columns} columns")
         values = []
         for column, tile in enumerate(row):
             if not isinstance(tile, int) or isinstance(tile, bool) or not 0 <= tile <= 0x3F:
-                raise PacmanMazeError(
-                    f"maze tiles[{row_index}][{column}] must be an integer in 0..63"
-                )
+                raise PacmanMazeError(f"maze tiles[{row_index}][{column}] must be an integer in 0..63")
             values.append(tile)
         result.append(tuple(values))
     return tuple(result)
 
 
-def decode_maze_rle(
-    payload: bytes, *, rows: int = ROWS, columns: int = COLUMNS
-) -> tuple[tuple[int, ...], ...]:
+def decode_maze_rle(payload: bytes, *, rows: int = ROWS, columns: int = COLUMNS) -> tuple[tuple[int, ...], ...]:
     tiles: list[int] = []
     column = 0
     for index, value in enumerate(payload):
@@ -58,13 +52,8 @@ def decode_maze_rle(
         tiles.extend((value & 0x3F,) * length)
         column = (column + length) % columns
     if len(tiles) != rows * columns or column != 0:
-        raise PacmanMazeError(
-            f"maze RLE expands to {len(tiles)} tiles; expected {rows * columns}"
-        )
-    return tuple(
-        tuple(tiles[start : start + columns])
-        for start in range(0, len(tiles), columns)
-    )
+        raise PacmanMazeError(f"maze RLE expands to {len(tiles)} tiles; expected {rows * columns}")
+    return tuple(tuple(tiles[start : start + columns]) for start in range(0, len(tiles), columns))
 
 
 def minimum_rle_size(grid: Sequence[Sequence[int]]) -> int:
@@ -73,11 +62,7 @@ def minimum_rle_size(grid: Sequence[Sequence[int]]) -> int:
         cursor = 0
         while cursor < len(row):
             length = 1
-            while (
-                cursor + length < len(row)
-                and length < 4
-                and row[cursor + length] == row[cursor]
-            ):
+            while cursor + length < len(row) and length < 4 and row[cursor + length] == row[cursor]:
                 length += 1
             count += 1
             cursor += length
@@ -98,26 +83,18 @@ def encode_maze_grid(
         while cursor < columns:
             tile = row[cursor]
             length = 1
-            while (
-                cursor + length < columns
-                and length < 4
-                and row[cursor + length] == tile
-            ):
+            while cursor + length < columns and length < 4 and row[cursor + length] == tile:
                 length += 1
             tokens.append([length, tile])
             cursor += length
     if len(tokens) > token_count:
-        raise PacmanMazeError(
-            f"maze needs {len(tokens)} RLE bytes; fixed layout allows {token_count}"
-        )
+        raise PacmanMazeError(f"maze needs {len(tokens)} RLE bytes; fixed layout allows {token_count}")
     cursor = 0
     while len(tokens) < token_count:
         while cursor < len(tokens) and tokens[cursor][0] == 1:
             cursor += 1
         if cursor == len(tokens):
-            raise PacmanMazeError(
-                f"maze cannot be expanded to exactly {token_count} RLE bytes"
-            )
+            raise PacmanMazeError(f"maze cannot be expanded to exactly {token_count} RLE bytes")
         tokens[cursor][0] -= 1
         tokens.insert(cursor, [1, tokens[cursor][1]])
         cursor += 1
@@ -127,12 +104,7 @@ def encode_maze_grid(
 def _passable_components(grid: Sequence[Sequence[int]]) -> list[int]:
     rows = len(grid)
     columns = len(grid[0])
-    remaining = {
-        (row, column)
-        for row in range(rows)
-        for column in range(columns)
-        if grid[row][column] < 0x10
-    }
+    remaining = {(row, column) for row in range(rows) for column in range(columns) if grid[row][column] < 0x10}
     sizes = []
     while remaining:
         start = remaining.pop()
@@ -174,30 +146,20 @@ def inspect_maze(
     pellets = sum(counts[tile] for tile in PELLET_TILES)
     if counted:
         if not 1 <= pellets <= 255:
-            errors.append(
-                f"maze has {pellets} collectible pellets; the round counter holds 1..255"
-            )
+            errors.append(f"maze has {pellets} collectible pellets; the round counter holds 1..255")
     elif pellets != 192:
-        errors.append(
-            f"maze has {pellets} collectible pellets; runtime round counter expects 192"
-        )
+        errors.append(f"maze has {pellets} collectible pellets; runtime round counter expects 192")
     if power_pellets is not None:
         fixed = {(int(row), int(column)) for row, column in power_pellets}
         for row, column in sorted(fixed):
             if grid[row][column] != POWER_PELLET_TILE:
-                errors.append(
-                    f"power pellet at ({row},{column}) must stay: the blinking table draws it there"
-                )
+                errors.append(f"power pellet at ({row},{column}) must stay: the blinking table draws it there")
         for row in range(ROWS):
             for column in range(COLUMNS):
                 if grid[row][column] in POWER_PELLET_TILES and (row, column) not in fixed:
-                    errors.append(
-                        f"power pellet at ({row},{column}) is outside the cells the blinking table draws"
-                    )
+                    errors.append(f"power pellet at ({row},{column}) is outside the cells the blinking table draws")
     elif counts[POWER_PELLET_TILE] != 4:
-        errors.append(
-            f"maze has {counts[POWER_PELLET_TILE]} visible power pellets; marker table expects 4"
-        )
+        errors.append(f"maze has {counts[POWER_PELLET_TILE]} visible power pellets; marker table expects 4")
     if grid[GHOST_DOOR[0]][GHOST_DOOR[1]] != 0x2C:
         errors.append("ghost-house door at (11,11) must remain tile $2C")
     spawn_points = (("Pac-Man spawn", PACMAN_SPAWN),) + tuple(

@@ -38,11 +38,26 @@ def parameters() -> dict[str, object]:
 
 
 def payload() -> bytes:
-    result = bytearray(range(64)) + bytearray([
-        0xA0, 4, 0x52, 5,
-        0x12, 6, 0x9F, 7, 0x43, 8,
-        0xDE, 0xAD, 0xBE, 0xEF, 0x55, 0xAA,
-    ])
+    result = bytearray(range(64)) + bytearray(
+        [
+            0xA0,
+            4,
+            0x52,
+            5,
+            0x12,
+            6,
+            0x9F,
+            7,
+            0x43,
+            8,
+            0xDE,
+            0xAD,
+            0xBE,
+            0xEF,
+            0x55,
+            0xAA,
+        ]
+    )
     return bytes(result)
 
 
@@ -60,11 +75,11 @@ def fds_fixture(data: bytes) -> bytes:
         header[3:11] = name
         header[11:13] = address.to_bytes(2, "little")
         header[13:15] = len(chunk).to_bytes(2, "little")
-        image[position:position + 16] = header
+        image[position : position + 16] = header
         position += 16
         image[position] = 4
         position += 1
-        image[position:position + len(chunk)] = chunk
+        image[position : position + len(chunk)] = chunk
         position += len(chunk)
     return bytes(image)
 
@@ -74,24 +89,38 @@ class FdsSynthesisTests(unittest.TestCase):
         data = payload()
         image = fds_fixture(data)
         revision = RevisionSpec(
-            "fds", "FDS synthesis probe", len(image),
-            hashlib.sha1(image).hexdigest(), hashlib.sha256(image).hexdigest(),
             "fds",
-            payloads=(PayloadSpec(
-                "ending", "fds-records", len(data), hashlib.sha1(data).hexdigest(),
-                record_ids=(3, 4),
-            ),),
+            "FDS synthesis probe",
+            len(image),
+            hashlib.sha1(image).hexdigest(),
+            hashlib.sha256(image).hexdigest(),
+            "fds",
+            payloads=(
+                PayloadSpec(
+                    "ending",
+                    "fds-records",
+                    len(data),
+                    hashlib.sha1(data).hexdigest(),
+                    record_ids=(3, 4),
+                ),
+            ),
         )
         profile = GameProfile(
-            "fds-synthesis-probe", 1, "FDS synthesis probe", "nes",
-            ("audio",), (revision,),
+            "fds-synthesis-probe",
+            1,
+            "FDS synthesis probe",
+            "nes",
+            ("audio",),
+            (revision,),
             (
+                ResourceSpec("bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"),
                 ResourceSpec(
-                    "bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"
-                ),
-                ResourceSpec(
-                    "synthesis", "audio", "fds.synthesis.v1", "fixed",
-                    {**parameters(), "file_offset": 0}, payload="ending",
+                    "synthesis",
+                    "audio",
+                    "fds.synthesis.v1",
+                    "fixed",
+                    {**parameters(), "file_offset": 0},
+                    payload="ending",
                 ),
             ),
         )
@@ -129,7 +158,7 @@ class FdsSynthesisTests(unittest.TestCase):
 
     def test_a_direct_step_keeps_its_ignored_bit_six(self) -> None:
         source = bytearray(payload())
-        source[70] = 0xDF   # direct, value $1F, with bit 6 set
+        source[70] = 0xDF  # direct, value $1F, with bit 6 set
         document = decode_synthesis(bytes(source), parameters())
         self.assertEqual("direct", document["volume_programs"][1]["steps"][1]["mode"])
         self.assertEqual(bytes(source), encode_synthesis(document, parameters()))
@@ -141,13 +170,13 @@ class FdsSynthesisTests(unittest.TestCase):
         document = decode_synthesis(source, parameters())
         document["waveforms"][1]["samples"][3] = 1
         document["volume_programs"][0]["steps"][1] = {
-            "step": 1, "mode": "increase", "value": 7, "frames": 9,
+            "step": 1,
+            "mode": "increase",
+            "value": 7,
+            "frames": 9,
         }
         encoded = encode_synthesis(document, parameters())
-        changed = [
-            index for index, (before, after) in enumerate(zip(source, encoded))
-            if before != after
-        ]
+        changed = [index for index, (before, after) in enumerate(zip(source, encoded)) if before != after]
         self.assertEqual([35, 66, 67], changed)
         self.assertEqual([1, 0x47, 9], [encoded[index] for index in changed])
         self.assertEqual(source[74:], encoded[74:])

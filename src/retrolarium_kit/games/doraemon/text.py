@@ -22,8 +22,15 @@ from typing import Any, Mapping
 import zlib
 
 from retrolarium_kit.core.authoring import (
-    Address, AddressRange, AuthoringError, BuildPlan, Change, ChangeSet,
-    GameProfile, Provenance, RevisionSpec,
+    Address,
+    AddressRange,
+    AuthoringError,
+    BuildPlan,
+    Change,
+    ChangeSet,
+    GameProfile,
+    Provenance,
+    RevisionSpec,
 )
 from retrolarium_core.ines import parse_ines
 
@@ -49,8 +56,10 @@ class DoraemonTextDocument:
 
     def as_dict(self) -> dict[str, Any]:
         return {
-            "schema": SCHEMA, "schema_version": VERSION,
-            "game": self.game_id, "revision": self.revision_id,
+            "schema": SCHEMA,
+            "schema_version": VERSION,
+            "game": self.game_id,
+            "revision": self.revision_id,
             "source_sha256": self.source_sha256,
             **{name: self.content[name] for name in FIELDS},
         }
@@ -80,7 +89,7 @@ def _bank_slice(prg: bytes, bank: int, address: int, size: int) -> bytes:
     offset = bank * BANK_SIZE + address - CPU_BASE
     if not 0 <= bank < 4 or not 0 <= offset <= len(prg) - size:
         raise DoraemonTextError("shell-text range is outside PRG")
-    return prg[offset:offset + size]
+    return prg[offset : offset + size]
 
 
 def _region_size(spec: Mapping[str, Any]) -> int:
@@ -134,7 +143,7 @@ def _parse_title_stream(data: bytes, address: int, text_records: Mapping[int, st
         end = cursor + 3 + size
         if end > len(data):
             raise DoraemonTextError("title stream has a truncated payload")
-        payload = data[cursor + 3:end]
+        payload = data[cursor + 3 : end]
         record: dict[str, Any] = {"source_address": f"0x{source_address:04X}", "ppu_address": f"0x{ppu_address:04X}"}
         if ppu_address in text_records:
             record["id"] = text_records[ppu_address]
@@ -177,7 +186,9 @@ def _decode_help_screen(data: bytes, screen: Mapping[str, Any]) -> dict[str, Any
             raise DoraemonTextError("a chapter-help text span is outside or overlaps its screen")
         if start > cursor:
             segments.append({"address": f"0x{base + cursor:04X}", "hex": data[cursor:start].hex(" ")})
-        segments.append({"id": span["id"], "address": f"0x{base + start:04X}", "text": data[start:start + size].decode("ascii")})
+        segments.append(
+            {"id": span["id"], "address": f"0x{base + start:04X}", "text": data[start : start + size].decode("ascii")}
+        )
         cursor = start + size
     if cursor < len(data):
         segments.append({"address": f"0x{base + cursor:04X}", "hex": data[cursor:].hex(" ")})
@@ -232,12 +243,12 @@ def _decode_content(prg: bytes, manifest: Mapping[str, Any]) -> dict[str, Any]:
         return {
             "game_over": "".join(" " if v == 0 else chr(v) for v in _region(prg, bank, manifest["game_over"])),
             "title_records": _parse_title_stream(_region(prg, bank, title), number(title["address"]), text_records),
-            "ending_nametable_rows": [ending_raw[o:o + row].hex(" ") for o in range(0, len(ending_raw), row)],
+            "ending_nametable_rows": [ending_raw[o : o + row].hex(" ") for o in range(0, len(ending_raw), row)],
             "chapter_help_screens": [
-                _decode_help_screen(help_raw[i * screen_size:(i + 1) * screen_size], screen)
+                _decode_help_screen(help_raw[i * screen_size : (i + 1) * screen_size], screen)
                 for i, screen in enumerate(help_spec["screens"])
             ],
-            "ending_credit_rows": [credit_raw[o:o + width].decode("ascii") for o in range(0, len(credit_raw), width)],
+            "ending_credit_rows": [credit_raw[o : o + width].decode("ascii") for o in range(0, len(credit_raw), width)],
         }
     except UnicodeDecodeError as exc:
         raise DoraemonTextError("shell text holds bytes outside ASCII") from exc
@@ -281,13 +292,17 @@ def _encode_content(content: Mapping[str, Any], manifest: Mapping[str, Any]) -> 
     except UnicodeEncodeError as exc:
         raise DoraemonTextError("ending credits contain non-ASCII text") from exc
     return {
-        "game_over": game_raw, "title_stream": title_raw, "ending_nametable": ending_raw,
-        "chapter_help_screens": help_raw, "ending_credits": credit_raw,
+        "game_over": game_raw,
+        "title_stream": title_raw,
+        "ending_nametable": ending_raw,
+        "chapter_help_screens": help_raw,
+        "ending_credits": credit_raw,
     }
 
 
-def decode_text(source: bytes, profile: GameProfile, revision: RevisionSpec,
-                *, _verify_identity: bool = True) -> DoraemonTextDocument:
+def decode_text(
+    source: bytes, profile: GameProfile, revision: RevisionSpec, *, _verify_identity: bool = True
+) -> DoraemonTextDocument:
     manifest = _manifest(profile, revision)
     prg = _prg(source, revision, verify=_verify_identity)
     _check_signatures(prg, manifest)
@@ -302,12 +317,20 @@ def decode_text(source: bytes, profile: GameProfile, revision: RevisionSpec,
 def parse_text_document(value: object, profile: GameProfile, revision: RevisionSpec) -> DoraemonTextDocument:
     manifest = _manifest(profile, revision)
     if not isinstance(value, Mapping) or set(value) != {
-        "schema", "schema_version", "game", "revision", "source_sha256", *FIELDS,
+        "schema",
+        "schema_version",
+        "game",
+        "revision",
+        "source_sha256",
+        *FIELDS,
     }:
         raise DoraemonTextError("text document fields differ")
     for key, expected in (
-        ("schema", SCHEMA), ("schema_version", VERSION), ("game", profile.game_id),
-        ("revision", revision.revision_id), ("source_sha256", revision.sha256),
+        ("schema", SCHEMA),
+        ("schema_version", VERSION),
+        ("game", profile.game_id),
+        ("revision", revision.revision_id),
+        ("source_sha256", revision.sha256),
     ):
         if value[key] != expected:
             raise DoraemonTextError(f"text {key} differs from profile")
@@ -316,8 +339,9 @@ def parse_text_document(value: object, profile: GameProfile, revision: RevisionS
     return DoraemonTextDocument(profile.game_id, revision.revision_id, revision.sha256, content)
 
 
-def build_text(source: bytes, document: DoraemonTextDocument, profile: GameProfile,
-               revision: RevisionSpec) -> tuple[bytes, dict[str, object]]:
+def build_text(
+    source: bytes, document: DoraemonTextDocument, profile: GameProfile, revision: RevisionSpec
+) -> tuple[bytes, dict[str, object]]:
     manifest = _manifest(profile, revision)
     image = parse_ines(source)
     prg = _prg(source, revision)
@@ -329,18 +353,24 @@ def build_text(source: bytes, document: DoraemonTextDocument, profile: GameProfi
     base = len(image.header) + len(image.trainer) + bank * BANK_SIZE - CPU_BASE
     for name, raw in encoded.items():
         start = base + number(manifest[name]["address"])
-        if source[start:start + len(raw)] != raw:
-            changes.append(Change(
-                AddressRange(Address("file", start), len(raw)), source[start:start + len(raw)], raw,
-                Provenance(revision.sha256, "text", name),
-            ))
+        if source[start : start + len(raw)] != raw:
+            changes.append(
+                Change(
+                    AddressRange(Address("file", start), len(raw)),
+                    source[start : start + len(raw)],
+                    raw,
+                    Provenance(revision.sha256, "text", name),
+                )
+            )
     output = BuildPlan(revision.sha256, ChangeSet(tuple(changes))).apply(source) if changes else source
     rebuilt = decode_text(output, profile, revision, _verify_identity=False)
     if _encode_content(rebuilt.content, manifest) != encoded:
         raise DoraemonTextError("rebuilt text does not decode to the document")
     return output, {
-        "schema": "retrolarium.doraemon-text-build", "schema_version": 1,
-        "game": profile.game_id, "revision": revision.revision_id,
+        "schema": "retrolarium.doraemon-text-build",
+        "schema_version": 1,
+        "game": profile.game_id,
+        "revision": revision.revision_id,
         "source_sha256": revision.sha256,
         "output_sha256": hashlib.sha256(output).hexdigest(),
         "size": len(output),

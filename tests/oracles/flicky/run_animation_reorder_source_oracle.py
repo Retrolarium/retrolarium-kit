@@ -34,8 +34,7 @@ def main() -> int:
     parser.add_argument("--native-writer", type=Path, required=True)
     parser.add_argument("--native-sequences-editor", type=Path, required=True)
     args = parser.parse_args()
-    os.environ["RETROLARIUM_FLICKY_LEVEL_WRITER"] = str(
-        args.native_writer.resolve())
+    os.environ["RETROLARIUM_FLICKY_LEVEL_WRITER"] = str(args.native_writer.resolve())
 
     original_rom = args.rom.read_bytes()
     scratch = Path(__file__).resolve().parents[3] / "build"
@@ -46,28 +45,35 @@ def main() -> int:
         create_flicky_studio_project(project)
         project_file = project / "flicky-ue.rlj"
         zero = build_studio_project(project_file)
-        assert zero["artifact"]["sha256"] == CANONICAL_SHA256, \
-            "zero-edit build must match the canonical ROM"
+        assert zero["artifact"]["sha256"] == CANONICAL_SHA256, "zero-edit build must match the canonical ROM"
 
         path = project / SOURCE_DIRECTORY / WORKSPACE_FILES["graphics_sequences"]
         original_document = path.read_bytes()
         animations = json.loads(original_document)["animations"]
-        timer = next(record for record in animations
-                     if record["id"] == "UI_TimerAnim")
+        timer = next(record for record in animations if record["id"] == "UI_TimerAnim")
         before = list(timer["frames"])
-        assert before == ["UI_TimerData0", "UI_TimerData1",
-                          "UI_TimerData2", "UI_TimerData0"]
-        address, frame_addresses = timer_animation_address(
-            original_rom, timer["delay"])
+        assert before == ["UI_TimerData0", "UI_TimerData1", "UI_TimerData2", "UI_TimerData0"]
+        address, frame_addresses = timer_animation_address(original_rom, timer["delay"])
 
-        subprocess.run([
-            str(args.native_sequences_editor.resolve()),
-            "--move-animation-frame", str(path), timer["id"], "1", "-1",
-        ], check=True)
-        after = next(record for record in json.loads(path.read_text(
-            encoding="utf-8"))["animations"] if record["id"] == timer["id"])
-        assert after["frames"] == [before[1], before[0], *before[2:]], \
+        subprocess.run(
+            [
+                str(args.native_sequences_editor.resolve()),
+                "--move-animation-frame",
+                str(path),
+                timer["id"],
+                "1",
+                "-1",
+            ],
+            check=True,
+        )
+        after = next(
+            record
+            for record in json.loads(path.read_text(encoding="utf-8"))["animations"]
+            if record["id"] == timer["id"]
+        )
+        assert after["frames"] == [before[1], before[0], *before[2:]], (
             "Qt frame-strip buttons did not save the expected order"
+        )
         assert verify_studio_project(project_file)["status"] == "mismatch"
 
         built = build_studio_project(project_file)
@@ -82,20 +88,20 @@ def main() -> int:
         ):
             old_bytes = old.to_bytes(4, "big")
             new_bytes = new.to_bytes(4, "big")
-            assert edited_rom[pointer:pointer + 4] == new_bytes, \
+            assert edited_rom[pointer : pointer + 4] == new_bytes, (
                 "reordered animation pointer did not read back from ROM"
-            expected_offsets.extend(pointer + index for index, pair in
-                                    enumerate(zip(old_bytes, new_bytes))
-                                    if pair[0] != pair[1])
-        assert_rom_delta(original_rom, edited_rom, sorted(expected_offsets),
-                         "Qt animation frame reorder")
+            )
+            expected_offsets.extend(
+                pointer + index for index, pair in enumerate(zip(old_bytes, new_bytes)) if pair[0] != pair[1]
+            )
+        assert_rom_delta(original_rom, edited_rom, sorted(expected_offsets), "Qt animation frame reorder")
 
         path.write_bytes(original_document)
         restored = build_studio_project(project_file)
-        assert restored["artifact"]["sha256"] == CANONICAL_SHA256, \
+        assert restored["artifact"]["sha256"] == CANONICAL_SHA256, (
             "restoring the animation document must reproduce the exact ROM"
-    print("Flicky Qt frame reorder: Save/Build/Verify, two independent ROM "
-          "pointers, isolated delta, exact restore")
+        )
+    print("Flicky Qt frame reorder: Save/Build/Verify, two independent ROM pointers, isolated delta, exact restore")
     return 0
 
 

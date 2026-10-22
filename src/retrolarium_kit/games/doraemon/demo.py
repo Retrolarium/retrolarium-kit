@@ -20,8 +20,15 @@ import hashlib
 from typing import Any, Mapping
 
 from retrolarium_kit.core.authoring import (
-    Address, AddressRange, AuthoringError, BuildPlan, Change, ChangeSet,
-    GameProfile, Provenance, RevisionSpec,
+    Address,
+    AddressRange,
+    AuthoringError,
+    BuildPlan,
+    Change,
+    ChangeSet,
+    GameProfile,
+    Provenance,
+    RevisionSpec,
 )
 from retrolarium_core.ines import parse_ines
 
@@ -49,8 +56,10 @@ class DoraemonDemoDocument:
 
     def as_dict(self) -> dict[str, Any]:
         return {
-            "schema": SCHEMA, "schema_version": VERSION,
-            "game": self.game_id, "revision": self.revision_id,
+            "schema": SCHEMA,
+            "schema_version": VERSION,
+            "game": self.game_id,
+            "revision": self.revision_id,
             "source_sha256": self.source_sha256,
             "layout": dict(self.layout),
             "steps": [
@@ -97,24 +106,26 @@ def _check_engine(prg: bytes, layout: Mapping[str, int]) -> None:
     # LDA #<stream / STA $A6 / LDA #>stream / STA $A7
     entry = bytes((0xA9, stream & 0xFF, 0x85, 0xA6, 0xA9, stream >> 8, 0x85, 0xA7))
     # LDA $21 / AND #$30 / BNE / LDA $A8 / BNE / LDY #0 / LDA ($A6),Y / STA $A8
-    reader = bytes((0xA5, 0x21, 0x29, 0x30, 0xD0, 0x2D, 0xA5, 0xA8, 0xD0, 0x1E,
-                    0xA0, 0x00, 0xB1, 0xA6, 0x85, 0xA8))
+    reader = bytes((0xA5, 0x21, 0x29, 0x30, 0xD0, 0x2D, 0xA5, 0xA8, 0xD0, 0x1E, 0xA0, 0x00, 0xB1, 0xA6, 0x85, 0xA8))
     at = _offset(layout, layout["entry_cpu"])
-    if prg[at:at + len(entry)] != entry:
+    if prg[at : at + len(entry)] != entry:
         raise DoraemonDemoError("the demo entry points at another stream than the profile names")
     at = _offset(layout, layout["reader_cpu"])
-    if prg[at:at + len(reader)] != reader:
+    if prg[at : at + len(reader)] != reader:
         raise DoraemonDemoError("the demo reader differs from the one the profile names")
 
 
 def _space(prg: bytes, layout: Mapping[str, int]) -> bytes:
     start = _offset(layout, layout["stream_cpu"])
-    return prg[start:start + layout["limit_cpu"] - layout["stream_cpu"]]
+    return prg[start : start + layout["limit_cpu"] - layout["stream_cpu"]]
 
 
 def decode_demo(
-    source: bytes, profile: GameProfile, revision: RevisionSpec,
-    *, _verify_identity: bool = True,
+    source: bytes,
+    profile: GameProfile,
+    revision: RevisionSpec,
+    *,
+    _verify_identity: bool = True,
 ) -> DoraemonDemoDocument:
     layout = _layout(profile, revision)
     prg = _source(source, revision, verify=_verify_identity).prg
@@ -127,15 +138,18 @@ def decode_demo(
             break
         if buttons & 0x30:
             raise DoraemonDemoError("the demo stream presses Start or Select, which the game masks")
-        steps.append({
-            "index": index, "frames": duration or 256,
-            "buttons": [name for name, bit in BUTTONS if buttons & bit],
-        })
+        steps.append(
+            {
+                "index": index,
+                "frames": duration or 256,
+                "buttons": [name for name, bit in BUTTONS if buttons & bit],
+            }
+        )
     else:
         raise DoraemonDemoError("the demo stream runs past its space")
     if not steps:
         raise DoraemonDemoError("the demo stream is empty")
-    if any(byte != 0xFF for byte in space[len(steps) * 2 + 2:]):
+    if any(byte != 0xFF for byte in space[len(steps) * 2 + 2 :]):
         raise DoraemonDemoError("the space after the demo stream is not free")
     return DoraemonDemoDocument(profile.game_id, revision.revision_id, revision.sha256, layout, tuple(steps))
 
@@ -151,49 +165,71 @@ def _encode(value: Mapping[str, Any], layout: Mapping[str, int]) -> bytes:
     names = [name for name, _ in BUTTONS]
     stream = bytearray()
     for index, step in enumerate(steps):
-        if not isinstance(step, Mapping) or set(step) != {"index", "frames", "buttons"} \
-                or step["index"] != index:
+        if not isinstance(step, Mapping) or set(step) != {"index", "frames", "buttons"} or step["index"] != index:
             raise DoraemonDemoError("demo step fields or indices differ")
         frames = step["frames"]
         if type(frames) is not int or not 1 <= frames <= 256:
             raise DoraemonDemoError(f"demo step {index + 1} lasts 1-256 frames")
         pressed = step["buttons"]
-        if not isinstance(pressed, list) or any(name not in names for name in pressed) \
-                or len(set(pressed)) != len(pressed):
+        if (
+            not isinstance(pressed, list)
+            or any(name not in names for name in pressed)
+            or len(set(pressed)) != len(pressed)
+        ):
             raise DoraemonDemoError(f"demo step {index + 1} buttons are not among {', '.join(names)}")
         buttons = 0
         for name, bit in BUTTONS:
             if name in pressed:
                 buttons |= bit
         stream += bytes((frames & 0xFF, buttons))
-    stream += b"\xFF\xFF"
-    return bytes(stream) + b"\xFF" * (layout["limit_cpu"] - layout["stream_cpu"] - len(stream))
+    stream += b"\xff\xff"
+    return bytes(stream) + b"\xff" * (layout["limit_cpu"] - layout["stream_cpu"] - len(stream))
 
 
 def parse_demo_document(value: object, profile: GameProfile, revision: RevisionSpec) -> DoraemonDemoDocument:
     layout = _layout(profile, revision)
     if not isinstance(value, Mapping) or set(value) != {
-        "schema", "schema_version", "game", "revision", "source_sha256", "layout", "steps",
+        "schema",
+        "schema_version",
+        "game",
+        "revision",
+        "source_sha256",
+        "layout",
+        "steps",
     }:
         raise DoraemonDemoError("demo document fields differ")
     for key, expected in (
-        ("schema", SCHEMA), ("schema_version", VERSION), ("game", profile.game_id),
-        ("revision", revision.revision_id), ("source_sha256", revision.sha256),
+        ("schema", SCHEMA),
+        ("schema_version", VERSION),
+        ("game", profile.game_id),
+        ("revision", revision.revision_id),
+        ("source_sha256", revision.sha256),
     ):
         if value[key] != expected:
             raise DoraemonDemoError(f"demo {key} differs from profile")
     _encode(value, layout)
     # Buttons keep the joypad's order whatever order the document lists.
     return DoraemonDemoDocument(
-        profile.game_id, revision.revision_id, revision.sha256, layout,
-        tuple({"index": s["index"], "frames": s["frames"],
-               "buttons": [name for name, _ in BUTTONS if name in s["buttons"]]}
-              for s in value["steps"]),
+        profile.game_id,
+        revision.revision_id,
+        revision.sha256,
+        layout,
+        tuple(
+            {
+                "index": s["index"],
+                "frames": s["frames"],
+                "buttons": [name for name, _ in BUTTONS if name in s["buttons"]],
+            }
+            for s in value["steps"]
+        ),
     )
 
 
 def build_demo(
-    source: bytes, document: DoraemonDemoDocument, profile: GameProfile, revision: RevisionSpec,
+    source: bytes,
+    document: DoraemonDemoDocument,
+    profile: GameProfile,
+    revision: RevisionSpec,
 ) -> tuple[bytes, dict[str, object]]:
     image = _source(source, revision)
     layout = _layout(profile, revision)
@@ -202,10 +238,11 @@ def build_demo(
     space = _encode(checked.as_dict(), layout)
     start = len(image.header) + len(image.trainer) + _offset(layout, layout["stream_cpu"])
     output = source
-    if source[start:start + len(space)] != space:
+    if source[start : start + len(space)] != space:
         change = Change(
             AddressRange(Address("file", start), len(space)),
-            source[start:start + len(space)], space,
+            source[start : start + len(space)],
+            space,
             Provenance(revision.sha256, "world1-demo", "stream"),
         )
         output = BuildPlan(revision.sha256, ChangeSet((change,))).apply(source)
@@ -213,8 +250,10 @@ def build_demo(
     if rebuilt.steps != checked.steps:
         raise DoraemonDemoError("rebuilt demo does not decode to the same stream")
     return output, {
-        "schema": "retrolarium.doraemon-demo-build", "schema_version": 1,
-        "game": profile.game_id, "revision": revision.revision_id,
+        "schema": "retrolarium.doraemon-demo-build",
+        "schema_version": 1,
+        "game": profile.game_id,
+        "revision": revision.revision_id,
         "source_sha256": revision.sha256,
         "output_sha256": hashlib.sha256(output).hexdigest(),
         "size": len(output),

@@ -28,16 +28,10 @@ def main() -> int:
         ("tiles_4bpp", "--decode-4bpp", tiles_to_packed_4bpp),
         ("tiles_1bpp", "--decode-1bpp", tiles_to_font),
     ):
-        tiles = [
-            tile for asset in document["assets"] if asset["kind"] == kind
-            for tile in asset["tiles"]
-        ]
+        tiles = [tile for asset in document["assets"] if asset["kind"] == kind for tile in asset["tiles"]]
         stride = 32 if kind == "tiles_4bpp" else 8
         plain = packer(tiles)
-        request = "".join(
-            plain[offset:offset + stride].hex() + "\n"
-            for offset in range(0, len(plain), stride)
-        )
+        request = "".join(plain[offset : offset + stride].hex() + "\n" for offset in range(0, len(plain), stride))
         result = subprocess.run(
             [str(args.native_model_exe.resolve()), mode],
             input=request,
@@ -53,10 +47,7 @@ def main() -> int:
             if pixels != expected:
                 raise AssertionError(f"{kind} tile {index} differs from source")
         counts[kind] = len(tiles)
-    print(
-        "Flicky native pixels match source: "
-        f"{counts['tiles_4bpp']} 4bpp tiles and {counts['tiles_1bpp']} font tiles"
-    )
+    print(f"Flicky native pixels match source: {counts['tiles_4bpp']} 4bpp tiles and {counts['tiles_1bpp']} font tiles")
     return 0
 
 

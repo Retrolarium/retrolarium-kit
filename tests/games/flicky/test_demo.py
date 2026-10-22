@@ -8,7 +8,10 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from retrolarium_kit.games.flicky.demo import (
-    DEMO_SOURCE, encode_steps, export_attract_demos, stage_attract_demos,
+    DEMO_SOURCE,
+    encode_steps,
+    export_attract_demos,
+    stage_attract_demos,
     validate_attract_demos,
 )
 
@@ -47,11 +50,18 @@ class FlickyDemoTests(unittest.TestCase):
             fixture(root)
             demos = export_attract_demos(root)
             self.assertEqual([2, 11, 21, 25], [demo["round"] for demo in demos])
-            self.assertEqual([{"frames": 18, "buttons": []},
-                              {"frames": 5, "buttons": ["A", "RIGHT"]},
-                              {"frames": 256, "buttons": []}], demos[0]["steps"])
-            self.assertEqual([(0x12, []), (1, ["RIGHT"]), (256, ["DOWN", "RIGHT"])],
-                             [(s["frames"], s["buttons"]) for s in demos[1]["steps"]])
+            self.assertEqual(
+                [
+                    {"frames": 18, "buttons": []},
+                    {"frames": 5, "buttons": ["A", "RIGHT"]},
+                    {"frames": 256, "buttons": []},
+                ],
+                demos[0]["steps"],
+            )
+            self.assertEqual(
+                [(0x12, []), (1, ["RIGHT"]), (256, ["DOWN", "RIGHT"])],
+                [(s["frames"], s["buttons"]) for s in demos[1]["steps"]],
+            )
             for demo in demos:
                 self.assertEqual(bytes(demo["baseline_bytes"]), encode_steps(demo["steps"]))
 

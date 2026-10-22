@@ -30,8 +30,12 @@ class ProjectError(RuntimeError):
 VS_MACHINES: dict[str, dict[str, Any]] = {
     "suprmrio": {
         "name": "Vs. Super Mario Bros. (set SM4-4 E)",
-        "prg": ("mds-sm4-4__1dor6d_e.1d or 6d", "mds-sm4-4__1cor6c_e.1c or 6c",
-                "mds-sm4-4__1bor6b_e.1b or 6b", "mds-sm4-4__1aor6a_e.1a or 6a"),
+        "prg": (
+            "mds-sm4-4__1dor6d_e.1d or 6d",
+            "mds-sm4-4__1cor6c_e.1c or 6c",
+            "mds-sm4-4__1bor6b_e.1b or 6b",
+            "mds-sm4-4__1aor6a_e.1a or 6a",
+        ),
         "chr": ("mds-sm4-4__2bor8b_e.2b or 8b", "mds-sm4-4__2aor8a_e.2a or 8a"),
         "palette": "rp2c04-0004",
         "revision": ("smb1", "vs_smb"),
@@ -42,8 +46,9 @@ VS_CHIP_SIZE = 0x2000
 
 def vs_machine(game: str, revision: str) -> str | None:
     """The MAME Vs. System machine a game revision runs on, if it is one."""
-    return next((name for name, board in VS_MACHINES.items()
-                 if board["revision"] == (game, revision)), None)
+    return next((name for name, board in VS_MACHINES.items() if board["revision"] == (game, revision)), None)
+
+
 # The RGB PPUs' palette ROMs: 64 colours of three 3-bit DAC levels (red,
 # green, blue), as the NESdev wiki's "PPU palettes" page tabulates them; MAME
 # loads each as a 192-byte file, one level per byte. The kit builds the file
@@ -102,11 +107,7 @@ def classify_mame_failure(stderr: str) -> tuple[str, dict[str, Any] | None]:
     if "Required files are missing" not in stderr:
         return "failed", None
     missing = sorted(
-        {
-            match.group(1)
-            for line in stderr.splitlines()
-            if (match := re.match(r"^([^\s]+) NOT FOUND(?:\s|$)", line))
-        }
+        {match.group(1) for line in stderr.splitlines() if (match := re.match(r"^([^\s]+) NOT FOUND(?:\s|$)", line))}
     )
     if not missing:
         return "failed", None
@@ -122,9 +123,7 @@ def classify_mame_failure(stderr: str) -> tuple[str, dict[str, Any] | None]:
 
 def _operation_argv(operation: dict[str, Any]) -> list[str]:
     argv = operation.get("argv", ["make", "all"])
-    if not isinstance(argv, list) or not argv or any(
-        not isinstance(value, str) or not value for value in argv
-    ):
+    if not isinstance(argv, list) or not argv or any(not isinstance(value, str) or not value for value in argv):
         raise ProjectError("build operation argv must be a non-empty string array")
     return argv
 
@@ -149,13 +148,10 @@ def _run_build_process(
         sys.stderr.write(output if output.endswith("\n") else output + "\n")
     if result.returncode:
         tail = "\n".join(output.strip().splitlines()[-5:])
-        raise ProjectError(f"project build failed with exit code {result.returncode}"
-                           + (f":\n{tail}" if tail else ""))
+        raise ProjectError(f"project build failed with exit code {result.returncode}" + (f":\n{tail}" if tail else ""))
 
 
-def _docker_build(
-    operation: dict[str, Any], project_directory: Path, selected_container: str
-) -> dict[str, str]:
+def _docker_build(operation: dict[str, Any], project_directory: Path, selected_container: str) -> dict[str, str]:
     if operation.get("z80_prebuild"):
         raise ProjectError("container build cannot assemble declared Z80 sources")
     command = [
@@ -173,9 +169,7 @@ def _docker_build(
     return {"kind": "docker", "container": selected_container}
 
 
-def _project_relative_path(
-    project_directory: Path, value: object, name: str
-) -> tuple[Path, str]:
+def _project_relative_path(project_directory: Path, value: object, name: str) -> tuple[Path, str]:
     try:
         path = artifact_path(project_directory, value)
     except (OSError, ValueError) as exc:
@@ -190,18 +184,10 @@ def _ca65_build(
     output: Path,
     suite: ResolvedToolchain,
 ) -> None:
-    source, source_relative = _project_relative_path(
-        project_directory, operation.get("source"), "ca65 source"
-    )
-    linker, linker_relative = _project_relative_path(
-        project_directory, operation.get("linker_config"), "linker config"
-    )
-    object_file, object_relative = _project_relative_path(
-        project_directory, operation.get("object"), "object output"
-    )
-    map_file, map_relative = _project_relative_path(
-        project_directory, operation.get("map"), "map output"
-    )
+    source, source_relative = _project_relative_path(project_directory, operation.get("source"), "ca65 source")
+    linker, linker_relative = _project_relative_path(project_directory, operation.get("linker_config"), "linker config")
+    object_file, object_relative = _project_relative_path(project_directory, operation.get("object"), "object output")
+    map_file, map_relative = _project_relative_path(project_directory, operation.get("map"), "map output")
     if not source.is_file() or not linker.is_file():
         raise ProjectError("ca65 recipe input is missing")
     object_file.parent.mkdir(parents=True, exist_ok=True)
@@ -236,9 +222,7 @@ def _asl_build(
     output: Path,
     suite: ResolvedToolchain,
 ) -> None:
-    source, source_relative = _project_relative_path(
-        project_directory, operation.get("source"), "AS source"
-    )
+    source, source_relative = _project_relative_path(project_directory, operation.get("source"), "AS source")
     object_file, object_relative = _project_relative_path(
         project_directory, operation.get("object"), "AS object output"
     )
@@ -250,15 +234,9 @@ def _asl_build(
     for index, item in enumerate(z80_prebuild):
         if not isinstance(item, dict):
             raise ProjectError(f"Z80 prebuild {index} must be an object")
-        z80_source, z80_source_relative = _project_relative_path(
-            project_directory, item.get("source"), "Z80 source"
-        )
-        z80_object, z80_object_relative = _project_relative_path(
-            project_directory, item.get("object"), "Z80 object"
-        )
-        z80_output, z80_output_relative = _project_relative_path(
-            project_directory, item.get("output"), "Z80 output"
-        )
+        z80_source, z80_source_relative = _project_relative_path(project_directory, item.get("source"), "Z80 source")
+        z80_object, z80_object_relative = _project_relative_path(project_directory, item.get("object"), "Z80 object")
+        z80_output, z80_output_relative = _project_relative_path(project_directory, item.get("output"), "Z80 output")
         if not z80_source.is_file() or z80_source.suffix.lower() != ".asm":
             raise ProjectError(f"Z80 prebuild source is missing or is not .asm: {z80_source}")
         z80_object.parent.mkdir(parents=True, exist_ok=True)
@@ -269,15 +247,27 @@ def _asl_build(
         z80_output.unlink(missing_ok=True)
         z80_listing.unlink(missing_ok=True)
         _run_build_process(
-            [str(suite.command("asl")), "-xx", "-n", "-q", "-A", "-L", "-U",
-             "-olist", z80_listing_relative,
-             "-i", ".", "-o", z80_object_relative, z80_source_relative],
+            [
+                str(suite.command("asl")),
+                "-xx",
+                "-n",
+                "-q",
+                "-A",
+                "-L",
+                "-U",
+                "-olist",
+                z80_listing_relative,
+                "-i",
+                ".",
+                "-o",
+                z80_object_relative,
+                z80_source_relative,
+            ],
             project_directory=project_directory,
             environment=suite.process_environment(),
         )
         _run_build_process(
-            [str(suite.command("p2bin")), z80_object_relative,
-             z80_output_relative, "-p=FF"],
+            [str(suite.command("p2bin")), z80_object_relative, z80_output_relative, "-p=FF"],
             project_directory=project_directory,
             environment=suite.process_environment(),
         )
@@ -288,9 +278,7 @@ def _asl_build(
     wrapper = object_file.parent / "retrolarium-main.68k"
     wrapper_relative = wrapper.relative_to(project_directory).as_posix()
     wrapper.write_text(
-        "                cpu 68000\n"
-        f'                include "{source_relative}"\n'
-        "                end\n",
+        f'                cpu 68000\n                include "{source_relative}"\n                end\n',
         encoding="utf-8",
         newline="\n",
     )
@@ -371,15 +359,11 @@ def build_project(
     if container is not None:
         runner = _docker_build(operation, project_directory, container)
     elif operation.get("runner") == "retrolarium-kit":
-        runner = _bundled_build(
-            operation, project_directory, output, toolchain_cache
-        )
+        runner = _bundled_build(operation, project_directory, output, toolchain_cache)
     else:
         default_container = operation.get("default_container")
         if not isinstance(default_container, str) or not default_container:
-            raise ProjectError(
-                "build operation has neither a bundled recipe nor a container"
-            )
+            raise ProjectError("build operation has neither a bundled recipe nor a container")
         runner = _docker_build(operation, project_directory, default_container)
     if not output.is_file():
         raise ProjectError(f"build did not produce declared artifact: {output}")
@@ -410,10 +394,7 @@ def verify_project(manifest_path: Path) -> dict[str, Any]:
         raise ProjectError(f"declared build artifact does not exist: {artifact}")
     actual_size = artifact.stat().st_size
     actual_sha256 = sha256_file(artifact)
-    exact = (
-        actual_size == operation["expected_size"]
-        and actual_sha256 == operation["expected_sha256"]
-    )
+    exact = actual_size == operation["expected_size"] and actual_sha256 == operation["expected_sha256"]
     document = {
         "schema": "retrolarium.verification-result",
         "schema_version": 1,
@@ -455,9 +436,7 @@ def launch_plan(
         or not isinstance(declared_machines, list)
         or selected_machine not in declared_machines
     ):
-        raise ProjectError(
-            f"unsupported {platform} MAME machine: {selected_machine}"
-        )
+        raise ProjectError(f"unsupported {platform} MAME machine: {selected_machine}")
     mame = mame.resolve()
     if not mame.is_file():
         raise ProjectError(f"MAME executable does not exist: {mame}")
@@ -551,9 +530,12 @@ def _unknown_bios_arguments(*, interactive: bool) -> list[str]:
     if not interactive:
         return []
     return [
-        "-seconds_to_run", "299",
-        "-autoboot_delay", "0",
-        "-autoboot_script", str(OPEN_DISK_SYS_START),
+        "-seconds_to_run",
+        "299",
+        "-autoboot_delay",
+        "0",
+        "-autoboot_script",
+        str(OPEN_DISK_SYS_START),
     ]
 
 
@@ -617,9 +599,7 @@ def launch_image_plan(
     disk = platform == "nes" and rom.suffix.lower() == ".fds"
     selected_machine = "fds" if disk else machine or default_machines.get(platform)
     if allowed_machines is None or selected_machine not in allowed_machines:
-        raise ProjectError(
-            f"unsupported {platform} MAME machine: {selected_machine}"
-        )
+        raise ProjectError(f"unsupported {platform} MAME machine: {selected_machine}")
     mame = mame.resolve()
     if not mame.is_file():
         raise ProjectError(f"MAME executable does not exist: {mame}")
@@ -673,8 +653,7 @@ def launch_image_plan(
     if disk:
         arguments.extend(bios_arguments)
     if vs and interactive:
-        arguments.extend(["-seconds_to_run", "299", "-autoboot_delay", "0",
-                          "-autoboot_script", str(MAME_VS_START)])
+        arguments.extend(["-seconds_to_run", "299", "-autoboot_delay", "0", "-autoboot_script", str(MAME_VS_START)])
     plan = {
         "schema": "retrolarium.process-spec",
         "schema_version": 1,
@@ -725,7 +704,7 @@ def _vs_rom_set(image: Any, rom: Path, machine: str) -> Path:
     try:
         folder.mkdir(parents=True, exist_ok=True)
         for index, name in enumerate((*board["prg"], *board["chr"])):
-            (folder / name).write_bytes(chips[index * VS_CHIP_SIZE:(index + 1) * VS_CHIP_SIZE])
+            (folder / name).write_bytes(chips[index * VS_CHIP_SIZE : (index + 1) * VS_CHIP_SIZE])
         (folder / f"{board['palette']}.pal").write_bytes(palette)
     except OSError as exc:
         raise ProjectError(f"cannot write the {machine} ROM set: {exc}") from exc
@@ -745,13 +724,10 @@ def launch_image_smoke(
     """Run a direct authoring artifact headlessly and retain reproducible evidence."""
     if seconds <= 0 or timeout <= 0:
         raise ProjectError("seconds and timeout must be positive")
-    plan = launch_image_plan(rom, platform=platform, mame=mame, machine=machine,
-                             interactive=False)
+    plan = launch_image_plan(rom, platform=platform, mame=mame, machine=machine, interactive=False)
     run_root = output.resolve()
     run_root.mkdir(parents=True, exist_ok=True)
-    run_directory = Path(
-        tempfile.mkdtemp(prefix=f"{plan['platform']}-authoring-smoke-", dir=run_root)
-    )
+    run_directory = Path(tempfile.mkdtemp(prefix=f"{plan['platform']}-authoring-smoke-", dir=run_root))
     snapshot_directory = run_directory / "snapshots"
     snapshot_directory.mkdir()
     arguments = list(plan["arguments"])
@@ -801,12 +777,8 @@ def launch_image_smoke(
         status = "timeout"
         stdout = process_text(exc.stdout)
         stderr = process_text(exc.stderr)
-    (run_directory / "stdout.log").write_text(
-        stdout, encoding="utf-8", newline="\n"
-    )
-    (run_directory / "stderr.log").write_text(
-        stderr, encoding="utf-8", newline="\n"
-    )
+    (run_directory / "stdout.log").write_text(stdout, encoding="utf-8", newline="\n")
+    (run_directory / "stderr.log").write_text(stderr, encoding="utf-8", newline="\n")
     snapshots = sorted(snapshot_directory.rglob("*.png"))
     document = {
         "schema": "retrolarium.run-result",
@@ -853,9 +825,7 @@ def launch_project_smoke(
     root = manifest_path.parent
     run_root = (output or root / "run").resolve()
     run_root.mkdir(parents=True, exist_ok=True)
-    run_directory = Path(
-        tempfile.mkdtemp(prefix=f"{plan['platform']}-smoke-", dir=run_root)
-    )
+    run_directory = Path(tempfile.mkdtemp(prefix=f"{plan['platform']}-smoke-", dir=run_root))
     snapshot_directory = run_directory / "snapshots"
     snapshot_directory.mkdir()
     arguments = list(plan["arguments"])
@@ -906,12 +876,8 @@ def launch_project_smoke(
         status = "timeout"
         stdout = process_text(exc.stdout)
         stderr = process_text(exc.stderr)
-    (run_directory / "stdout.log").write_text(
-        stdout, encoding="utf-8", newline="\n"
-    )
-    (run_directory / "stderr.log").write_text(
-        stderr, encoding="utf-8", newline="\n"
-    )
+    (run_directory / "stdout.log").write_text(stdout, encoding="utf-8", newline="\n")
+    (run_directory / "stderr.log").write_text(stderr, encoding="utf-8", newline="\n")
     snapshots = sorted(snapshot_directory.rglob("*.png"))
     document = {
         "schema": "retrolarium.run-result",

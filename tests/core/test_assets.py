@@ -22,13 +22,18 @@ def sha1(data: bytes) -> str:
 def write_repository(root: Path, **extra) -> Path:
     (root / "game.bin").write_bytes(IMAGE)
     manifest = {
-        "schema": "retrolarium.assets", "schema_version": 1, "output": "assets/generated",
-        "images": [{"id": "base", "file": "game.bin", "size": len(IMAGE), "sha1": sha1(IMAGE)},
-                   {"id": "other", "file": "other.bin", "size": 16, "sha1": sha1(bytes(16))}],
-        "assets": [{"path": "chr/a.chr", "image": "base", "offset": 16, "size": 32, "sha1": sha1(IMAGE[16:48])},
-                   {"path": "prg/b.prg", "image": "base", "offset": "0x100", "size": 8,
-                    "sha1": sha1(IMAGE[0x100:0x108])},
-                   {"path": "other/c.bin", "image": "other", "offset": 0, "size": 16, "sha1": sha1(bytes(16))}],
+        "schema": "retrolarium.assets",
+        "schema_version": 1,
+        "output": "assets/generated",
+        "images": [
+            {"id": "base", "file": "game.bin", "size": len(IMAGE), "sha1": sha1(IMAGE)},
+            {"id": "other", "file": "other.bin", "size": 16, "sha1": sha1(bytes(16))},
+        ],
+        "assets": [
+            {"path": "chr/a.chr", "image": "base", "offset": 16, "size": 32, "sha1": sha1(IMAGE[16:48])},
+            {"path": "prg/b.prg", "image": "base", "offset": "0x100", "size": 8, "sha1": sha1(IMAGE[0x100:0x108])},
+            {"path": "other/c.bin", "image": "other", "offset": 0, "size": 16, "sha1": sha1(bytes(16))},
+        ],
         **extra,
     }
     path = root / "assets" / "manifest.json"
@@ -43,16 +48,18 @@ class AssetsTests(unittest.TestCase):
             root = Path(directory)
             manifest = assets.load(write_repository(root))
             report = assets.split(manifest)
-            self.assertEqual(["[OK] base: 2 asset(s) written, 0 unchanged", "[SKIP] other: other.bin is not here"],
-                             report)
+            self.assertEqual(
+                ["[OK] base: 2 asset(s) written, 0 unchanged", "[SKIP] other: other.bin is not here"], report
+            )
             self.assertEqual(IMAGE[16:48], (root / "assets/generated/chr/a.chr").read_bytes())
             self.assertEqual(["[OK] base: 0 asset(s) written, 2 unchanged"], assets.split(manifest, ["base"]))
             self.assertEqual([], assets.check(manifest, ["base"]))
             self.assertEqual(["assets/generated/other/c.bin is missing"], assets.check(manifest))
             (root / "assets/generated/chr/a.chr").write_bytes(bytes(32))
             self.assertEqual([], assets.check(manifest, ["base"]))
-            self.assertEqual(["assets/generated/chr/a.chr differs from base"],
-                             assets.check(manifest, ["base"], exact=True))
+            self.assertEqual(
+                ["assets/generated/chr/a.chr differs from base"], assets.check(manifest, ["base"], exact=True)
+            )
 
     def test_a_wrong_image_is_refused(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

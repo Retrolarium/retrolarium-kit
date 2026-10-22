@@ -155,14 +155,10 @@ def _profiles(custom_profile: Path | None) -> tuple[GameProfile, ...]:
 
 
 class _CastleExcellentAuthoringAdapter:
-    def decode(
-        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
-    ) -> CastleExcellentLevelDocument:
+    def decode(self, payload: bytes, profile: GameProfile, revision: RevisionSpec) -> CastleExcellentLevelDocument:
         return decode_levels(payload, profile, revision)
 
-    def parse(
-        self, document: object, profile: GameProfile, revision: RevisionSpec
-    ) -> CastleExcellentLevelDocument:
+    def parse(self, document: object, profile: GameProfile, revision: RevisionSpec) -> CastleExcellentLevelDocument:
         return parse_level_document(document, profile, revision)
 
     def build(
@@ -188,14 +184,10 @@ class _CastleExcellentAuthoringAdapter:
 
 
 class _NesResourceAuthoringAdapter:
-    def decode(
-        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
-    ) -> NesResourceBundleDocument:
+    def decode(self, payload: bytes, profile: GameProfile, revision: RevisionSpec) -> NesResourceBundleDocument:
         return decode_resources(payload, profile, revision)
 
-    def parse(
-        self, document: object, profile: GameProfile, revision: RevisionSpec
-    ) -> NesResourceBundleDocument:
+    def parse(self, document: object, profile: GameProfile, revision: RevisionSpec) -> NesResourceBundleDocument:
         return parse_resource_document(document, profile, revision)
 
     def build(
@@ -216,14 +208,10 @@ class _NesResourceAuthoringAdapter:
 
 
 class _SolomonRoomAuthoringAdapter:
-    def decode(
-        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
-    ) -> SolomonRoomDocument:
+    def decode(self, payload: bytes, profile: GameProfile, revision: RevisionSpec) -> SolomonRoomDocument:
         return decode_solomon_rooms(payload, profile, revision)
 
-    def parse(
-        self, document: object, profile: GameProfile, revision: RevisionSpec
-    ) -> SolomonRoomDocument:
+    def parse(self, document: object, profile: GameProfile, revision: RevisionSpec) -> SolomonRoomDocument:
         return parse_solomon_room_document(document, profile, revision)
 
     def build(
@@ -248,19 +236,18 @@ class _SolomonRoomAuthoringAdapter:
 
 
 class _SolomonRoomArtAuthoringAdapter:
-    def decode(
-        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
-    ) -> SolomonRoomArtDocument:
+    def decode(self, payload: bytes, profile: GameProfile, revision: RevisionSpec) -> SolomonRoomArtDocument:
         return decode_room_art(payload, profile, revision)
 
-    def parse(
-        self, document: object, profile: GameProfile, revision: RevisionSpec
-    ) -> SolomonRoomArtDocument:
+    def parse(self, document: object, profile: GameProfile, revision: RevisionSpec) -> SolomonRoomArtDocument:
         return parse_room_art_document(document, profile, revision)
 
     def build(
-        self, payload: bytes, document: SolomonRoomArtDocument,
-        profile: GameProfile, revision: RevisionSpec,
+        self,
+        payload: bytes,
+        document: SolomonRoomArtDocument,
+        profile: GameProfile,
+        revision: RevisionSpec,
     ) -> tuple[bytes, dict[str, object]]:
         return build_room_art(payload, document, profile, revision)
 
@@ -276,19 +263,18 @@ class _SolomonRoomArtAuthoringAdapter:
 
 
 class _SolomonSpriteFrameAuthoringAdapter:
-    def decode(
-        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
-    ) -> SolomonSpriteFrameDocument:
+    def decode(self, payload: bytes, profile: GameProfile, revision: RevisionSpec) -> SolomonSpriteFrameDocument:
         return decode_sprite_frames(payload, profile, revision)
 
-    def parse(
-        self, document: object, profile: GameProfile, revision: RevisionSpec
-    ) -> SolomonSpriteFrameDocument:
+    def parse(self, document: object, profile: GameProfile, revision: RevisionSpec) -> SolomonSpriteFrameDocument:
         return parse_sprite_frame_document(document, profile, revision)
 
     def build(
-        self, payload: bytes, document: SolomonSpriteFrameDocument,
-        profile: GameProfile, revision: RevisionSpec,
+        self,
+        payload: bytes,
+        document: SolomonSpriteFrameDocument,
+        profile: GameProfile,
+        revision: RevisionSpec,
     ) -> tuple[bytes, dict[str, object]]:
         return build_sprite_frames(payload, document, profile, revision)
 
@@ -304,19 +290,18 @@ class _SolomonSpriteFrameAuthoringAdapter:
 
 
 class _SolomonAnimationAuthoringAdapter:
-    def decode(
-        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
-    ) -> SolomonAnimationDocument:
+    def decode(self, payload: bytes, profile: GameProfile, revision: RevisionSpec) -> SolomonAnimationDocument:
         return decode_animations(payload, profile, revision)
 
-    def parse(
-        self, document: object, profile: GameProfile, revision: RevisionSpec
-    ) -> SolomonAnimationDocument:
+    def parse(self, document: object, profile: GameProfile, revision: RevisionSpec) -> SolomonAnimationDocument:
         return parse_animation_document(document, profile, revision)
 
     def build(
-        self, payload: bytes, document: SolomonAnimationDocument,
-        profile: GameProfile, revision: RevisionSpec,
+        self,
+        payload: bytes,
+        document: SolomonAnimationDocument,
+        profile: GameProfile,
+        revision: RevisionSpec,
     ) -> tuple[bytes, dict[str, object]]:
         return build_animations(payload, document, profile, revision)
 
@@ -334,19 +319,18 @@ class _SolomonAnimationAuthoringAdapter:
 
 
 class _SolomonAudioAuthoringAdapter:
-    def decode(
-        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
-    ) -> SolomonAudioDocument:
+    def decode(self, payload: bytes, profile: GameProfile, revision: RevisionSpec) -> SolomonAudioDocument:
         return decode_solomon_audio(payload, profile, revision)
 
-    def parse(
-        self, document: object, profile: GameProfile, revision: RevisionSpec
-    ) -> SolomonAudioDocument:
+    def parse(self, document: object, profile: GameProfile, revision: RevisionSpec) -> SolomonAudioDocument:
         return parse_solomon_audio_document(document, profile, revision)
 
     def build(
-        self, payload: bytes, document: SolomonAudioDocument,
-        profile: GameProfile, revision: RevisionSpec,
+        self,
+        payload: bytes,
+        document: SolomonAudioDocument,
+        profile: GameProfile,
+        revision: RevisionSpec,
     ) -> tuple[bytes, dict[str, object]]:
         return build_solomon_audio(payload, document, profile, revision)
 
@@ -364,19 +348,18 @@ class _SolomonAudioAuthoringAdapter:
 
 
 class _SolomonPresentationAuthoringAdapter:
-    def decode(
-        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
-    ) -> SolomonPresentationDocument:
+    def decode(self, payload: bytes, profile: GameProfile, revision: RevisionSpec) -> SolomonPresentationDocument:
         return decode_solomon_presentation(payload, profile, revision)
 
-    def parse(
-        self, document: object, profile: GameProfile, revision: RevisionSpec
-    ) -> SolomonPresentationDocument:
+    def parse(self, document: object, profile: GameProfile, revision: RevisionSpec) -> SolomonPresentationDocument:
         return parse_solomon_presentation_document(document, profile, revision)
 
     def build(
-        self, payload: bytes, document: SolomonPresentationDocument,
-        profile: GameProfile, revision: RevisionSpec,
+        self,
+        payload: bytes,
+        document: SolomonPresentationDocument,
+        profile: GameProfile,
+        revision: RevisionSpec,
     ) -> tuple[bytes, dict[str, object]]:
         return build_solomon_presentation(payload, document, profile, revision)
 
@@ -398,19 +381,18 @@ class _SolomonPresentationAuthoringAdapter:
 
 
 class _SmbDemoAuthoringAdapter:
-    def decode(
-        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
-    ) -> SmbDemoDocument:
+    def decode(self, payload: bytes, profile: GameProfile, revision: RevisionSpec) -> SmbDemoDocument:
         return decode_smb_demo(payload, profile, revision)
 
-    def parse(
-        self, document: object, profile: GameProfile, revision: RevisionSpec
-    ) -> SmbDemoDocument:
+    def parse(self, document: object, profile: GameProfile, revision: RevisionSpec) -> SmbDemoDocument:
         return parse_smb_demo_document(document, profile, revision)
 
     def build(
-        self, payload: bytes, document: SmbDemoDocument,
-        profile: GameProfile, revision: RevisionSpec,
+        self,
+        payload: bytes,
+        document: SmbDemoDocument,
+        profile: GameProfile,
+        revision: RevisionSpec,
     ) -> tuple[bytes, dict[str, object]]:
         return build_smb_demo(payload, document, profile, revision)
 
@@ -423,19 +405,18 @@ class _SmbDemoAuthoringAdapter:
 
 
 class _CastleExcellentDemoAuthoringAdapter:
-    def decode(
-        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
-    ) -> CastleExcellentDemoDocument:
+    def decode(self, payload: bytes, profile: GameProfile, revision: RevisionSpec) -> CastleExcellentDemoDocument:
         return decode_castle_excellent_demo(payload, profile, revision)
 
-    def parse(
-        self, document: object, profile: GameProfile, revision: RevisionSpec
-    ) -> CastleExcellentDemoDocument:
+    def parse(self, document: object, profile: GameProfile, revision: RevisionSpec) -> CastleExcellentDemoDocument:
         return parse_castle_excellent_demo_document(document, profile, revision)
 
     def build(
-        self, payload: bytes, document: CastleExcellentDemoDocument,
-        profile: GameProfile, revision: RevisionSpec,
+        self,
+        payload: bytes,
+        document: CastleExcellentDemoDocument,
+        profile: GameProfile,
+        revision: RevisionSpec,
     ) -> tuple[bytes, dict[str, object]]:
         return build_castle_excellent_demo(payload, document, profile, revision)
 
@@ -448,19 +429,18 @@ class _CastleExcellentDemoAuthoringAdapter:
 
 
 class _DoraemonDemoAuthoringAdapter:
-    def decode(
-        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
-    ) -> DoraemonDemoDocument:
+    def decode(self, payload: bytes, profile: GameProfile, revision: RevisionSpec) -> DoraemonDemoDocument:
         return decode_doraemon_demo(payload, profile, revision)
 
-    def parse(
-        self, document: object, profile: GameProfile, revision: RevisionSpec
-    ) -> DoraemonDemoDocument:
+    def parse(self, document: object, profile: GameProfile, revision: RevisionSpec) -> DoraemonDemoDocument:
         return parse_doraemon_demo_document(document, profile, revision)
 
     def build(
-        self, payload: bytes, document: DoraemonDemoDocument,
-        profile: GameProfile, revision: RevisionSpec,
+        self,
+        payload: bytes,
+        document: DoraemonDemoDocument,
+        profile: GameProfile,
+        revision: RevisionSpec,
     ) -> tuple[bytes, dict[str, object]]:
         return build_doraemon_demo(payload, document, profile, revision)
 
@@ -473,19 +453,18 @@ class _DoraemonDemoAuthoringAdapter:
 
 
 class _DoraemonMusicAuthoringAdapter:
-    def decode(
-        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
-    ) -> DoraemonMusicDocument:
+    def decode(self, payload: bytes, profile: GameProfile, revision: RevisionSpec) -> DoraemonMusicDocument:
         return decode_doraemon_music(payload, profile, revision)
 
-    def parse(
-        self, document: object, profile: GameProfile, revision: RevisionSpec
-    ) -> DoraemonMusicDocument:
+    def parse(self, document: object, profile: GameProfile, revision: RevisionSpec) -> DoraemonMusicDocument:
         return parse_doraemon_music_document(document, profile, revision)
 
     def build(
-        self, payload: bytes, document: DoraemonMusicDocument,
-        profile: GameProfile, revision: RevisionSpec,
+        self,
+        payload: bytes,
+        document: DoraemonMusicDocument,
+        profile: GameProfile,
+        revision: RevisionSpec,
     ) -> tuple[bytes, dict[str, object]]:
         return build_doraemon_music(payload, document, profile, revision)
 
@@ -498,19 +477,18 @@ class _DoraemonMusicAuthoringAdapter:
 
 
 class _DoraemonTextAuthoringAdapter:
-    def decode(
-        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
-    ) -> DoraemonTextDocument:
+    def decode(self, payload: bytes, profile: GameProfile, revision: RevisionSpec) -> DoraemonTextDocument:
         return decode_doraemon_text(payload, profile, revision)
 
-    def parse(
-        self, document: object, profile: GameProfile, revision: RevisionSpec
-    ) -> DoraemonTextDocument:
+    def parse(self, document: object, profile: GameProfile, revision: RevisionSpec) -> DoraemonTextDocument:
         return parse_doraemon_text_document(document, profile, revision)
 
     def build(
-        self, payload: bytes, document: DoraemonTextDocument,
-        profile: GameProfile, revision: RevisionSpec,
+        self,
+        payload: bytes,
+        document: DoraemonTextDocument,
+        profile: GameProfile,
+        revision: RevisionSpec,
     ) -> tuple[bytes, dict[str, object]]:
         return build_doraemon_text(payload, document, profile, revision)
 
@@ -523,19 +501,18 @@ class _DoraemonTextAuthoringAdapter:
 
 
 class _PacmanDemoAuthoringAdapter:
-    def decode(
-        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
-    ) -> PacmanDemoDocument:
+    def decode(self, payload: bytes, profile: GameProfile, revision: RevisionSpec) -> PacmanDemoDocument:
         return decode_pacman_demo(payload, profile, revision)
 
-    def parse(
-        self, document: object, profile: GameProfile, revision: RevisionSpec
-    ) -> PacmanDemoDocument:
+    def parse(self, document: object, profile: GameProfile, revision: RevisionSpec) -> PacmanDemoDocument:
         return parse_pacman_demo_document(document, profile, revision)
 
     def build(
-        self, payload: bytes, document: PacmanDemoDocument,
-        profile: GameProfile, revision: RevisionSpec,
+        self,
+        payload: bytes,
+        document: PacmanDemoDocument,
+        profile: GameProfile,
+        revision: RevisionSpec,
     ) -> tuple[bytes, dict[str, object]]:
         return build_pacman_demo(payload, document, profile, revision)
 
@@ -548,19 +525,18 @@ class _PacmanDemoAuthoringAdapter:
 
 
 class _CastleExcellentScreensAuthoringAdapter:
-    def decode(
-        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
-    ) -> CastleExcellentScreensDocument:
+    def decode(self, payload: bytes, profile: GameProfile, revision: RevisionSpec) -> CastleExcellentScreensDocument:
         return decode_castle_excellent_screens(payload, profile, revision)
 
-    def parse(
-        self, document: object, profile: GameProfile, revision: RevisionSpec
-    ) -> CastleExcellentScreensDocument:
+    def parse(self, document: object, profile: GameProfile, revision: RevisionSpec) -> CastleExcellentScreensDocument:
         return parse_castle_excellent_screens_document(document, profile, revision)
 
     def build(
-        self, payload: bytes, document: CastleExcellentScreensDocument,
-        profile: GameProfile, revision: RevisionSpec,
+        self,
+        payload: bytes,
+        document: CastleExcellentScreensDocument,
+        profile: GameProfile,
+        revision: RevisionSpec,
     ) -> tuple[bytes, dict[str, object]]:
         return build_castle_excellent_screens(payload, document, profile, revision)
 
@@ -573,19 +549,18 @@ class _CastleExcellentScreensAuthoringAdapter:
 
 
 class _SolomonTextAuthoringAdapter:
-    def decode(
-        self, payload: bytes, profile: GameProfile, revision: RevisionSpec
-    ) -> SolomonTextDocument:
+    def decode(self, payload: bytes, profile: GameProfile, revision: RevisionSpec) -> SolomonTextDocument:
         return decode_solomon_text(payload, profile, revision)
 
-    def parse(
-        self, document: object, profile: GameProfile, revision: RevisionSpec
-    ) -> SolomonTextDocument:
+    def parse(self, document: object, profile: GameProfile, revision: RevisionSpec) -> SolomonTextDocument:
         return parse_solomon_text_document(document, profile, revision)
 
     def build(
-        self, payload: bytes, document: SolomonTextDocument,
-        profile: GameProfile, revision: RevisionSpec,
+        self,
+        payload: bytes,
+        document: SolomonTextDocument,
+        profile: GameProfile,
+        revision: RevisionSpec,
     ) -> tuple[bytes, dict[str, object]]:
         return build_solomon_text(payload, document, profile, revision)
 
@@ -609,9 +584,7 @@ def authoring_adapters() -> Registry[object]:
     registry.register(SOLOMON_SPRITE_FRAME_CODEC, _SolomonSpriteFrameAuthoringAdapter())
     registry.register(SOLOMON_ANIMATION_CODEC, _SolomonAnimationAuthoringAdapter())
     registry.register(SOLOMON_AUDIO_CODEC, _SolomonAudioAuthoringAdapter())
-    registry.register(
-        SOLOMON_PRESENTATION_CODEC, _SolomonPresentationAuthoringAdapter()
-    )
+    registry.register(SOLOMON_PRESENTATION_CODEC, _SolomonPresentationAuthoringAdapter())
     registry.register(SOLOMON_TEXT_CODEC, _SolomonTextAuthoringAdapter())
     registry.register(SMB_DEMO_CODEC, _SmbDemoAuthoringAdapter())
     registry.register(CASTLE_EXCELLENT_DEMO_CODEC, _CastleExcellentDemoAuthoringAdapter())
@@ -627,24 +600,16 @@ def _adapters(profile: GameProfile, revision: RevisionSpec) -> tuple[Any, ...]:
     registry = authoring_adapters()
     identifiers = set(registry.identifiers())
     matches = tuple(
-        registry.get(resource.codec)
-        for resource in profile.resources_for(revision)
-        if resource.codec in identifiers
+        registry.get(resource.codec) for resource in profile.resources_for(revision) if resource.codec in identifiers
     )
     if not matches:
-        raise AuthoringError(
-            f"game profile {profile.game_id} must select an authoring adapter"
-        )
+        raise AuthoringError(f"game profile {profile.game_id} must select an authoring adapter")
     if len({adapter.resource_id for adapter in matches}) != len(matches):
-        raise AuthoringError(
-            f"game profile {profile.game_id} selects duplicate authoring adapters"
-        )
+        raise AuthoringError(f"game profile {profile.game_id} selects duplicate authoring adapters")
     return matches
 
 
-def _adapter(
-    profile: GameProfile, revision: RevisionSpec, resource: str | None = None
-) -> Any:
+def _adapter(profile: GameProfile, revision: RevisionSpec, resource: str | None = None) -> Any:
     matches = _adapters(profile, revision)
     if resource is None:
         return matches[0]
@@ -652,38 +617,25 @@ def _adapter(
     if len(selected) != 1:
         available = ", ".join(adapter.resource_id for adapter in matches)
         raise AuthoringError(
-            f"game profile {profile.game_id} has no authoring resource {resource!r}; "
-            f"available: {available}"
+            f"game profile {profile.game_id} has no authoring resource {resource!r}; available: {available}"
         )
     return selected[0]
 
 
-def _adapter_for_document(
-    value: dict[str, Any], profile: GameProfile, revision: RevisionSpec
-) -> Any:
+def _adapter_for_document(value: dict[str, Any], profile: GameProfile, revision: RevisionSpec) -> Any:
     schema = value.get("schema")
-    selected = [
-        adapter for adapter in _adapters(profile, revision)
-        if adapter.document_schema == schema
-    ]
+    selected = [adapter for adapter in _adapters(profile, revision) if adapter.document_schema == schema]
     if len(selected) != 1:
-        raise AuthoringError(
-            f"authoring document schema {schema!r} is not registered for "
-            f"{profile.game_id}"
-        )
+        raise AuthoringError(f"authoring document schema {schema!r} is not registered for {profile.game_id}")
     return selected[0]
 
 
-def resolve_profile_revision(
-    profile_reference: str, source_sha256: str
-) -> tuple[GameProfile, RevisionSpec]:
+def resolve_profile_revision(profile_reference: str, source_sha256: str) -> tuple[GameProfile, RevisionSpec]:
     """Resolve a ``game-id.vN`` Studio reference and its immutable revision."""
 
     match = re.fullmatch(r"([a-z0-9][a-z0-9._-]*)\.v([1-9][0-9]*)", profile_reference)
     if match is None:
-        raise AuthoringError(
-            "Studio profile must use the game-id.vN form"
-        )
+        raise AuthoringError("Studio profile must use the game-id.vN form")
     game_id, version_text = match.groups()
     registry = game_profiles()
     try:
@@ -696,14 +648,9 @@ def resolve_profile_revision(
             f"Studio profile {profile_reference} does not match the repository's profile "
             f"version {profile.profile_version}"
         )
-    matches = [
-        revision for revision in profile.revisions
-        if revision.sha256 == source_sha256
-    ]
+    matches = [revision for revision in profile.revisions if revision.sha256 == source_sha256]
     if len(matches) != 1:
-        raise AuthoringError(
-            f"Studio source is not a recognized revision of {profile_reference}"
-        )
+        raise AuthoringError(f"Studio source is not a recognized revision of {profile_reference}")
     return profile, matches[0]
 
 
@@ -728,9 +675,7 @@ def validate_game_document_for_revision(
     }
 
 
-def _read_image(
-    path: Path, custom_profile: Path | None
-) -> tuple[bytes, GameProfile, RevisionSpec]:
+def _read_image(path: Path, custom_profile: Path | None) -> tuple[bytes, GameProfile, RevisionSpec]:
     try:
         payload = path.read_bytes()
     except OSError as exc:
@@ -755,9 +700,7 @@ def _atomic_write(path: Path, payload: bytes, *, durable: bool = True) -> None:
     the flush costs most of a second on Windows)."""
     path = path.resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(
-        dir=path.parent, prefix=f".{path.name}.", suffix=".tmp"
-    )
+    descriptor, temporary_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
     temporary = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "wb") as stream:
@@ -799,10 +742,7 @@ def profile_catalog() -> dict[str, object]:
                         "sha256": revision.sha256,
                         "container": revision.container,
                         "capabilities": list(profile.capabilities_for(revision)),
-                        "resources": [
-                            resource.resource_id
-                            for resource in profile.resources_for(revision)
-                        ],
+                        "resources": [resource.resource_id for resource in profile.resources_for(revision)],
                         "payloads": [
                             {
                                 "id": payload.payload_id,
@@ -877,9 +817,7 @@ def extract_game(
     return result
 
 
-def validate_game(
-    path: Path, document_path: Path, *, custom_profile: Path | None = None
-) -> dict[str, object]:
+def validate_game(path: Path, document_path: Path, *, custom_profile: Path | None = None) -> dict[str, object]:
     payload, profile, revision = _read_image(path, custom_profile)
     value = _load_json(document_path)
     adapter = _adapter_for_document(value, profile, revision)
@@ -896,9 +834,7 @@ def validate_game(
     }
 
 
-def _check_build_paths(
-    path: Path, document_paths: Sequence[Path], output: Path, report_path: Path | None
-) -> None:
+def _check_build_paths(path: Path, document_paths: Sequence[Path], output: Path, report_path: Path | None) -> None:
     """Refuse a build that would write over what it reads, or write its two
     outputs to one file, before anything is written."""
     inputs = {path.resolve(): "the source image"}
@@ -959,33 +895,30 @@ def build_game_documents(
         value = _load_json(document_path)
         schema = value.get("schema")
         if not isinstance(schema, str) or schema in schemas:
-            raise AuthoringError(
-                f"composed game build requires unique document schemas; got {schema!r}"
-            )
+            raise AuthoringError(f"composed game build requires unique document schemas; got {schema!r}")
         schemas.add(schema)
         adapter = _adapter_for_document(value, profile, revision)
         document = adapter.parse(value, profile, revision)
         rebuilt, report = adapter.build(payload, document, profile, revision)
         if len(rebuilt) != len(payload):
-            raise AuthoringError(
-                f"authoring document {document_path} changed the game image size"
-            )
+            raise AuthoringError(f"authoring document {document_path} changed the game image size")
         for offset, (before, after) in enumerate(zip(payload, rebuilt)):
             if before == after:
                 continue
             previous = owners.get(offset)
             if previous is not None and previous[1] != after:
                 raise AuthoringError(
-                    "authoring documents conflict at file offset "
-                    f"0x{offset:X}: {previous[0]} and {document_path}"
+                    f"authoring documents conflict at file offset 0x{offset:X}: {previous[0]} and {document_path}"
                 )
             owners[offset] = (document_path, after)
             merged[offset] = after
-        builds.append({
-            "document": str(document_path.resolve()),
-            "resource": adapter.resource_id,
-            "build": report,
-        })
+        builds.append(
+            {
+                "document": str(document_path.resolve()),
+                "resource": adapter.resource_id,
+                "build": report,
+            }
+        )
     _atomic_write(output, bytes(merged), durable=False)
     result: dict[str, object] = {
         "schema": "retrolarium.composed-game-build",
@@ -1002,18 +935,12 @@ def build_game_documents(
     return result
 
 
-def _validate_built_image(
-    artifact: Path, profile: GameProfile, revision: RevisionSpec
-) -> None:
+def _validate_built_image(artifact: Path, profile: GameProfile, revision: RevisionSpec) -> None:
     if profile.platform != "nes":
-        raise AuthoringError(
-            f"no direct authoring launch validator for {profile.platform}"
-        )
+        raise AuthoringError(f"no direct authoring launch validator for {profile.platform}")
     image = load_ines(artifact)
     if artifact.stat().st_size != revision.size or image.mapper != revision.mapper:
-        raise AuthoringError(
-            "edited image container, size or mapper differs from its base revision"
-        )
+        raise AuthoringError("edited image container, size or mapper differs from its base revision")
 
 
 def game_launch_plan(

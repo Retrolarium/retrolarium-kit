@@ -21,20 +21,28 @@ from retrolarium_kit.games.flicky.demo import stage_attract_demos
 from retrolarium_kit.games.flicky.title_layout import stage_title_layout
 from retrolarium_kit.games.flicky.workspace import graphics, semantics, sequences
 from retrolarium_kit.games.flicky.workspace.content import (
-    ARTIFACTS, OUTPUT, FlickyWorkspaceError, artifact, stage_sources, validate_workspace, workspace_path,
+    ARTIFACTS,
+    OUTPUT,
+    FlickyWorkspaceError,
+    artifact,
+    stage_sources,
+    validate_workspace,
+    workspace_path,
 )
 
 
 def _run(command: list[str], root: Path, env: dict[str, str]) -> None:
-    result = subprocess.run(command, cwd=root, env=env, text=True,
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    result = subprocess.run(command, cwd=root, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if result.returncode:
-        raise FlickyWorkspaceError(f"Flicky source command failed ({result.returncode}): "
-                                   + " ".join(command[2:4]) + "\n" + result.stdout[-8000:])
+        raise FlickyWorkspaceError(
+            f"Flicky source command failed ({result.returncode}): "
+            + " ".join(command[2:4])
+            + "\n"
+            + result.stdout[-8000:]
+        )
 
 
-def build_content(root: Path, *, as_bin: Path, p2bin: Path, level_writer: Path,
-                  as_args: str = "-maxerrors 2") -> Path:
+def build_content(root: Path, *, as_bin: Path, p2bin: Path, level_writer: Path, as_args: str = "-maxerrors 2") -> Path:
     """Build the snapshot's documents into build/content/flicky.bin."""
     root = root.resolve()
     validate_workspace(root)
@@ -46,18 +54,56 @@ def build_content(root: Path, *, as_bin: Path, p2bin: Path, level_writer: Path,
     driver_output = build_dir / "z80_driver.bin"
     sound_output = build_dir / "z80_sound_data.bin"
     common = ["--as-bin", str(as_bin.resolve()), "--p2bin", str(p2bin.resolve()), "--as-args", as_args]
-    _run([sys.executable, "scripts/run.py", "build.build_z80_driver",
-          "--source", "src/sound/z80/driver.asm", "--obj", str(build_dir / "z80_driver.p"),
-          "--output", str(driver_output), "--reference", "data/sound/data_z80_part1.bin",
-          "--expected-size", "4070", *common], root, env)
-    _run([sys.executable, "scripts/run.py", "build.build_z80_driver",
-          "--source", str(workspace_path(root, sound)), "--obj", str(build_dir / "z80_sound_data.p"),
-          "--output", str(sound_output), "--reference", "data/sound/data_z80_part2.bin",
-          "--reference-offset", "12", "--description", "editable Z80 sound-data banks",
-          "--expected-size", str(sound["capacity"]), "--split-label", "zMusicBank",
-          "--allow-different", *common], root, env)
-    staged_main = stage_sources(root, build_dir / "src", driver_output.relative_to(root),
-                                sound_output.relative_to(root))
+    _run(
+        [
+            sys.executable,
+            "scripts/run.py",
+            "build.build_z80_driver",
+            "--source",
+            "src/sound/z80/driver.asm",
+            "--obj",
+            str(build_dir / "z80_driver.p"),
+            "--output",
+            str(driver_output),
+            "--reference",
+            "data/sound/data_z80_part1.bin",
+            "--expected-size",
+            "4070",
+            *common,
+        ],
+        root,
+        env,
+    )
+    _run(
+        [
+            sys.executable,
+            "scripts/run.py",
+            "build.build_z80_driver",
+            "--source",
+            str(workspace_path(root, sound)),
+            "--obj",
+            str(build_dir / "z80_sound_data.p"),
+            "--output",
+            str(sound_output),
+            "--reference",
+            "data/sound/data_z80_part2.bin",
+            "--reference-offset",
+            "12",
+            "--description",
+            "editable Z80 sound-data banks",
+            "--expected-size",
+            str(sound["capacity"]),
+            "--split-label",
+            "zMusicBank",
+            "--allow-different",
+            *common,
+        ],
+        root,
+        env,
+    )
+    staged_main = stage_sources(
+        root, build_dir / "src", driver_output.relative_to(root), sound_output.relative_to(root)
+    )
     staged = staged_main.parent
 
     level_path = workspace_path(root, artifact("level_layouts"))
@@ -78,8 +124,22 @@ def build_content(root: Path, *, as_bin: Path, p2bin: Path, level_writer: Path,
     stage_bonus_motion(sequences_document, root, staged)
 
     rom_output = root / OUTPUT
-    _run([sys.executable, "scripts/run.py", "build.build_rom", "--source", str(staged_main),
-          "--obj", str(build_dir / "main.p"), "--output", str(rom_output), *common], root, env)
+    _run(
+        [
+            sys.executable,
+            "scripts/run.py",
+            "build.build_rom",
+            "--source",
+            str(staged_main),
+            "--obj",
+            str(build_dir / "main.p"),
+            "--output",
+            str(rom_output),
+            *common,
+        ],
+        root,
+        env,
+    )
     return rom_output
 
 

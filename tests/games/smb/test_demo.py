@@ -16,24 +16,45 @@ def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
     prg = bytearray(0x8000)
 
     def put(address: int, payload: bytes) -> None:
-        prg[address - 0x8000:address - 0x8000 + len(payload)] = payload
+        prg[address - 0x8000 : address - 0x8000 + len(payload)] = payload
 
     put(actions, bytes((0x01, 0x80, 0x81)) + bytes(18))
     put(durations, bytes((30, 10, 20, 0)) + bytes(18))
     # LDA durations-1,X at +13 and LDA actions-1,X at +21, as sub_demo_engine.
-    put(engine + 13, b"\xBD" + (durations - 1).to_bytes(2, "little"))
-    put(engine + 21, b"\xBD" + (actions - 1).to_bytes(2, "little"))
+    put(engine + 13, b"\xbd" + (durations - 1).to_bytes(2, "little"))
+    put(engine + 21, b"\xbd" + (actions - 1).to_bytes(2, "little"))
     header = b"NES\x1a" + bytes((2, 1, 0x01, 0)) + bytes(8)
     source = header + bytes(prg) + bytes(0x2000)
     revision = RevisionSpec(
-        "ju", "SMB probe", len(source), hashlib.sha1(source).hexdigest(),
-        hashlib.sha256(source).hexdigest(), "ines", 0,
+        "ju",
+        "SMB probe",
+        len(source),
+        hashlib.sha1(source).hexdigest(),
+        hashlib.sha256(source).hexdigest(),
+        "ines",
+        0,
     )
     profile = GameProfile(
-        "smb1", 1, "SMB probe", "nes", ("demo",), (revision,),
-        (ResourceSpec("demo", "demo", "smb.demo-input.v1", "fixed", {
-            "actions_cpu": actions, "durations_cpu": durations, "engine_cpu": engine, "capacity": 21,
-        }),),
+        "smb1",
+        1,
+        "SMB probe",
+        "nes",
+        ("demo",),
+        (revision,),
+        (
+            ResourceSpec(
+                "demo",
+                "demo",
+                "smb.demo-input.v1",
+                "fixed",
+                {
+                    "actions_cpu": actions,
+                    "durations_cpu": durations,
+                    "engine_cpu": engine,
+                    "capacity": 21,
+                },
+            ),
+        ),
     )
     return source, profile, revision
 
@@ -45,24 +66,47 @@ def disk_fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
     program = bytearray(0x8000)
 
     def put(address: int, payload: bytes) -> None:
-        program[address - 0x6000:address - 0x6000 + len(payload)] = payload
+        program[address - 0x6000 : address - 0x6000 + len(payload)] = payload
 
     put(actions, bytes((0x01, 0x80)) + bytes(19))
     put(durations, bytes((30, 10, 0)) + bytes(19))
-    put(engine + 13, b"\xBD" + (durations - 1).to_bytes(2, "little"))
-    put(engine + 21, b"\xBD" + (actions - 1).to_bytes(2, "little"))
+    put(engine + 13, b"\xbd" + (durations - 1).to_bytes(2, "little"))
+    put(engine + 21, b"\xbd" + (actions - 1).to_bytes(2, "little"))
     source = b"VS" + bytes(30) + bytes(program)
-    payload = PayloadSpec("prg", "range", 0x8000, hashlib.sha1(bytes(program)).hexdigest(),
-                          file_offset=32, load_address=0x6000)
+    payload = PayloadSpec(
+        "prg", "range", 0x8000, hashlib.sha1(bytes(program)).hexdigest(), file_offset=32, load_address=0x6000
+    )
     revision = RevisionSpec(
-        "vs_smb", "SMB disk probe", len(source), hashlib.sha1(source).hexdigest(),
-        hashlib.sha256(source).hexdigest(), "ines-vs", payloads=(payload,),
+        "vs_smb",
+        "SMB disk probe",
+        len(source),
+        hashlib.sha1(source).hexdigest(),
+        hashlib.sha256(source).hexdigest(),
+        "ines-vs",
+        payloads=(payload,),
     )
     profile = GameProfile(
-        "smb1", 1, "SMB probe", "nes", ("demo",), (revision,),
-        (ResourceSpec("demo", "demo", "smb.demo-input.v1", "fixed", {
-            "actions_cpu": actions, "durations_cpu": durations, "engine_cpu": engine, "capacity": 21,
-        }, payload="prg"),),
+        "smb1",
+        1,
+        "SMB probe",
+        "nes",
+        ("demo",),
+        (revision,),
+        (
+            ResourceSpec(
+                "demo",
+                "demo",
+                "smb.demo-input.v1",
+                "fixed",
+                {
+                    "actions_cpu": actions,
+                    "durations_cpu": durations,
+                    "engine_cpu": engine,
+                    "capacity": 21,
+                },
+                payload="prg",
+            ),
+        ),
     )
     return source, profile, revision
 
@@ -71,8 +115,9 @@ class SmbDemoTests(unittest.TestCase):
     def test_round_trip_and_edit(self) -> None:
         source, profile, revision = fixture()
         document = decode_demo(source, profile, revision)
-        self.assertEqual([(30, ["RIGHT"]), (10, ["A"]), (20, ["A", "RIGHT"])],
-                         [(s["frames"], s["buttons"]) for s in document.steps])
+        self.assertEqual(
+            [(30, ["RIGHT"]), (10, ["A"]), (20, ["A", "RIGHT"])], [(s["frames"], s["buttons"]) for s in document.steps]
+        )
         self.assertEqual(source, build_demo(source, document, profile, revision)[0])
         value = document.as_dict()
         value["steps"] = value["steps"] + [{"index": 3, "frames": 255, "buttons": ["B", "LEFT"]}]

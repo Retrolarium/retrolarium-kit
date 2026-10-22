@@ -45,7 +45,7 @@ def decode_palette_compact(data: bytes) -> list[dict]:
     """
     entries = []
     for offset in range(0, len(data), 2):
-        word = int.from_bytes(data[offset:offset + 2], "big")
+        word = int.from_bytes(data[offset : offset + 2], "big")
         index = (word & 0x10) | ((word >> 12) & 0xF) | ((word & 0x100) >> 3)
         entries.append({"index": index, "colour": word & 0xEEE, "last": bool(word & 1)})
         if word & 1:
@@ -76,9 +76,9 @@ def packed_4bpp_to_tiles(data: bytes) -> list[list[list[int]]]:
     tiles = []
     for start in range(0, len(data), 32):
         pixels = []
-        for byte in data[start:start + 32]:
+        for byte in data[start : start + 32]:
             pixels.extend((byte >> 4, byte & 0x0F))
-        tiles.append([pixels[row * 8:(row + 1) * 8] for row in range(8)])
+        tiles.append([pixels[row * 8 : (row + 1) * 8] for row in range(8)])
     return tiles
 
 
@@ -98,7 +98,7 @@ def font_to_tiles(data: bytes) -> list[list[list[int]]]:
     tiles = []
     for start in range(0, len(data), 8):
         tile = []
-        for byte in data[start:start + 8]:
+        for byte in data[start : start + 8]:
             tile.append([(byte >> shift) & 1 for shift in range(7, -1, -1)])
         tiles.append(tile)
     return tiles
@@ -159,10 +159,7 @@ def export_document(root: Path) -> dict[str, Any]:
             plain = enigma_decode(data)
             entry["width"] = 12
             entry["height"] = 4
-            entry["words"] = [
-                int.from_bytes(plain[offset:offset + 2], "big")
-                for offset in range(0, len(plain), 2)
-            ]
+            entry["words"] = [int.from_bytes(plain[offset : offset + 2], "big") for offset in range(0, len(plain), 2)]
         assets.append(entry)
     return {"schema_version": 1, "profile": "canonical", "assets": assets}
 

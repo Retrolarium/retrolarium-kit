@@ -20,8 +20,7 @@ GROUPS = (
     ("cast", "Title_BirdXTable", "Title_BirdYTable", 4),
 )
 # Labels a source from before the 2026-10 object names uses instead.
-LEGACY_LABELS = {"Title_LogoLetterXTable": "Title_StaticXTable",
-                 "Title_LogoLetterYTable": "Title_StaticYTable"}
+LEGACY_LABELS = {"Title_LogoLetterXTable": "Title_StaticXTable", "Title_LogoLetterYTable": "Title_StaticYTable"}
 LINE_RE = r"(?m)^{label}:(?P<pad>[ \t]+)dc\.w(?P<gap>[ \t]+)(?P<words>[^;\r\n]*?)(?P<tail>[ \t]*(?:;[^\r\n]*)?)$"
 
 
@@ -44,8 +43,7 @@ def _line(source: str, label: str) -> re.Match[str]:
 
 
 def _words(source: str, first: str, second: str) -> list[int]:
-    return [_number(token) for label in (first, second)
-            for token in _line(source, label).group("words").split(",")]
+    return [_number(token) for label in (first, second) for token in _line(source, label).group("words").split(",")]
 
 
 def export_title_layout(source_root: Path) -> list[dict[str, object]]:
@@ -56,8 +54,9 @@ def export_title_layout(source_root: Path) -> list[dict[str, object]]:
         if len(words) != count * 2 or len(_line(source, first).group("words").split(",")) != 1:
             raise ValueError(f"unexpected Flicky title table layout: {identifier}")
         positions = [[words[i], words[i + 1]] for i in range(0, len(words), 2)]
-        records.append({"id": identifier, "source": SOURCE, "positions": positions,
-                        "baseline": [list(p) for p in positions]})
+        records.append(
+            {"id": identifier, "source": SOURCE, "positions": positions, "baseline": [list(p) for p in positions]}
+        )
     return records
 
 
@@ -70,14 +69,21 @@ def validate_title_layout(document: dict, source_root: Path) -> None:
     if not isinstance(records, list) or len(records) != len(baseline):
         raise ValueError("Flicky title layout needs the statics and cast groups")
     for record, expected in zip(records, baseline):
-        if not isinstance(record, dict) or set(record) != set(expected) or any(
-                record.get(key) != expected[key] for key in ("id", "source", "baseline")):
+        if (
+            not isinstance(record, dict)
+            or set(record) != set(expected)
+            or any(record.get(key) != expected[key] for key in ("id", "source", "baseline"))
+        ):
             raise ValueError("Flicky title layout identity/baseline changed")
         positions = record.get("positions")
-        if (not isinstance(positions, list) or len(positions) != len(expected["positions"])
-                or any(not isinstance(p, list) or len(p) != 2
-                       or any(type(v) is not int or not 0 <= v <= 0x1FF for v in p)
-                       for p in positions)):
+        if (
+            not isinstance(positions, list)
+            or len(positions) != len(expected["positions"])
+            or any(
+                not isinstance(p, list) or len(p) != 2 or any(type(v) is not int or not 0 <= v <= 0x1FF for v in p)
+                for p in positions
+            )
+        ):
             raise ValueError(f"invalid Flicky title positions: {record['id']}")
 
 
@@ -97,5 +103,5 @@ def stage_title_layout(document: dict, source_root: Path, staged_source: Path) -
         for label, values in ((first, words[:1]), (second, words[1:])):
             line = _line(source, label)
             text = ", ".join(f"${value:X}" for value in values)
-            source = source[:line.start("words")] + text + source[line.end("words"):]
+            source = source[: line.start("words")] + text + source[line.end("words") :]
     path.write_text(source, encoding="utf-8", newline="\n")

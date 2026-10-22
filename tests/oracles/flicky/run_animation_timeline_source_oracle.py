@@ -13,8 +13,7 @@ from retrolarium_kit.games.flicky.content import WORKSPACE_FILES, import_flicky_
 
 
 def table_words(source: str, label: str) -> list[int] | None:
-    match = re.search(
-        rf"^{re.escape(label)}:\s*dc\.w\s+([^;\r\n]+)", source, re.MULTILINE)
+    match = re.search(rf"^{re.escape(label)}:\s*dc\.w\s+([^;\r\n]+)", source, re.MULTILINE)
     if match is None:
         return None
     words = []
@@ -35,14 +34,11 @@ def main() -> int:
         root = Path(name)
         import_flicky_source(args.source_root, args.rom, root)
         source = root / "flicky-source"
-        document = json.loads((source / WORKSPACE_FILES["graphics_sequences"])
-                              .read_text(encoding="utf-8"))
+        document = json.loads((source / WORKSPACE_FILES["graphics_sequences"]).read_text(encoding="utf-8"))
         mappings = {item["id"] for item in document["mappings"]}
         assert len(mappings) == 224
-        sprite = [item for item in document["animations"]
-                  if item["kind"] == "sprite"]
-        tilemap = [item for item in document["animations"]
-                   if item["kind"] == "tilemap"]
+        sprite = [item for item in document["animations"] if item["kind"] == "sprite"]
+        tilemap = [item for item in document["animations"] if item["kind"] == "tilemap"]
         assert len(sprite) == 44 and len(tilemap) == 6
         for animation in sprite:
             assert animation["frames"] and 0 <= animation["delay"] <= 255
@@ -59,9 +55,11 @@ def main() -> int:
                 words = table_words(hud, frame)
             assert words is not None and len(words) in (3, 9), frame
             assert all(0 <= word <= 0xFFFF for word in words), frame
-        print(f"Flicky animation preview inventory: {len(sprite)} sprite + "
-              f"{len(tilemap)} tilemap animations, {len(frames)} distinct "
-              "UI source frames (3 or 9 VDP words each)")
+        print(
+            f"Flicky animation preview inventory: {len(sprite)} sprite + "
+            f"{len(tilemap)} tilemap animations, {len(frames)} distinct "
+            "UI source frames (3 or 9 VDP words each)"
+        )
     return 0
 
 

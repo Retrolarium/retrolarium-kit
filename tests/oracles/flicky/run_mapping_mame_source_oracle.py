@@ -11,7 +11,9 @@ import subprocess
 import tempfile
 
 from retrolarium_kit.games.flicky.content import (
-    CANONICAL_SHA256, WORKSPACE_FILES, import_flicky_source,
+    CANONICAL_SHA256,
+    WORKSPACE_FILES,
+    import_flicky_source,
 )
 from retrolarium_core.megadrive import cartridge_checksum
 from retrolarium_kit.studio.project import (
@@ -47,8 +49,9 @@ def main() -> int:
     parser.add_argument("--source-root", type=Path, required=True)
     parser.add_argument("--rom", type=Path, required=True)
     parser.add_argument("--native-writer", type=Path, required=True)
-    parser.add_argument("--native-sequences-editor", type=Path,
-                        help="exercise the Qt Animations widget; omit for document probe")
+    parser.add_argument(
+        "--native-sequences-editor", type=Path, help="exercise the Qt Animations widget; omit for document probe"
+    )
     parser.add_argument("--native-renderer", type=Path, required=True)
     parser.add_argument("--mame", type=Path, required=True)
     args = parser.parse_args()
@@ -64,8 +67,7 @@ def main() -> int:
         baseline_rom = (root / "build" / "flicky-edited.bin").read_bytes()
         assert verify_studio_project(project)["status"] == "current"
         baseline_png = root / "baseline-vdp.png"
-        launch(studio_flicky_round_playtest_plan(project, mame=args.mame, round=1),
-               1, root, baseline_png)
+        launch(studio_flicky_round_playtest_plan(project, mame=args.mame, round=1), 1, root, baseline_png)
         source = root / "flicky-source"
         render_native(args.native_renderer, source, root / "native-baseline.png")
 
@@ -74,43 +76,55 @@ def main() -> int:
             environment = os.environ.copy()
             # The Windows Qt offscreen plugin stalls this source-backed
             # preview probe; use the native backend on Windows.
-            environment.setdefault("QT_QPA_PLATFORM",
-                                   "windows" if os.name == "nt" else "offscreen")
-            preview_result = subprocess.run([
-                str(args.native_sequences_editor.resolve()), "--preview-source",
-                str(source),
-                str(source / WORKSPACE_FILES["graphics_assets"]),
-                str(source / WORKSPACE_FILES["graphics_semantics"]),
-                str(sequences),
-            ], env=environment, capture_output=True, text=True, timeout=60)
+            environment.setdefault("QT_QPA_PLATFORM", "windows" if os.name == "nt" else "offscreen")
+            preview_result = subprocess.run(
+                [
+                    str(args.native_sequences_editor.resolve()),
+                    "--preview-source",
+                    str(source),
+                    str(source / WORKSPACE_FILES["graphics_assets"]),
+                    str(source / WORKSPACE_FILES["graphics_semantics"]),
+                    str(sequences),
+                ],
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
             assert preview_result.returncode == 0, (
                 f"Qt mapping preview probe failed ({preview_result.returncode}): "
-                f"{preview_result.stdout} {preview_result.stderr}")
+                f"{preview_result.stdout} {preview_result.stderr}"
+            )
         original = sequences.read_bytes()
         document = json.loads(original)
-        mapping = next(item for item in document["mappings"]
-                       if item["id"] == MAPPING_ID)
+        mapping = next(item for item in document["mappings"] if item["id"] == MAPPING_ID)
         assert len(mapping["pieces"]) == 1
         original_bytes = mapping_bytes(mapping)
         address = baseline_rom.find(original_bytes)
-        assert address >= 0 and baseline_rom.find(original_bytes, address + 1) < 0, \
+        assert address >= 0 and baseline_rom.find(original_bytes, address + 1) < 0, (
             "sprite mapping has no unique canonical ROM address"
+        )
         old_x = mapping["pieces"][0]["x"]
         new_x = old_x + 4
         assert new_x <= 127
         if args.native_sequences_editor:
-            subprocess.run([
-                str(args.native_sequences_editor.resolve()), "--edit-mapping-x",
-                str(sequences), MAPPING_ID, "0", str(new_x),
-            ], check=True)
+            subprocess.run(
+                [
+                    str(args.native_sequences_editor.resolve()),
+                    "--edit-mapping-x",
+                    str(sequences),
+                    MAPPING_ID,
+                    "0",
+                    str(new_x),
+                ],
+                check=True,
+            )
         else:
             print("Flicky mapping probe uses document edit; Qt click is unverified")
             mapping["pieces"][0]["x"] = new_x
-            sequences.write_text(json.dumps(document, indent=2) + "\n",
-                                 encoding="utf-8")
+            sequences.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
         saved = json.loads(sequences.read_text(encoding="utf-8"))
-        edited_mapping = next(item for item in saved["mappings"]
-                              if item["id"] == MAPPING_ID)
+        edited_mapping = next(item for item in saved["mappings"] if item["id"] == MAPPING_ID)
         assert edited_mapping["pieces"][0]["x"] == new_x
         try:
             studio_flicky_round_playtest_plan(project, mame=args.mame, round=1)
@@ -124,27 +138,24 @@ def main() -> int:
         offset = address + 6
         assert edited_rom[offset] == new_x & 0xFF
         assert edited_rom[0x18E:0x190] == cartridge_checksum(edited_rom).to_bytes(2, "big")
-        expected_changes = {offset} | {
-            index for index in (0x18E, 0x18F)
-            if edited_rom[index] != baseline_rom[index]
-        }
-        actual_changes = {index for index, pair in enumerate(
-            zip(baseline_rom, edited_rom)) if pair[0] != pair[1]}
+        expected_changes = {offset} | {index for index in (0x18E, 0x18F) if edited_rom[index] != baseline_rom[index]}
+        actual_changes = {index for index, pair in enumerate(zip(baseline_rom, edited_rom)) if pair[0] != pair[1]}
         assert actual_changes == expected_changes, (
             f"mapping edit changed unrelated ROM bytes: {sorted(actual_changes)[:16]}"
         )
 
         edited_png = root / "edited-vdp.png"
-        launch(studio_flicky_round_playtest_plan(project, mame=args.mame, round=1),
-               1, root, edited_png)
+        launch(studio_flicky_round_playtest_plan(project, mame=args.mame, round=1), 1, root, edited_png)
         render_native(args.native_renderer, source, root / "native-edited.png")
         mame_delta = changed_pixels(baseline_png, edited_png)
-        native_delta = changed_pixels(root / "native-baseline.png",
-                                      root / "native-edited.png")
-        print(f"Flicky {MAPPING_ID} VDP delta: MAME={len(mame_delta)} "
-              f"native={len(native_delta)} overlap={len(mame_delta & native_delta)}")
-        assert mame_delta == native_delta and len(mame_delta) == 288, \
+        native_delta = changed_pixels(root / "native-baseline.png", root / "native-edited.png")
+        print(
+            f"Flicky {MAPPING_ID} VDP delta: MAME={len(mame_delta)} "
+            f"native={len(native_delta)} overlap={len(mame_delta & native_delta)}"
+        )
+        assert mame_delta == native_delta and len(mame_delta) == 288, (
             "mapping edit changed unexpected MAME/native VDP pixels"
+        )
         sequences.write_bytes(original)
         assert build_studio_project(project)["artifact"]["sha256"] == CANONICAL_SHA256
     return 0

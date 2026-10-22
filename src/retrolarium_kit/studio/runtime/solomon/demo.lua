@@ -37,7 +37,7 @@ local recording = record_path ~= nil and record_path ~= ""
 local ready_path = os.getenv("SOLOMON_DEMO_READY")
 
 local GAMEPLAY = 0xcf
-local WAIT = 255            -- the counter never passes it
+local WAIT = 255 -- the counter never passes it
 local PPU_MASK = 0x2001
 local SHOW_PICTURE = 0x18
 
@@ -49,10 +49,10 @@ end
 local memory = cpu.spaces["program"]
 local pc = cpu.state["PC"]
 
-local in_demo = false       -- between the demo thread's start and the post-game thread
-local active = false        -- recording now
-local installed = 0         -- the buttons the demo thread put in last
-local pending = nil         -- {duration, buttons} the current poll puts in
+local in_demo = false -- between the demo thread's start and the post-game thread
+local active = false -- recording now
+local installed = 0 -- the buttons the demo thread put in last
+local pending = nil -- {duration, buttons} the current poll puts in
 local output = nil
 
 local function close_recording()
@@ -69,82 +69,96 @@ end
 -- Program-space read taps see every read, the 6502's dummy reads after
 -- RTS included; an opcode fetch is the read made with PC at the address.
 -- Holding the handler objects keeps them installed.
-run_tap = memory:install_read_tap(run_demo, run_demo, "solomon-demo-run",
-    function(_, value)
-        if pc.value ~= run_demo or in_demo then return value end
-        in_demo = true
-        machine.video.throttled = true
-        machine.sound.ui_mute = false
-        if ready_path ~= nil and ready_path ~= "" then
-            local file = io.open(ready_path, "w")
-            if file ~= nil then
-                file:write("ready")
-                file:close()
-            end
-        end
-        if recording then
-            active = true
-            installed = 0
-            pending = nil
-            output = assert(io.open(record_path, "w"))
-            print("Solomon demo: recording; press Start or stop the emulator to finish")
-        end
+run_tap = memory:install_read_tap(run_demo, run_demo, "solomon-demo-run", function(_, value)
+    if pc.value ~= run_demo or in_demo then
         return value
-    end)
-post_game_tap = memory:install_read_tap(post_game, post_game, "solomon-demo-post-game",
-    function(_, value)
-        if pc.value ~= post_game or not in_demo then return value end
-        in_demo = false
-        if active then
-            close_recording()
-            print("Solomon demo: recording finished")
-            machine:exit()
-        elseif not recording then
-            machine:hard_reset()
+    end
+    in_demo = true
+    machine.video.throttled = true
+    machine.sound.ui_mute = false
+    if ready_path ~= nil and ready_path ~= "" then
+        local file = io.open(ready_path, "w")
+        if file ~= nil then
+            file:write("ready")
+            file:close()
         end
+    end
+    if recording then
+        active = true
+        installed = 0
+        pending = nil
+        output = assert(io.open(record_path, "w"))
+        print("Solomon demo: recording; press Start or stop the emulator to finish")
+    end
+    return value
+end)
+post_game_tap = memory:install_read_tap(post_game, post_game, "solomon-demo-post-game", function(_, value)
+    if pc.value ~= post_game or not in_demo then
         return value
-    end)
-mask_tap = memory:install_write_tap(PPU_MASK, PPU_MASK, "solomon-demo-dark",
-    function(_, data, _)
-        if in_demo then return data end
-        return data & ~SHOW_PICTURE
-    end)
+    end
+    in_demo = false
+    if active then
+        close_recording()
+        print("Solomon demo: recording finished")
+        machine:exit()
+    elseif not recording then
+        machine:hard_reset()
+    end
+    return value
+end)
+mask_tap = memory:install_write_tap(PPU_MASK, PPU_MASK, "solomon-demo-dark", function(_, data, _)
+    if in_demo then
+        return data
+    end
+    return data & ~SHOW_PICTURE
+end)
 
 if recording then
     if durations == nil or steps == nil or steps < 1 then
         error("recording needs SOLOMON_DEMO_DURATIONS and SOLOMON_DEMO_STEPS")
     end
-    duration_tap = memory:install_read_tap(durations, durations + steps - 1, "solomon-demo-duration",
+    duration_tap = memory:install_read_tap(durations, durations + steps - 1, "solomon-demo-duration", function(_, value)
+        if not active then
+            return value
+        end
+        local buttons = memory:read_u8(joypad_raw) & GAMEPLAY
+        local counter = memory:read_u8(nmi_counter)
+        if counter >= 1 and (buttons ~= installed or counter >= WAIT) then
+            pending = { counter - 1, buttons }
+            return counter - 1
+        end
+        pending = nil
+        return WAIT
+    end)
+    value_tap = memory:install_read_tap(
+        durations + steps,
+        durations + 2 * steps - 1,
+        "solomon-demo-value",
         function(_, value)
-            if not active then return value end
-            local buttons = memory:read_u8(joypad_raw) & GAMEPLAY
-            local counter = memory:read_u8(nmi_counter)
-            if counter >= 1 and (buttons ~= installed or counter >= WAIT) then
-                pending = {counter - 1, buttons}
-                return counter - 1
+            if not active or pending == nil then
+                return value
             end
-            pending = nil
-            return WAIT
-        end)
-    value_tap = memory:install_read_tap(durations + steps, durations + 2 * steps - 1, "solomon-demo-value",
-        function(_, value)
-            if not active or pending == nil then return value end
             local step = pending
             pending = nil
             installed = step[2]
             output:write(string.format("step %d %d\n", step[1], step[2]))
             output:flush()
             return step[2]
-        end)
+        end
+    )
     stop_subscription = emu.add_machine_stop_notifier(function()
-        if active then close_recording() end
+        if active then
+            close_recording()
+        end
     end)
 end
 
 emu.register_frame_done(function()
     if in_demo then
         -- The step index stays at the first step so the demo never runs out.
-        if active then memory:write_u8(demo_index, 0) end
+        if active then
+            memory:write_u8(demo_index, 0)
+        end
     else
         -- The way to the demo: fast and silent.
         machine.video.throttled = false

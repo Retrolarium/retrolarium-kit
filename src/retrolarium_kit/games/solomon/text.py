@@ -23,8 +23,15 @@ import hashlib
 from typing import Any, Mapping
 
 from retrolarium_kit.core.authoring import (
-    Address, AddressRange, AuthoringError, BuildPlan, Change, ChangeSet,
-    GameProfile, Provenance, RevisionSpec,
+    Address,
+    AddressRange,
+    AuthoringError,
+    BuildPlan,
+    Change,
+    ChangeSet,
+    GameProfile,
+    Provenance,
+    RevisionSpec,
 )
 from retrolarium_core.ines import parse_ines
 
@@ -43,13 +50,20 @@ INTRO_SIZE = 27
 SPECIAL_NAME_COUNT = 3
 SPECIAL_NAME_WIDTH = 8
 FIELDS = (
-    "static_pointer_low_cpu", "static_pointer_high_cpu",
-    "static_region_cpu", "static_region_end_cpu", "static_05_reference_cpu",
-    "ending_initial_cpu", "ending_initial_end_cpu",
+    "static_pointer_low_cpu",
+    "static_pointer_high_cpu",
+    "static_region_cpu",
+    "static_region_end_cpu",
+    "static_05_reference_cpu",
+    "ending_initial_cpu",
+    "ending_initial_end_cpu",
     "ending_initial_second_operand_cpu",
-    "ending_offsets_cpu", "ending_data_cpu", "ending_data_end_cpu",
+    "ending_offsets_cpu",
+    "ending_data_cpu",
+    "ending_data_end_cpu",
     "ending_single_address_operand_cpu",
-    "room_intro_cpu", "special_names_cpu",
+    "room_intro_cpu",
+    "special_names_cpu",
 )
 
 
@@ -61,8 +75,11 @@ def static_order(count: int) -> tuple[int, ...]:
     """The programs in ROM order: 05, which BuildEndingPpuMessage copies 19
     bytes from its own address and so keeps its shape, and the palette 13
     come last. Solomon no Kagi has no 13-17 (the licence screen)."""
-    return (*(index for index in range(count) if index not in (FIXED_PROGRAM, 13)),
-            FIXED_PROGRAM, *((13,) if count > 13 else ()))
+    return (
+        *(index for index in range(count) if index not in (FIXED_PROGRAM, 13)),
+        FIXED_PROGRAM,
+        *((13,) if count > 13 else ()),
+    )
 
 
 @dataclass(frozen=True)
@@ -79,8 +96,10 @@ class SolomonTextDocument:
 
     def as_dict(self) -> dict[str, Any]:
         return {
-            "schema": SCHEMA, "schema_version": VERSION,
-            "game": self.game_id, "revision": self.revision_id,
+            "schema": SCHEMA,
+            "schema_version": VERSION,
+            "game": self.game_id,
+            "revision": self.revision_id,
             "source_sha256": self.source_sha256,
             "layout": dict(self.layout),
             "static_programs": [
@@ -96,8 +115,10 @@ class SolomonTextDocument:
 
 def _command_dict(command: Mapping[str, Any]) -> dict[str, Any]:
     return {
-        "address": command["address"], "literal": command["literal"],
-        "vertical": command["vertical"], "bytes": list(command["bytes"]),
+        "address": command["address"],
+        "literal": command["literal"],
+        "vertical": command["vertical"],
+        "bytes": list(command["bytes"]),
     }
 
 
@@ -112,25 +133,23 @@ def _byte(value: object, name: str) -> int:
 
 
 def _layout(profile: GameProfile, revision: RevisionSpec) -> dict[str, int]:
-    resources = [
-        resource for resource in profile.resources_for(revision)
-        if resource.codec == CODEC
-    ]
+    resources = [resource for resource in profile.resources_for(revision) if resource.codec == CODEC]
     if len(resources) != 1:
         raise SolomonTextError("Solomon profile needs one text resource")
     parameters = resources[0].parameters
-    if any(type(parameters.get(name)) is not int or not 0x8000 <= parameters[name] <= 0xFFFF
-           for name in FIELDS):
+    if any(type(parameters.get(name)) is not int or not 0x8000 <= parameters[name] <= 0xFFFF for name in FIELDS):
         raise SolomonTextError("text resource needs its CPU addresses")
     layout = {name: parameters[name] for name in FIELDS}
     layout["static_count"] = parameters.get("static_count", STATIC_COUNT)
     if type(layout["static_count"]) is not int or not FIXED_PROGRAM < layout["static_count"] <= STATIC_COUNT:
         raise SolomonTextError("text resource static_count is invalid")
-    if layout["static_pointer_high_cpu"] - layout["static_pointer_low_cpu"] != layout["static_count"] \
-            or layout["static_region_end_cpu"] <= layout["static_region_cpu"] \
-            or layout["ending_initial_end_cpu"] <= layout["ending_initial_cpu"] \
-            or layout["ending_data_end_cpu"] <= layout["ending_data_cpu"] \
-            or layout["ending_data_end_cpu"] - layout["ending_data_cpu"] > 256:
+    if (
+        layout["static_pointer_high_cpu"] - layout["static_pointer_low_cpu"] != layout["static_count"]
+        or layout["static_region_end_cpu"] <= layout["static_region_cpu"]
+        or layout["ending_initial_end_cpu"] <= layout["ending_initial_cpu"]
+        or layout["ending_data_end_cpu"] <= layout["ending_data_cpu"]
+        or layout["ending_data_end_cpu"] - layout["ending_data_cpu"] > 256
+    ):
         raise SolomonTextError("text resource ranges differ")
     return layout
 
@@ -155,10 +174,11 @@ def _source(source: bytes, revision: RevisionSpec, *, verify: bool = True):
 def _read(prg: bytes, address: int, count: int) -> bytes:
     if not 0x8000 <= address <= 0x10000 - count:
         raise SolomonTextError("text range escapes PRG")
-    return prg[address - 0x8000:address - 0x8000 + count]
+    return prg[address - 0x8000 : address - 0x8000 + count]
 
 
 # ---------------------------------------------------------------- PPU programs
+
 
 def _decode_program(prg: bytes, address: int, end: int) -> tuple[list[dict[str, Any]], int]:
     """Commands of a zero-terminated program and its byte size."""
@@ -174,10 +194,14 @@ def _decode_program(prg: bytes, address: int, end: int) -> tuple[list[dict[str, 
         count = (flags & 0x3F) + 1
         literal = bool(flags & 0x40)
         payload = _read(prg, cursor + 3, count if literal else 1)
-        commands.append({
-            "address": (high << 8) | low, "literal": literal,
-            "vertical": bool(flags & 0x80), "bytes": list(payload) if literal else [payload[0]] * count,
-        })
+        commands.append(
+            {
+                "address": (high << 8) | low,
+                "literal": literal,
+                "vertical": bool(flags & 0x80),
+                "bytes": list(payload) if literal else [payload[0]] * count,
+            }
+        )
         cursor += 3 + len(payload)
 
 
@@ -209,6 +233,7 @@ def _encode_program(commands: object, name: str, *, terminate: bool = True) -> b
 
 
 # ---------------------------------------------------------------- messages
+
 
 def _decode_message(prg: bytes, address: int, addresses: int) -> tuple[dict[str, Any], int]:
     header = _read(prg, address, 1)[0]
@@ -251,9 +276,13 @@ def _encode_message(message: object, name: str, addresses: int) -> bytes:
 
 # ---------------------------------------------------------------- decode
 
+
 def decode_text(
-    source: bytes, profile: GameProfile, revision: RevisionSpec,
-    *, _verify_identity: bool = True,
+    source: bytes,
+    profile: GameProfile,
+    revision: RevisionSpec,
+    *,
+    _verify_identity: bool = True,
 ) -> SolomonTextDocument:
     layout = _layout(profile, revision)
     prg = _source(source, revision, verify=_verify_identity).prg
@@ -283,14 +312,16 @@ def decode_text(
     initial: list[dict[str, Any]] = []
     cursor = layout["ending_initial_cpu"]
     for index in range(INITIAL_COUNT):
-        if index == 1 and _read(prg, layout["ending_initial_second_operand_cpu"], 1)[0] + 1 \
-                != cursor - layout["ending_initial_cpu"]:
+        if (
+            index == 1
+            and _read(prg, layout["ending_initial_second_operand_cpu"], 1)[0] + 1
+            != cursor - layout["ending_initial_cpu"]
+        ):
             raise SolomonTextError("the second initial ending message starts elsewhere")
         message, size = _decode_message(prg, cursor, 2)
         initial.append(message)
         cursor += size
-    if cursor > layout["ending_initial_end_cpu"] \
-            or any(_read(prg, cursor, layout["ending_initial_end_cpu"] - cursor)):
+    if cursor > layout["ending_initial_end_cpu"] or any(_read(prg, cursor, layout["ending_initial_end_cpu"] - cursor)):
         raise SolomonTextError("initial ending messages do not fill their region")
 
     offsets = _read(prg, layout["ending_offsets_cpu"], MESSAGE_COUNT)
@@ -316,19 +347,25 @@ def decode_text(
         raise SolomonTextError("room intro template differs")
     names_raw = _read(prg, layout["special_names_cpu"], SPECIAL_NAME_COUNT * SPECIAL_NAME_WIDTH)
     names = tuple(
-        tuple(names_raw[i * SPECIAL_NAME_WIDTH:(i + 1) * SPECIAL_NAME_WIDTH])
-        for i in range(SPECIAL_NAME_COUNT)
+        tuple(names_raw[i * SPECIAL_NAME_WIDTH : (i + 1) * SPECIAL_NAME_WIDTH]) for i in range(SPECIAL_NAME_COUNT)
     )
     result = SolomonTextDocument(
-        profile.game_id, revision.revision_id, revision.sha256,
-        _capacities(layout), tuple(programs), tuple(initial), tuple(messages),
-        tuple(intro), names,
+        profile.game_id,
+        revision.revision_id,
+        revision.sha256,
+        _capacities(layout),
+        tuple(programs),
+        tuple(initial),
+        tuple(messages),
+        tuple(intro),
+        names,
     )
     _encode(result.as_dict(), layout)
     return result
 
 
 # ---------------------------------------------------------------- encode
+
 
 def _encode(value: Mapping[str, Any], layout: Mapping[str, int]) -> dict[str, Any]:
     """Every region's bytes and patched operands, checked against capacity."""
@@ -342,8 +379,7 @@ def _encode(value: Mapping[str, Any], layout: Mapping[str, int]) -> dict[str, An
         raise SolomonTextError(f"text needs {count} static PPU programs")
     encoded: dict[int, bytes] = {}
     for index, program in enumerate(programs):
-        if not isinstance(program, Mapping) or set(program) != {"index", "commands"} \
-                or program["index"] != index:
+        if not isinstance(program, Mapping) or set(program) != {"index", "commands"} or program["index"] != index:
             raise SolomonTextError("static PPU program indices differ")
         encoded[index] = _encode_program(program["commands"], f"static PPU program {index:02d}")
     static = bytearray()
@@ -361,8 +397,7 @@ def _encode(value: Mapping[str, Any], layout: Mapping[str, int]) -> dict[str, An
     if not isinstance(initial, list) or len(initial) != INITIAL_COUNT:
         raise SolomonTextError(f"text needs {INITIAL_COUNT} initial ending messages")
     initial_bytes = [
-        _encode_message(message, f"initial ending message {index}", 2)
-        for index, message in enumerate(initial)
+        _encode_message(message, f"initial ending message {index}", 2) for index, message in enumerate(initial)
     ]
     initial_data = b"".join(initial_bytes)
     if len(initial_data) > capacities["ending_initial_bytes"]:
@@ -380,9 +415,7 @@ def _encode(value: Mapping[str, Any], layout: Mapping[str, int]) -> dict[str, An
     threshold = None
     for index, message in enumerate(messages):
         offsets.append((len(data) - 1) & 0xFF)
-        piece = _encode_message(
-            message, f"ending message {index}", 2 if index < DOUBLE_ADDRESS_MESSAGES else 1
-        )
+        piece = _encode_message(message, f"ending message {index}", 2 if index < DOUBLE_ADDRESS_MESSAGES else 1)
         if index == DOUBLE_ADDRESS_MESSAGES:
             # The game compares a message's terminator index with this; the
             # first single-address message's offset entry is what it uses.
@@ -404,14 +437,16 @@ def _encode(value: Mapping[str, Any], layout: Mapping[str, int]) -> dict[str, An
     ] != [(0x216B, True, False, 6), (0x21CB, True, False, 8), (0x226F, True, False, 3)]:
         raise SolomonTextError("the room intro keeps its three runs; only their tiles change")
     names = value.get("special_room_names")
-    if not isinstance(names, list) or len(names) != SPECIAL_NAME_COUNT \
-            or any(not isinstance(name, list) or len(name) != SPECIAL_NAME_WIDTH for name in names):
+    if (
+        not isinstance(names, list)
+        or len(names) != SPECIAL_NAME_COUNT
+        or any(not isinstance(name, list) or len(name) != SPECIAL_NAME_WIDTH for name in names)
+    ):
         raise SolomonTextError(f"special-room names are {SPECIAL_NAME_COUNT} runs of {SPECIAL_NAME_WIDTH} tiles")
     names_data = bytes(_byte(tile, "special-room name tile") for name in names for tile in name)
 
     fixed = programs[FIXED_PROGRAM]["commands"]
-    if len(encoded[FIXED_PROGRAM]) != 20 or len(fixed) != 1 or fixed[0]["address"] != 0x3F00 \
-            or not fixed[0]["literal"]:
+    if len(encoded[FIXED_PROGRAM]) != 20 or len(fixed) != 1 or fixed[0]["address"] != 0x3F00 or not fixed[0]["literal"]:
         raise SolomonTextError("program 05 stays one 16-colour palette write: the ending copies it")
 
     return {
@@ -435,28 +470,44 @@ def _encode(value: Mapping[str, Any], layout: Mapping[str, int]) -> dict[str, An
 
 
 def parse_text_document(
-    value: object, profile: GameProfile, revision: RevisionSpec,
+    value: object,
+    profile: GameProfile,
+    revision: RevisionSpec,
 ) -> SolomonTextDocument:
     layout = _layout(profile, revision)
     if not isinstance(value, Mapping) or set(value) != {
-        "schema", "schema_version", "game", "revision", "source_sha256", "layout",
-        "static_programs", "ending_initial", "ending_messages", "room_intro",
+        "schema",
+        "schema_version",
+        "game",
+        "revision",
+        "source_sha256",
+        "layout",
+        "static_programs",
+        "ending_initial",
+        "ending_messages",
+        "room_intro",
         "special_room_names",
     }:
         raise SolomonTextError("text document fields differ")
     for key, expected in (
-        ("schema", SCHEMA), ("schema_version", VERSION),
-        ("game", profile.game_id), ("revision", revision.revision_id),
+        ("schema", SCHEMA),
+        ("schema_version", VERSION),
+        ("game", profile.game_id),
+        ("revision", revision.revision_id),
         ("source_sha256", revision.sha256),
     ):
         if value[key] != expected:
             raise SolomonTextError(f"text {key} differs from profile")
     _encode(value, layout)
     return SolomonTextDocument(
-        profile.game_id, revision.revision_id, revision.sha256,
+        profile.game_id,
+        revision.revision_id,
+        revision.sha256,
         _capacities(layout),
-        tuple({"index": p["index"], "commands": [_command_dict(c) for c in p["commands"]]}
-              for p in value["static_programs"]),
+        tuple(
+            {"index": p["index"], "commands": [_command_dict(c) for c in p["commands"]]}
+            for p in value["static_programs"]
+        ),
         tuple(_message_dict(m) for m in value["ending_initial"]),
         tuple(_message_dict(m) for m in value["ending_messages"]),
         tuple(_command_dict(c) for c in value["room_intro"]),
@@ -465,8 +516,10 @@ def parse_text_document(
 
 
 def build_text(
-    source: bytes, document: SolomonTextDocument,
-    profile: GameProfile, revision: RevisionSpec,
+    source: bytes,
+    document: SolomonTextDocument,
+    profile: GameProfile,
+    revision: RevisionSpec,
 ) -> tuple[bytes, dict[str, object]]:
     image = _source(source, revision)
     layout = _layout(profile, revision)
@@ -475,20 +528,30 @@ def build_text(
     base = len(image.header) + len(image.trainer)
     changes = []
     for field in (
-        "static_pointer_low_cpu", "static_pointer_high_cpu", "static_region_cpu",
-        "static_05_reference_cpu", "ending_initial_cpu", "ending_initial_second_operand_cpu",
-        "ending_offsets_cpu", "ending_data_cpu", "ending_single_address_operand_cpu",
-        "room_intro_cpu", "special_names_cpu",
+        "static_pointer_low_cpu",
+        "static_pointer_high_cpu",
+        "static_region_cpu",
+        "static_05_reference_cpu",
+        "ending_initial_cpu",
+        "ending_initial_second_operand_cpu",
+        "ending_offsets_cpu",
+        "ending_data_cpu",
+        "ending_single_address_operand_cpu",
+        "room_intro_cpu",
+        "special_names_cpu",
     ):
         payload = pieces[field]
         start = base + layout[field] - 0x8000
-        if source[start:start + len(payload)] == payload:
+        if source[start : start + len(payload)] == payload:
             continue
-        changes.append(Change(
-            AddressRange(Address("file", start), len(payload)),
-            source[start:start + len(payload)], payload,
-            Provenance(revision.sha256, "text", field),
-        ))
+        changes.append(
+            Change(
+                AddressRange(Address("file", start), len(payload)),
+                source[start : start + len(payload)],
+                payload,
+                Provenance(revision.sha256, "text", field),
+            )
+        )
     output = BuildPlan(revision.sha256, ChangeSet(tuple(changes))).apply(source) if changes else source
     rebuilt = decode_text(output, profile, revision, _verify_identity=False)
     if rebuilt.as_dict() != checked.as_dict():
@@ -496,7 +559,8 @@ def build_text(
     return output, {
         "schema": "retrolarium.solomon-text-build",
         "schema_version": 1,
-        "game": profile.game_id, "revision": revision.revision_id,
+        "game": profile.game_id,
+        "revision": revision.revision_id,
         "source_sha256": revision.sha256,
         "output_sha256": hashlib.sha256(output).hexdigest(),
         "size": len(output),

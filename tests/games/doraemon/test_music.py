@@ -9,7 +9,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "retrolarium-core" / "python"))
 
 from retrolarium_kit.games.doraemon.music import (
-    DoraemonMusicError, build_music, decode_music, parse_music_document, trace_track,
+    DoraemonMusicError,
+    build_music,
+    decode_music,
+    parse_music_document,
+    trace_track,
 )
 from helpers import game_profile
 from retrolarium_core.ines import parse_ines
@@ -37,8 +41,9 @@ class DoraemonMusicTests(unittest.TestCase):
         at = next(i for i, text in enumerate(events) if text.startswith("event $") and text != "event $00")
         old = int(events[at].split("$")[1], 16)
         events[at] = f"event ${old + 1:02X}"
-        output, report = build_music(self.source, parse_music_document(value, self.profile, self.revision),
-                                     self.profile, self.revision)
+        output, report = build_music(
+            self.source, parse_music_document(value, self.profile, self.revision), self.profile, self.revision
+        )
         self.assertEqual(1, report["changed_bytes"])
         rebuilt = decode_music(output, self.profile, self.revision, _verify_identity=False)
         self.assertEqual(events[at], rebuilt.drivers[3]["segments"][0]["events"][at])

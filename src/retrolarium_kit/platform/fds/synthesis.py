@@ -15,23 +15,13 @@ class FdsSynthesisError(AuthoringError):
     """Raised when FDS synthesis data differs from its fixed profile."""
 
 
-def _integer(
-    value: object, name: str, *, minimum: int = 0, maximum: int = 0x7FFFFFFF
-) -> int:
-    if (
-        not isinstance(value, int)
-        or isinstance(value, bool)
-        or not minimum <= value <= maximum
-    ):
-        raise FdsSynthesisError(
-            f"{name} must be an integer in {minimum}..{maximum}"
-        )
+def _integer(value: object, name: str, *, minimum: int = 0, maximum: int = 0x7FFFFFFF) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or not minimum <= value <= maximum:
+        raise FdsSynthesisError(f"{name} must be an integer in {minimum}..{maximum}")
     return value
 
 
-def _descriptors(
-    parameters: Mapping[str, object], key: str, *, unit_size: int
-) -> tuple[tuple[str, int, int], ...]:
+def _descriptors(parameters: Mapping[str, object], key: str, *, unit_size: int) -> tuple[tuple[str, int, int], ...]:
     raw = parameters.get(key)
     if not isinstance(raw, list) or not raw:
         raise FdsSynthesisError(f"{key} must be a non-empty array")
@@ -73,18 +63,14 @@ def _layout(
     size = _integer(parameters.get("size"), "size", minimum=1)
     waveforms = _descriptors(parameters, "waveforms", unit_size=1)
     if any(count != WAVEFORM_SAMPLES for _name, _offset, count in waveforms):
-        raise FdsSynthesisError(
-            f"waveforms must contain exactly {WAVEFORM_SAMPLES} samples"
-        )
+        raise FdsSynthesisError(f"waveforms must contain exactly {WAVEFORM_SAMPLES} samples")
     programs = _descriptors(parameters, "volume_programs", unit_size=2)
     occupied: set[int] = set()
     for descriptors, unit_size in ((waveforms, 1), (programs, 2)):
         for _name, offset, count in descriptors:
             indexes = set(range(offset, offset + count * unit_size))
             if occupied.intersection(indexes):
-                raise FdsSynthesisError(
-                    "waveform and volume-program spans overlap"
-                )
+                raise FdsSynthesisError("waveform and volume-program spans overlap")
             occupied.update(indexes)
     return size, waveforms, programs
 
@@ -92,16 +78,11 @@ def _layout(
 def _arena(value: object, size: int) -> bytearray:
     if not isinstance(value, list) or len(value) != size:
         raise FdsSynthesisError(f"arena must contain {size} bytes")
-    return bytearray(
-        _integer(item, f"arena[{index}]", maximum=0xFF)
-        for index, item in enumerate(value)
-    )
+    return bytearray(_integer(item, f"arena[{index}]", maximum=0xFF) for index, item in enumerate(value))
 
 
 def _decode_step(register: int, frames: int, step: int) -> dict[str, object]:
-    frames = _integer(
-        frames, f"volume step {step} frames", minimum=1, maximum=0xFF
-    )
+    frames = _integer(frames, f"volume step {step} frames", minimum=1, maximum=0xFF)
     if register & 0x80:
         mode = "direct"
     elif register & 0x40:
@@ -116,16 +97,12 @@ def _decode_step(register: int, frames: int, step: int) -> dict[str, object]:
     }
 
 
-def decode_synthesis(
-    payload: bytes, parameters: Mapping[str, object]
-) -> dict[str, object]:
+def decode_synthesis(payload: bytes, parameters: Mapping[str, object]) -> dict[str, object]:
     """Decode semantic FDS controls while retaining every arena byte."""
 
     size, waveforms, programs = _layout(parameters)
     if len(payload) != size:
-        raise FdsSynthesisError(
-            f"FDS synthesis resource has {len(payload)} bytes, expected {size}"
-        )
+        raise FdsSynthesisError(f"FDS synthesis resource has {len(payload)} bytes, expected {size}")
     return {
         "arena": list(payload),
         "waveforms": [
@@ -159,38 +136,25 @@ def decode_synthesis(
     }
 
 
-def encode_synthesis(
-    value: object, parameters: Mapping[str, object]
-) -> bytes:
+def encode_synthesis(value: object, parameters: Mapping[str, object]) -> bytes:
     """Encode fixed-capacity FDS controls without normalizing unknown bytes."""
 
     size, waveforms, programs = _layout(parameters)
-    if not isinstance(value, dict) or set(value) != {
-        "arena", "waveforms", "volume_programs"
-    }:
+    if not isinstance(value, dict) or set(value) != {"arena", "waveforms", "volume_programs"}:
         raise FdsSynthesisError("FDS synthesis fields differ from contract")
     output = _arena(value.get("arena"), size)
     raw_waveforms = value.get("waveforms")
-    if (
-        not isinstance(raw_waveforms, list)
-        or len(raw_waveforms) != len(waveforms)
-    ):
-        raise FdsSynthesisError(
-            f"waveforms must contain {len(waveforms)} entries"
-        )
-    for index, ((name, offset, count), raw) in enumerate(
-        zip(waveforms, raw_waveforms)
-    ):
+    if not isinstance(raw_waveforms, list) or len(raw_waveforms) != len(waveforms):
+        raise FdsSynthesisError(f"waveforms must contain {len(waveforms)} entries")
+    for index, ((name, offset, count), raw) in enumerate(zip(waveforms, raw_waveforms)):
         if not isinstance(raw, dict) or set(raw) != {"name", "samples"}:
             raise FdsSynthesisError(f"waveforms[{index}] fields differ from contract")
         if raw.get("name") != name:
             raise FdsSynthesisError(f"waveforms[{index}].name differs from profile")
         samples = raw.get("samples")
         if not isinstance(samples, list) or len(samples) != count:
-            raise FdsSynthesisError(
-                f"waveforms[{index}].samples must contain {count} values"
-            )
-        output[offset:offset + count] = bytes(
+            raise FdsSynthesisError(f"waveforms[{index}].samples must contain {count} values")
+        output[offset : offset + count] = bytes(
             _integer(
                 sample,
                 f"waveforms[{index}].samples[{sample_index}]",
@@ -202,48 +166,30 @@ def encode_synthesis(
     modes = {"direct": 0x80, "increase": 0x40, "decrease": 0x00}
     raw_programs = value.get("volume_programs")
     if not isinstance(raw_programs, list) or len(raw_programs) != len(programs):
-        raise FdsSynthesisError(
-            f"volume_programs must contain {len(programs)} entries"
-        )
-    for index, ((name, offset, count), raw) in enumerate(
-        zip(programs, raw_programs)
-    ):
+        raise FdsSynthesisError(f"volume_programs must contain {len(programs)} entries")
+    for index, ((name, offset, count), raw) in enumerate(zip(programs, raw_programs)):
         if not isinstance(raw, dict) or set(raw) != {"name", "steps"}:
-            raise FdsSynthesisError(
-                f"volume_programs[{index}] fields differ from contract"
-            )
+            raise FdsSynthesisError(f"volume_programs[{index}] fields differ from contract")
         if raw.get("name") != name:
-            raise FdsSynthesisError(
-                f"volume_programs[{index}].name differs from profile"
-            )
+            raise FdsSynthesisError(f"volume_programs[{index}].name differs from profile")
         steps = raw.get("steps")
         if not isinstance(steps, list) or len(steps) != count:
-            raise FdsSynthesisError(
-                f"volume_programs[{index}].steps must contain {count} entries"
-            )
+            raise FdsSynthesisError(f"volume_programs[{index}].steps must contain {count} entries")
         for step_index, step in enumerate(steps):
             context = f"volume_programs[{index}].steps[{step_index}]"
-            if not isinstance(step, dict) or set(step) != {
-                "step", "mode", "value", "frames"
-            }:
+            if not isinstance(step, dict) or set(step) != {"step", "mode", "value", "frames"}:
                 raise FdsSynthesisError(f"{context} fields differ from contract")
             if step.get("step") != step_index:
                 raise FdsSynthesisError(f"{context}.step differs from its index")
             mode = step.get("mode")
             if mode not in modes:
                 raise FdsSynthesisError(f"{context}.mode is unsupported")
-            register = modes[mode] | _integer(
-                step.get("value"), f"{context}.value", maximum=0x3F
-            )
+            register = modes[mode] | _integer(step.get("value"), f"{context}.value", maximum=0x3F)
             # The hardware ignores bit 6 in direct mode; a byte that had it
             # keeps it, so an unedited step encodes to its own byte.
             previous = output[offset + step_index * 2]
             if mode == "direct" and previous & 0x80:
                 register |= previous & 0x40
-            frames = _integer(
-                step.get("frames"), f"{context}.frames", minimum=1, maximum=0xFF
-            )
-            output[offset + step_index * 2:offset + step_index * 2 + 2] = bytes(
-                (register, frames)
-            )
+            frames = _integer(step.get("frames"), f"{context}.frames", minimum=1, maximum=0xFF)
+            output[offset + step_index * 2 : offset + step_index * 2 + 2] = bytes((register, frames))
     return bytes(output)

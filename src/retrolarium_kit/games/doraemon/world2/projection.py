@@ -12,7 +12,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from retrolarium_kit.games.doraemon.world2.streams import (
-    PADDING, POINTER_SIZE, REGION_ADDRESS, SPAWN_BASE, _validate_screens,
+    PADDING,
+    POINTER_SIZE,
+    REGION_ADDRESS,
+    SPAWN_BASE,
+    _validate_screens,
     DoraemonWorld2StreamError,
 )
 
@@ -40,7 +44,10 @@ class _TokenCell:
 
 
 def _decode_groups(
-    region: bytes, start: int, group_count: int, minimum_cells: int,
+    region: bytes,
+    start: int,
+    group_count: int,
+    minimum_cells: int,
 ) -> tuple[tuple[_TokenCell, ...], ...]:
     if not 0 <= start < len(region):
         raise DoraemonWorld2StreamError("World 2 selector points outside stream")
@@ -55,32 +62,27 @@ def _decode_groups(
             token = region[cursor]
             cursor += 1
             if token < 0xD0:
-                cells.append(_TokenCell(
-                    token, (token_offset, 0, "literal")))
+                cells.append(_TokenCell(token, (token_offset, 0, "literal")))
             elif token < 0xEF:
-                cells.append(_TokenCell(
-                    SPAWN_BASE + token - 0xD0,
-                    (token_offset, 0, "spawn")))
+                cells.append(_TokenCell(SPAWN_BASE + token - 0xD0, (token_offset, 0, "spawn")))
             elif token == 0xEF:
-                cells.extend(_TokenCell(PADDING, None)
-                             for _ in range(max(0, 16 - len(cells))))
+                cells.extend(_TokenCell(PADDING, None) for _ in range(max(0, 16 - len(cells))))
             elif token == 0xF0:
                 raise DoraemonWorld2StreamError("World 2 reserved F0 token")
             else:
                 if cursor >= len(region) or region[cursor] >= 0xD0:
-                    raise DoraemonWorld2StreamError(
-                        "World 2 projection has invalid RLE operand")
+                    raise DoraemonWorld2StreamError("World 2 projection has invalid RLE operand")
                 value = region[cursor]
                 cursor += 1
-                cells.extend(_TokenCell(
-                    value, (token_offset, index, "rle"))
-                    for index in range((token & 0x0F) + 1))
+                cells.extend(_TokenCell(value, (token_offset, index, "rle")) for index in range((token & 0x0F) + 1))
         result.append(tuple(cells))
     return tuple(result)
 
 
 def project_screen(
-    resource: dict[str, Any], selector: int, direction: int,
+    resource: dict[str, Any],
+    selector: int,
+    direction: int,
 ) -> ProjectedScreen:
     """Return 15×16 runtime cells plus inverse coordinates into raw selector rows."""
     if direction not in range(4):
@@ -97,7 +99,7 @@ def project_screen(
     if len(payload) != 16669:
         raise DoraemonWorld2StreamError("World 2 projection needs 16669 bytes")
     screens = _validate_screens(resource.get("screens"))
-    pointer = int.from_bytes(payload[selector * 2:selector * 2 + 2], "little")
+    pointer = int.from_bytes(payload[selector * 2 : selector * 2 + 2], "little")
     region = payload[POINTER_SIZE:]
     start = pointer - REGION_ADDRESS
     canonical = _decode_groups(region, start, 16, 15)
@@ -108,15 +110,12 @@ def project_screen(
         if cell.identity is not None
     }
     if direction in (0, 3):
-        columns = tuple(column[:15]
-                        for column in _decode_groups(region, start, 16, 15))
+        columns = tuple(column[:15] for column in _decode_groups(region, start, 16, 15))
         if direction == 3:
             columns = tuple(reversed(columns))
-        oriented = tuple(tuple(columns[x][y] for x in range(16))
-                         for y in range(15))
+        oriented = tuple(tuple(columns[x][y] for x in range(16)) for y in range(15))
     else:
-        oriented = tuple(row[:16] for row in
-                         _decode_groups(region, start, 15, 16))
+        oriented = tuple(row[:16] for row in _decode_groups(region, start, 15, 16))
         if direction == 1:
             oriented = tuple(reversed(oriented))
     if len(oriented) != 15 or any(len(row) != 16 for row in oriented):

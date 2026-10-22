@@ -56,10 +56,7 @@ def main() -> int:
         grid = [row[:] for row in layout["collision"]]
         grid[2][0] ^= 1
         edits.append(grid)
-    edited_request = "".join(
-        "".join(str(cell) for row in grid for cell in row) + "\n"
-        for grid in edits
-    )
+    edited_request = "".join("".join(str(cell) for row in grid for cell in row) + "\n" for grid in edits)
     edited = subprocess.run(
         [str(native_exe), "--encode-grid"],
         input=edited_request,

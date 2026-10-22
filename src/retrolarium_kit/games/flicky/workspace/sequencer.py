@@ -26,9 +26,27 @@ MUSIC_PSG_CHANNELS = (0x80, 0xA0, 0xC0)
 ADDRESS_RE = re.compile(r";\s*\$([0-9A-Fa-f]{4})\b")
 
 VOICE_REGISTERS = (
-    0xB0, 0x30, 0x38, 0x34, 0x3C, 0x50, 0x58, 0x54, 0x5C,
-    0x60, 0x68, 0x64, 0x6C, 0x70, 0x78, 0x74, 0x7C, 0x80,
-    0x88, 0x84, 0x8C,
+    0xB0,
+    0x30,
+    0x38,
+    0x34,
+    0x3C,
+    0x50,
+    0x58,
+    0x54,
+    0x5C,
+    0x60,
+    0x68,
+    0x64,
+    0x6C,
+    0x70,
+    0x78,
+    0x74,
+    0x7C,
+    0x80,
+    0x88,
+    0x84,
+    0x8C,
 )
 LEVEL_REGISTERS = (0x40, 0x48, 0x44, 0x4C)
 
@@ -183,22 +201,16 @@ class SoundSequencer:
             return
         port = 1 if track.channel & 4 else 0
         register = address + (track.channel - 4 if port else track.channel)
-        self.writes.append(ChipWrite(
-            self.sample, "ym2612", value & 0xFF, port, register & 0xFF, track.index
-        ))
+        self.writes.append(ChipWrite(self.sample, "ym2612", value & 0xFF, port, register & 0xFF, track.index))
 
     def _ym_global(self, address: int, value: int, channel: int | None = None) -> None:
         if channel is not None and self.enabled_channels is not None and channel not in self.enabled_channels:
             return
-        self.writes.append(ChipWrite(
-            self.sample, "ym2612", value & 0xFF, 0, address & 0xFF, channel
-        ))
+        self.writes.append(ChipWrite(self.sample, "ym2612", value & 0xFF, 0, address & 0xFF, channel))
 
     def _psg(self, track: TrackState, value: int) -> None:
         if self._channel_enabled(track):
-            self.writes.append(ChipWrite(
-                self.sample, "sn76489", value & 0xFF, channel=track.index
-            ))
+            self.writes.append(ChipWrite(self.sample, "sn76489", value & 0xFF, channel=track.index))
 
     def _key_off(self, track: TrackState) -> None:
         if track.kind != "psg" and not track.flags & 6:
@@ -261,7 +273,7 @@ class SoundSequencer:
         offset = FM_SEMITONE_TABLE_ADDRESS + semitone * 2
         if offset + 2 > len(self.driver):
             raise ValueError("FM semitone table reads beyond the resident driver")
-        base = int.from_bytes(self.driver[offset:offset + 2], "little")
+        base = int.from_bytes(self.driver[offset : offset + 2], "little")
         return ((((octave * 8) & 0xFF) | (base >> 8)) << 8) | (base & 0xFF)
 
     def _update_modulation(self, track: TrackState, *, new_event: bool) -> None:
@@ -282,9 +294,7 @@ class SoundSequencer:
         try:
             pointer = MODULATION_POINTERS[track.modulation_speed]
         except IndexError as error:
-            raise ValueError(
-                f"modulation speed {track.modulation_speed} is outside the driver table"
-            ) from error
+            raise ValueError(f"modulation speed {track.modulation_speed} is outside the driver table") from error
         step = track.modulation_step
         track.modulation_step = (track.modulation_step + 1) & 0xFF
         if ((track.modulation_steps - 1) & 0xFF) == step:
@@ -317,9 +327,7 @@ class SoundSequencer:
         track.pitch_cursor = (track.pitch_cursor - 1) & 0xFF
         if track.pitch_cursor == 0:
             track.pitch_cursor = track.pitch_data[1]
-            track.pitch_value = (
-                track.pitch_value + signed_byte(track.pitch_step)
-            ) & 0xFFFF
+            track.pitch_value = (track.pitch_value + signed_byte(track.pitch_step)) & 0xFFFF
         track.pitch_step_counter = (track.pitch_step_counter - 1) & 0xFF
         if track.pitch_step_counter == 0:
             track.pitch_step_counter = track.pitch_data[3]
@@ -476,8 +484,13 @@ class SoundSequencer:
             track.duration = track.saved_duration
             track.note_fill_counter = track.note_fill
             event = NoteEvent(
-                track.index, track.channel, self.sample, self.sample + 1,
-                note, track.voice, rest=note is None,
+                track.index,
+                track.channel,
+                self.sample,
+                self.sample + 1,
+                note,
+                track.voice,
+                rest=note is None,
             )
             self.notes.append(event)
             track.current_note = event
@@ -518,16 +531,18 @@ class SoundSequencer:
                 fm_index += 1
             else:
                 channel = record["channel"]
-            tracks.append(TrackState(
-                index=index,
-                kind=record["type"],
-                channel=channel,
-                cursor=self.addresses[record["sequence"]],
-                duration_scale=header["scale"],
-                transpose=record["transpose"],
-                volume=record["volume"],
-                flags=record.get("flags", 0x80),
-            ))
+            tracks.append(
+                TrackState(
+                    index=index,
+                    kind=record["type"],
+                    channel=channel,
+                    cursor=self.addresses[record["sequence"]],
+                    duration_scale=header["scale"],
+                    transpose=record["transpose"],
+                    volume=record["volume"],
+                    flags=record.get("flags", 0x80),
+                )
+            )
         return tracks
 
     def render(

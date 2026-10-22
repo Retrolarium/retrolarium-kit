@@ -54,13 +54,15 @@ class Route:
 
     @property
     def width(self) -> int:
-        return (max(item.screen_x for item in self.placements)
-                - min(item.screen_x for item in self.placements) + 1) * 16
+        return (
+            max(item.screen_x for item in self.placements) - min(item.screen_x for item in self.placements) + 1
+        ) * 16
 
     @property
     def height(self) -> int:
-        return (max(item.screen_y for item in self.placements)
-                - min(item.screen_y for item in self.placements) + 1) * 15
+        return (
+            max(item.screen_y for item in self.placements) - min(item.screen_y for item in self.placements) + 1
+        ) * 15
 
     def visible_placements(self) -> tuple[Placement, ...]:
         seen: set[tuple[int, int]] = set()
@@ -98,9 +100,7 @@ def _walk(tokens: bytes, start: int, end: int, palette: int) -> tuple[Placement,
         elif token < 0xF0:
             selector = token & 0x7F
             if selector <= 0x76:
-                result.append(Placement(
-                    offset, selector, direction, x, y, palette
-                ))
+                result.append(Placement(offset, selector, direction, x, y, palette))
             dx, dy = STEPS[direction]
             x, y = x + dx, y + dy
     return tuple(result)
@@ -113,27 +113,30 @@ def _selector(placements: tuple[Placement, ...], selector: int) -> Placement:
         raise ValueError(f"World 2 route has no selector ${selector:02X}") from exc
 
 
-def _attach(
-    main: tuple[Placement, ...], branch: tuple[Placement, ...], selector: int
-) -> tuple[Placement, ...]:
+def _attach(main: tuple[Placement, ...], branch: tuple[Placement, ...], selector: int) -> tuple[Placement, ...]:
     if not branch:
         return main
     trigger = _selector(main, selector)
     dx, dy = STEPS[branch[0].direction]
     shift_x = trigger.screen_x + dx - branch[0].screen_x
     shift_y = trigger.screen_y + dy - branch[0].screen_y
-    return main + tuple(Placement(
-        item.sequence_offset, item.selector_id, item.direction,
-        item.screen_x + shift_x, item.screen_y + shift_y, item.palette_index,
-    ) for item in branch)
+    return main + tuple(
+        Placement(
+            item.sequence_offset,
+            item.selector_id,
+            item.direction,
+            item.screen_x + shift_x,
+            item.screen_y + shift_y,
+            item.palette_index,
+        )
+        for item in branch
+    )
 
 
 def _endpoints(name: str, placements: tuple[Placement, ...]) -> tuple[Annotation, ...]:
     return (
-        Annotation(placements[0].screen_x, placements[0].screen_y,
-                   f"{name} entrance"),
-        Annotation(placements[-1].screen_x, placements[-1].screen_y,
-                   f"{name} exit"),
+        Annotation(placements[0].screen_x, placements[0].screen_y, f"{name} entrance"),
+        Annotation(placements[-1].screen_x, placements[-1].screen_y, f"{name} exit"),
     )
 
 
@@ -147,13 +150,11 @@ def build_routes(
     encode_branches(branch_document)
     encode_chapters(chapter_document)
     initial_palette_ids = chapter_document["background_palette_ids"]
-    branches = tuple((
-        entry["destination_offset"], entry["trigger_screen_id"],
-        entry["return_offset_override"]
-    ) for entry in branch_document["branches"])
-    destinations = tuple(sorted({
-        destination for destination, _, _ in branches if destination >= 134
-    }))
+    branches = tuple(
+        (entry["destination_offset"], entry["trigger_screen_id"], entry["return_offset_override"])
+        for entry in branch_document["branches"]
+    )
+    destinations = tuple(sorted({destination for destination, _, _ in branches if destination >= 134}))
     if destinations != DESTINATIONS:
         raise ValueError("World 2 branch route boundaries differ")
     if not starts[0] < starts[1] < starts[2] < DESTINATIONS[0]:
@@ -161,58 +162,47 @@ def build_routes(
     if any(not 1 <= palette <= 9 for palette in initial_palette_ids):
         raise ValueError("World 2 initial palette IDs must be in 1..9")
     end = {
-        start: (DESTINATIONS[index + 1] - 1
-                if index + 1 < len(DESTINATIONS) else len(tokens) - 1)
+        start: (DESTINATIONS[index + 1] - 1 if index + 1 < len(DESTINATIONS) else len(tokens) - 1)
         for index, start in enumerate(DESTINATIONS)
     }
     initial = tuple(item - 1 for item in initial_palette_ids)
     main1 = _walk(tokens, starts[0], starts[1] - 1, initial[0])
     main2 = _walk(tokens, starts[1], starts[2] - 1, initial[1])
     main3 = _walk(tokens, starts[2], DESTINATIONS[0] - 1, initial[2])
-    by_destination = {destination: (selector, override)
-                      for destination, selector, override in branches}
+    by_destination = {destination: (selector, override) for destination, selector, override in branches}
 
     part1 = main1
     for destination in (134, 144, 154):
         selector, _ = by_destination[destination]
         trigger = _selector(main1, selector)
-        part1 = _attach(part1,
-            _walk(tokens, destination, end[destination],
-                  trigger.palette_index), selector)
+        part1 = _attach(part1, _walk(tokens, destination, end[destination], trigger.palette_index), selector)
     part3 = main3
     for destination in (215, 223):
         selector, _ = by_destination[destination]
         trigger = _selector(main3, selector)
-        part3 = _attach(part3,
-            _walk(tokens, destination, end[destination],
-                  trigger.palette_index), selector)
+        part3 = _attach(part3, _walk(tokens, destination, end[destination], trigger.palette_index), selector)
     part2a = _walk(tokens, 162, end[162], initial[1])
-    part2b_segments = tuple(_walk(tokens, destination, end[destination], initial[1])
-                            for destination in (180, 192, 202, 212))
+    part2b_segments = tuple(
+        _walk(tokens, destination, end[destination], initial[1]) for destination in (180, 192, 202, 212)
+    )
     part2b = tuple(item for segment in part2b_segments for item in segment)
 
     annotations: list[Annotation] = []
     for destination, selector, override in branches:
-        name = ("Part 2A" if destination == 162 else
-                "Part 2B" if destination in (180, 192, 202, 212) else None)
+        name = "Part 2A" if destination == 162 else "Part 2B" if destination in (180, 192, 202, 212) else None
         if name is None:
             continue
         trigger = _selector(main2, selector)
-        annotations.append(Annotation(
-            trigger.screen_x, trigger.screen_y, f"{name} entrance"))
-        return_offset = (trigger.sequence_offset if override is None else override)
-        exit_placement = next(
-            (item for item in main2 if item.sequence_offset > return_offset),
-            main2[-1])
-        annotations.append(Annotation(
-            exit_placement.screen_x, exit_placement.screen_y, f"{name} exit"))
+        annotations.append(Annotation(trigger.screen_x, trigger.screen_y, f"{name} entrance"))
+        return_offset = trigger.sequence_offset if override is None else override
+        exit_placement = next((item for item in main2 if item.sequence_offset > return_offset), main2[-1])
+        annotations.append(Annotation(exit_placement.screen_x, exit_placement.screen_y, f"{name} exit"))
 
     return {
         "Part 1": Route("Part 1", part1),
         "Part 2": Route("Part 2", main2, tuple(annotations)),
         "Part 2A": Route("Part 2A", part2a, _endpoints("Part 2A", part2a)),
-        "Part 2B": Route("Part 2B", part2b,
-                         _endpoints("Part 2B", part2b_segments[0])),
+        "Part 2B": Route("Part 2B", part2b, _endpoints("Part 2B", part2b_segments[0])),
         "Part 3": Route("Part 3", part3),
     }
 
@@ -236,22 +226,17 @@ def paint_route_cell(
     if located is None:
         return None
     placement, local_x, local_y = located
-    projection = project_screen(
-        screen_resource, placement.selector_id, placement.direction)
+    projection = project_screen(screen_resource, placement.selector_id, placement.direction)
     if projection.cells[local_y][local_x] >= 208:
         raise ValueError("World 2 spawn or padding cell is not a background")
     raw_x, raw_y = projection.raw_coordinate(local_x, local_y)
     if projection.cells[local_y][local_x] == metatile:
         return None
     payload = bytes.fromhex(screen_resource["raw_hex"])
-    selected_pointer = payload[
-        placement.selector_id * 2:placement.selector_id * 2 + 2]
-    updated = [
-        [list(row) for row in screen]
-        for screen in screen_resource["screens"]
-    ]
+    selected_pointer = payload[placement.selector_id * 2 : placement.selector_id * 2 + 2]
+    updated = [[list(row) for row in screen] for screen in screen_resource["screens"]]
     for selector in range(119):
-        if payload[selector * 2:selector * 2 + 2] == selected_pointer:
+        if payload[selector * 2 : selector * 2 + 2] == selected_pointer:
             updated[selector][raw_y][raw_x] = metatile
     encode_screens({"raw_hex": screen_resource["raw_hex"], "screens": updated})
     screen_resource["screens"] = updated
@@ -275,7 +260,7 @@ def route_view(
     """
     routes = build_routes(stage, branch_document, chapter_document)
     payload = bytes.fromhex(screen_resource["raw_hex"])
-    pointers = [payload[index * 2:index * 2 + 2] for index in range(119)]
+    pointers = [payload[index * 2 : index * 2 + 2] for index in range(119)]
     projections: dict[tuple[int, int], Any] = {}
     result_routes = []
     for name in ROUTE_NAMES:
@@ -286,42 +271,41 @@ def route_view(
             if key not in projections:
                 projections[key] = project_screen(screen_resource, *key)
             projection = projections[key]
-            panels.append({
-                "selector": item.selector_id,
-                "direction": item.direction,
-                "x": item.screen_x - route.min_x,
-                "y": item.screen_y - route.min_y,
-                "palette": item.palette_index,
-                "sequence_offset": item.sequence_offset,
-                "cells": [
-                    [list(coordinate) if coordinate is not None else None
-                     for coordinate in row]
-                    for row in projection.raw_coordinates
+            panels.append(
+                {
+                    "selector": item.selector_id,
+                    "direction": item.direction,
+                    "x": item.screen_x - route.min_x,
+                    "y": item.screen_y - route.min_y,
+                    "palette": item.palette_index,
+                    "sequence_offset": item.sequence_offset,
+                    "cells": [
+                        [list(coordinate) if coordinate is not None else None for coordinate in row]
+                        for row in projection.raw_coordinates
+                    ],
+                    "fixed": [
+                        [value if coordinate is None else None for value, coordinate in zip(values, coordinates)]
+                        for values, coordinates in zip(projection.cells, projection.raw_coordinates)
+                    ],
+                }
+            )
+        result_routes.append(
+            {
+                "name": name,
+                "columns": route.width // 16,
+                "rows": route.height // 15,
+                "panels": panels,
+                "annotations": [
+                    {"x": item.screen_x - route.min_x, "y": item.screen_y - route.min_y, "text": item.text}
+                    for item in route.annotations
                 ],
-                "fixed": [
-                    [value if coordinate is None else None
-                     for value, coordinate in zip(values, coordinates)]
-                    for values, coordinates in zip(
-                        projection.cells, projection.raw_coordinates)
-                ],
-            })
-        result_routes.append({
-            "name": name,
-            "columns": route.width // 16,
-            "rows": route.height // 15,
-            "panels": panels,
-            "annotations": [
-                {"x": item.screen_x - route.min_x, "y": item.screen_y - route.min_y,
-                 "text": item.text}
-                for item in route.annotations
-            ],
-        })
+            }
+        )
     return {
         "schema": "retrolarium.doraemon-world2-view",
         "schema_version": 1,
         "routes": result_routes,
         "aliases": [
-            [other for other in range(119) if pointers[other] == pointers[selector]]
-            for selector in range(119)
+            [other for other in range(119) if pointers[other] == pointers[selector]] for selector in range(119)
         ],
     }

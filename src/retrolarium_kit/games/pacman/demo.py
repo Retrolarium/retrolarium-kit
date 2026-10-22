@@ -19,8 +19,15 @@ import hashlib
 from typing import Any, Mapping
 
 from retrolarium_kit.core.authoring import (
-    Address, AddressRange, AuthoringError, BuildPlan, Change, ChangeSet,
-    GameProfile, Provenance, RevisionSpec,
+    Address,
+    AddressRange,
+    AuthoringError,
+    BuildPlan,
+    Change,
+    ChangeSet,
+    GameProfile,
+    Provenance,
+    RevisionSpec,
 )
 from retrolarium_core.ines import parse_ines
 
@@ -47,8 +54,10 @@ class PacmanDemoDocument:
 
     def as_dict(self) -> dict[str, Any]:
         return {
-            "schema": SCHEMA, "schema_version": VERSION,
-            "game": self.game_id, "revision": self.revision_id,
+            "schema": SCHEMA,
+            "schema_version": VERSION,
+            "game": self.game_id,
+            "revision": self.revision_id,
             "source_sha256": self.source_sha256,
             "layout": dict(self.layout),
             "steps": [
@@ -89,7 +98,7 @@ def _read(prg: bytes, address: int, count: int) -> bytes:
     base = _base(prg)
     if not base <= address <= 0x10000 - count:
         raise PacmanDemoError("demo range escapes PRG")
-    return prg[address - base:address - base + count]
+    return prg[address - base : address - base + count]
 
 
 def _check_engine(prg: bytes, layout: Mapping[str, int]) -> None:
@@ -97,17 +106,42 @@ def _check_engine(prg: bytes, layout: Mapping[str, int]) -> None:
     after = table + 1
     # LDY index / DEC timer / BNE / INC index x2 / LDY index /
     # LDA table,Y / STA timer / LDA table+1,Y / AND #3
-    expected = bytes((
-        0xA4, 0xE4, 0xC6, 0xE3, 0xD0, 0x0B, 0xE6, 0xE4, 0xE6, 0xE4, 0xA4, 0xE4,
-        0xB9, table & 0xFF, table >> 8, 0x85, 0xE3, 0xB9, after & 0xFF, after >> 8, 0x29, 0x03,
-    ))
+    expected = bytes(
+        (
+            0xA4,
+            0xE4,
+            0xC6,
+            0xE3,
+            0xD0,
+            0x0B,
+            0xE6,
+            0xE4,
+            0xE6,
+            0xE4,
+            0xA4,
+            0xE4,
+            0xB9,
+            table & 0xFF,
+            table >> 8,
+            0x85,
+            0xE3,
+            0xB9,
+            after & 0xFF,
+            after >> 8,
+            0x29,
+            0x03,
+        )
+    )
     if _read(prg, layout["script_cpu"], len(expected)) != expected:
         raise PacmanDemoError("the demo engine reads another table than the profile names")
 
 
 def decode_demo(
-    source: bytes, profile: GameProfile, revision: RevisionSpec,
-    *, _verify_identity: bool = True,
+    source: bytes,
+    profile: GameProfile,
+    revision: RevisionSpec,
+    *,
+    _verify_identity: bool = True,
 ) -> PacmanDemoDocument:
     layout = _layout(profile, revision)
     prg = _source(source, revision, verify=_verify_identity).prg
@@ -137,8 +171,7 @@ def _encode(value: Mapping[str, Any], layout: Mapping[str, int], *, first_durati
         raise PacmanDemoError(f"the demo holds 1-{pairs} steps")
     table = bytearray()
     for index, step in enumerate(steps):
-        if not isinstance(step, Mapping) or set(step) != {"index", "direction", "frames"} \
-                or step["index"] != index:
+        if not isinstance(step, Mapping) or set(step) != {"index", "direction", "frames"} or step["index"] != index:
             raise PacmanDemoError("demo step fields or indices differ")
         if step["direction"] not in DIRECTIONS:
             raise PacmanDemoError(f"demo step {index + 1} direction is not one of {', '.join(DIRECTIONS)}")
@@ -161,25 +194,39 @@ def _encode(value: Mapping[str, Any], layout: Mapping[str, int], *, first_durati
 def parse_demo_document(value: object, profile: GameProfile, revision: RevisionSpec) -> PacmanDemoDocument:
     layout = _layout(profile, revision)
     if not isinstance(value, Mapping) or set(value) != {
-        "schema", "schema_version", "game", "revision", "source_sha256", "layout", "steps",
+        "schema",
+        "schema_version",
+        "game",
+        "revision",
+        "source_sha256",
+        "layout",
+        "steps",
     }:
         raise PacmanDemoError("demo document fields differ")
     for key, expected in (
-        ("schema", SCHEMA), ("schema_version", VERSION), ("game", profile.game_id),
-        ("revision", revision.revision_id), ("source_sha256", revision.sha256),
+        ("schema", SCHEMA),
+        ("schema_version", VERSION),
+        ("game", profile.game_id),
+        ("revision", revision.revision_id),
+        ("source_sha256", revision.sha256),
     ):
         if value[key] != expected:
             raise PacmanDemoError(f"demo {key} differs from profile")
     _encode(value, layout, first_duration=0)
     return PacmanDemoDocument(
-        profile.game_id, revision.revision_id, revision.sha256, layout,
-        tuple({"index": s["index"], "direction": s["direction"], "frames": s["frames"]}
-              for s in value["steps"]),
+        profile.game_id,
+        revision.revision_id,
+        revision.sha256,
+        layout,
+        tuple({"index": s["index"], "direction": s["direction"], "frames": s["frames"]} for s in value["steps"]),
     )
 
 
 def build_demo(
-    source: bytes, document: PacmanDemoDocument, profile: GameProfile, revision: RevisionSpec,
+    source: bytes,
+    document: PacmanDemoDocument,
+    profile: GameProfile,
+    revision: RevisionSpec,
 ) -> tuple[bytes, dict[str, object]]:
     image = _source(source, revision)
     layout = _layout(profile, revision)
@@ -188,10 +235,11 @@ def build_demo(
     start = len(image.header) + len(image.trainer) + layout["table_cpu"] - _base(image.prg)
     table = _encode(checked.as_dict(), layout, first_duration=source[start])
     output = source
-    if source[start:start + len(table)] != table:
+    if source[start : start + len(table)] != table:
         change = Change(
             AddressRange(Address("file", start), len(table)),
-            source[start:start + len(table)], table,
+            source[start : start + len(table)],
+            table,
             Provenance(revision.sha256, "attract-demo", "pairs"),
         )
         output = BuildPlan(revision.sha256, ChangeSet((change,))).apply(source)
@@ -199,8 +247,10 @@ def build_demo(
     if _encode(rebuilt.as_dict(), layout, first_duration=source[start]) != table:
         raise PacmanDemoError("rebuilt demo does not decode to the same table")
     return output, {
-        "schema": "retrolarium.pacman-demo-build", "schema_version": 1,
-        "game": profile.game_id, "revision": revision.revision_id,
+        "schema": "retrolarium.pacman-demo-build",
+        "schema_version": 1,
+        "game": profile.game_id,
+        "revision": revision.revision_id,
         "source_sha256": revision.sha256,
         "output_sha256": hashlib.sha256(output).hexdigest(),
         "size": len(output),

@@ -60,9 +60,7 @@ def fixture_profile(image: bytes) -> tuple[GameProfile, RevisionSpec]:
         0,
     )
     resources = (
-        ResourceSpec(
-            "authoring-bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"
-        ),
+        ResourceSpec("authoring-bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"),
         ResourceSpec(
             "palette",
             "palette",
@@ -142,10 +140,7 @@ def write_profile(path: Path, profile: GameProfile) -> None:
                 {
                     "id": override.resource_id,
                     "parameters": dict(override.parameters),
-                    **(
-                        {"payload": override.payload}
-                        if override.payload is not None else {}
-                    ),
+                    **({"payload": override.payload} if override.payload is not None else {}),
                 }
                 for override in item.resource_overrides
             ]
@@ -156,18 +151,9 @@ def write_profile(path: Path, profile: GameProfile) -> None:
                     "storage": payload.storage,
                     "size": payload.size,
                     "sha1": payload.sha1,
-                    **(
-                        {"file_offset": payload.file_offset}
-                        if payload.file_offset is not None else {}
-                    ),
-                    **(
-                        {"record_ids": list(payload.record_ids)}
-                        if payload.record_ids else {}
-                    ),
-                    **(
-                        {"load_address": payload.load_address}
-                        if payload.load_address is not None else {}
-                    ),
+                    **({"file_offset": payload.file_offset} if payload.file_offset is not None else {}),
+                    **({"record_ids": list(payload.record_ids)} if payload.record_ids else {}),
+                    **({"load_address": payload.load_address} if payload.load_address is not None else {}),
                 }
                 for payload in item.payloads
             ]
@@ -205,7 +191,11 @@ class NesResourceTests(unittest.TestCase):
             sha256=hashlib.sha256(image).hexdigest(),
         )
         text = ResourceSpec(
-            "sub-command-text", "text", "castle-excellent.sub-command-text.v1", "fixed", {
+            "sub-command-text",
+            "text",
+            "castle-excellent.sub-command-text.v1",
+            "fixed",
+            {
                 "file_offset": 0x200,
                 "size": 10,
                 "record_names": ["title", "load"],
@@ -213,30 +203,36 @@ class NesResourceTests(unittest.TestCase):
             },
         )
         sfx = ResourceSpec(
-            "sfx-parameters", "audio-parameter",
-            "castle-excellent.sfx-parameters.v1", "fixed", {
+            "sfx-parameters",
+            "audio-parameter",
+            "castle-excellent.sfx-parameters.v1",
+            "fixed",
+            {
                 "file_offset": 0x220,
                 "size": 8,
                 "record_names": ["triangle", "noise"],
                 "record_sizes": [4, 4],
             },
         )
-        marker = replace(base.resources[0], parameters={
-            "resource_ids": ["sub-command-text", "sfx-parameters"]
-        })
-        profile = replace(
-            base, revisions=(revision,), resources=(marker, text, sfx)
-        )
+        marker = replace(base.resources[0], parameters={"resource_ids": ["sub-command-text", "sfx-parameters"]})
+        profile = replace(base, revisions=(revision,), resources=(marker, text, sfx))
 
         document = decode_resources(image, profile, revision)
         raw = document.as_dict()
-        self.assertEqual(raw["resources"][0]["records"], [
-            {"id": "title", "values": [0, 1, 2, 3, 4, 5]},
-            {"id": "load", "values": [6, 7, 8, 9]},
-        ])
-        self.assertEqual(raw["resources"][1]["records"][1], {
-            "id": "noise", "values": [0x24, 0x25, 0x26, 0x27],
-        })
+        self.assertEqual(
+            raw["resources"][0]["records"],
+            [
+                {"id": "title", "values": [0, 1, 2, 3, 4, 5]},
+                {"id": "load", "values": [6, 7, 8, 9]},
+            ],
+        )
+        self.assertEqual(
+            raw["resources"][1]["records"][1],
+            {
+                "id": "noise",
+                "values": [0x24, 0x25, 0x26, 0x27],
+            },
+        )
         self.assertEqual(inspection_details(document)["fixed_byte_records"], 4)
         self.assertEqual(inspection_details(document)["fixed_byte_values"], 18)
         exact, report = build_resources(image, document, profile, revision)
@@ -258,8 +254,7 @@ class NesResourceTests(unittest.TestCase):
 
     def test_castle_excellent_metasprites_round_trip_tile_and_oam_attributes(self) -> None:
         source = bytearray(fixture_image())
-        source[0x180:0x188] = bytes((0x10, 0x00, 0x12, 0x40,
-                                             0x14, 0x81, 0x16, 0xC3))
+        source[0x180:0x188] = bytes((0x10, 0x00, 0x12, 0x40, 0x14, 0x81, 0x16, 0xC3))
         image = bytes(source)
         base, old_revision = fixture_profile(fixture_image())
         revision = replace(
@@ -268,38 +263,41 @@ class NesResourceTests(unittest.TestCase):
             sha256=hashlib.sha256(image).hexdigest(),
         )
         metasprites = ResourceSpec(
-            "metasprite-descriptors", "animation",
-            "castle-excellent.metasprite-descriptors.v1", "fixed", {
+            "metasprite-descriptors",
+            "animation",
+            "castle-excellent.metasprite-descriptors.v1",
+            "fixed",
+            {
                 "file_offset": 0x180,
                 "size": 8,
                 "descriptor_count": 4,
             },
         )
-        marker = replace(base.resources[0], parameters={
-            "resource_ids": ["metasprite-descriptors"]
-        })
-        profile = replace(
-            base, revisions=(revision,), resources=(marker, metasprites)
-        )
+        marker = replace(base.resources[0], parameters={"resource_ids": ["metasprite-descriptors"]})
+        profile = replace(base, revisions=(revision,), resources=(marker, metasprites))
 
         document = decode_resources(image, profile, revision)
-        self.assertEqual(document.resources[0]["descriptors"], [
-            {"index": 0, "tile": 0x10, "attributes": 0x00},
-            {"index": 1, "tile": 0x12, "attributes": 0x40},
-            {"index": 2, "tile": 0x14, "attributes": 0x81},
-            {"index": 3, "tile": 0x16, "attributes": 0xC3},
-        ])
         self.assertEqual(
-            inspection_details(document)["metasprite_descriptors"], 4
+            document.resources[0]["descriptors"],
+            [
+                {"index": 0, "tile": 0x10, "attributes": 0x00},
+                {"index": 1, "tile": 0x12, "attributes": 0x40},
+                {"index": 2, "tile": 0x14, "attributes": 0x81},
+                {"index": 3, "tile": 0x16, "attributes": 0xC3},
+            ],
         )
+        self.assertEqual(inspection_details(document)["metasprite_descriptors"], 4)
         exact, report = build_resources(image, document, profile, revision)
         self.assertEqual(exact, image)
         self.assertEqual(report["changed_bytes"], 0)
 
         edited = document.as_dict()
-        edited["resources"][0]["descriptors"][2].update({
-            "tile": 0x2A, "attributes": 0xC2,
-        })
+        edited["resources"][0]["descriptors"][2].update(
+            {
+                "tile": 0x2A,
+                "attributes": 0xC2,
+            }
+        )
         parsed = parse_resource_document(edited, profile, revision)
         rebuilt, report = build_resources(image, parsed, profile, revision)
         self.assertEqual(rebuilt[0x184:0x186], bytes((0x2A, 0xC2)))
@@ -318,37 +316,43 @@ class NesResourceTests(unittest.TestCase):
             sha256=hashlib.sha256(image).hexdigest(),
         )
         room_cells = ResourceSpec(
-            "room-cell-visuals", "metatile", "castle-excellent.room-cell-visuals.v1",
-            "fixed", {
+            "room-cell-visuals",
+            "metatile",
+            "castle-excellent.room-cell-visuals.v1",
+            "fixed",
+            {
                 "cell_count": 4,
                 "left_file_offset": 0x100,
                 "right_file_offset": 0x110,
                 "attributes_file_offset": 0x120,
             },
         )
-        marker = replace(base.resources[0], parameters={
-            "resource_ids": ["room-cell-visuals"]
-        })
-        profile = replace(
-            base, revisions=(revision,), resources=(marker, room_cells)
-        )
+        marker = replace(base.resources[0], parameters={"resource_ids": ["room-cell-visuals"]})
+        profile = replace(base, revisions=(revision,), resources=(marker, room_cells))
 
         document = decode_resources(image, profile, revision)
-        self.assertEqual(document.resources[0]["records"], [
-            {"index": 0, "left_tile": 1, "right_tile": 5, "palette": 0},
-            {"index": 1, "left_tile": 2, "right_tile": 6, "palette": 1},
-            {"index": 2, "left_tile": 3, "right_tile": 7, "palette": 2},
-            {"index": 3, "left_tile": 4, "right_tile": 8, "palette": 3},
-        ])
+        self.assertEqual(
+            document.resources[0]["records"],
+            [
+                {"index": 0, "left_tile": 1, "right_tile": 5, "palette": 0},
+                {"index": 1, "left_tile": 2, "right_tile": 6, "palette": 1},
+                {"index": 2, "left_tile": 3, "right_tile": 7, "palette": 2},
+                {"index": 3, "left_tile": 4, "right_tile": 8, "palette": 3},
+            ],
+        )
         self.assertEqual(inspection_details(document)["room_cells"], 4)
         exact, report = build_resources(image, document, profile, revision)
         self.assertEqual(exact, image)
         self.assertEqual(report["changed_bytes"], 0)
 
         edited = document.as_dict()
-        edited["resources"][0]["records"][2].update({
-            "left_tile": 0x2A, "right_tile": 0x3B, "palette": 1,
-        })
+        edited["resources"][0]["records"][2].update(
+            {
+                "left_tile": 0x2A,
+                "right_tile": 0x3B,
+                "palette": 1,
+            }
+        )
         parsed = parse_resource_document(edited, profile, revision)
         rebuilt, report = build_resources(image, parsed, profile, revision)
         self.assertEqual(rebuilt[0x102], 0x2A)
@@ -370,15 +374,11 @@ class NesResourceTests(unittest.TestCase):
     def test_scoped_bundle_coexists_with_another_authoring_adapter(self) -> None:
         image = fixture_image()
         base, revision = fixture_profile(image)
-        marker = replace(
-            base.resources[0], parameters={"resource_ids": ["graphics"]}
-        )
+        marker = replace(base.resources[0], parameters={"resource_ids": ["graphics"]})
         profile = replace(
             base,
             resources=(
-                ResourceSpec(
-                    "rooms", "room-collection", "castle-excellent.prefix-rooms.v1", "fixed"
-                ),
+                ResourceSpec("rooms", "room-collection", "castle-excellent.prefix-rooms.v1", "fixed"),
                 marker,
                 *base.resources[1:],
             ),
@@ -418,12 +418,13 @@ class NesResourceTests(unittest.TestCase):
                 "first": Adapter("first", 16, 7),
                 "second": Adapter("second", 17, 8),
             }
-            with patch.object(
-                games_module, "_read_image", return_value=(image, profile, revision)
-            ), patch.object(
-                games_module,
-                "_adapter_for_document",
-                side_effect=lambda value, _profile, _revision: adapters[value["schema"]],
+            with (
+                patch.object(games_module, "_read_image", return_value=(image, profile, revision)),
+                patch.object(
+                    games_module,
+                    "_adapter_for_document",
+                    side_effect=lambda value, _profile, _revision: adapters[value["schema"]],
+                ),
             ):
                 result = build_game_documents(source, [first, second], output)
                 self.assertEqual(2, result["changed_bytes"])
@@ -440,13 +441,11 @@ class NesResourceTests(unittest.TestCase):
         source = bytearray(fixture_image())
         offsets = bytes(index * TILES_PER_FRAME for index in range(16))
         frames = bytes(
-            (frame * TILES_PER_FRAME + tile) & 0xFF
-            for frame in range(FRAME_COUNT)
-            for tile in range(TILES_PER_FRAME)
+            (frame * TILES_PER_FRAME + tile) & 0xFF for frame in range(FRAME_COUNT) for tile in range(TILES_PER_FRAME)
         )
         payload = offsets + frames + bytes((0x31, 0x46))
         player_offset = 0x100
-        source[player_offset:player_offset + len(payload)] = payload
+        source[player_offset : player_offset + len(payload)] = payload
         image = bytes(source)
         base_profile, base_revision = fixture_profile(fixture_image())
         revision = replace(
@@ -455,7 +454,10 @@ class NesResourceTests(unittest.TestCase):
             sha256=hashlib.sha256(image).hexdigest(),
         )
         player_resource = ResourceSpec(
-            "player-frames", "animation", "smb.player-frames.v1", "fixed",
+            "player-frames",
+            "animation",
+            "smb.player-frames.v1",
+            "fixed",
             {
                 "file_offset": player_offset,
                 "size": len(payload),
@@ -494,7 +496,9 @@ class NesResourceTests(unittest.TestCase):
 
     def test_packaged_honkeypong_profile_has_open_fixture_identity(self) -> None:
         profile = game_profile("honkeypong")
-        self.assertEqual(profile.revisions[0].sha256, "cce7bf2f71eb9e63de0dba15098679dde06a1da9d7553f2319aa60ea57a1193b")
+        self.assertEqual(
+            profile.revisions[0].sha256, "cce7bf2f71eb9e63de0dba15098679dde06a1da9d7553f2319aa60ea57a1193b"
+        )
         self.assertEqual(profile.revisions[0].mapper, 0)
         self.assertEqual(
             [item.codec for item in profile.resources],
@@ -569,20 +573,14 @@ class NesResourceTests(unittest.TestCase):
             inspected = inspect_game(rom, custom_profile=profile_path)
             self.assertEqual(inspected["details"]["screens"], 1)
             self.assertEqual(inspected["details"]["chr_tiles"], 1)
-            extracted = extract_game(
-                rom, document_path, custom_profile=profile_path
-            )
+            extracted = extract_game(rom, document_path, custom_profile=profile_path)
             self.assertEqual(extracted["resource"], "resource-bundle")
             self.assertEqual(extracted["resource_count"], 3)
             self.assertEqual(
-                validate_game(rom, document_path, custom_profile=profile_path)[
-                    "status"
-                ],
+                validate_game(rom, document_path, custom_profile=profile_path)["status"],
                 "valid",
             )
-            result = build_game(
-                rom, document_path, output, custom_profile=profile_path
-            )
+            result = build_game(rom, document_path, output, custom_profile=profile_path)
             self.assertEqual(result["schema"], "retrolarium.nes-resource-build")
             self.assertEqual(output.read_bytes(), image)
 
@@ -596,9 +594,7 @@ class NesResourceTests(unittest.TestCase):
         revision = replace(
             base_revision,
             capabilities=("revision-palettes",),
-            resource_overrides=(ResourceOverrideSpec(
-                "palette", {"file_offset": 16}
-            ),),
+            resource_overrides=(ResourceOverrideSpec("palette", {"file_offset": 16}),),
         )
         profile = replace(
             base_profile,
@@ -608,9 +604,7 @@ class NesResourceTests(unittest.TestCase):
         )
 
         self.assertEqual(profile.capabilities_for(revision), ("revision-palettes",))
-        self.assertEqual(
-            profile.resources_for(revision)[1].parameters["file_offset"], 16
-        )
+        self.assertEqual(profile.resources_for(revision)[1].parameters["file_offset"], 16)
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -649,24 +643,29 @@ class NesResourceTests(unittest.TestCase):
         with self.assertRaisesRegex(AuthoringError, "overrides unknown resource"):
             replace(
                 profile,
-                revisions=(replace(
-                    revision,
-                    resource_overrides=(ResourceOverrideSpec("missing"),),
-                ),),
+                revisions=(
+                    replace(
+                        revision,
+                        resource_overrides=(ResourceOverrideSpec("missing"),),
+                    ),
+                ),
             )
         payload = PayloadSpec(
-            "prg", "range", 16, hashlib.sha1(bytes(16)).hexdigest(),
-            file_offset=16, load_address=0x8000,
+            "prg",
+            "range",
+            16,
+            hashlib.sha1(bytes(16)).hexdigest(),
+            file_offset=16,
+            load_address=0x8000,
         )
         payload_resource = replace(profile.resources[1], payload="prg")
         payload_revision = replace(
-            revision, payloads=(payload,),
+            revision,
+            payloads=(payload,),
             resources=(profile.resources[0], payload_resource),
         )
         payload_profile = replace(profile, revisions=(payload_revision,))
-        self.assertEqual(
-            payload_profile.payload_for(payload_revision, "prg"), payload
-        )
+        self.assertEqual(payload_profile.payload_for(payload_revision, "prg"), payload)
         with self.assertRaisesRegex(AuthoringError, "payload ids must be unique"):
             replace(payload_revision, payloads=(payload, payload))
         with self.assertRaisesRegex(AuthoringError, "unknown resource payload"):
@@ -681,8 +680,13 @@ class NesResourceTests(unittest.TestCase):
         image = core + instruction_rom
         base_profile, _base_revision = fixture_profile(core)
         revision = RevisionSpec(
-            "pc10", "PC10 probe", len(image), hashlib.sha1(image).hexdigest(),
-            hashlib.sha256(image).hexdigest(), "ines-pc10", 0,
+            "pc10",
+            "PC10 probe",
+            len(image),
+            hashlib.sha1(image).hexdigest(),
+            hashlib.sha256(image).hexdigest(),
+            "ines-pc10",
+            0,
         )
         profile = replace(base_profile, revisions=(revision,))
 
@@ -707,17 +711,22 @@ class NesResourceTests(unittest.TestCase):
         source[24:40] = bytes((0x80,)) + bytes(15)
         image = bytes(source)
         revision_resources = (
+            ResourceSpec("bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"),
             ResourceSpec(
-                "bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"
-            ),
-            ResourceSpec(
-                "graphics", "graphics", "nes.chr-2bpp.v1", "fixed",
+                "graphics",
+                "graphics",
+                "nes.chr-2bpp.v1",
+                "fixed",
                 {"file_offset": 24, "size": 16},
             ),
         )
         revision = RevisionSpec(
-            "vs_smb", "Vs. probe", len(image), hashlib.sha1(image).hexdigest(),
-            hashlib.sha256(image).hexdigest(), "ines-vs",
+            "vs_smb",
+            "Vs. probe",
+            len(image),
+            hashlib.sha1(image).hexdigest(),
+            hashlib.sha256(image).hexdigest(),
+            "ines-vs",
             capabilities=("graphics",),
             resources=(
                 revision_resources[0],
@@ -729,8 +738,11 @@ class NesResourceTests(unittest.TestCase):
             ),
             payloads=(
                 PayloadSpec(
-                    "chr", "range", 16,
-                    hashlib.sha1(image[24:40]).hexdigest(), file_offset=24,
+                    "chr",
+                    "range",
+                    16,
+                    hashlib.sha1(image[24:40]).hexdigest(),
+                    file_offset=24,
                 ),
             ),
         )

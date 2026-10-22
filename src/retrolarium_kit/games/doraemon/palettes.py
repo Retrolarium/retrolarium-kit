@@ -25,7 +25,6 @@ def decode_room_selectors(payload: bytes) -> list[int]:
 def encode_room_selectors(values: object) -> bytes:
     if not isinstance(values, list) or len(values) != ROOM_COUNT:
         raise DoraemonPaletteError("World 3 needs exactly 64 room palette selectors")
-    if any(not isinstance(value, int) or isinstance(value, bool)
-           or not 0 <= value < PALETTE_COUNT for value in values):
+    if any(not isinstance(value, int) or isinstance(value, bool) or not 0 <= value < PALETTE_COUNT for value in values):
         raise DoraemonPaletteError("World 3 room palette selector is outside 0..10")
     return bytes(values)

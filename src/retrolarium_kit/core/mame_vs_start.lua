@@ -15,7 +15,9 @@ for _, port in pairs(manager.machine.ioport.ports) do
     for name, field in pairs(port.fields) do
         if name == "Coinage" then
             for value, setting in pairs(field.settings) do
-                if setting == "Free Play" then field.user_value = value end
+                if setting == "Free Play" then
+                    field.user_value = value
+                end
             end
         end
     end

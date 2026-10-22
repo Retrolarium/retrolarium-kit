@@ -6,8 +6,7 @@
 
 local function setting(name, minimum, maximum)
     local value = tonumber(os.getenv(name) or "")
-    if value == nil or value < minimum or value > maximum
-            or value ~= math.floor(value) then
+    if value == nil or value < minimum or value > maximum or value ~= math.floor(value) then
         error(name .. " must be in range " .. minimum .. ".." .. maximum)
     end
     return value
@@ -23,8 +22,12 @@ if cpu == nil or cpu.spaces["program"] == nil then
     error("MAME NES main CPU program space is unavailable")
 end
 local memory = cpu.spaces["program"]
-local function read(address) return memory:read_u8(address) end
-local function write(address, value) memory:write_u8(address, value) end
+local function read(address)
+    return memory:read_u8(address)
+end
+local function write(address, value)
+    memory:write_u8(address, value)
+end
 
 local start_field = nil
 for _, port in pairs(manager.machine.ioport.ports) do
@@ -35,7 +38,9 @@ for _, port in pairs(manager.machine.ioport.ports) do
             break
         end
     end
-    if start_field ~= nil then break end
+    if start_field ~= nil then
+        break
+    end
 end
 if start_field == nil then
     error("MAME NES player-one Start input is unavailable")
@@ -46,11 +51,12 @@ local placed = false
 -- New-game setup stores InitialPlayerY ($98) in PlayerY ($3A) after the
 -- position is cleared; the player is placed the frame after it.
 local initialized = false
-init_tap = memory:install_write_tap(0x003a, 0x003a, "castle-excellent-point-init",
-    function(_, value)
-        if frame > 30 and value == 0x98 then initialized = true end
-        return value
-    end)
+init_tap = memory:install_write_tap(0x003a, 0x003a, "castle-excellent-point-init", function(_, value)
+    if frame > 30 and value == 0x98 then
+        initialized = true
+    end
+    return value
+end)
 local function on_frame()
     frame = frame + 1
     -- The way to the room: fast and silent until the player is placed.
@@ -58,9 +64,15 @@ local function on_frame()
         machine.video.throttled = false
         machine.sound.ui_mute = true
     end
-    if frame == 30 then start_field:set_value(1) end
-    if frame == 33 then start_field:clear_value() end
-    if placed then return end
+    if frame == 30 then
+        start_field:set_value(1)
+    end
+    if frame == 33 then
+        start_field:clear_value()
+    end
+    if placed then
+        return
+    end
     if frame > 1800 then
         error("Castle Excellent gameplay did not become ready for point playtest")
     end
@@ -80,9 +92,15 @@ local function on_frame()
                 file:close()
             end
         end
-        print(string.format(
-            "Castle Excellent point playtest ready: room=%d x=%d y=%d frame=%d",
-            room, player_x, player_y, frame))
+        print(
+            string.format(
+                "Castle Excellent point playtest ready: room=%d x=%d y=%d frame=%d",
+                room,
+                player_x,
+                player_y,
+                frame
+            )
+        )
     end
 end
 

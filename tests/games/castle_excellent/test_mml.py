@@ -29,18 +29,10 @@ def fixture() -> bytes:
     image = bytearray(128)
     first = 0xBBE7
     second = first + len(b"t1l8c4") + 3
-    image[8:16] = (
-        first.to_bytes(2, "little")
-        + second.to_bytes(2, "little")
-        + bytes(2)
-        + bytes((0xBF, 0xBB))
-    )
+    image[8:16] = first.to_bytes(2, "little") + second.to_bytes(2, "little") + bytes(2) + bytes((0xBF, 0xBB))
     image[32:48] = bytes(range(16))
-    arena = (
-        b"t1l8c4\0" + first.to_bytes(2, "little")
-        + b"o3r8\0\0\0"
-    )
-    image[64:64 + len(arena)] = arena
+    arena = b"t1l8c4\0" + first.to_bytes(2, "little") + b"o3r8\0\0\0"
+    image[64 : 64 + len(arena)] = arena
     return bytes(image)
 
 
@@ -49,15 +41,14 @@ class CastleExcellentMmlTests(unittest.TestCase):
         source = fixture()
         document = decode_music(source, PARAMETERS)
         self.assertEqual(document["used_bytes"], 16)
-        self.assertEqual(document["streams"][0], {
-            "id": "stream_00", "text": "t1l8c4", "restart": "stream_00"})
+        self.assertEqual(document["streams"][0], {"id": "stream_00", "text": "t1l8c4", "restart": "stream_00"})
         self.assertEqual(
             document["track_sets"][0]["streams"],
             ["stream_00", "stream_01", None],
         )
         rebuilt = bytearray(source)
         for offset, payload in encode_music(document, PARAMETERS):
-            rebuilt[offset:offset + len(payload)] = payload
+            rebuilt[offset : offset + len(payload)] = payload
         self.assertEqual(bytes(rebuilt), source)
 
         document["streams"][0]["text"] += "d8"
@@ -65,10 +56,9 @@ class CastleExcellentMmlTests(unittest.TestCase):
         rebuilt = bytearray(source)
         spans = encode_music(document, PARAMETERS)
         for offset, payload in spans:
-            rebuilt[offset:offset + len(payload)] = payload
+            rebuilt[offset : offset + len(payload)] = payload
         second = 0xBBE7 + len(b"t1l8c4d8") + 3
-        self.assertEqual(
-            rebuilt[10:12], second.to_bytes(2, "little"))
+        self.assertEqual(rebuilt[10:12], second.to_bytes(2, "little"))
         self.assertEqual(rebuilt[64:72], b"t1l8c4d8")
 
     def test_grammar_capacity_and_identity_are_strict(self) -> None:

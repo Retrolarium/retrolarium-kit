@@ -23,9 +23,22 @@ from retrolarium_kit.core.authoring import AuthoringError
 
 CODEC = "doraemon.world3-behavior.v1"
 COMMANDS = (
-    "move_x_forward", "move_x_reverse", "move_y_forward", "move_y_reverse", "jump", "wait",
-    "set_rate", "set_direction", "loop", "move_relative", "set_position", "set_metasprite_variant",
-    "conditional_branch", "set_follow_anchor", "toggle_metasprite_variant", "stop",
+    "move_x_forward",
+    "move_x_reverse",
+    "move_y_forward",
+    "move_y_reverse",
+    "jump",
+    "wait",
+    "set_rate",
+    "set_direction",
+    "loop",
+    "move_relative",
+    "set_position",
+    "set_metasprite_variant",
+    "conditional_branch",
+    "set_follow_anchor",
+    "toggle_metasprite_variant",
+    "stop",
 )
 
 
@@ -85,17 +98,26 @@ def decode_behavior(payload: bytes, stream_sizes: list[int]) -> list[dict[str, o
     streams = []
     start = 0
     for index, size in enumerate(stream_sizes):
-        data = payload[start:start + size]
+        data = payload[start : start + size]
         try:
             offsets = _walk(data)
         except DoraemonBehaviorError as exc:
             raise DoraemonBehaviorError(f"behavior stream {index}: {exc}") from exc
         if sum(offsets.values()) != size:
             raise DoraemonBehaviorError(f"behavior stream {index} has bytes play never reaches")
-        streams.append({"instructions": [
-            {"offset": at, "command": COMMANDS[data[at] >> 4], "opcode": data[at],
-             "operands": list(data[at + 1:at + offsets[at]])}
-            for at in sorted(offsets)]})
+        streams.append(
+            {
+                "instructions": [
+                    {
+                        "offset": at,
+                        "command": COMMANDS[data[at] >> 4],
+                        "opcode": data[at],
+                        "operands": list(data[at + 1 : at + offsets[at]]),
+                    }
+                    for at in sorted(offsets)
+                ]
+            }
+        )
         start += size
     return streams
 
@@ -108,8 +130,11 @@ def encode_behavior(value: Any, stream_sizes: list[int]) -> bytes:
     output = bytearray()
     for index, (stream, size) in enumerate(zip(value, stream_sizes)):
         where = f"behavior stream {index}"
-        if not isinstance(stream, Mapping) or set(stream) != {"instructions"} \
-                or not isinstance(stream["instructions"], list):
+        if (
+            not isinstance(stream, Mapping)
+            or set(stream) != {"instructions"}
+            or not isinstance(stream["instructions"], list)
+        ):
             raise DoraemonBehaviorError(f"{where} needs its instruction list")
         data = bytearray(size)
         covered: set[int] = set()
@@ -118,8 +143,13 @@ def encode_behavior(value: Any, stream_sizes: list[int]) -> bytes:
             if not isinstance(entry, Mapping) or set(entry) != {"offset", "command", "opcode", "operands"}:
                 raise DoraemonBehaviorError(f"{where}: an instruction needs offset, command, opcode and operands")
             at, opcode, operands = entry["offset"], entry["opcode"], entry["operands"]
-            if type(at) is not int or type(opcode) is not int or not 0 <= opcode <= 255 \
-                    or not isinstance(operands, list) or any(type(v) is not int or not 0 <= v <= 255 for v in operands):
+            if (
+                type(at) is not int
+                or type(opcode) is not int
+                or not 0 <= opcode <= 255
+                or not isinstance(operands, list)
+                or any(type(v) is not int or not 0 <= v <= 255 for v in operands)
+            ):
                 raise DoraemonBehaviorError(f"{where}: instruction values must be bytes")
             if entry["command"] != COMMANDS[opcode >> 4]:
                 raise DoraemonBehaviorError(f"{where} ${at:02X}: the opcode is not a {entry['command']}")
@@ -129,7 +159,7 @@ def encode_behavior(value: Any, stream_sizes: list[int]) -> bytes:
             if not 0 <= at or at + len(raw) > size or covered & set(range(at, at + len(raw))):
                 raise DoraemonBehaviorError(f"{where} ${at:02X}: the instruction leaves its place")
             covered.update(range(at, at + len(raw)))
-            data[at:at + len(raw)] = raw
+            data[at : at + len(raw)] = raw
             declared[at] = len(raw)
         if len(covered) != size:
             raise DoraemonBehaviorError(f"{where} leaves bytes without an instruction")
@@ -138,7 +168,8 @@ def encode_behavior(value: Any, stream_sizes: list[int]) -> bytes:
         except DoraemonBehaviorError as exc:
             raise DoraemonBehaviorError(f"{where}: {exc}") from exc
         if reached != declared:
-            raise DoraemonBehaviorError(f"{where}: a jump or branch must land on one of its instructions, "
-                                        "and play must still reach them all")
+            raise DoraemonBehaviorError(
+                f"{where}: a jump or branch must land on one of its instructions, and play must still reach them all"
+            )
         output += data
     return bytes(output)

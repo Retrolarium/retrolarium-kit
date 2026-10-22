@@ -39,9 +39,7 @@ class Address:
         stable_identifier(self.space, "address space")
         if not isinstance(self.offset, int) or self.offset < 0:
             raise AuthoringError("address offset must be a non-negative integer")
-        if self.bank is not None and (
-            not isinstance(self.bank, int) or self.bank < 0
-        ):
+        if self.bank is not None and (not isinstance(self.bank, int) or self.bank < 0):
             raise AuthoringError("address bank must be a non-negative integer")
 
     def add(self, amount: int) -> Address:
@@ -90,10 +88,7 @@ class BinaryReader:
             raise AuthoringError(f"{self.name} read offset and size must be integers")
         end = offset + size
         if offset < 0 or size < 0 or end < offset or end > len(self._payload):
-            raise AuthoringError(
-                f"{self.name} read 0x{offset:X}+0x{size:X} exceeds "
-                f"0x{len(self._payload):X} bytes"
-            )
+            raise AuthoringError(f"{self.name} read 0x{offset:X}+0x{size:X} exceeds 0x{len(self._payload):X} bytes")
         return self._payload[offset:end]
 
     def u8(self, offset: int) -> int:
@@ -114,8 +109,7 @@ class BinaryWriter:
         end = offset + len(replacement)
         if offset < 0 or end < offset or end > len(self._payload):
             raise AuthoringError(
-                f"{self.name} write 0x{offset:X}+0x{len(replacement):X} "
-                f"exceeds 0x{len(self._payload):X} bytes"
+                f"{self.name} write 0x{offset:X}+0x{len(replacement):X} exceeds 0x{len(self._payload):X} bytes"
             )
         self._payload[offset:end] = replacement
 
@@ -161,19 +155,17 @@ class PayloadSpec:
                 or self.file_offset < 0
                 or record_ids
             ):
-                raise AuthoringError(
-                    "range payload needs a non-negative file offset and no record IDs"
-                )
+                raise AuthoringError("range payload needs a non-negative file offset and no record IDs")
         elif self.storage == "fds-records":
-            if self.file_offset is not None or not record_ids or any(
-                not isinstance(item, int)
-                or isinstance(item, bool)
-                or not 0 <= item <= 0xFF
-                for item in record_ids
-            ) or len(set(record_ids)) != len(record_ids):
-                raise AuthoringError(
-                    "FDS payload needs unique byte record IDs and no file offset"
+            if (
+                self.file_offset is not None
+                or not record_ids
+                or any(
+                    not isinstance(item, int) or isinstance(item, bool) or not 0 <= item <= 0xFF for item in record_ids
                 )
+                or len(set(record_ids)) != len(record_ids)
+            ):
+                raise AuthoringError("FDS payload needs unique byte record IDs and no file offset")
         else:
             raise AuthoringError(f"unsupported payload storage {self.storage!r}")
         if self.load_address is not None and (
@@ -226,9 +218,7 @@ class RevisionSpec:
         if not re.fullmatch(r"[0-9a-f]{64}", self.sha256):
             raise AuthoringError("revision sha256 must be lowercase SHA-256")
         stable_identifier(self.container, "revision container")
-        if self.mapper is not None and (
-            not isinstance(self.mapper, int) or self.mapper < 0
-        ):
+        if self.mapper is not None and (not isinstance(self.mapper, int) or self.mapper < 0):
             raise AuthoringError("revision mapper must be a non-negative integer")
         if self.capabilities is not None:
             capabilities = tuple(self.capabilities)
@@ -247,9 +237,7 @@ class RevisionSpec:
             object.__setattr__(self, "resources", resources)
         resource_overrides = tuple(self.resource_overrides)
         if self.resources is not None and resource_overrides:
-            raise AuthoringError(
-                "revision resources and resource overrides are mutually exclusive"
-            )
+            raise AuthoringError("revision resources and resource overrides are mutually exclusive")
         override_ids = [value.resource_id for value in resource_overrides]
         if len(set(override_ids)) != len(override_ids):
             raise AuthoringError("revision resource override ids must be unique")
@@ -261,14 +249,13 @@ class RevisionSpec:
         object.__setattr__(self, "payloads", payloads)
         if self.playtest is not None:
             expected = {
-                "room_load_address": (0x8000, 0xffff),
-                "gameplay_address": (0x8000, 0xffff),
-                "current_room_address": (0, 0x07ff),
+                "room_load_address": (0x8000, 0xFFFF),
+                "gameplay_address": (0x8000, 0xFFFF),
+                "current_room_address": (0, 0x07FF),
                 "start_frame": (1, 3598),
                 "ready_frames": (3, 3600),
             }
-            if not isinstance(self.playtest, Mapping) \
-                    or set(self.playtest) != set(expected):
+            if not isinstance(self.playtest, Mapping) or set(self.playtest) != set(expected):
                 raise AuthoringError("revision playtest contract has invalid keys")
             for name, (minimum, maximum) in expected.items():
                 value = self.playtest[name]
@@ -276,8 +263,7 @@ class RevisionSpec:
                     raise AuthoringError(f"revision playtest {name} is out of range")
             if self.playtest["ready_frames"] <= self.playtest["start_frame"] + 2:
                 raise AuthoringError("revision playtest ready_frames is too early")
-            object.__setattr__(self, "playtest",
-                               MappingProxyType(dict(self.playtest)))
+            object.__setattr__(self, "playtest", MappingProxyType(dict(self.playtest)))
 
 
 @dataclass(frozen=True)
@@ -337,30 +323,21 @@ class GameProfile:
             }
             if unknown_payloads:
                 raise AuthoringError(
-                    f"revision {revision.revision_id} has unknown resource payload "
-                    f"{sorted(unknown_payloads)[0]!r}"
+                    f"revision {revision.revision_id} has unknown resource payload {sorted(unknown_payloads)[0]!r}"
                 )
 
     def _revision(self, revision: RevisionSpec | str) -> RevisionSpec:
         if isinstance(revision, RevisionSpec):
             return revision
         revision_id = revision
-        matches = [
-            item for item in self.revisions if item.revision_id == revision_id
-        ]
+        matches = [item for item in self.revisions if item.revision_id == revision_id]
         if len(matches) != 1:
-            raise AuthoringError(
-                f"unknown revision {revision_id!r} in {self.game_id}"
-            )
+            raise AuthoringError(f"unknown revision {revision_id!r} in {self.game_id}")
         return matches[0]
 
     def capabilities_for(self, revision: RevisionSpec | str) -> tuple[str, ...]:
         selected = self._revision(revision)
-        return (
-            self.capabilities
-            if selected.capabilities is None
-            else selected.capabilities
-        )
+        return self.capabilities if selected.capabilities is None else selected.capabilities
 
     def resources_for(self, revision: RevisionSpec | str) -> tuple[ResourceSpec, ...]:
         selected = self._revision(revision)
@@ -368,17 +345,10 @@ class GameProfile:
             return selected.resources
         if not selected.resource_overrides:
             return self.resources
-        overrides = {
-            item.resource_id: item for item in selected.resource_overrides
-        }
-        unknown = set(overrides) - {
-            item.resource_id for item in self.resources
-        }
+        overrides = {item.resource_id: item for item in selected.resource_overrides}
+        unknown = set(overrides) - {item.resource_id for item in self.resources}
         if unknown:
-            raise AuthoringError(
-                f"revision {selected.revision_id} overrides unknown resource "
-                f"{sorted(unknown)[0]!r}"
-            )
+            raise AuthoringError(f"revision {selected.revision_id} overrides unknown resource {sorted(unknown)[0]!r}")
         return tuple(
             replace(
                 item,
@@ -397,23 +367,14 @@ class GameProfile:
             for item in self.resources
         )
 
-    def payload_for(
-        self, revision: RevisionSpec | str, payload_id: str
-    ) -> PayloadSpec:
+    def payload_for(self, revision: RevisionSpec | str, payload_id: str) -> PayloadSpec:
         selected = self._revision(revision)
-        matches = [
-            payload for payload in selected.payloads
-            if payload.payload_id == payload_id
-        ]
+        matches = [payload for payload in selected.payloads if payload.payload_id == payload_id]
         if len(matches) != 1:
-            raise AuthoringError(
-                f"unknown payload {payload_id!r} in {self.game_id}/{selected.revision_id}"
-            )
+            raise AuthoringError(f"unknown payload {payload_id!r} in {self.game_id}/{selected.revision_id}")
         return matches[0]
 
-    def resource(
-        self, resource_id: str, revision: RevisionSpec | str | None = None
-    ) -> ResourceSpec:
+    def resource(self, resource_id: str, revision: RevisionSpec | str | None = None) -> ResourceSpec:
         resources = self.resources if revision is None else self.resources_for(revision)
         matches = [item for item in resources if item.resource_id == resource_id]
         if len(matches) != 1:
@@ -475,10 +436,7 @@ class BuildPlan:
     def apply(self, source: bytes) -> bytes:
         actual_sha256 = hashlib.sha256(source).hexdigest()
         if actual_sha256 != self.source_sha256:
-            raise AuthoringError(
-                f"build plan source SHA-256 is {actual_sha256}, "
-                f"expected {self.source_sha256}"
-            )
+            raise AuthoringError(f"build plan source SHA-256 is {actual_sha256}, expected {self.source_sha256}")
 
         reader = BinaryReader(source, "build source")
         replacements: dict[int, int] = {}
@@ -488,21 +446,16 @@ class BuildPlan:
             actual = reader.read(offset, change.span.size)
             if actual != change.expected:
                 raise AuthoringError(
-                    f"stale change at {change.span.start.display()}: "
-                    "source bytes differ from the plan"
+                    f"stale change at {change.span.start.display()}: source bytes differ from the plan"
                 )
-            for relative, (expected, replacement) in enumerate(
-                zip(change.expected, change.replacement)
-            ):
+            for relative, (expected, replacement) in enumerate(zip(change.expected, change.replacement)):
                 position = offset + relative
                 previous_expected = expectations.get(position)
                 previous_replacement = replacements.get(position)
                 if previous_expected is not None and (
                     previous_expected != expected or previous_replacement != replacement
                 ):
-                    raise AuthoringError(
-                        f"conflicting build changes at file:0x{position:X}"
-                    )
+                    raise AuthoringError(f"conflicting build changes at file:0x{position:X}")
                 expectations[position] = expected
                 replacements[position] = replacement
 

@@ -8,30 +8,56 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from retrolarium_kit.core.authoring import GameProfile, ResourceSpec, RevisionSpec
-from retrolarium_kit.games.castle_excellent.screens import CastleExcellentScreensError, build_screens, decode_screens, parse_screens_document
+from retrolarium_kit.games.castle_excellent.screens import (
+    CastleExcellentScreensError,
+    build_screens,
+    decode_screens,
+    parse_screens_document,
+)
 
 
 def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
     prg = bytearray(0x8000)
     message = bytes((0x77, 0x71, 0x7D, 0x75)) + b"\x00"
-    prg[0x7E84:0x7E84 + len(message)] = message
+    prg[0x7E84 : 0x7E84 + len(message)] = message
     chr_data = bytearray(0x8000)
     for page in (0x14, 0x18):
         start = 0x6000 + page * 256
-        chr_data[start:start + 1024] = bytes((page + i) & 0xFF for i in range(1024))
+        chr_data[start : start + 1024] = bytes((page + i) & 0xFF for i in range(1024))
     header = b"NES\x1a" + bytes((2, 4, 0x31, 0)) + bytes(8)
     source = header + bytes(prg) + bytes(chr_data)
     revision = RevisionSpec(
-        "probe", "Castle Excellent probe", len(source), hashlib.sha1(source).hexdigest(),
-        hashlib.sha256(source).hexdigest(), "ines", 3,
+        "probe",
+        "Castle Excellent probe",
+        len(source),
+        hashlib.sha1(source).hexdigest(),
+        hashlib.sha256(source).hexdigest(),
+        "ines",
+        3,
     )
     profile = GameProfile(
-        "castle-excellent", 1, "Castle Excellent probe", "nes", ("screens",), (revision,),
-        (ResourceSpec("screens", "screens", "castle-excellent.screens.v1", "fixed", {
-            "chr_file_offset": 16 + 0x8000 + 0x6000, "pages": [0x14, 0x18],
-            "page_names": ["completion", "title"], "chr_banks": [0, 1],
-            "game_over_cpu": 0xFE84, "game_over_length": 4,
-        }),),
+        "castle-excellent",
+        1,
+        "Castle Excellent probe",
+        "nes",
+        ("screens",),
+        (revision,),
+        (
+            ResourceSpec(
+                "screens",
+                "screens",
+                "castle-excellent.screens.v1",
+                "fixed",
+                {
+                    "chr_file_offset": 16 + 0x8000 + 0x6000,
+                    "pages": [0x14, 0x18],
+                    "page_names": ["completion", "title"],
+                    "chr_banks": [0, 1],
+                    "game_over_cpu": 0xFE84,
+                    "game_over_length": 4,
+                },
+            ),
+        ),
     )
     return source, profile, revision
 

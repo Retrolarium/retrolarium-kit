@@ -23,11 +23,10 @@ def decode_metatiles(visual: bytes, collision: bytes) -> dict[str, object]:
     palettes = list(visual[:METATILE_COUNT])
     if any(value > 3 for value in palettes):
         raise DoraemonWorld2MetatileError("World 2 palette selector is outside 0..3")
-    tiles = [list(visual[METATILE_COUNT + index * 4:
-                         METATILE_COUNT + (index + 1) * 4])
-             for index in range(METATILE_COUNT)]
-    solid = [bool(collision[index // 8] & (0x80 >> (index % 8)))
-             for index in range(METATILE_COUNT)]
+    tiles = [
+        list(visual[METATILE_COUNT + index * 4 : METATILE_COUNT + (index + 1) * 4]) for index in range(METATILE_COUNT)
+    ]
+    solid = [bool(collision[index // 8] & (0x80 >> (index % 8))) for index in range(METATILE_COUNT)]
     return {"palettes": palettes, "tiles": tiles, "solid": solid}
 
 
@@ -39,23 +38,20 @@ def encode_metatiles(value: Mapping[str, object]) -> tuple[bytes, bytes]:
     solid = value["solid"]
     if not isinstance(palettes, list) or len(palettes) != METATILE_COUNT:
         raise DoraemonWorld2MetatileError("World 2 needs 208 palette selectors")
-    if any(not isinstance(item, int) or isinstance(item, bool)
-           or not 0 <= item <= 3 for item in palettes):
+    if any(not isinstance(item, int) or isinstance(item, bool) or not 0 <= item <= 3 for item in palettes):
         raise DoraemonWorld2MetatileError("World 2 palette selector is outside 0..3")
     if not isinstance(tiles, list) or len(tiles) != METATILE_COUNT:
         raise DoraemonWorld2MetatileError("World 2 needs 208 tile quads")
     tile_bytes = bytearray()
     for index, quad in enumerate(tiles):
-        if not isinstance(quad, list) or len(quad) != 4 or any(
-            not isinstance(item, int) or isinstance(item, bool)
-            or not 0 <= item <= 255 for item in quad
+        if (
+            not isinstance(quad, list)
+            or len(quad) != 4
+            or any(not isinstance(item, int) or isinstance(item, bool) or not 0 <= item <= 255 for item in quad)
         ):
-            raise DoraemonWorld2MetatileError(
-                f"World 2 tile quad {index} needs four CHR tile IDs"
-            )
+            raise DoraemonWorld2MetatileError(f"World 2 tile quad {index} needs four CHR tile IDs")
         tile_bytes.extend(quad)
-    if not isinstance(solid, list) or len(solid) != METATILE_COUNT \
-            or any(not isinstance(item, bool) for item in solid):
+    if not isinstance(solid, list) or len(solid) != METATILE_COUNT or any(not isinstance(item, bool) for item in solid):
         raise DoraemonWorld2MetatileError("World 2 needs 208 collision flags")
     collision = bytearray(COLLISION_SIZE)
     for index, enabled in enumerate(solid):

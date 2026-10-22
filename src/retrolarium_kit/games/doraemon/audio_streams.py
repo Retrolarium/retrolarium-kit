@@ -86,20 +86,14 @@ def bank_slice(prg: bytes, bank: int, address: int, size: int) -> bytes:
     offset = bank_offset(bank, address)
     if size < 0 or offset + size > (bank + 1) * BANK_SIZE:
         raise ValueError(f"bank {bank} range is outside PRG: ${address:04X}+{size}")
-    return prg[offset:offset + size]
+    return prg[offset : offset + size]
 
 
 def command_grammar(music: dict[str, Any]) -> dict[int, tuple[str, int]]:
-    grammar = {
-        number(item["opcode"]): (str(item["name"]), int(item["operand_bytes"]))
-        for item in music["commands"]
-    }
+    grammar = {number(item["opcode"]): (str(item["name"]), int(item["operand_bytes"])) for item in music["commands"]}
     if set(grammar) != set(range(0xEF, 0x100)):
         raise ValueError("music command grammar does not cover $EF-$FF")
-    expected = {
-        opcode: (name, operand_count)
-        for opcode, operand_count, name in EXPECTED_COMMANDS
-    }
+    expected = {opcode: (name, operand_count) for opcode, operand_count, name in EXPECTED_COMMANDS}
     if grammar != expected:
         raise ValueError("music command grammar differs from the interpreter ABI")
     return grammar
@@ -142,11 +136,7 @@ def next_state(
             loop_iteration=1,
         )
     if name == "RepeatCountedLoop":
-        if (
-            state.loop_start is None
-            or state.loop_limit is None
-            or state.loop_iteration is None
-        ):
+        if state.loop_start is None or state.loop_limit is None or state.loop_iteration is None:
             raise ValueError(f"counted-loop repeat lacks a start at ${token.address:04X}")
         if state.loop_iteration < state.loop_limit:
             return replace(
@@ -189,9 +179,7 @@ def register_token(
     for address in range(token.address, token.address + len(token.raw)):
         owner = byte_owners.get(address)
         if owner is not None and owner != token.address:
-            raise ValueError(
-                f"token at ${token.address:04X} overlaps token at ${owner:04X}"
-            )
+            raise ValueError(f"token at ${token.address:04X} overlaps token at ${owner:04X}")
         byte_owners[address] = token.address
     tokens[token.address] = token
 
@@ -211,9 +199,7 @@ def trace_channel(
     visited: set[StreamState] = set()
     while state not in visited:
         if len(visited) >= MAX_STATES_PER_CHANNEL:
-            raise ValueError(
-                f"bank {bank} track {track_id} channel {channel} exceeds state limit"
-            )
+            raise ValueError(f"bank {bank} track {track_id} channel {channel} exceeds state limit")
         visited.add(state)
         token = decode_token(prg, bank, state.pc, grammar)
         register_token(token, tokens, byte_owners)
@@ -269,16 +255,11 @@ def parse_event(text: str, address: int) -> Token:
         if fields[0] != expected_kind or not 0 <= opcode < 0xEF:
             raise ValueError(f"music event class differs at ${address:04X}")
         return Token(address, opcode, expected_kind, expected_kind.title(), ())
-    commands = {
-        name: (opcode, operand_count)
-        for opcode, operand_count, name in EXPECTED_COMMANDS
-    }
+    commands = {name: (opcode, operand_count) for opcode, operand_count, name in EXPECTED_COMMANDS}
     if fields[0] not in commands:
         raise ValueError(f"unknown music command {fields[0]} at ${address:04X}")
     opcode, operand_count = commands[fields[0]]
-    if len(fields) != operand_count + 1 or any(
-        not field.startswith("$") for field in fields[1:]
-    ):
+    if len(fields) != operand_count + 1 or any(not field.startswith("$") for field in fields[1:]):
         raise ValueError(f"wrong operand count for {fields[0]} at ${address:04X}")
     operands = tuple(int(field[1:], 16) for field in fields[1:])
     if any(not 0 <= value <= 0xFF for value in operands):
@@ -302,8 +283,7 @@ def scan_driver(
     headers: list[tuple[int, ...]] = []
     for offset in range(0, len(header_raw), 8):
         header = tuple(
-            int.from_bytes(header_raw[index:index + 2], "little")
-            for index in range(offset, offset + 8, 2)
+            int.from_bytes(header_raw[index : index + 2], "little") for index in range(offset, offset + 8, 2)
         )
         if any(not CPU_BASE <= pointer <= 0xFFFF for pointer in header):
             raise ValueError(f"bank {bank} header contains a non-PRG pointer")
@@ -329,15 +309,11 @@ def scan_driver(
 
     used_addresses = set(byte_owners)
     segments = contiguous_segments(used_addresses)
-    command_counts = Counter(
-        token.name for token in tokens.values() if token.kind == "command"
-    )
+    command_counts = Counter(token.name for token in tokens.values() if token.kind == "command")
     segment_documents = []
     for start, end in segments:
         segment_tokens = [
-            token
-            for token in sorted(tokens.values(), key=lambda item: item.address)
-            if start <= token.address <= end
+            token for token in sorted(tokens.values(), key=lambda item: item.address) if start <= token.address <= end
         ]
         cursor = start
         for token in segment_tokens:
@@ -346,12 +322,14 @@ def scan_driver(
             cursor += len(token.raw)
         if cursor != end + 1:
             raise ValueError(f"music segment does not end at ${end:04X}")
-        segment_documents.append({
-            "address": f"0x{start:04X}",
-            "end_address": f"0x{end:04X}",
-            "size": end - start + 1,
-            "events": [event_text(token) for token in segment_tokens],
-        })
+        segment_documents.append(
+            {
+                "address": f"0x{start:04X}",
+                "end_address": f"0x{end:04X}",
+                "size": end - start + 1,
+                "events": [event_text(token) for token in segment_tokens],
+            }
+        )
     return {
         "bank": bank,
         "name": str(driver["name"]),
@@ -375,9 +353,7 @@ def scan_driver(
             "command_count": sum(command_counts.values()),
             "command_histogram": dict(sorted(command_counts.items())),
             "cycle_paths": sum(path["termination"] == "cycle" for path in paths),
-            "ended_paths": sum(
-                path["termination"] == "end-channel" for path in paths
-            ),
+            "ended_paths": sum(path["termination"] == "end-channel" for path in paths),
         },
     }
 
@@ -429,9 +405,7 @@ def encode_driver(driver: dict[str, Any]) -> bytes:
 
 
 def encode_authoring(document: dict[str, Any]) -> bytes:
-    if document.get("schema_version") != 1 or document.get("format") != (
-        "doraemon-music-streams"
-    ):
+    if document.get("schema_version") != 1 or document.get("format") != ("doraemon-music-streams"):
         raise ValueError("unsupported music-stream authoring schema")
     drivers = document.get("drivers", [])
     if [int(driver["bank"]) for driver in drivers] != list(range(4)):
@@ -481,19 +455,8 @@ def validate_authoring(
         errors.append(str(exc))
     return errors, {
         "driver_count": len(expected["drivers"]),
-        "track_count": sum(
-            int(driver["track_count"]) for driver in expected["drivers"]
-        ),
-        "header_bytes": sum(
-            int(driver["metrics"]["header_bytes"])
-            for driver in expected["drivers"]
-        ),
-        "reachable_bytes": sum(
-            int(driver["metrics"]["reachable_bytes"])
-            for driver in expected["drivers"]
-        ),
-        "token_count": sum(
-            int(driver["metrics"]["token_count"])
-            for driver in expected["drivers"]
-        ),
+        "track_count": sum(int(driver["track_count"]) for driver in expected["drivers"]),
+        "header_bytes": sum(int(driver["metrics"]["header_bytes"]) for driver in expected["drivers"]),
+        "reachable_bytes": sum(int(driver["metrics"]["reachable_bytes"]) for driver in expected["drivers"]),
+        "token_count": sum(int(driver["metrics"]["token_count"]) for driver in expected["drivers"]),
     }

@@ -23,12 +23,15 @@ from retrolarium_kit.core.build_toolchains import BuildToolchainError, materiali
 from retrolarium_kit.games.flicky.bonus_motion import export_bonus_motion, validate_bonus_motion
 from retrolarium_kit.games.flicky.demo import export_attract_demos, validate_attract_demos
 from retrolarium_kit.games.flicky.bonus_placement import (
-    export_bonus_placements, validate_bonus_placements,
+    export_bonus_placements,
+    validate_bonus_placements,
 )
 from retrolarium_kit.games.flicky.title_layout import export_title_layout, validate_title_layout
 from retrolarium_kit.games.flicky.workspace.build import build_content
 from retrolarium_kit.games.flicky.workspace.content import (
-    FlickyWorkspaceError, initialize as initialize_workspace, validate_workspace,
+    FlickyWorkspaceError,
+    initialize as initialize_workspace,
+    validate_workspace,
 )
 
 
@@ -60,8 +63,7 @@ def _sha256(path: Path) -> str:
 
 
 def _canonical_rom(path: Path) -> None:
-    if not path.is_file() or path.stat().st_size != CANONICAL_SIZE \
-            or _sha256(path) != CANONICAL_SHA256:
+    if not path.is_file() or path.stat().st_size != CANONICAL_SIZE or _sha256(path) != CANONICAL_SHA256:
         raise FlickyContentError("Flicky requires the exact canonical (UE) ROM")
 
 
@@ -72,13 +74,17 @@ def _source_names(source_root: Path) -> list[str]:
     if not (source_root / ".git").exists():
         return sorted(
             path.relative_to(source_root).as_posix()
-            for top in SOURCE_PATHS if (source_root / top).is_dir()
+            for top in SOURCE_PATHS
+            if (source_root / top).is_dir()
             for path in (source_root / top).rglob("*")
             if path.is_file() and path.suffix != ".bin" and "__pycache__" not in path.parts
         )
-    result = subprocess.run(["git", "ls-files", "-z", "--cached", "--",
-                             *SOURCE_PATHS], cwd=source_root,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    result = subprocess.run(
+        ["git", "ls-files", "-z", "--cached", "--", *SOURCE_PATHS],
+        cwd=source_root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
     if result.returncode:
         raise FlickyContentError("Flicky source must be a readable Git checkout")
     return [os.fsdecode(raw) for raw in result.stdout.split(b"\0") if raw]
@@ -88,8 +94,7 @@ def _tracked_files(source_root: Path) -> list[Path]:
     files: list[Path] = []
     for name in _source_names(source_root):
         portable = PurePosixPath(name)
-        if portable.is_absolute() or PureWindowsPath(name).is_absolute() \
-                or "\\" in name or ".." in portable.parts:
+        if portable.is_absolute() or PureWindowsPath(name).is_absolute() or "\\" in name or ".." in portable.parts:
             raise FlickyContentError(f"unsafe source path: {name}")
         path = source_root.joinpath(*portable.parts)
         if path.is_symlink() or not path.is_file():
@@ -121,12 +126,19 @@ def _extract_assets(snapshot: Path, rom: Path) -> None:
             expected_sha1 = asset["sha1"]
         except (KeyError, TypeError, ValueError) as exc:
             raise FlickyContentError("invalid Flicky asset entry") from exc
-        if relative.is_absolute() or PureWindowsPath(asset["path"]).is_absolute() \
-                or "\\" in asset["path"] or ".." in relative.parts or not relative.parts \
-                or not isinstance(size, int) or size <= 0 or address < 0 \
-                or address + size > len(image):
+        if (
+            relative.is_absolute()
+            or PureWindowsPath(asset["path"]).is_absolute()
+            or "\\" in asset["path"]
+            or ".." in relative.parts
+            or not relative.parts
+            or not isinstance(size, int)
+            or size <= 0
+            or address < 0
+            or address + size > len(image)
+        ):
             raise FlickyContentError(f"invalid Flicky asset range: {relative}")
-        content = image[address:address + size]
+        content = image[address : address + size]
         if hashlib.sha1(content).hexdigest() != expected_sha1:
             raise FlickyContentError(f"Flicky asset hash differs: {relative}")
         target = snapshot / "data" / Path(*relative.parts)
@@ -143,25 +155,34 @@ def _validate_snapshot(source: Path) -> None:
         record = json.loads((source / SNAPSHOT_RECORD).read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise FlickyContentError(f"cannot read Flicky snapshot record: {exc}") from exc
-    if record.get("schema") != "retrolarium.flicky-source-snapshot" \
-            or record.get("schema_version") != 1 \
-            or record.get("canonical_sha256") != CANONICAL_SHA256 \
-            or not isinstance(record.get("files"), dict):
+    if (
+        record.get("schema") != "retrolarium.flicky-source-snapshot"
+        or record.get("schema_version") != 1
+        or record.get("canonical_sha256") != CANONICAL_SHA256
+        or not isinstance(record.get("files"), dict)
+    ):
         raise FlickyContentError("Flicky snapshot record is unsupported")
     for name, expected in record["files"].items():
         relative = PurePosixPath(name)
-        if relative.is_absolute() or PureWindowsPath(name).is_absolute() \
-                or "\\" in name or ".." in relative.parts or not relative.parts:
+        if (
+            relative.is_absolute()
+            or PureWindowsPath(name).is_absolute()
+            or "\\" in name
+            or ".." in relative.parts
+            or not relative.parts
+        ):
             raise FlickyContentError(f"unsafe Flicky snapshot path: {name}")
         path = source.joinpath(*relative.parts)
-        if not path.resolve().is_relative_to(source.resolve()) \
-                or not path.is_file() or path.is_symlink() or _sha256(path) != expected:
+        if (
+            not path.resolve().is_relative_to(source.resolve())
+            or not path.is_file()
+            or path.is_symlink()
+            or _sha256(path) != expected
+        ):
             raise FlickyContentError(f"Flicky source snapshot changed: {name}")
 
 
-def import_flicky_source(
-    source_root: Path, canonical_rom: Path, project_root: Path
-) -> dict[str, object]:
+def import_flicky_source(source_root: Path, canonical_rom: Path, project_root: Path) -> dict[str, object]:
     """Create a self-contained source/workspace copy without touching source_root."""
 
     source_root = source_root.resolve()
@@ -189,26 +210,20 @@ def import_flicky_source(
         levels = json.loads(levels_path.read_text(encoding="utf-8"))
         levels["bonus_placements"] = export_bonus_placements(staging)
         levels["attract_demos"] = export_attract_demos(staging)
-        levels_path.write_text(json.dumps(levels, indent=2) + "\n",
-                               encoding="utf-8", newline="\n")
+        levels_path.write_text(json.dumps(levels, indent=2) + "\n", encoding="utf-8", newline="\n")
         sequences_path = staging / WORKSPACE_FILES["graphics_sequences"]
         sequences = json.loads(sequences_path.read_text(encoding="utf-8"))
         sequences["bonus_motion"] = export_bonus_motion(staging)
-        sequences_path.write_text(json.dumps(sequences, indent=2) + "\n",
-                                  encoding="utf-8", newline="\n")
+        sequences_path.write_text(json.dumps(sequences, indent=2) + "\n", encoding="utf-8", newline="\n")
         semantics_path = staging / WORKSPACE_FILES["graphics_semantics"]
         semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
         semantics["title_layout"] = export_title_layout(staging)
-        semantics_path.write_text(json.dumps(semantics, indent=2) + "\n",
-                                  encoding="utf-8", newline="\n")
+        semantics_path.write_text(json.dumps(semantics, indent=2) + "\n", encoding="utf-8", newline="\n")
         for relative in WORKSPACE_FILES.values():
             if not (staging / relative).is_file():
                 raise FlickyContentError(f"Flicky workspace missing {relative}")
-        asset_manifest = json.loads(
-            (staging / "assets/manifest.json").read_text(encoding="utf-8")
-        )
-        asset_files = [Path("data", *PurePosixPath(item["path"]).parts)
-                       for item in asset_manifest["assets"]]
+        asset_manifest = json.loads((staging / "assets/manifest.json").read_text(encoding="utf-8"))
+        asset_files = [Path("data", *PurePosixPath(item["path"]).parts) for item in asset_manifest["assets"]]
         snapshot_record = {
             "schema": "retrolarium.flicky-source-snapshot",
             "schema_version": 1,
@@ -223,8 +238,12 @@ def import_flicky_source(
     finally:
         if staging.exists():
             shutil.rmtree(staging)
-    return {"source": str(destination), "source_sha256": CANONICAL_SHA256,
-            "tracked_files": len(files), "documents": WORKSPACE_FILES.copy()}
+    return {
+        "source": str(destination),
+        "source_sha256": CANONICAL_SHA256,
+        "tracked_files": len(files),
+        "documents": WORKSPACE_FILES.copy(),
+    }
 
 
 def validate_flicky_source_snapshot(project_root: Path) -> dict[str, str]:
@@ -236,26 +255,24 @@ def validate_flicky_source_snapshot(project_root: Path) -> dict[str, str]:
     for relative in WORKSPACE_FILES.values():
         if not (source / relative).is_file():
             raise FlickyContentError(f"Flicky workspace missing {relative}")
-    sequences = json.loads((source / WORKSPACE_FILES["graphics_sequences"])
-                           .read_text(encoding="utf-8"))
+    sequences = json.loads((source / WORKSPACE_FILES["graphics_sequences"]).read_text(encoding="utf-8"))
     validate_bonus_motion(sequences, source)
-    levels = json.loads((source / WORKSPACE_FILES["level_layouts"])
-                        .read_text(encoding="utf-8"))
+    levels = json.loads((source / WORKSPACE_FILES["level_layouts"]).read_text(encoding="utf-8"))
     validate_bonus_placements(levels, source)
     validate_attract_demos(levels, source)
-    semantics = json.loads((source / WORKSPACE_FILES["graphics_semantics"])
-                           .read_text(encoding="utf-8"))
+    semantics = json.loads((source / WORKSPACE_FILES["graphics_semantics"]).read_text(encoding="utf-8"))
     validate_title_layout(semantics, source)
     try:
         validate_workspace(source)
     except FlickyWorkspaceError as exc:
         raise FlickyContentError(str(exc)) from exc
-    return {key: _sha256(source / relative)
-            for key, relative in WORKSPACE_FILES.items()}
+    return {key: _sha256(source / relative) for key, relative in WORKSPACE_FILES.items()}
 
 
 def build_flicky_source_snapshot(
-    project_root: Path, *, native_writer: Path | None = None,
+    project_root: Path,
+    *,
+    native_writer: Path | None = None,
 ) -> dict[str, object]:
     """Build edited Flicky documents in the imported snapshot and publish a ROM."""
 
@@ -268,8 +285,11 @@ def build_flicky_source_snapshot(
         as_bin, p2bin = tools.command("asl"), tools.command("p2bin")
     except BuildToolchainError as exc:
         raise FlickyContentError(f"Flicky assembler tools are unavailable: {exc}") from exc
-    selected_writer = native_writer or os.environ.get("RETROLARIUM_FLICKY_LEVEL_WRITER") \
+    selected_writer = (
+        native_writer
+        or os.environ.get("RETROLARIUM_FLICKY_LEVEL_WRITER")
         or shutil.which("retrolarium-flicky-level-writer")
+    )
     if not selected_writer:
         raise FlickyContentError(
             "native Flicky level writer is required; pass "
@@ -289,8 +309,7 @@ def build_flicky_source_snapshot(
     output_dir = project_root / "build"
     output_dir.mkdir(parents=True, exist_ok=True)
     output = output_dir / "flicky-edited.bin"
-    descriptor, temporary_name = tempfile.mkstemp(prefix=".flicky-", suffix=".bin",
-                                                   dir=output_dir)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".flicky-", suffix=".bin", dir=output_dir)
     temporary = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "wb") as stream:
@@ -303,9 +322,13 @@ def build_flicky_source_snapshot(
         os.replace(temporary, output)
     finally:
         temporary.unlink(missing_ok=True)
-    return {"artifact": str(output), "size": output.stat().st_size,
-            "sha256": _sha256(output), "source_sha256": CANONICAL_SHA256,
-            "documents": document_hashes}
+    return {
+        "artifact": str(output),
+        "size": output.stat().st_size,
+        "sha256": _sha256(output),
+        "source_sha256": CANONICAL_SHA256,
+        "documents": document_hashes,
+    }
 
 
 def main() -> int:
@@ -320,12 +343,9 @@ def main() -> int:
     building.add_argument("--native-writer", type=Path)
     args = parser.parse_args()
     if args.operation == "import":
-        result = import_flicky_source(
-            args.source_root, args.canonical_rom, args.project_root
-        )
+        result = import_flicky_source(args.source_root, args.canonical_rom, args.project_root)
     else:
-        result = build_flicky_source_snapshot(
-            args.project_root, native_writer=args.native_writer)
+        result = build_flicky_source_snapshot(args.project_root, native_writer=args.native_writer)
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 

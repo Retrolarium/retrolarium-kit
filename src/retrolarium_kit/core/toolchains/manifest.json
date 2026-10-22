@@ -4,15 +4,10 @@
   "release": "2026.10.11",
   "suites": {
     "nes": {
-      "components": [
-        "cc65"
-      ]
+      "components": ["cc65"]
     },
     "megadrive": {
-      "components": [
-        "asl",
-        "p2bin"
-      ]
+      "components": ["asl", "p2bin"]
     }
   },
   "components": {

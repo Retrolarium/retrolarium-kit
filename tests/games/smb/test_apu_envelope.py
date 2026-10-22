@@ -13,10 +13,24 @@ from retrolarium_kit.games.smb.apu_envelope import (
 )
 
 
-SOURCE = bytes((
-    0x9F, 0x9B, 0x98, 0x96, 0x95, 0x94, 0x92, 0x90,
-    0x90, 0x9A, 0x97, 0x95, 0x93, 0x92,
-))
+SOURCE = bytes(
+    (
+        0x9F,
+        0x9B,
+        0x98,
+        0x96,
+        0x95,
+        0x94,
+        0x92,
+        0x90,
+        0x90,
+        0x9A,
+        0x97,
+        0x95,
+        0x93,
+        0x92,
+    )
+)
 PARAMETERS = {"size": len(SOURCE)}
 
 
@@ -25,22 +39,31 @@ class SmbApuEnvelopeTests(unittest.TestCase):
         header = b"NES\x1a" + bytes((1, 1, 0, 0)) + bytes(8)
         source = bytearray(header + bytes(0x4000) + bytes(0x2000))
         file_offset = 0x120
-        source[file_offset:file_offset + len(SOURCE)] = SOURCE
+        source[file_offset : file_offset + len(SOURCE)] = SOURCE
         image = bytes(source)
         revision = RevisionSpec(
-            "probe", "Envelope probe", len(image),
-            hashlib.sha1(image).hexdigest(), hashlib.sha256(image).hexdigest(),
-            "ines", mapper=0,
+            "probe",
+            "Envelope probe",
+            len(image),
+            hashlib.sha1(image).hexdigest(),
+            hashlib.sha256(image).hexdigest(),
+            "ines",
+            mapper=0,
         )
         profile = GameProfile(
-            "smb-envelope-probe", 1, "SMB envelope probe", "nes",
-            ("audio",), (revision,),
+            "smb-envelope-probe",
+            1,
+            "SMB envelope probe",
+            "nes",
+            ("audio",),
+            (revision,),
             (
+                ResourceSpec("bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"),
                 ResourceSpec(
-                    "bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"
-                ),
-                ResourceSpec(
-                    "swim-stomp", "audio", "smb.apu-envelope.v1", "fixed",
+                    "swim-stomp",
+                    "audio",
+                    "smb.apu-envelope.v1",
+                    "fixed",
                     {"file_offset": file_offset, **PARAMETERS},
                 ),
             ),
@@ -58,12 +81,8 @@ class SmbApuEnvelopeTests(unittest.TestCase):
 
     def test_round_trip_matches_legacy_swim_stomp_envelope(self) -> None:
         document = decode_envelope(SOURCE, PARAMETERS)
-        self.assertEqual(
-            {"duty": 2, "mode": 1, "volume": 15}, document["steps"][0]
-        )
-        self.assertEqual(
-            {"duty": 2, "mode": 1, "volume": 2}, document["steps"][-1]
-        )
+        self.assertEqual({"duty": 2, "mode": 1, "volume": 15}, document["steps"][0])
+        self.assertEqual({"duty": 2, "mode": 1, "volume": 2}, document["steps"][-1])
         self.assertEqual(SOURCE, encode_envelope(document, PARAMETERS))
 
     def test_known_edit_changes_only_one_packed_field(self) -> None:
@@ -96,9 +115,7 @@ class SmbApuEnvelopeTests(unittest.TestCase):
         ):
             invalid = copy.deepcopy(document)
             invalid["steps"][0][field] = value
-            with self.assertRaisesRegex(
-                SmbApuEnvelopeError, f"0..{maximum}"
-            ):
+            with self.assertRaisesRegex(SmbApuEnvelopeError, f"0..{maximum}"):
                 encode_envelope(invalid, PARAMETERS)
 
         boolean = copy.deepcopy(document)

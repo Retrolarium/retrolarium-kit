@@ -6,6 +6,7 @@ plays in frames 320-457 of its longplay; after aligning on the song's first
 32 writes, every audible write must equal the sequencer's, in order, and land
 within 2.1 frames of it. Registers $24-$27 are the driver's timer traffic.
 """
+
 from __future__ import annotations
 
 import csv
@@ -43,26 +44,35 @@ def gens_writes() -> list[tuple[int, tuple[int, int, int]]]:
     return result
 
 
-@unittest.skipUnless(TRACE.is_file() and SOURCE.is_file(),
-                     "Flicky's repository has no Gens sound trace (make trace-sound)")
+@unittest.skipUnless(
+    TRACE.is_file() and SOURCE.is_file(), "Flicky's repository has no Gens sound trace (make trace-sound)"
+)
 class FlickySoundTraceTests(unittest.TestCase):
     def test_title_song_matches_the_z80_driver_write_for_write(self) -> None:
         rendered = SoundSequencer.from_source(SOURCE, SOURCE).render("zMusic85Header", seconds=4.0)
-        expected = [(write.sample, (write.port, write.address, write.value)) for write in rendered.writes
-                    if write.chip == "ym2612" and write.address not in TIMER_REGISTERS]
+        expected = [
+            (write.sample, (write.port, write.address, write.value))
+            for write in rendered.writes
+            if write.chip == "ym2612" and write.address not in TIMER_REGISTERS
+        ]
         observed = gens_writes()
         signature = [write for _sample, write in expected[:SIGNATURE]]
-        starts = [index for index in range(len(observed) - SIGNATURE + 1)
-                  if [write for _frame, write in observed[index:index + SIGNATURE]] == signature]
+        starts = [
+            index
+            for index in range(len(observed) - SIGNATURE + 1)
+            if [write for _frame, write in observed[index : index + SIGNATURE]] == signature
+        ]
         self.assertEqual(1, len(starts), "the song must start exactly once in the trace")
-        actual = observed[starts[0]:]
+        actual = observed[starts[0] :]
         self.assertGreaterEqual(len(actual), MINIMUM_WRITES)
         self.assertGreaterEqual(len(expected), len(actual))
         for index, ((_frame, left), (_sample, right)) in enumerate(zip(actual, expected)):
             self.assertEqual(left, right, f"write {index}")
         first_frame, first_sample = actual[0][0], expected[0][0]
-        drift = max(abs((frame - first_frame) - (sample - first_sample) * FRAME_RATE / rendered.sample_rate)
-                    for (frame, _left), (sample, _right) in zip(actual, expected))
+        drift = max(
+            abs((frame - first_frame) - (sample - first_sample) * FRAME_RATE / rendered.sample_rate)
+            for (frame, _left), (sample, _right) in zip(actual, expected)
+        )
         self.assertLessEqual(drift, TOLERANCE_FRAMES)
 
 

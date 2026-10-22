@@ -16,8 +16,7 @@ class PacmanScreenError(AuthoringError):
 
 
 def _integer(value: object, name: str, minimum: int = 0, maximum: int = 0xFFFFFFFF) -> int:
-    if (not isinstance(value, int) or isinstance(value, bool)
-            or not minimum <= value <= maximum):
+    if not isinstance(value, int) or isinstance(value, bool) or not minimum <= value <= maximum:
         raise PacmanScreenError(f"{name} must be an integer in {minimum}..{maximum}")
     return value
 
@@ -26,8 +25,7 @@ def _bytes(value: object, name: str, count: int | None = None, maximum: int = 0x
     if not isinstance(value, list) or (count is not None and len(value) != count):
         expected = "a byte array" if count is None else f"exactly {count} bytes"
         raise PacmanScreenError(f"{name} must contain {expected}")
-    return [_integer(item, f"{name}[{index}]", maximum=maximum)
-            for index, item in enumerate(value)]
+    return [_integer(item, f"{name}[{index}]", maximum=maximum) for index, item in enumerate(value)]
 
 
 def _mapping(value: object, name: str) -> Mapping[str, object]:
@@ -52,7 +50,7 @@ def _section(spec: Mapping[str, object], name: str) -> tuple[int, int]:
 
 
 def _slice(source: bytes, offset: int, size: int, name: str) -> bytes:
-    payload = source[offset:offset + size]
+    payload = source[offset : offset + size]
     if len(payload) != size:
         raise PacmanScreenError(f"{name} exceeds the source image")
     return payload
@@ -81,9 +79,17 @@ def _encode_packet(value: object, payload_size: int, name: str) -> bytes:
 
 def _layout(parameters: Mapping[str, object]) -> dict[str, object]:
     required = {
-        "prg_cpu_base", "prg_file_offset", "title_logo", "title_packets",
-        "title_attributes", "fixed_blocks", "attract", "intermission_visual",
-        "read_only_tables", "encoding", "text_fields",
+        "prg_cpu_base",
+        "prg_file_offset",
+        "title_logo",
+        "title_packets",
+        "title_attributes",
+        "fixed_blocks",
+        "attract",
+        "intermission_visual",
+        "read_only_tables",
+        "encoding",
+        "text_fields",
     }
     if set(parameters) != required:
         raise PacmanScreenError("Pac-Man screen layout parameters have the wrong shape")
@@ -103,9 +109,11 @@ def _layout(parameters: Mapping[str, object]) -> dict[str, object]:
     title = _mapping(parameters.get("title_packets"), "title_packets")
     if set(title) != {"file_offset", "payload_sizes"}:
         raise PacmanScreenError("title_packets layout has the wrong shape")
-    title_sizes = tuple(_integer(item, "title packet size", 0, 0x10000)
-                        for item in title.get("payload_sizes", [])) \
-        if isinstance(title.get("payload_sizes"), list) else ()
+    title_sizes = (
+        tuple(_integer(item, "title packet size", 0, 0x10000) for item in title.get("payload_sizes", []))
+        if isinstance(title.get("payload_sizes"), list)
+        else ()
+    )
     if not title_sizes:
         raise PacmanScreenError("title_packets.payload_sizes must not be empty")
 
@@ -130,21 +138,29 @@ def _layout(parameters: Mapping[str, object]) -> dict[str, object]:
         if not isinstance(label, str) or not label:
             raise PacmanScreenError(f"fixed block {key} label must be non-empty")
         fixed_keys.add(key)
-        fixed.append({"key": key, "label": label,
-                      "file_offset": _integer(item.get("file_offset"), f"{key}.file_offset"),
-                      "size": _integer(item.get("size"), f"{key}.size", 1)})
+        fixed.append(
+            {
+                "key": key,
+                "label": label,
+                "file_offset": _integer(item.get("file_offset"), f"{key}.file_offset"),
+                "size": _integer(item.get("size"), f"{key}.size", 1),
+            }
+        )
 
     attract = _mapping(parameters.get("attract"), "attract")
     if set(attract) != {"pointer_file_offset", "packet_file_offsets", "payload_sizes"}:
         raise PacmanScreenError("attract layout has the wrong shape")
     attract_offsets = attract.get("packet_file_offsets")
     attract_sizes = attract.get("payload_sizes")
-    if (not isinstance(attract_offsets, list) or not isinstance(attract_sizes, list)
-            or not attract_offsets or len(attract_offsets) != len(attract_sizes)):
+    if (
+        not isinstance(attract_offsets, list)
+        or not isinstance(attract_sizes, list)
+        or not attract_offsets
+        or len(attract_offsets) != len(attract_sizes)
+    ):
         raise PacmanScreenError("attract offsets and payload sizes must have equal non-zero length")
     normalized_offsets = tuple(_integer(item, "attract packet offset") for item in attract_offsets)
-    normalized_sizes = tuple(_integer(item, "attract packet size", 0, 0x10000)
-                             for item in attract_sizes)
+    normalized_sizes = tuple(_integer(item, "attract packet size", 0, 0x10000) for item in attract_sizes)
     if tuple(sorted(normalized_offsets)) != normalized_offsets:
         raise PacmanScreenError("attract packet offsets must be ordered")
 
@@ -160,11 +176,14 @@ def _layout(parameters: Mapping[str, object]) -> dict[str, object]:
         if not isinstance(allowed, list):
             raise PacmanScreenError(f"intermission visual {key} allowed_values must be an array")
         visual_keys.add(key)
-        visual.append({"key": key,
-                       "file_offset": _integer(item.get("file_offset"), f"{key}.file_offset"),
-                       "size": _integer(item.get("size"), f"{key}.size", 1),
-                       "allowed_values": tuple(_integer(value, f"{key}.allowed_values", maximum=0xFF)
-                                               for value in allowed)})
+        visual.append(
+            {
+                "key": key,
+                "file_offset": _integer(item.get("file_offset"), f"{key}.file_offset"),
+                "size": _integer(item.get("size"), f"{key}.size", 1),
+                "allowed_values": tuple(_integer(value, f"{key}.allowed_values", maximum=0xFF) for value in allowed),
+            }
+        )
 
     read_only = []
     for index, item in enumerate(_records(parameters.get("read_only_tables"), "read_only_tables")):
@@ -174,15 +193,25 @@ def _layout(parameters: Mapping[str, object]) -> dict[str, object]:
         if not isinstance(key, str) or not key or kind not in ("bytes", "words"):
             raise PacmanScreenError(f"read_only_tables[{index}] metadata is invalid")
         cpu_address = _integer(item.get("cpu_address"), f"{key}.cpu_address", prg_cpu_base, 0xFFFF)
-        read_only.append({"key": key, "cpu_address": cpu_address, "kind": kind,
-                          "count": _integer(item.get("count"), f"{key}.count", 1),
-                          "file_offset": prg_file_offset + cpu_address - prg_cpu_base})
+        read_only.append(
+            {
+                "key": key,
+                "cpu_address": cpu_address,
+                "kind": kind,
+                "count": _integer(item.get("count"), f"{key}.count", 1),
+                "file_offset": prg_file_offset + cpu_address - prg_cpu_base,
+            }
+        )
 
     encoding = copy.deepcopy(_mapping(parameters.get("encoding"), "encoding"))
     characters = encoding.get("characters")
     codes = encoding.get("codes")
-    if (not isinstance(characters, str) or not isinstance(codes, list)
-            or len(characters) != len(codes) or len(set(characters)) != len(characters)):
+    if (
+        not isinstance(characters, str)
+        or not isinstance(codes, list)
+        or len(characters) != len(codes)
+        or len(set(characters)) != len(characters)
+    ):
         raise PacmanScreenError("screen text encoding characters/codes are invalid")
     normalized_codes = _bytes(codes, "encoding.codes", len(codes))
     if len(set(normalized_codes)) != len(normalized_codes):
@@ -192,8 +221,12 @@ def _layout(parameters: Mapping[str, object]) -> dict[str, object]:
     padding = _integer(encoding.get("padding"), "encoding.padding", maximum=0xFF)
     if padding not in normalized_codes:
         raise PacmanScreenError("screen text padding is not mapped")
-    encoding = {"characters": characters, "codes": normalized_codes,
-                "case_fold": encoding["case_fold"], "padding": padding}
+    encoding = {
+        "characters": characters,
+        "codes": normalized_codes,
+        "case_fold": encoding["case_fold"],
+        "padding": padding,
+    }
 
     text_fields = copy.deepcopy(_records(parameters.get("text_fields"), "text_fields"))
     keys: set[str] = set()
@@ -210,22 +243,34 @@ def _layout(parameters: Mapping[str, object]) -> dict[str, object]:
         field["width"] = _integer(field.get("width"), f"{key}.width", 1)
 
     return {
-        "prg_cpu_base": prg_cpu_base, "prg_file_offset": prg_file_offset,
+        "prg_cpu_base": prg_cpu_base,
+        "prg_file_offset": prg_file_offset,
         "title_logo": logo_layout,
-        "title_packets": {"file_offset": _integer(title.get("file_offset"),
-            "title_packets.file_offset"), "payload_sizes": title_sizes},
-        "title_attributes": attributes_layout, "fixed_blocks": fixed,
-        "attract": {"pointer_file_offset": _integer(attract.get("pointer_file_offset"),
-            "attract.pointer_file_offset"), "packet_file_offsets": normalized_offsets,
-            "payload_sizes": normalized_sizes},
-        "intermission_visual": visual, "read_only_tables": read_only,
-        "encoding": encoding, "text_fields": text_fields,
+        "title_packets": {
+            "file_offset": _integer(title.get("file_offset"), "title_packets.file_offset"),
+            "payload_sizes": title_sizes,
+        },
+        "title_attributes": attributes_layout,
+        "fixed_blocks": fixed,
+        "attract": {
+            "pointer_file_offset": _integer(attract.get("pointer_file_offset"), "attract.pointer_file_offset"),
+            "packet_file_offsets": normalized_offsets,
+            "payload_sizes": normalized_sizes,
+        },
+        "intermission_visual": visual,
+        "read_only_tables": read_only,
+        "encoding": encoding,
+        "text_fields": text_fields,
     }
 
 
 def _field_bytes(document: Mapping[str, object], path: Sequence[object]) -> list[int]:
-    if len(path) == 3 and path[0] in ("title_packets", "attract_packets") \
-            and isinstance(path[1], int) and path[2] == "bytes":
+    if (
+        len(path) == 3
+        and path[0] in ("title_packets", "attract_packets")
+        and isinstance(path[1], int)
+        and path[2] == "bytes"
+    ):
         packets = document.get(path[0])
         if isinstance(packets, list) and 0 <= path[1] < len(packets):
             values = packets[path[1]].get("bytes") if isinstance(packets[path[1]], Mapping) else None
@@ -253,7 +298,7 @@ def text_field_value(document: Mapping[str, object], key: str) -> str:
         raise PacmanScreenError(f"screen text field {key} exceeds its source")
     decode = dict(zip(encoding["codes"], encoding["characters"]))
     try:
-        return "".join(decode[value] for value in values[start:start + width]).rstrip()
+        return "".join(decode[value] for value in values[start : start + width]).rstrip()
     except KeyError as exc:
         raise PacmanScreenError(f"screen text field {key} contains unmapped tile ${exc.args[0]:02X}") from exc
 
@@ -268,8 +313,11 @@ def set_text_field(document: Mapping[str, object], key: str, text: str) -> dict[
         raise PacmanScreenError(f"unknown screen text field {key!r}")
     field = matches[0]
     encoding = _mapping(result.get("encoding"), "encoding")
-    normalized = text.upper() if encoding["case_fold"] == "upper" else (
-        text.lower() if encoding["case_fold"] == "lower" else text)
+    normalized = (
+        text.upper()
+        if encoding["case_fold"] == "upper"
+        else (text.lower() if encoding["case_fold"] == "lower" else text)
+    )
     width = int(field["width"])
     if len(normalized) > width:
         raise PacmanScreenError(f"screen text field {key} exceeds its fixed width")
@@ -281,7 +329,7 @@ def set_text_field(document: Mapping[str, object], key: str, text: str) -> dict[
     replacement.extend([encoding["padding"]] * (width - len(replacement)))
     values = _field_bytes(result, field["path"])
     start = int(field["start"])
-    values[start:start + width] = replacement
+    values[start : start + width] = replacement
     return result
 
 
@@ -296,12 +344,15 @@ def decode_screen_collection(source: bytes, parameters: Mapping[str, object]) ->
         cursor += size + 3
 
     attract_layout = layout["attract"]
-    pointer_data = _slice(source, attract_layout["pointer_file_offset"],
-                          len(attract_layout["packet_file_offsets"]) * 2, "attract pointers")
+    pointer_data = _slice(
+        source,
+        attract_layout["pointer_file_offset"],
+        len(attract_layout["packet_file_offsets"]) * 2,
+        "attract pointers",
+    )
     attract_packets = []
-    for index, (offset, size) in enumerate(zip(
-            attract_layout["packet_file_offsets"], attract_layout["payload_sizes"])):
-        pointer = int.from_bytes(pointer_data[index * 2:index * 2 + 2], "little")
+    for index, (offset, size) in enumerate(zip(attract_layout["packet_file_offsets"], attract_layout["payload_sizes"])):
+        pointer = int.from_bytes(pointer_data[index * 2 : index * 2 + 2], "little")
         expected = layout["prg_cpu_base"] + offset - layout["prg_file_offset"]
         if pointer != expected:
             raise PacmanScreenError(f"attract pointer {index} differs from the profile")
@@ -320,21 +371,30 @@ def decode_screen_collection(source: bytes, parameters: Mapping[str, object]) ->
     for item in layout["read_only_tables"]:
         width = 2 if item["kind"] == "words" else 1
         raw = _slice(source, item["file_offset"], item["count"] * width, item["key"])
-        values = ([int.from_bytes(raw[index:index + 2], "little")
-                   for index in range(0, len(raw), 2)] if width == 2 else list(raw))
-        read_only.append({key: item[key] for key in ("key", "cpu_address", "kind", "count")}
-                         | {"values": values})
+        values = (
+            [int.from_bytes(raw[index : index + 2], "little") for index in range(0, len(raw), 2)]
+            if width == 2
+            else list(raw)
+        )
+        read_only.append({key: item[key] for key in ("key", "cpu_address", "kind", "count")} | {"values": values})
     result: dict[str, object] = {
-        "title_logo": {"ppu_address": logo["ppu_address"], "width": logo["width"],
-                       "height": logo["height"],
-                       "tiles": [list(flat_logo[row * logo["width"]:(row + 1) * logo["width"]])
-                                 for row in range(logo["height"])]},
+        "title_logo": {
+            "ppu_address": logo["ppu_address"],
+            "width": logo["width"],
+            "height": logo["height"],
+            "tiles": [
+                list(flat_logo[row * logo["width"] : (row + 1) * logo["width"]]) for row in range(logo["height"])
+            ],
+        },
         "title_packets": title_packets,
-        "title_attributes": {"ppu_address": attributes["ppu_address"],
-                             "bytes": list(_slice(source, attributes["file_offset"],
-                                                  attributes["size"], "title attributes"))},
-        "fixed_blocks": fixed_blocks, "attract_packets": attract_packets,
-        "intermission_visual": visual, "read_only_code_tables": read_only,
+        "title_attributes": {
+            "ppu_address": attributes["ppu_address"],
+            "bytes": list(_slice(source, attributes["file_offset"], attributes["size"], "title attributes")),
+        },
+        "fixed_blocks": fixed_blocks,
+        "attract_packets": attract_packets,
+        "intermission_visual": visual,
+        "read_only_code_tables": read_only,
         "encoding": copy.deepcopy(layout["encoding"]),
         "text_fields": copy.deepcopy(layout["text_fields"]),
     }
@@ -344,23 +404,36 @@ def decode_screen_collection(source: bytes, parameters: Mapping[str, object]) ->
 
 def validate_screen_collection(document: Mapping[str, object], parameters: Mapping[str, object]) -> None:
     layout = _layout(parameters)
-    expected = {"title_logo", "title_packets", "title_attributes", "fixed_blocks",
-                "attract_packets", "intermission_visual", "read_only_code_tables",
-                "encoding", "text_fields"}
+    expected = {
+        "title_logo",
+        "title_packets",
+        "title_attributes",
+        "fixed_blocks",
+        "attract_packets",
+        "intermission_visual",
+        "read_only_code_tables",
+        "encoding",
+        "text_fields",
+    }
     if set(document) != expected:
         raise PacmanScreenError("screen collection has the wrong shape")
     logo = _mapping(document.get("title_logo"), "title_logo")
     configured_logo = layout["title_logo"]
     if (logo.get("ppu_address"), logo.get("width"), logo.get("height")) != (
-            configured_logo["ppu_address"], configured_logo["width"], configured_logo["height"]):
+        configured_logo["ppu_address"],
+        configured_logo["width"],
+        configured_logo["height"],
+    ):
         raise PacmanScreenError("title logo geometry or PPU origin differs from the profile")
     rows = logo.get("tiles")
     if not isinstance(rows, list) or len(rows) != configured_logo["height"]:
         raise PacmanScreenError("title logo has the wrong height")
     for row in rows:
         _bytes(row, "title_logo.tiles", configured_logo["width"])
-    for group, sizes in (("title_packets", layout["title_packets"]["payload_sizes"]),
-                         ("attract_packets", layout["attract"]["payload_sizes"])):
+    for group, sizes in (
+        ("title_packets", layout["title_packets"]["payload_sizes"]),
+        ("attract_packets", layout["attract"]["payload_sizes"]),
+    ):
         packets = document.get(group)
         if not isinstance(packets, list) or len(packets) != len(sizes):
             raise PacmanScreenError(f"{group} has the wrong packet count")
@@ -377,8 +450,7 @@ def validate_screen_collection(document: Mapping[str, object], parameters: Mappi
         _bytes(fixed.get(item["key"]), item["key"], item["size"])
     if "menu_prompt" in fixed:
         menu = fixed["menu_prompt"]
-        if len(menu) < 3 or not 0x2000 <= (menu[0] << 8 | menu[1]) <= 0x3FFF \
-                or menu[-1] != 0xFF:
+        if len(menu) < 3 or not 0x2000 <= (menu[0] << 8 | menu[1]) <= 0x3FFF or menu[-1] != 0xFF:
             raise PacmanScreenError("menu_prompt must retain a PPU address and terminator")
     if "pause_tiles" in fixed:
         pause = fixed["pause_tiles"]
@@ -415,20 +487,18 @@ def encode_screen_collection(
     layout = _layout(parameters)
     spans: list[tuple[int, bytes]] = []
     logo = document["title_logo"]
-    spans.append((layout["title_logo"]["file_offset"],
-                  bytes(value for row in logo["tiles"] for value in row)))
-    title_payload = b"".join(_encode_packet(packet, size, f"title_packets[{index}]")
-                             for index, (packet, size) in enumerate(zip(
-                                 document["title_packets"],
-                                 layout["title_packets"]["payload_sizes"])))
+    spans.append((layout["title_logo"]["file_offset"], bytes(value for row in logo["tiles"] for value in row)))
+    title_payload = b"".join(
+        _encode_packet(packet, size, f"title_packets[{index}]")
+        for index, (packet, size) in enumerate(zip(document["title_packets"], layout["title_packets"]["payload_sizes"]))
+    )
     spans.append((layout["title_packets"]["file_offset"], title_payload))
-    spans.append((layout["title_attributes"]["file_offset"],
-                  bytes(document["title_attributes"]["bytes"])))
+    spans.append((layout["title_attributes"]["file_offset"], bytes(document["title_attributes"]["bytes"])))
     for item in layout["fixed_blocks"]:
         spans.append((item["file_offset"], bytes(document["fixed_blocks"][item["key"]])))
-    for index, (offset, size, packet) in enumerate(zip(
-            layout["attract"]["packet_file_offsets"],
-            layout["attract"]["payload_sizes"], document["attract_packets"])):
+    for index, (offset, size, packet) in enumerate(
+        zip(layout["attract"]["packet_file_offsets"], layout["attract"]["payload_sizes"], document["attract_packets"])
+    ):
         spans.append((offset, _encode_packet(packet, size, f"attract_packets[{index}]")))
     for item in layout["intermission_visual"]:
         spans.append((item["file_offset"], bytes(document["intermission_visual"][item["key"]])))

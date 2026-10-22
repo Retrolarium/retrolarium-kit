@@ -31,15 +31,18 @@ def _byte(value: object, name: str) -> int:
 
 
 def _names(value: object, name: str, count: int) -> list[str]:
-    if (not isinstance(value, list) or len(value) != count
-            or any(not isinstance(item, str) or not item for item in value)
-            or len(set(value)) != len(value)):
+    if (
+        not isinstance(value, list)
+        or len(value) != count
+        or any(not isinstance(item, str) or not item for item in value)
+        or len(set(value)) != len(value)
+    ):
         raise CastleExcellentMmlError(f"{name} must contain {count} unique names")
     return list(value)
 
 
 def _slice(image: bytes, offset: int, size: int, name: str) -> bytes:
-    payload = image[offset:offset + size]
+    payload = image[offset : offset + size]
     if len(payload) != size:
         raise CastleExcellentMmlError(f"{name} exceeds the source image")
     return payload
@@ -72,9 +75,7 @@ def validate_mml_text(text: str, name: str = "MML stream") -> dict[str, int]:
             counts[command] += 1
             continue
         if value not in NOTE_BYTES and value != ord("r"):
-            raise CastleExcellentMmlError(
-                f"{name} has invalid byte ${value:02X} at offset {cursor - 1}"
-            )
+            raise CastleExcellentMmlError(f"{name} has invalid byte ${value:02X} at offset {cursor - 1}")
         token = "rest" if value == ord("r") else "note"
         if value in NOTE_BYTES and cursor < len(data) and data[cursor] in b"+-":
             cursor += 1
@@ -94,9 +95,7 @@ def _layout(parameters: Mapping[str, object]) -> dict[str, object]:
     stream_count = _integer(parameters.get("stream_count"), "stream_count", minimum=1)
     channel_names = _names(parameters.get("channel_names"), "channel_names", 3)
     layout = {
-        "track_table_file_offset": _integer(
-            parameters.get("track_table_file_offset"), "track_table_file_offset"
-        ),
+        "track_table_file_offset": _integer(parameters.get("track_table_file_offset"), "track_table_file_offset"),
         "track_count": track_count,
         "track_names": _names(parameters.get("track_names"), "track_names", track_count),
         "channel_names": channel_names,
@@ -118,8 +117,9 @@ def _layout(parameters: Mapping[str, object]) -> dict[str, object]:
         "mml_capacity": _integer(parameters.get("mml_capacity"), "mml_capacity", minimum=1),
         "stream_count": stream_count,
     }
-    if (int(layout["playback_prefix_cpu_address"])
-            + int(layout["playback_prefix_size"]) != int(layout["mml_cpu_address"])):
+    if int(layout["playback_prefix_cpu_address"]) + int(layout["playback_prefix_size"]) != int(
+        layout["mml_cpu_address"]
+    ):
         raise CastleExcellentMmlError("Castle Excellent playback prefix must end at the MML arena")
     return layout
 
@@ -130,15 +130,21 @@ def decode_music(image: bytes, parameters: Mapping[str, object]) -> dict[str, ob
     stream_count = int(layout["stream_count"])
     mml_cpu = int(layout["mml_cpu_address"])
     track_table = _slice(
-        image, int(layout["track_table_file_offset"]), track_count * 8,
+        image,
+        int(layout["track_table_file_offset"]),
+        track_count * 8,
         "Castle Excellent track table",
     )
     prefix = _slice(
-        image, int(layout["playback_prefix_file_offset"]),
-        int(layout["playback_prefix_size"]), "Castle Excellent playback prefix",
+        image,
+        int(layout["playback_prefix_file_offset"]),
+        int(layout["playback_prefix_size"]),
+        "Castle Excellent playback prefix",
     )
     arena = _slice(
-        image, int(layout["mml_file_offset"]), int(layout["mml_capacity"]),
+        image,
+        int(layout["mml_file_offset"]),
+        int(layout["mml_capacity"]),
         "Castle Excellent MML arena",
     )
     raw_streams: list[tuple[int, str, int]] = []
@@ -160,34 +166,33 @@ def decode_music(image: bytes, parameters: Mapping[str, object]) -> dict[str, ob
         cursor = end + 3
     if any(arena[cursor:]):
         raise CastleExcellentMmlError("Castle Excellent MML padding must be zero-filled")
-    address_to_id = {
-        address: f"stream_{index:02d}"
-        for index, (address, _text, _restart) in enumerate(raw_streams)
-    }
+    address_to_id = {address: f"stream_{index:02d}" for index, (address, _text, _restart) in enumerate(raw_streams)}
     streams = []
     for index, (_address, text, restart) in enumerate(raw_streams):
         if restart and restart not in address_to_id:
-            raise CastleExcellentMmlError(
-                f"stream_{index:02d} restart does not target a stream boundary"
-            )
-        streams.append({
-            "id": f"stream_{index:02d}",
-            "text": text,
-            "restart": address_to_id.get(restart),
-        })
+            raise CastleExcellentMmlError(f"stream_{index:02d} restart does not target a stream boundary")
+        streams.append(
+            {
+                "id": f"stream_{index:02d}",
+                "text": text,
+                "restart": address_to_id.get(restart),
+            }
+        )
     track_names = list(layout["track_names"])
     track_sets = []
     for index in range(track_count):
-        record = track_table[index * 8:(index + 1) * 8]
+        record = track_table[index * 8 : (index + 1) * 8]
         pointers = [record[pos] | record[pos + 1] << 8 for pos in (0, 2, 4)]
         if any(pointer and pointer not in address_to_id for pointer in pointers):
             raise CastleExcellentMmlError(f"track set {index} points outside stream boundaries")
-        track_sets.append({
-            "index": index,
-            "name": track_names[index],
-            "streams": [address_to_id.get(pointer) for pointer in pointers],
-            "channel_parameters": [record[6], record[7]],
-        })
+        track_sets.append(
+            {
+                "index": index,
+                "name": track_names[index],
+                "streams": [address_to_id.get(pointer) for pointer in pointers],
+                "channel_parameters": [record[6], record[7]],
+            }
+        )
     return {
         "capacity_bytes": int(layout["mml_capacity"]),
         "used_bytes": cursor,
@@ -200,14 +205,17 @@ def decode_music(image: bytes, parameters: Mapping[str, object]) -> dict[str, ob
     }
 
 
-def encode_music(
-    document: Mapping[str, object], parameters: Mapping[str, object]
-) -> list[tuple[int, bytes]]:
+def encode_music(document: Mapping[str, object], parameters: Mapping[str, object]) -> list[tuple[int, bytes]]:
     layout = _layout(parameters)
     expected_fields = {
-        "capacity_bytes", "used_bytes", "mml_cpu_address",
-        "playback_prefix_cpu_address", "channel_names", "playback_prefix",
-        "track_sets", "streams",
+        "capacity_bytes",
+        "used_bytes",
+        "mml_cpu_address",
+        "playback_prefix_cpu_address",
+        "channel_names",
+        "playback_prefix",
+        "track_sets",
+        "streams",
     }
     if set(document) != expected_fields:
         raise CastleExcellentMmlError("Castle Excellent music fields differ from codec v1")
@@ -225,10 +233,7 @@ def encode_music(
     prefix_size = int(layout["playback_prefix_size"])
     if not isinstance(prefix_values, list) or len(prefix_values) != prefix_size:
         raise CastleExcellentMmlError(f"Castle Excellent playback prefix must contain {prefix_size} bytes")
-    prefix = bytes(
-        _byte(value, f"playback_prefix[{index}]")
-        for index, value in enumerate(prefix_values)
-    )
+    prefix = bytes(_byte(value, f"playback_prefix[{index}]") for index, value in enumerate(prefix_values))
     stream_count = int(layout["stream_count"])
     raw_streams = document.get("streams")
     if not isinstance(raw_streams, list) or len(raw_streams) != stream_count:
@@ -255,9 +260,7 @@ def encode_music(
         cursor += len(encoded) + 3
         normalized_streams.append((identifier, encoded, restart))
     if cursor > capacity:
-        raise CastleExcellentMmlError(
-            f"Castle Excellent MML arena needs {cursor} bytes; capacity is {capacity}"
-        )
+        raise CastleExcellentMmlError(f"Castle Excellent MML arena needs {cursor} bytes; capacity is {capacity}")
     if document.get("used_bytes") != cursor:
         raise CastleExcellentMmlError("Castle Excellent MML used byte count is stale")
     arena = bytearray()
@@ -275,26 +278,25 @@ def encode_music(
     track_names = list(layout["track_names"])
     track_table = bytearray()
     for index, track in enumerate(raw_tracks):
-        if not isinstance(track, dict) or set(track) != {
-                "index", "name", "streams", "channel_parameters"}:
+        if not isinstance(track, dict) or set(track) != {"index", "name", "streams", "channel_parameters"}:
             raise CastleExcellentMmlError(f"track set {index} fields differ from codec v1")
         if track.get("index") != index or track.get("name") != track_names[index]:
             raise CastleExcellentMmlError(f"track set {index} identity differs from the profile")
         pointers = track.get("streams")
-        if (not isinstance(pointers, list) or len(pointers) != 3
-                or any(pointer is not None and pointer not in ids for pointer in pointers)):
+        if (
+            not isinstance(pointers, list)
+            or len(pointers) != 3
+            or any(pointer is not None and pointer not in ids for pointer in pointers)
+        ):
             raise CastleExcellentMmlError(f"track set {index} must contain three stream ids")
         for pointer in pointers:
-            track_table.extend((starts[pointer] if pointer is not None else 0)
-                               .to_bytes(2, "little"))
+            track_table.extend((starts[pointer] if pointer is not None else 0).to_bytes(2, "little"))
         parameters_raw = track.get("channel_parameters")
         if not isinstance(parameters_raw, list) or len(parameters_raw) != 2:
             raise CastleExcellentMmlError(f"track set {index} must contain two parameters")
         for parameter_index, value in enumerate(parameters_raw):
             if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value <= 0xFF:
-                raise CastleExcellentMmlError(
-                    f"track set {index} parameter {parameter_index} must be a byte"
-                )
+                raise CastleExcellentMmlError(f"track set {index} parameter {parameter_index} must be a byte")
             track_table.append(value)
     return [
         (int(layout["track_table_file_offset"]), bytes(track_table)),

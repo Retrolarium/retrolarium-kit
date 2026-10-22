@@ -16,7 +16,10 @@ import sys
 import tempfile
 
 from retrolarium_kit.games.flicky.content import (
-    CANONICAL_SHA256, SOURCE_DIRECTORY, WORKSPACE_FILES, import_flicky_source,
+    CANONICAL_SHA256,
+    SOURCE_DIRECTORY,
+    WORKSPACE_FILES,
+    import_flicky_source,
 )
 from retrolarium_core.megadrive import cartridge_checksum
 from retrolarium_kit.studio.project import StudioProjectError, build_studio_project
@@ -31,17 +34,35 @@ def capture_sega_screen(mame: Path, rom: Path, prefix: Path) -> Path:
     probe = Path(__file__).with_name("sega_screen_probe.lua")
     environment = os.environ.copy()
     environment["FLICKY_SEGA_SCREEN_PREFIX"] = str(prefix.resolve())
-    result = subprocess.run([
-        str(mame.resolve()), "genesis", "-cart", str(rom.resolve()),
-        "-skip_gameinfo", "-video", "none", "-sound", "none",
-        "-nothrottle", "-noreadconfig", "-nowriteconfig",
-        "-seconds_to_run", "30", "-autoboot_delay", "0",
-        "-autoboot_script", str(probe.resolve()),
-    ], cwd=prefix.parent, env=environment, text=True, capture_output=True,
-        timeout=90)
+    result = subprocess.run(
+        [
+            str(mame.resolve()),
+            "genesis",
+            "-cart",
+            str(rom.resolve()),
+            "-skip_gameinfo",
+            "-video",
+            "none",
+            "-sound",
+            "none",
+            "-nothrottle",
+            "-noreadconfig",
+            "-nowriteconfig",
+            "-seconds_to_run",
+            "30",
+            "-autoboot_delay",
+            "0",
+            "-autoboot_script",
+            str(probe.resolve()),
+        ],
+        cwd=prefix.parent,
+        env=environment,
+        text=True,
+        capture_output=True,
+        timeout=90,
+    )
     frame = prefix.with_name(prefix.name + "-180.png")
-    assert result.returncode == 0 and frame.is_file(), (
-        f"MAME SEGA screen failed: {result.stdout}\n{result.stderr}")
+    assert result.returncode == 0 and frame.is_file(), f"MAME SEGA screen failed: {result.stdout}\n{result.stderr}"
     return frame
 
 
@@ -51,8 +72,7 @@ def main() -> int:
     parser.add_argument("--rom", required=True, type=Path)
     parser.add_argument("--native-writer", required=True, type=Path)
     parser.add_argument("--native-graphics-editor", required=True, type=Path)
-    parser.add_argument("--mame", type=Path,
-                        help="compare canonical and GUI-edited SEGA logo at boot")
+    parser.add_argument("--mame", type=Path, help="compare canonical and GUI-edited SEGA logo at boot")
     args = parser.parse_args()
     os.environ["RETROLARIUM_FLICKY_LEVEL_WRITER"] = str(args.native_writer.resolve())
 
@@ -76,8 +96,7 @@ def main() -> int:
         assert built_path.read_bytes() == original_rom
         baseline_screen = None
         if args.mame:
-            baseline_screen = capture_sega_screen(
-                args.mame, built_path, project / "sega-baseline")
+            baseline_screen = capture_sega_screen(args.mame, built_path, project / "sega-baseline")
 
         graphics_path = project / SOURCE_DIRECTORY / WORKSPACE_FILES["graphics_assets"]
         original_graphics = graphics_path.read_bytes()
@@ -93,20 +112,20 @@ def main() -> int:
             ("combined", "--edit-sega", True, True),
         ):
             graphics_path.write_bytes(original_graphics)
-            subprocess.run([str(args.native_graphics_editor.resolve()), option,
-                            str(graphics_path)], check=True)
+            subprocess.run([str(args.native_graphics_editor.resolve()), option, str(graphics_path)], check=True)
             edited_document = json.loads(graphics_path.read_text(encoding="utf-8"))
             entries = asset(edited_document, "sega_palette")["entries"]
             words = asset(edited_document, "sega_tilemap")["words"]
-            assert entries[0]["colour"] == original_palette[0]["colour"] - (
-                2 if palette_changed else 0)
+            assert entries[0]["colour"] == original_palette[0]["colour"] - (2 if palette_changed else 0)
             assert entries[1:] == original_palette[1:]
             assert words == (list(range(1, 49)) if map_changed else original_words)
 
             expected_palette = formats.encode_palette_compact(entries)
-            expected_map = (encoder.encode(b"".join(
-                word.to_bytes(2, "big") for word in words))
-                if map_changed else original_rom[0x510:0x51A])
+            expected_map = (
+                encoder.encode(b"".join(word.to_bytes(2, "big") for word in words))
+                if map_changed
+                else original_rom[0x510:0x51A]
+            )
             assert len(expected_palette) == 20 and len(expected_map) == 10
             edited = build_studio_project(project_file)
             edited_rom = (project / edited["artifact"]["path"]).read_bytes()
@@ -114,28 +133,33 @@ def main() -> int:
             assert edited_rom[0x510:0x51A] == expected_map
             assert formats.decode_palette_compact(edited_rom[0x4F6:0x50A]) == entries
             decoded_map = enigma.decompress(edited_rom[0x510:0x51A])
-            assert [int.from_bytes(decoded_map[index:index + 2], "big")
-                    for index in range(0, len(decoded_map), 2)] == words
+            assert [
+                int.from_bytes(decoded_map[index : index + 2], "big") for index in range(0, len(decoded_map), 2)
+            ] == words
             assert edited_rom[0x18E:0x190] == cartridge_checksum(edited_rom).to_bytes(2, "big")
-            changes = {index for index, pair in enumerate(zip(original_rom, edited_rom))
-                       if pair[0] != pair[1]}
-            allowed = ({0x18E, 0x18F}
-                       | (set(range(0x4F6, 0x50A)) if palette_changed else set())
-                       | (set(range(0x510, 0x51A)) if map_changed else set()))
+            changes = {index for index, pair in enumerate(zip(original_rom, edited_rom)) if pair[0] != pair[1]}
+            allowed = (
+                {0x18E, 0x18F}
+                | (set(range(0x4F6, 0x50A)) if palette_changed else set())
+                | (set(range(0x510, 0x51A)) if map_changed else set())
+            )
             assert changes and changes <= allowed, (label, sorted(changes)[:20])
             assert any(0x4F6 <= offset < 0x50A for offset in changes) == palette_changed
             assert any(0x510 <= offset < 0x51A for offset in changes) == map_changed
             if args.mame:
                 from PIL import Image
 
-                edited_screen = capture_sega_screen(
-                    args.mame, built_path, project / f"sega-{label}")
+                edited_screen = capture_sega_screen(args.mame, built_path, project / f"sega-{label}")
                 with Image.open(baseline_screen) as base_image, Image.open(edited_screen) as edited_image:
                     base = base_image.convert("RGB")
                     changed = edited_image.convert("RGB")
                     assert base.size == changed.size
-                    mask = {(x, y) for y in range(80, 160) for x in range(64, 224)
-                            if base.getpixel((x, y)) != changed.getpixel((x, y))}
+                    mask = {
+                        (x, y)
+                        for y in range(80, 160)
+                        for x in range(64, 224)
+                        if base.getpixel((x, y)) != changed.getpixel((x, y))
+                    }
                     assert mask, f"GUI SEGA-screen {label} edit had no visible MAME effect"
                     screen_masks[label] = mask
                     print(f"SEGA screen MAME boot ({label}): {len(mask)} changed logo-region pixels")
@@ -146,14 +170,23 @@ def main() -> int:
 
         if args.mame:
             assert screen_masks["palette"] != screen_masks["tilemap"], (
-                "palette and Enigma GUI edits produced indistinguishable MAME masks")
+                "palette and Enigma GUI edits produced indistinguishable MAME masks"
+            )
 
-        subprocess.run([str(args.native_graphics_editor.resolve()),
-                        "--edit-sega-cell", str(graphics_path)], check=True)
-        assert len(encoder.encode(b"".join(
-            word.to_bytes(2, "big") for word in asset(
-                json.loads(graphics_path.read_text(encoding="utf-8")),
-                "sega_tilemap")["words"]))) > 10
+        subprocess.run([str(args.native_graphics_editor.resolve()), "--edit-sega-cell", str(graphics_path)], check=True)
+        assert (
+            len(
+                encoder.encode(
+                    b"".join(
+                        word.to_bytes(2, "big")
+                        for word in asset(json.loads(graphics_path.read_text(encoding="utf-8")), "sega_tilemap")[
+                            "words"
+                        ]
+                    )
+                )
+            )
+            > 10
+        )
         try:
             build_studio_project(project_file)
         except StudioProjectError as error:
@@ -162,8 +195,10 @@ def main() -> int:
             raise AssertionError("over-capacity GUI tilemap edit unexpectedly built")
         assert built_path.read_bytes() == original_rom, "failed build changed published ROM"
 
-    print("PASS: SEGA-screen Qt palette/map edits, exact ROM slots, restore, capacity guard"
-          + (", and MAME boot" if args.mame else ""))
+    print(
+        "PASS: SEGA-screen Qt palette/map edits, exact ROM slots, restore, capacity guard"
+        + (", and MAME boot" if args.mame else "")
+    )
     return 0
 
 

@@ -23,8 +23,9 @@ def _mame(args: argparse.Namespace) -> Path:
 
     named = args.mame or os.environ.get("RETROLARIUM_MAME") or user_settings.get("mame")
     if not named:
-        raise MovieError("which MAME? remember one with `rltool movie mame <path>` "
-                         "(or name it with --mame or RETROLARIUM_MAME)")
+        raise MovieError(
+            "which MAME? remember one with `rltool movie mame <path>` (or name it with --mame or RETROLARIUM_MAME)"
+        )
     path = Path(named).resolve()
     if not path.is_file():
         raise MovieError(f"MAME executable does not exist: {path}")
@@ -46,11 +47,18 @@ def _play(args: argparse.Namespace, check_path: Path, *, watch: bool = False) ->
         # the run ends there.
         kept = tuple(frame for frame in check.frames if frame != "end" and int(frame) < stop_at)
         check = movies.Check(check.cells, kept + (stop_at,))
-        spec = {**spec, "expected": {label: values for label, values in spec.get("expected", {}).items()
-                                     if label != "end" and int(label) <= stop_at}}
+        spec = {
+            **spec,
+            "expected": {
+                label: values
+                for label, values in spec.get("expected", {}).items()
+                if label != "end" and int(label) <= stop_at
+            },
+        }
     stay = None if not watch else not (stop_at or getattr(args, "close", False))
-    snapshot = movies.run_in_mame(movie, args.rom.resolve(), check, mame=_mame(args),
-                                  machine=spec.get("machine"), watch=watch, stay=stay)
+    snapshot = movies.run_in_mame(
+        movie, args.rom.resolve(), check, mame=_mame(args), machine=spec.get("machine"), watch=watch, stay=stay
+    )
     return spec_path, spec, snapshot, check
 
 
@@ -70,9 +78,13 @@ def command_check(args: argparse.Namespace, *, watch: bool = False) -> None:
     stop_at = getattr(args, "stop_at", None)
     for check_path in args.checks:
         if watch:
-            ends = (f"it closes at frame {stop_at}" if stop_at
-                    else "it closes when the movie ends" if getattr(args, "close", False)
-                    else "close it after the movie ends")
+            ends = (
+                f"it closes at frame {stop_at}"
+                if stop_at
+                else "it closes when the movie ends"
+                if getattr(args, "close", False)
+                else "close it after the movie ends"
+            )
             print(f"{check_path.name}: playing in a MAME window; {ends}")
         spec_path, spec, snapshot, check = _play(args, check_path, watch=watch)
         expected = spec.get("expected")
@@ -86,8 +98,10 @@ def command_check(args: argparse.Namespace, *, watch: bool = False) -> None:
             print(problem, file=sys.stderr)
         if problems:
             raise movies.MovieError(f"{spec_path.name}: {len(problems)} cell(s) differ from the original")
-        print(f"[OK] {spec_path.name}: {sum(len(cells) for cells in expected.values())} cell(s) "
-              f"match the original after {len(expected)} frame(s)")
+        print(
+            f"[OK] {spec_path.name}: {sum(len(cells) for cells in expected.values())} cell(s) "
+            f"match the original after {len(expected)} frame(s)"
+        )
 
 
 def command_play(args: argparse.Namespace) -> None:
@@ -132,8 +146,9 @@ def command_plan(args: argparse.Namespace) -> None:
         rom = descriptor.root / revision.rom
         platform = descriptor.platform
         if machine is None:
-            machine = "nespal" if (descriptor.id, revision.id) in PAL_REVISIONS \
-                else vs_machine(descriptor.id, revision.id)
+            machine = (
+                "nespal" if (descriptor.id, revision.id) in PAL_REVISIONS else vs_machine(descriptor.id, revision.id)
+            )
         folder = descriptor.root / "movies"
     else:
         rom = args.rom
@@ -158,21 +173,32 @@ def command_plan(args: argparse.Namespace) -> None:
         prepared = str(args.prepared.resolve())
         power_on = movies.power_on(movie)
         if power_on:
-            plan["arguments"] += ["-pluginspath", f"{mame.parent / 'plugins'};{movies.PLUGINS}",
-                                  "-plugin", "rlpoweron"]
-            plan["environment"] = {**plan.get("environment", {}), "RL_MOVIE_RAM_FILL": power_on[0],
-                                   "RL_MOVIE_RAM_SIZE": str(power_on[1])}
-    print(json.dumps({
-        "schema": "retrolarium.movie-plan",
-        "schema_version": 1,
-        "plan": plan,
-        "platform": platform,
-        "rom": {"path": str(Path(rom).resolve()), "name": Path(rom).name,
-                "sha1": hashlib.sha1(data).hexdigest(), "size": len(data)},
-        "movies_dir": str(folder.resolve()) if folder is not None else None,
-        "movies": movies.describe_movies(folder) if folder is not None else [],
-        "prepared_movie": prepared,
-    }, indent=2))
+            plan["arguments"] += ["-pluginspath", f"{mame.parent / 'plugins'};{movies.PLUGINS}", "-plugin", "rlpoweron"]
+            plan["environment"] = {
+                **plan.get("environment", {}),
+                "RL_MOVIE_RAM_FILL": power_on[0],
+                "RL_MOVIE_RAM_SIZE": str(power_on[1]),
+            }
+    print(
+        json.dumps(
+            {
+                "schema": "retrolarium.movie-plan",
+                "schema_version": 1,
+                "plan": plan,
+                "platform": platform,
+                "rom": {
+                    "path": str(Path(rom).resolve()),
+                    "name": Path(rom).name,
+                    "sha1": hashlib.sha1(data).hexdigest(),
+                    "size": len(data),
+                },
+                "movies_dir": str(folder.resolve()) if folder is not None else None,
+                "movies": movies.describe_movies(folder) if folder is not None else [],
+                "prepared_movie": prepared,
+            },
+            indent=2,
+        )
+    )
 
 
 def _platform_of(rom: Path) -> str:
@@ -210,16 +236,20 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
         ("play", command_play, "check, shown in a MAME window at the game's speed (close it at the end)"),
     ):
         action = actions.add_parser(name, help=summary)
-        action.add_argument("checks", type=Path, nargs="+", metavar="check",
-                            help="movie checks (JSON), played in this order")
+        action.add_argument(
+            "checks", type=Path, nargs="+", metavar="check", help="movie checks (JSON), played in this order"
+        )
         action.add_argument("--rom", type=Path, required=True, help="the ROM to play")
-        action.add_argument("--mame", help="MAME executable (default: RETROLARIUM_MAME, "
-                            "else the one `rltool movie mame` remembers)")
+        action.add_argument(
+            "--mame", help="MAME executable (default: RETROLARIUM_MAME, else the one `rltool movie mame` remembers)"
+        )
         if name == "play":
-            action.add_argument("--stop-at", type=int, metavar="frame",
-                                help="close MAME at this frame (only the start of the movie)")
-            action.add_argument("--close", action="store_true",
-                                help="close MAME when the movie ends instead of leaving it to play on")
+            action.add_argument(
+                "--stop-at", type=int, metavar="frame", help="close MAME at this frame (only the start of the movie)"
+            )
+            action.add_argument(
+                "--close", action="store_true", help="close MAME when the movie ends instead of leaving it to play on"
+            )
         action.set_defaults(handler=handler)
     remember = actions.add_parser("mame", help="remember the MAME movies play with (no path: show it)")
     remember.add_argument("path", type=Path, nargs="?")
@@ -232,12 +262,12 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     plan.add_argument("--platform", choices=("nes", "megadrive"), help="for --rom (default: from the image)")
     plan.add_argument("--machine", help="the MAME machine (default: the revision's or the platform's)")
     plan.add_argument("--movies", type=Path, help="for --rom: the folder its movies are kept in")
-    plan.add_argument("--movies-root", type=Path,
-                      help="for --rom: keep its movies in <this>/<the image's SHA-1>")
+    plan.add_argument("--movies-root", type=Path, help="for --rom: keep its movies in <this>/<the image's SHA-1>")
     plan.add_argument("--movie", type=Path, help="a movie to play or resume (.rlmovie, .fm2, .gmv)")
     plan.add_argument("--prepared", type=Path, help="with --movie: where the movie as MAME plays it goes")
-    plan.add_argument("--mame", help="MAME executable (default: RETROLARIUM_MAME, "
-                      "else the one `rltool movie mame` remembers)")
+    plan.add_argument(
+        "--mame", help="MAME executable (default: RETROLARIUM_MAME, else the one `rltool movie mame` remembers)"
+    )
     plan.set_defaults(handler=command_plan)
     listing = actions.add_parser("list", help="the movies in a folder and their descriptions (JSON)")
     listing.add_argument("folder", type=Path)

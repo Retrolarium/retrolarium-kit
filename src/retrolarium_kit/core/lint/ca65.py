@@ -36,9 +36,7 @@ DATA_DIRECTIVES = frozenset(
     {".addr", ".asciiz", ".byte", ".dbyt", ".faraddr", ".incbin", ".literal", ".res", ".tag", ".word"}
 )
 BLOCK_OPENERS = frozenset({".enum", ".macro", ".proc", ".repeat", ".scope", ".struct", ".union"})
-BLOCK_CLOSERS = frozenset(
-    {".endenum", ".endmacro", ".endproc", ".endrepeat", ".endscope", ".endstruct", ".endunion"}
-)
+BLOCK_CLOSERS = frozenset({".endenum", ".endmacro", ".endproc", ".endrepeat", ".endscope", ".endstruct", ".endunion"})
 BLOCK_MIDDLES = frozenset({".else", ".elseif"})
 DIRECTIVE_RE = re.compile(r"^\.[A-Za-z][A-Za-z0-9]*")
 LABEL_RE = re.compile(r"^(?P<label>[A-Za-z_@.?][A-Za-z0-9_@.?]*:)(?P<tail>.*)$")
@@ -139,9 +137,14 @@ def _text_issues(path: Path, payload: bytes, text: str) -> list[Issue]:
     for line_number, line in enumerate(text.splitlines(), 1):
         for column, character in enumerate(line, 1):
             if character != "\t" and not " " <= character <= "~":
-                issues.append(Issue(path, line_number, "ascii-only",
-                                    f"only printable ASCII and LF are allowed; found "
-                                    f"U+{ord(character):04X} at column {column}"))
+                issues.append(
+                    Issue(
+                        path,
+                        line_number,
+                        "ascii-only",
+                        f"only printable ASCII and LF are allowed; found U+{ord(character):04X} at column {column}",
+                    )
+                )
                 break
         if "\t" in line:
             issues.append(Issue(path, line_number, "tab", "tabs are not allowed"))
@@ -158,11 +161,16 @@ def _comment_issues(path: Path, line_number: int, before: str, comment: str) -> 
     if content.endswith("."):
         issues.append(Issue(path, line_number, "comment-period", "remove the period at the end of the comment"))
     if MACHINE_CODE_COMMENT_RE.fullmatch(content):
-        issues.append(Issue(path, line_number, "machine-code-comment",
-                            "remove the address/byte dump or add a meaningful explanation"))
+        issues.append(
+            Issue(
+                path,
+                line_number,
+                "machine-code-comment",
+                "remove the address/byte dump or add a meaningful explanation",
+            )
+        )
     if before.strip() and len(before) - len(before.rstrip(" ")) != 2:
-        issues.append(Issue(path, line_number, "inline-comment-gap",
-                            "use exactly two spaces before an inline comment"))
+        issues.append(Issue(path, line_number, "inline-comment-gap", "use exactly two spaces before an inline comment"))
     return issues
 
 
@@ -202,9 +210,14 @@ def lint_file(path: Path, style: Ca65Style = Ca65Style()) -> list[Issue]:
             if leading:
                 issues.append(Issue(path, line_number, "label-indent", "labels must start at column zero"))
             if comment is not None or label.group("tail").strip():
-                issues.append(Issue(path, line_number, "label-line",
-                                    "a label stands alone: put its comment on the line before "
-                                    "and its statement on the line after"))
+                issues.append(
+                    Issue(
+                        path,
+                        line_number,
+                        "label-line",
+                        "a label stands alone: put its comment on the line before and its statement on the line after",
+                    )
+                )
             continue
 
         directive = DIRECTIVE_RE.match(statement)
@@ -215,8 +228,9 @@ def lint_file(path: Path, style: Ca65Style = Ca65Style()) -> list[Issue]:
                 issues.append(Issue(path, line_number, "directive-case", "write ca65 directives in lowercase"))
             expected = directive_indent(normalized, depth)
             if leading != expected:
-                issues.append(Issue(path, line_number, "directive-indent",
-                                    f"expected {expected} leading spaces, found {leading}"))
+                issues.append(
+                    Issue(path, line_number, "directive-indent", f"expected {expected} leading spaces, found {leading}")
+                )
             rest = statement[len(token) :]
             if rest and (not rest.startswith(" ") or rest.startswith("  ")):
                 issues.append(Issue(path, line_number, "operand-gap", "use one space before directive operands"))
@@ -230,20 +244,30 @@ def lint_file(path: Path, style: Ca65Style = Ca65Style()) -> list[Issue]:
                 issues.append(Issue(path, line_number, "mnemonic-case", "write 6502 mnemonics in uppercase"))
             expected = statement_indent(depth)
             if leading != expected:
-                issues.append(Issue(path, line_number, "instruction-indent",
-                                    f"expected {expected} leading spaces, found {leading}"))
+                issues.append(
+                    Issue(
+                        path, line_number, "instruction-indent", f"expected {expected} leading spaces, found {leading}"
+                    )
+                )
             rest = statement[len(mnemonic) :]
             if rest and (not rest.startswith(" ") or rest.startswith("  ")):
                 issues.append(Issue(path, line_number, "operand-gap", "use one space before instruction operands"))
         elif ASSIGNMENT_RE.match(statement):
             if leading:
-                issues.append(Issue(path, line_number, "assignment-indent",
-                                    "symbol assignments must start at column zero"))
+                issues.append(
+                    Issue(path, line_number, "assignment-indent", "symbol assignments must start at column zero")
+                )
         else:
             expected = statement_indent(depth)
             if leading != expected:
-                issues.append(Issue(path, line_number, "statement-indent",
-                                    f"expected {expected} leading spaces for a macro or statement, found {leading}"))
+                issues.append(
+                    Issue(
+                        path,
+                        line_number,
+                        "statement-indent",
+                        f"expected {expected} leading spaces for a macro or statement, found {leading}",
+                    )
+                )
     if depth:
         issues.append(Issue(path, len(lines) or 1, "block-depth", f"{depth} assembly block(s) not closed"))
     return issues
