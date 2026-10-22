@@ -10,7 +10,10 @@
 `assembly` is the house style of the game's assembler (ca65, or asl with its
 column settings); `text` is the text-format contract, with its JSON layout
 ("indent" or "valid") and the trees it skips beyond the ones every repository
-skips. A section left out is not run.
+skips. A section left out is not run. `code` runs Retrolarium Core's
+formatters over the other languages (retrolarium_core.formatting: Markdown,
+Python, Lua, JSON and the rest); it runs unless the config says
+`"code": false`.
 """
 
 from __future__ import annotations
@@ -25,7 +28,7 @@ from retrolarium_kit.core.lint.issues import Issue, LintError
 
 SCHEMA = "retrolarium.lint"
 CONFIG_PATH = Path("config/lint.json")
-SECTIONS = ("assembly", "text")
+SECTIONS = ("assembly", "text", "code")
 DIALECTS: dict[str, tuple[Any, type]] = {"ca65": (ca65, ca65.Ca65Style), "asl": (asl, asl.AslStyle)}
 
 
@@ -79,6 +82,8 @@ def parse_config(document: dict[str, Any]) -> LintConfig:
         if json_layout not in ("indent", "valid"):
             raise LintError("lint config: text json must be indent or valid")
         sections.append("text")
+    if document.get("code", True) is not False:
+        sections.append("code")
     return LintConfig(dialect, paths, style, text_skip, json_layout, tuple(sections))
 
 
@@ -137,4 +142,22 @@ def run(root: Path, config: LintConfig, *, fix: bool = False, only: tuple[str, .
         action = f"formatted {changed}, checked" if fix else "checked"
         report(f"[{'OK' if not found else 'FAIL'}] text format: {action} {len(files)} file(s)"
                + (f", {len(found)} issue(s)" if found else ""))
+    if "code" in selected:
+        from retrolarium_core import formatting
+
+        if fix:
+            formatting.results(root)
+        for result in formatting.results(root, check=True):
+            if result.missing:
+                report(f"{result.language.upper()} FORMAT NOT CHECKED: install {result.missing}")
+                continue
+            if result.error:
+                issues.append(Issue(root, 0, "code-format", f"{result.language}: {result.error}"))
+                report(f"[FAIL] {result.language} format: the formatter failed")
+                continue
+            issues += [Issue(root / name, 0, "code-format", f"the {result.language} formatter would change it")
+                       for name in result.changed]
+            report(f"[{'OK' if not result.changed else 'FAIL'}] {result.language} format: "
+                   f"{'formatted, ' if fix else ''}checked {result.files} file(s)"
+                   + (f", {len(result.changed)} to format" if result.changed else ""))
     return issues
