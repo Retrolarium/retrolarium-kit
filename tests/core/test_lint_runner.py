@@ -33,7 +33,8 @@ def repository(root: Path, config: dict = CONFIG) -> None:
 class ConfigTests(unittest.TestCase):
     def test_sections_and_settings_are_read(self) -> None:
         config = parse_config(CONFIG)
-        self.assertEqual(config.sections, ("assembly", "text"))
+        self.assertEqual(config.sections, ("assembly", "text", "code"))
+        self.assertEqual(parse_config({**CONFIG, "code": False}).sections, ("assembly", "text"))
         self.assertEqual((config.dialect, config.paths, config.json_layout), ("ca65", ("src",), "indent"))
         asl = parse_config({"schema": "retrolarium.lint", "schema_version": 1,
                             "assembly": {"dialect": "asl", "comment_column": 48}})
