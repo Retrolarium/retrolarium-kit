@@ -1,4 +1,5 @@
 """lint: check (or with --fix, apply) a game repository's house style.
+format: Retrolarium Core's formatters over any repository's tracked files.
 hooks: install the core's Git hooks into a game repository."""
 
 from __future__ import annotations
@@ -22,6 +23,13 @@ def command_lint(args: argparse.Namespace) -> None:
         if limit and len(issues) > limit:
             print(f"... and {len(issues) - limit} more", file=sys.stderr)
         raise LintError(f"{len(issues)} style issue(s)")
+
+
+def command_format(args: argparse.Namespace) -> None:
+    from retrolarium_core import formatting
+
+    if formatting.run(args.project.resolve(), args.check, out=sys.stdout):
+        raise SystemExit(1)
 
 
 def rltool_command() -> str:
@@ -60,6 +68,15 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     lint.add_argument("--limit", type=int, default=200, help="issues to print (0: all)")
     lint.add_argument("paths", nargs="*", type=Path, help="assembly files or folders to check instead of the config's")
     lint.set_defaults(handler=command_lint)
+
+    formatter = commands.add_parser(
+        "format", help="format a repository's tracked files (Markdown, Python, C++, Lua, JSON and the rest)"
+    )
+    formatter.add_argument(
+        "--project", type=Path, default=Path("."), help="repository root (default: the current directory)"
+    )
+    formatter.add_argument("--check", action="store_true", help="report the files to format, change nothing")
+    formatter.set_defaults(handler=command_format)
 
     hooks = commands.add_parser("hooks", help="install the core's Git hooks (stop words, make lint) into a repository")
     hooks.add_argument("action", choices=("install", "uninstall"))
