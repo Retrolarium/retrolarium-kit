@@ -14,17 +14,9 @@ class SmbApuEnvelopeError(AuthoringError):
     """An SMB APU effect envelope violates its fixed profile."""
 
 
-def _integer(
-    value: object, name: str, *, minimum: int = 0, maximum: int
-) -> int:
-    if (
-        not isinstance(value, int)
-        or isinstance(value, bool)
-        or not minimum <= value <= maximum
-    ):
-        raise SmbApuEnvelopeError(
-            f"{name} must be an integer in {minimum}..{maximum}"
-        )
+def _integer(value: object, name: str, *, minimum: int = 0, maximum: int) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or not minimum <= value <= maximum:
+        raise SmbApuEnvelopeError(f"{name} must be an integer in {minimum}..{maximum}")
     return value
 
 
@@ -32,16 +24,12 @@ def _size(parameters: Mapping[str, object]) -> int:
     return _integer(parameters.get("size"), "size", minimum=1, maximum=0xFFFF)
 
 
-def decode_envelope(
-    payload: bytes, parameters: Mapping[str, object]
-) -> dict[str, object]:
+def decode_envelope(payload: bytes, parameters: Mapping[str, object]) -> dict[str, object]:
     """Decode packed duty, mode and volume fields from an SMB envelope."""
 
     size = _size(parameters)
     if len(payload) != size:
-        raise SmbApuEnvelopeError(
-            f"SMB APU envelope has {len(payload)} bytes, expected {size}"
-        )
+        raise SmbApuEnvelopeError(f"SMB APU envelope has {len(payload)} bytes, expected {size}")
     return {
         "steps": [
             {
@@ -54,9 +42,7 @@ def decode_envelope(
     }
 
 
-def encode_envelope(
-    value: object, parameters: Mapping[str, object]
-) -> bytes:
+def encode_envelope(value: object, parameters: Mapping[str, object]) -> bytes:
     """Encode an SMB envelope without changing its fixed step count."""
 
     size = _size(parameters)

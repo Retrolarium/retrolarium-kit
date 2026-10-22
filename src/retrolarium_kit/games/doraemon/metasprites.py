@@ -50,11 +50,13 @@ def decode_variable(index: bytes, records: bytes, records_address: int) -> dict[
         if count == 0 or offset + size > len(records):
             raise DoraemonMetaspriteError("metasprite record is truncated")
         starts[records_address + offset] = len(parsed)
-        parsed.append({
-            "x_extent": records[offset + 1],
-            "y_extent": records[offset + 2],
-            "pieces": [list(records[offset + 3 + p * 3:offset + 6 + p * 3]) for p in range(count)],
-        })
+        parsed.append(
+            {
+                "x_extent": records[offset + 1],
+                "y_extent": records[offset + 2],
+                "pieces": [list(records[offset + 3 + p * 3 : offset + 6 + p * 3]) for p in range(count)],
+            }
+        )
         offset += size
     entries: list[dict[str, int]] = []
     for i in range(len(index) // 2):
@@ -90,23 +92,31 @@ def encode_variable(value: Any, records_address: int, index_size: int, records_s
         if not isinstance(pieces, list) or not 1 <= len(pieces) <= 64:
             raise DoraemonMetaspriteError(f"metasprite record {r} holds 1-64 pieces")
         addresses.append(records_address + len(body))
-        body += bytes((len(pieces), _byte(record["x_extent"], f"record {r} X extent"),
-                       _byte(record["y_extent"], f"record {r} Y extent")))
+        body += bytes(
+            (
+                len(pieces),
+                _byte(record["x_extent"], f"record {r} X extent"),
+                _byte(record["y_extent"], f"record {r} Y extent"),
+            )
+        )
         for p, piece in enumerate(pieces):
             if not isinstance(piece, list) or len(piece) != 3:
                 raise DoraemonMetaspriteError(f"record {r} piece {p} is [y, x, tile]")
             body += bytes(_byte(v, f"record {r} piece {p}") for v in piece)
     if len(body) != records_size:
-        raise DoraemonMetaspriteError(
-            f"the catalog keeps {records_size} bytes of records; these take {len(body)}")
+        raise DoraemonMetaspriteError(f"the catalog keeps {records_size} bytes of records; these take {len(body)}")
     index = bytearray()
     for i, entry in enumerate(entries):
         if isinstance(entry, Mapping) and set(entry) == {"record"}:
             record = _byte(entry["record"], f"index {i} record", len(records) - 1)
             index += addresses[record].to_bytes(2, "little")
         elif isinstance(entry, Mapping) and set(entry) == {"alias", "flip"}:
-            index += bytes((_byte(entry["alias"], f"index {i} alias", len(entries) - 1),
-                            _byte(entry["flip"], f"index {i} flip", 3)))
+            index += bytes(
+                (
+                    _byte(entry["alias"], f"index {i} alias", len(entries) - 1),
+                    _byte(entry["flip"], f"index {i} flip", 3),
+                )
+            )
         else:
             raise DoraemonMetaspriteError(f"index {i} is a record or an alias")
     return bytes(index), bytes(body)
@@ -122,7 +132,7 @@ def decode_oam_stream(payload: bytes) -> list[dict[str, int]]:
         raise DoraemonMetaspriteError("an OAM stream is whole sprites and a zero terminator")
     sprites = []
     for at in range(0, len(payload) - 1, 4):
-        y, tile, attributes, x = payload[at:at + 4]
+        y, tile, attributes, x = payload[at : at + 4]
         if y == 0:
             raise DoraemonMetaspriteError("an OAM stream ends before its span")
         sprites.append({"x": x, "y": y, "tile": tile, "attributes": attributes})
@@ -139,9 +149,14 @@ def encode_oam_stream(value: Any, size: int) -> bytes:
         y = _byte(sprite["y"], f"OAM sprite {i} y")
         if y == 0:
             raise DoraemonMetaspriteError(f"OAM sprite {i} y 0 would end the stream")
-        payload += bytes((y, _byte(sprite["tile"], f"OAM sprite {i} tile"),
-                          _byte(sprite["attributes"], f"OAM sprite {i} attributes"),
-                          _byte(sprite["x"], f"OAM sprite {i} x")))
+        payload += bytes(
+            (
+                y,
+                _byte(sprite["tile"], f"OAM sprite {i} tile"),
+                _byte(sprite["attributes"], f"OAM sprite {i} attributes"),
+                _byte(sprite["x"], f"OAM sprite {i} x"),
+            )
+        )
     return bytes(payload) + b"\x00"
 
 
@@ -149,7 +164,7 @@ def decode_world2(tiles: bytes, descriptors: bytes, attributes: bytes) -> dict[s
     if len(tiles) != WORLD2_RECORDS * 4 or len(descriptors) != WORLD2_RECORDS or len(attributes) != WORLD2_ATTRIBUTES:
         raise DoraemonMetaspriteError("World 2 metasprite table sizes differ")
     result = {
-        "tiles": [list(tiles[i * 4:i * 4 + 4]) for i in range(WORLD2_RECORDS)],
+        "tiles": [list(tiles[i * 4 : i * 4 + 4]) for i in range(WORLD2_RECORDS)],
         "descriptors": list(descriptors),
         "attributes": list(attributes),
     }
@@ -163,8 +178,11 @@ def encode_world2(value: Any) -> tuple[bytes, bytes, bytes]:
     tiles = value["tiles"]
     descriptors = value["descriptors"]
     attributes = value["attributes"]
-    if not isinstance(tiles, list) or len(tiles) != WORLD2_RECORDS \
-            or any(not isinstance(q, list) or len(q) != 4 for q in tiles):
+    if (
+        not isinstance(tiles, list)
+        or len(tiles) != WORLD2_RECORDS
+        or any(not isinstance(q, list) or len(q) != 4 for q in tiles)
+    ):
         raise DoraemonMetaspriteError("World 2 has 58 metasprites of four tiles")
     if not isinstance(descriptors, list) or len(descriptors) != WORLD2_RECORDS:
         raise DoraemonMetaspriteError("World 2 has 58 metasprite descriptors")

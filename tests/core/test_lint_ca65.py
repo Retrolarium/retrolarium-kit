@@ -35,8 +35,7 @@ class Ca65StyleTests(unittest.TestCase):
 
     def test_common_violations_are_reported(self) -> None:
         codes = lint(";Bad heading\nBad: lda #$00 ;bad comment\n\n\n")
-        self.assertTrue({"blank-lines", "comment-space", "final-newline",
-                         "inline-comment-gap", "label-line"} <= codes)
+        self.assertTrue({"blank-lines", "comment-space", "final-newline", "inline-comment-gap", "label-line"} <= codes)
 
     def test_non_ascii_text_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -58,8 +57,18 @@ class Ca65StyleTests(unittest.TestCase):
 
     def test_case_and_indentation_are_checked(self) -> None:
         codes = lint("  label:\n  nop\n.BYTE 1\n  value = 2\n.proc a\n.endproc\n.scope\n")
-        self.assertTrue({"label-indent", "mnemonic-case", "instruction-indent", "directive-case",
-                         "directive-indent", "assignment-indent", "block-depth"} <= codes)
+        self.assertTrue(
+            {
+                "label-indent",
+                "mnemonic-case",
+                "instruction-indent",
+                "directive-case",
+                "directive-indent",
+                "assignment-indent",
+                "block-depth",
+            }
+            <= codes
+        )
 
     def test_the_formatter_produces_the_style(self) -> None:
         source = "Start: lda #$01 ;load.\n  .BYTE 1\n\n\n    ; note\n    nop ; $C000 EA\n"
@@ -69,8 +78,7 @@ class Ca65StyleTests(unittest.TestCase):
         self.assertEqual(lint(formatted), set())
 
     def test_a_label_comment_moves_above_the_label(self) -> None:
-        self.assertEqual(ca65.format_text("Entry:  ; starts here\n    RTS\n"),
-                         "; starts here\nEntry:\n    RTS\n")
+        self.assertEqual(ca65.format_text("Entry:  ; starts here\n    RTS\n"), "; starts here\nEntry:\n    RTS\n")
 
     def test_a_semicolon_inside_a_string_stays_data(self) -> None:
         self.assertEqual(ca65.split_comment('    .byte "a;b"  ; text'), ('    .byte "a;b"  ', " text"))

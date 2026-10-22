@@ -29,34 +29,24 @@ def parameters() -> dict[str, object]:
     return {
         "prg_cpu_base": 0xC000,
         "prg_file_offset": 16,
-        "title_logo": {"file_offset": 16, "ppu_address": 0x20E5,
-                       "width": 2, "height": 2},
+        "title_logo": {"file_offset": 16, "ppu_address": 0x20E5, "width": 2, "height": 2},
         "title_packets": {"file_offset": 20, "payload_sizes": [2, 1]},
         "title_attributes": {"file_offset": 29, "ppu_address": 0x23C8, "size": 2},
         "fixed_blocks": [
             {"key": "menu", "label": "Menu", "file_offset": 31, "size": 3},
             {"key": "pause", "label": "Pause", "file_offset": 34, "size": 2},
         ],
-        "attract": {"pointer_file_offset": 40,
-                    "packet_file_offsets": [44, 50], "payload_sizes": [3, 1]},
+        "attract": {"pointer_file_offset": 40, "packet_file_offsets": [44, 50], "payload_sizes": [3, 1]},
         "intermission_visual": [
-            {"key": "cycle_tiles", "file_offset": 60, "size": 2,
-             "allowed_values": []},
-            {"key": "cycle_indexes", "file_offset": 62, "size": 2,
-             "allowed_values": [0, 4, 8]},
+            {"key": "cycle_tiles", "file_offset": 60, "size": 2, "allowed_values": []},
+            {"key": "cycle_indexes", "file_offset": 62, "size": 2, "allowed_values": [0, 4, 8]},
         ],
-        "read_only_tables": [
-            {"key": "dispatch", "cpu_address": 0xC040, "kind": "words", "count": 2}
-        ],
-        "encoding": {"characters": " ABC", "codes": [32, 65, 66, 67],
-                     "case_fold": "upper", "padding": 32},
+        "read_only_tables": [{"key": "dispatch", "cpu_address": 0xC040, "kind": "words", "count": 2}],
+        "encoding": {"characters": " ABC", "codes": [32, 65, 66, 67], "case_fold": "upper", "padding": 32},
         "text_fields": [
-            {"key": "title", "label": "Title", "path": ["title_packets", 0, "bytes"],
-             "start": 0, "width": 2},
-            {"key": "attract", "label": "Attract",
-             "path": ["attract_packets", 1, "bytes"], "start": 0, "width": 1},
-            {"key": "pause", "label": "Pause", "path": ["fixed_blocks", "pause"],
-             "start": 0, "width": 2},
+            {"key": "title", "label": "Title", "path": ["title_packets", 0, "bytes"], "start": 0, "width": 2},
+            {"key": "attract", "label": "Attract", "path": ["attract_packets", 1, "bytes"], "start": 0, "width": 1},
+            {"key": "pause", "label": "Pause", "path": ["fixed_blocks", "pause"], "start": 0, "width": 2},
         ],
     }
 
@@ -88,7 +78,7 @@ class PacmanScreenTests(unittest.TestCase):
         self.assertEqual(document["read_only_code_tables"][0]["values"], [0x1234, 0x5678])
         rebuilt = bytearray(source)
         for offset, payload in encode_screen_collection(document, config):
-            rebuilt[offset:offset + len(payload)] = payload
+            rebuilt[offset : offset + len(payload)] = payload
         self.assertEqual(bytes(rebuilt), source)
 
         edited = set_text_field(document, "pause", "c")
@@ -96,7 +86,7 @@ class PacmanScreenTests(unittest.TestCase):
         spans = encode_screen_collection(edited, config)
         rebuilt = bytearray(source)
         for offset, payload in spans:
-            rebuilt[offset:offset + len(payload)] = payload
+            rebuilt[offset : offset + len(payload)] = payload
         self.assertEqual(rebuilt[34:36], bytes((67, 32)))
 
     def test_rejects_pointer_packet_and_protected_metadata_changes(self) -> None:
@@ -139,23 +129,31 @@ class PacmanScreenTests(unittest.TestCase):
         source[:16] = b"NES\x1a" + bytes((1, 0, 0, 0)) + bytes(8)
         source = bytes(source).ljust(0x4010, b"\0")
         revision = RevisionSpec(
-            "probe", "Screen probe", len(source), hashlib.sha1(source).hexdigest(),
-            hashlib.sha256(source).hexdigest(), "ines", 0,
+            "probe",
+            "Screen probe",
+            len(source),
+            hashlib.sha1(source).hexdigest(),
+            hashlib.sha256(source).hexdigest(),
+            "ines",
+            0,
         )
         profile = GameProfile(
-            "screen-probe", 1, "Screen probe", "nes", ("screens", "text"),
-            (revision,), (
+            "screen-probe",
+            1,
+            "Screen probe",
+            "nes",
+            ("screens", "text"),
+            (revision,),
+            (
                 ResourceSpec("bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"),
-                ResourceSpec("screens", "screen", "pacman.screen-collection.v1", "fixed",
-                             parameters()),
+                ResourceSpec("screens", "screen", "pacman.screen-collection.v1", "fixed", parameters()),
             ),
         )
         decoded = decode_resources(source, profile, revision)
         details = inspection_details(decoded)
         self.assertEqual((details["screens"], details["text_messages"]), (1, 3))
         raw = decoded.as_dict()
-        content = {key: value for key, value in raw["resources"][0].items()
-                   if key not in ("id", "kind", "codec")}
+        content = {key: value for key, value in raw["resources"][0].items() if key not in ("id", "kind", "codec")}
         edited_content = set_text_field(content, "pause", "c")
         raw["resources"][0].update(edited_content)
         parsed = parse_resource_document(raw, profile, revision)

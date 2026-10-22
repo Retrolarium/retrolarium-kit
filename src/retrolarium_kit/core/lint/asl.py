@@ -61,8 +61,9 @@ def untab(text: str) -> str:
     code, comment = split_comment(text)
     parts = code.split('"')
     # Even parts lie outside strings.
-    return '"'.join(part.replace("\t", " ") if index % 2 == 0 else part
-                    for index, part in enumerate(parts)) + comment.replace("\t", " ")
+    return '"'.join(
+        part.replace("\t", " ") if index % 2 == 0 else part for index, part in enumerate(parts)
+    ) + comment.replace("\t", " ")
 
 
 def _normalize_comment(comment: str) -> str:
@@ -238,17 +239,24 @@ def lint_file(path: Path, style: AslStyle = AslStyle()) -> list[Issue]:
             if not code.strip():
                 indent = len(code) - len(code.lstrip(" "))
                 if (indent % step) if step else indent:
-                    issues.append(Issue(path, number, "comment-indent",
-                                        f"indent whole-line comments in multiples of {step}"))
+                    issues.append(
+                        Issue(path, number, "comment-indent", f"indent whole-line comments in multiples of {step}")
+                    )
             else:
                 inline = INLINE_COMMENT_RE.match(line.rstrip())
                 if inline:
                     wanted = style.comment_column - len(inline.group(1))
                     gap = len(inline.group(2))
                     if (wanted >= 2 and gap != wanted) or (wanted < 2 and gap != 2):
-                        issues.append(Issue(path, number, "comment-column",
-                                            f"inline comments start at column {style.comment_column}, "
-                                            f"or two spaces out when the code reaches it"))
+                        issues.append(
+                            Issue(
+                                path,
+                                number,
+                                "comment-column",
+                                f"inline comments start at column {style.comment_column}, "
+                                f"or two spaces out when the code reaches it",
+                            )
+                        )
 
         expected = _normalize_line(line, depth, columns[number - 1], style)
         if line.rstrip() != expected:

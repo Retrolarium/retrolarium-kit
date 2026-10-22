@@ -33,8 +33,7 @@ def main() -> int:
     parser.add_argument("--native-writer", type=Path, required=True)
     parser.add_argument("--native-sound-editor", type=Path, required=True)
     args = parser.parse_args()
-    os.environ["RETROLARIUM_FLICKY_LEVEL_WRITER"] = str(
-        args.native_writer.resolve())
+    os.environ["RETROLARIUM_FLICKY_LEVEL_WRITER"] = str(args.native_writer.resolve())
 
     original_rom = args.rom.read_bytes()
     scratch = Path(__file__).resolve().parents[3] / "build"
@@ -45,48 +44,56 @@ def main() -> int:
         create_flicky_studio_project(project)
         project_file = project / "flicky-ue.rlj"
         zero = build_studio_project(project_file)
-        assert zero["artifact"]["sha256"] == CANONICAL_SHA256, \
-            "zero-edit build must match the canonical ROM"
+        assert zero["artifact"]["sha256"] == CANONICAL_SHA256, "zero-edit build must match the canonical ROM"
 
         source = project / SOURCE_DIRECTORY
         sound_path = source / WORKSPACE_FILES["z80_sound_banks"]
         original_sound = sound_path.read_bytes()
         sound_model = sound_source_model(source)
         sequence_id = "zSFX90Sequence"
-        sequence = next(record for record in sound_model.export_document(
-            sound_path)["sequences"] if record["id"] == sequence_id)
+        sequence = next(
+            record for record in sound_model.export_document(sound_path)["sequences"] if record["id"] == sequence_id
+        )
         original_stream = bytes(sequence["bytes"])
-        assert original_rom.count(original_stream) == 1, \
-            "SFX90 stream has no unique ROM address"
+        assert original_rom.count(original_stream) == 1, "SFX90 stream has no unique ROM address"
         note = sound_model.piano_roll_notes(sequence["bytes"])[0]
         assert 0 <= note["note"] <= 92
         edited_pitch = note["note"] + 2
         note_address = original_rom.find(original_stream) + note["offset"]
 
-        subprocess.run([
-            str(args.native_sound_editor.resolve()), "--drag-note",
-            str(sound_path), sequence_id, "0", "2",
-        ], check=True)
-        saved = next(record for record in sound_model.export_document(
-            sound_path)["sequences"] if record["id"] == sequence_id)
-        assert saved["bytes"][note["offset"]] == 0x81 + edited_pitch, \
+        subprocess.run(
+            [
+                str(args.native_sound_editor.resolve()),
+                "--drag-note",
+                str(sound_path),
+                sequence_id,
+                "0",
+                "2",
+            ],
+            check=True,
+        )
+        saved = next(
+            record for record in sound_model.export_document(sound_path)["sequences"] if record["id"] == sequence_id
+        )
+        assert saved["bytes"][note["offset"]] == 0x81 + edited_pitch, (
             "Qt piano drag did not save the expected source note"
+        )
         assert verify_studio_project(project_file)["status"] == "mismatch"
 
         built = build_studio_project(project_file)
         assert verify_studio_project(project_file)["status"] == "current"
         edited_rom = (project / built["artifact"]["path"]).read_bytes()
-        assert edited_rom[note_address] == 0x81 + edited_pitch, \
+        assert edited_rom[note_address] == 0x81 + edited_pitch, (
             "Qt piano drag did not read back from the independent ROM address"
-        assert_rom_delta(original_rom, edited_rom, [note_address],
-                         "Qt piano-roll drag")
+        )
+        assert_rom_delta(original_rom, edited_rom, [note_address], "Qt piano-roll drag")
 
         sound_path.write_bytes(original_sound)
         restored = build_studio_project(project_file)
-        assert restored["artifact"]["sha256"] == CANONICAL_SHA256, \
+        assert restored["artifact"]["sha256"] == CANONICAL_SHA256, (
             "restoring the sound document must reproduce the exact ROM"
-    print("Flicky Qt piano drag: Save/Build/Verify, independent SFX ROM byte, "
-          "isolated delta, exact restore")
+        )
+    print("Flicky Qt piano drag: Save/Build/Verify, independent SFX ROM byte, isolated delta, exact restore")
     return 0
 
 

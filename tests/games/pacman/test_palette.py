@@ -17,22 +17,38 @@ def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
     values = bytearray(range(32))
     for left, right in ((0, 16), (4, 20), (8, 24), (12, 28)):
         values[right] = values[left]
-    image = b"NES\x1a" + bytes((1, 1, 0, 0)) + bytes(8) \
-        + bytes(values) + bytes(0x4000 - 32) + bytes(0x2000)
+    image = b"NES\x1a" + bytes((1, 1, 0, 0)) + bytes(8) + bytes(values) + bytes(0x4000 - 32) + bytes(0x2000)
     revision = RevisionSpec(
-        "probe-v1", "palette probe", len(image), hashlib.sha1(image).hexdigest(),
-        hashlib.sha256(image).hexdigest(), "ines", 0,
+        "probe-v1",
+        "palette probe",
+        len(image),
+        hashlib.sha1(image).hexdigest(),
+        hashlib.sha256(image).hexdigest(),
+        "ines",
+        0,
     )
     pairs = [[0, 16], [4, 20], [8, 24], [12, 28]]
     profile = GameProfile(
-        "palette-probe", 1, "palette probe", "nes", ("palettes",),
+        "palette-probe",
+        1,
+        "palette probe",
+        "nes",
+        ("palettes",),
         (revision,),
         (
             ResourceSpec("bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"),
-            ResourceSpec("palette", "palette", "pacman.palette-table.v1", "fixed", {
-                "file_offset": 16, "size": 32, "entries": 32,
-                "mirror_pairs": pairs,
-            }),
+            ResourceSpec(
+                "palette",
+                "palette",
+                "pacman.palette-table.v1",
+                "fixed",
+                {
+                    "file_offset": 16,
+                    "size": 32,
+                    "entries": 32,
+                    "mirror_pairs": pairs,
+                },
+            ),
         ),
     )
     return image, profile, revision
@@ -48,9 +64,7 @@ class PacmanPaletteTests(unittest.TestCase):
         raw = copy.deepcopy(document.as_dict())
         raw["resources"][0]["values"][0] = 0x2A
         raw["resources"][0]["values"][16] = 0x2A
-        edited, report = build_resources(
-            image, parse_resource_document(raw, profile, revision), profile, revision
-        )
+        edited, report = build_resources(image, parse_resource_document(raw, profile, revision), profile, revision)
         self.assertEqual((edited[16], edited[32]), (0x2A, 0x2A))
         self.assertEqual(report["changed_bytes"], 2)
 
@@ -71,36 +85,54 @@ class PacmanPaletteTests(unittest.TestCase):
         image[60] = 0x23
         image = bytes(image)
         revision = RevisionSpec(
-            "probe-v1", "replicated palette probe", len(image),
-            hashlib.sha1(image).hexdigest(), hashlib.sha256(image).hexdigest(),
-            "ines", 0,
+            "probe-v1",
+            "replicated palette probe",
+            len(image),
+            hashlib.sha1(image).hexdigest(),
+            hashlib.sha256(image).hexdigest(),
+            "ines",
+            0,
         )
         profile = GameProfile(
-            "palette-probe", 1, "palette probe", "nes", ("palettes",),
-            (revision,), (
+            "palette-probe",
+            1,
+            "palette probe",
+            "nes",
+            ("palettes",),
+            (revision,),
+            (
                 ResourceSpec("bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"),
-                ResourceSpec("dynamic", "palette", "pacman.palette-table.v1", "fixed", {
-                    "entries": 2,
-                    "replicated_file_offsets": [[20, 40], [60]],
-                    "mirror_pairs": [],
-                }),
+                ResourceSpec(
+                    "dynamic",
+                    "palette",
+                    "pacman.palette-table.v1",
+                    "fixed",
+                    {
+                        "entries": 2,
+                        "replicated_file_offsets": [[20, 40], [60]],
+                        "mirror_pairs": [],
+                    },
+                ),
             ),
         )
         document = decode_resources(image, profile, revision)
         self.assertEqual(document.resources[0]["values"], [0x12, 0x23])
         raw = document.as_dict()
         raw["resources"][0]["values"] = [0x2A, 0x31]
-        edited, report = build_resources(
-            image, parse_resource_document(raw, profile, revision), profile, revision
-        )
+        edited, report = build_resources(image, parse_resource_document(raw, profile, revision), profile, revision)
         self.assertEqual((edited[20], edited[40], edited[60]), (0x2A, 0x2A, 0x31))
         self.assertEqual((report["resources"][0]["size"], report["changed_bytes"]), (3, 3))
 
         mismatched = bytearray(image)
         mismatched[40] = 0x13
         bad_revision = RevisionSpec(
-            "bad", "bad", len(mismatched), hashlib.sha1(mismatched).hexdigest(),
-            hashlib.sha256(mismatched).hexdigest(), "ines", 0,
+            "bad",
+            "bad",
+            len(mismatched),
+            hashlib.sha1(mismatched).hexdigest(),
+            hashlib.sha256(mismatched).hexdigest(),
+            "ines",
+            0,
         )
         with self.assertRaisesRegex(Exception, "replicas differ"):
             decode_resources(bytes(mismatched), profile, bad_revision)

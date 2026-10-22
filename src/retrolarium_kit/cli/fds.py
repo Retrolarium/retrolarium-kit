@@ -28,17 +28,22 @@ def command_fds_write(args: argparse.Namespace) -> None:
         image = replace_fds_payload(image, file_ids, Path(path).read_bytes())
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(image)
-    print_json({"status": "written", "output": str(args.output), "size": len(image),
-                "sha1": hashlib.sha1(image).hexdigest()})
+    print_json(
+        {"status": "written", "output": str(args.output), "size": len(image), "sha1": hashlib.sha1(image).hexdigest()}
+    )
 
 
 def add_parsers(commands: argparse._SubParsersAction) -> None:
     group = commands.add_parser("fds", help="Famicom Disk System sides a game's build writes")
     actions = group.add_subparsers(dest="fds_command", required=True)
-    write = actions.add_parser(
-        "write", help="lay built program files over the data of a side's disk files")
+    write = actions.add_parser("write", help="lay built program files over the data of a side's disk files")
     write.add_argument("--disk", required=True, type=Path, help="the side the files go into (raw, no header)")
-    write.add_argument("--file", action="append", default=[], metavar="IDS=PATH",
-                       help="disk file IDs (comma-separated, in order) and the built file that fills them")
+    write.add_argument(
+        "--file",
+        action="append",
+        default=[],
+        metavar="IDS=PATH",
+        help="disk file IDs (comma-separated, in order) and the built file that fills them",
+    )
     write.add_argument("--output", required=True, type=Path)
     write.set_defaults(handler=command_fds_write)

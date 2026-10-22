@@ -7,8 +7,16 @@ import hashlib
 from typing import Mapping
 
 from retrolarium_kit.core.authoring import (
-    Address, AddressRange, AuthoringError, BuildPlan, Change, ChangeSet,
-    GameProfile, Provenance, ResourceSpec, RevisionSpec,
+    Address,
+    AddressRange,
+    AuthoringError,
+    BuildPlan,
+    Change,
+    ChangeSet,
+    GameProfile,
+    Provenance,
+    ResourceSpec,
+    RevisionSpec,
 )
 from retrolarium_core.ines import parse_ines
 
@@ -66,9 +74,7 @@ class SolomonSpriteFrameDocument:
 
 
 def _resource(profile: GameProfile, revision: RevisionSpec) -> ResourceSpec:
-    matches = [
-        item for item in profile.resources_for(revision) if item.codec == CODEC
-    ]
+    matches = [item for item in profile.resources_for(revision) if item.codec == CODEC]
     if len(matches) != 1:
         raise SolomonSpriteFrameError("Solomon profile needs one sprite-frame resource")
     return matches[0]
@@ -99,9 +105,7 @@ def _source(source: bytes, revision: RevisionSpec):
 def _byte(prg: bytes, address: int) -> int:
     offset = address - 0x8000
     if not 0 <= offset < len(prg):
-        raise SolomonSpriteFrameError(
-            f"sprite animation address ${address:04X} is outside PRG"
-        )
+        raise SolomonSpriteFrameError(f"sprite animation address ${address:04X} is outside PRG")
     return prg[offset]
 
 
@@ -118,8 +122,11 @@ def _initial_frame_offset(initial_phase: int) -> int:
 
 
 def _frame_offset(
-    prg: bytes, pointer_table: int, pointer_index: int,
-    action: int, variant: int,
+    prg: bytes,
+    pointer_table: int,
+    pointer_index: int,
+    action: int,
+    variant: int,
 ) -> int:
     group = _word(prg, pointer_table + pointer_index * 2)
     descriptor = group + action * 4
@@ -131,28 +138,24 @@ def _frame_offset(
     frame_address = frame_pointer + _initial_frame_offset(initial_phase)
     offset = frame_address - 0x8000
     if not 0 <= offset <= len(prg) - 3:
-        raise SolomonSpriteFrameError(
-            f"sprite frame at ${frame_address:04X} escapes PRG"
-        )
+        raise SolomonSpriteFrameError(f"sprite frame at ${frame_address:04X} escapes PRG")
     return offset
 
 
 def _bindings(
-    prg: bytes, pointer_offset: int, configuration_offset: int,
+    prg: bytes,
+    pointer_offset: int,
+    configuration_offset: int,
 ) -> dict[int, tuple[list[int], list[str]]]:
     pointer_table = pointer_offset + 0x8000
     configuration = configuration_offset + 0x8000
     result: dict[int, tuple[list[int], list[str]]] = {}
     for enemy_type in range(ENEMY_TYPE_FIRST, ENEMY_TYPE_FIRST + ENEMY_TYPE_COUNT):
-        flags = _byte(
-            prg, configuration + ((enemy_type - ENEMY_TYPE_FIRST) >> 2)
-        )
+        flags = _byte(prg, configuration + ((enemy_type - ENEMY_TYPE_FIRST) >> 2))
         action = enemy_type & 3
         if not flags & 0x08:
             action |= 0x18
-        offset = _frame_offset(
-            prg, pointer_table, enemy_type >> 2, action, enemy_type & 3
-        )
+        offset = _frame_offset(prg, pointer_table, enemy_type >> 2, action, enemy_type & 3)
         result.setdefault(offset, ([], []))[0].append(enemy_type)
     for facing, action in PLAYER_ACTIONS.items():
         offset = _frame_offset(prg, pointer_table, 0, action, 0)
@@ -163,23 +166,28 @@ def _bindings(
     return result
 
 
-def decode_sprite_frames(
-    source: bytes, profile: GameProfile, revision: RevisionSpec
-) -> SolomonSpriteFrameDocument:
+def decode_sprite_frames(source: bytes, profile: GameProfile, revision: RevisionSpec) -> SolomonSpriteFrameDocument:
     image = _source(source, revision)
-    pointer_offset, configuration_offset = _table_offsets(
-        _resource(profile, revision)
-    )
+    pointer_offset, configuration_offset = _table_offsets(_resource(profile, revision))
     bindings = _bindings(image.prg, pointer_offset, configuration_offset)
     frames = []
     for offset, (enemy_types, facings) in sorted(bindings.items()):
-        left, right, flags = image.prg[offset:offset + 3]
-        frames.append(SpriteFrame(
-            offset, left, right, flags,
-            tuple(enemy_types), tuple(facings),
-        ))
+        left, right, flags = image.prg[offset : offset + 3]
+        frames.append(
+            SpriteFrame(
+                offset,
+                left,
+                right,
+                flags,
+                tuple(enemy_types),
+                tuple(facings),
+            )
+        )
     return SolomonSpriteFrameDocument(
-        profile.game_id, revision.revision_id, revision.sha256, tuple(frames),
+        profile.game_id,
+        revision.revision_id,
+        revision.sha256,
+        tuple(frames),
     )
 
 
@@ -194,13 +202,19 @@ def parse_sprite_frame_document(
 ) -> SolomonSpriteFrameDocument:
     _table_offsets(_resource(profile, revision))
     if not isinstance(value, Mapping) or set(value) != {
-        "schema", "schema_version", "game", "revision",
-        "source_sha256", "frames",
+        "schema",
+        "schema_version",
+        "game",
+        "revision",
+        "source_sha256",
+        "frames",
     }:
         raise SolomonSpriteFrameError("sprite-frame document fields differ")
     for name, expected in (
-        ("schema", SCHEMA), ("schema_version", VERSION),
-        ("game", profile.game_id), ("revision", revision.revision_id),
+        ("schema", SCHEMA),
+        ("schema_version", VERSION),
+        ("game", profile.game_id),
+        ("revision", revision.revision_id),
         ("source_sha256", revision.sha256),
     ):
         if value.get(name) != expected:
@@ -213,8 +227,12 @@ def parse_sprite_frame_document(
     seen_facings: set[str] = set()
     previous_end = -1
     required = {
-        "prg_offset", "left_tile", "right_tile", "flags",
-        "enemy_types", "player_facings",
+        "prg_offset",
+        "left_tile",
+        "right_tile",
+        "flags",
+        "enemy_types",
+        "player_facings",
     }
     for index, raw in enumerate(raw_frames):
         if not isinstance(raw, Mapping) or set(raw) != required:
@@ -232,43 +250,45 @@ def parse_sprite_frame_document(
         if not enemy_types and not facings:
             raise SolomonSpriteFrameError("sprite frame has no enemy or player binding")
         if any(
-            type(item) is not int
-            or not ENEMY_TYPE_FIRST <= item < ENEMY_TYPE_FIRST + ENEMY_TYPE_COUNT
+            type(item) is not int or not ENEMY_TYPE_FIRST <= item < ENEMY_TYPE_FIRST + ENEMY_TYPE_COUNT
             for item in enemy_types
         ) or enemy_types != sorted(set(enemy_types)):
             raise SolomonSpriteFrameError("sprite-frame enemy bindings are invalid")
-        if (
-            any(type(item) is not str or item not in PLAYER_ACTIONS
-                for item in facings)
-            or facings != [item for item in PLAYER_ACTIONS if item in facings]
-        ):
+        if any(type(item) is not str or item not in PLAYER_ACTIONS for item in facings) or facings != [
+            item for item in PLAYER_ACTIONS if item in facings
+        ]:
             raise SolomonSpriteFrameError("sprite-frame player bindings are invalid")
         if seen_enemies.intersection(enemy_types) or seen_facings.intersection(facings):
             raise SolomonSpriteFrameError("sprite-frame bindings are duplicated")
         seen_enemies.update(enemy_types)
         seen_facings.update(facings)
-        frames.append(SpriteFrame(
-            offset,
-            _byte_field(raw["left_tile"], f"frame {index}.left_tile"),
-            _byte_field(raw["right_tile"], f"frame {index}.right_tile"),
-            _byte_field(raw["flags"], f"frame {index}.flags"),
-            tuple(enemy_types), tuple(facings),
-        ))
-    if (
-        seen_enemies != set(range(
-            ENEMY_TYPE_FIRST, ENEMY_TYPE_FIRST + ENEMY_TYPE_COUNT
-        ))
-        or seen_facings != set(PLAYER_ACTIONS)
+        frames.append(
+            SpriteFrame(
+                offset,
+                _byte_field(raw["left_tile"], f"frame {index}.left_tile"),
+                _byte_field(raw["right_tile"], f"frame {index}.right_tile"),
+                _byte_field(raw["flags"], f"frame {index}.flags"),
+                tuple(enemy_types),
+                tuple(facings),
+            )
+        )
+    if seen_enemies != set(range(ENEMY_TYPE_FIRST, ENEMY_TYPE_FIRST + ENEMY_TYPE_COUNT)) or seen_facings != set(
+        PLAYER_ACTIONS
     ):
         raise SolomonSpriteFrameError("sprite-frame bindings do not cover all types")
     return SolomonSpriteFrameDocument(
-        profile.game_id, revision.revision_id, revision.sha256, tuple(frames),
+        profile.game_id,
+        revision.revision_id,
+        revision.sha256,
+        tuple(frames),
     )
 
 
 def build_sprite_frames(
-    source: bytes, document: SolomonSpriteFrameDocument,
-    profile: GameProfile, revision: RevisionSpec,
+    source: bytes,
+    document: SolomonSpriteFrameDocument,
+    profile: GameProfile,
+    revision: RevisionSpec,
 ) -> tuple[bytes, dict[str, object]]:
     image = _source(source, revision)
     checked = parse_sprite_frame_document(document.as_dict(), profile, revision)
@@ -277,21 +297,23 @@ def build_sprite_frames(
         raise SolomonSpriteFrameError("sprite-frame layout differs from source")
     for index, (edited, baseline) in enumerate(zip(checked.frames, original.frames)):
         if (edited.prg_offset, edited.enemy_types, edited.player_facings) != (
-            baseline.prg_offset, baseline.enemy_types, baseline.player_facings
+            baseline.prg_offset,
+            baseline.enemy_types,
+            baseline.player_facings,
         ):
-            raise SolomonSpriteFrameError(
-                f"sprite frame {index} binding differs from source"
-            )
+            raise SolomonSpriteFrameError(f"sprite frame {index} binding differs from source")
     base = len(image.header) + len(image.trainer)
     changes = []
     for index, frame in enumerate(checked.frames):
         file_offset = base + frame.prg_offset
-        changes.append(Change(
-            AddressRange(Address("file", file_offset), 3),
-            source[file_offset:file_offset + 3],
-            bytes((frame.left_tile, frame.right_tile, frame.flags)),
-            Provenance(revision.sha256, f"sprite-frame-{index}", "encode"),
-        ))
+        changes.append(
+            Change(
+                AddressRange(Address("file", file_offset), 3),
+                source[file_offset : file_offset + 3],
+                bytes((frame.left_tile, frame.right_tile, frame.flags)),
+                Provenance(revision.sha256, f"sprite-frame-{index}", "encode"),
+            )
+        )
     output = BuildPlan(revision.sha256, ChangeSet(tuple(changes))).apply(source)
     return output, {
         "schema": "retrolarium.solomon-sprite-frames-build",

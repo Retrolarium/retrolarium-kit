@@ -61,15 +61,9 @@ def _resources(value: object, name: str) -> tuple[ResourceSpec, ...]:
                 resource_id=_string(item.get("id"), f"{item_name}.id"),
                 kind=_string(item.get("kind"), f"{item_name}.kind"),
                 codec=_string(item.get("codec"), f"{item_name}.codec"),
-                capacity_policy=_string(
-                    item.get("capacity_policy"), f"{item_name}.capacity_policy"
-                ),
+                capacity_policy=_string(item.get("capacity_policy"), f"{item_name}.capacity_policy"),
                 parameters=parameters,
-                payload=(
-                    _string(item.get("payload"), f"{item_name}.payload")
-                    if "payload" in item
-                    else None
-                ),
+                payload=(_string(item.get("payload"), f"{item_name}.payload") if "payload" in item else None),
             )
         )
     return tuple(specs)
@@ -99,9 +93,7 @@ def _payloads(value: object, name: str) -> tuple[PayloadSpec, ...]:
     return tuple(payloads)
 
 
-def _resource_overrides(
-    value: object, name: str
-) -> tuple[ResourceOverrideSpec, ...]:
+def _resource_overrides(value: object, name: str) -> tuple[ResourceOverrideSpec, ...]:
     if not isinstance(value, list):
         raise AuthoringError(f"{name} must be an array")
     overrides = []
@@ -111,14 +103,8 @@ def _resource_overrides(
         overrides.append(
             ResourceOverrideSpec(
                 resource_id=_string(item.get("id"), f"{item_name}.id"),
-                parameters=_mapping(
-                    item.get("parameters", {}), f"{item_name}.parameters"
-                ),
-                payload=(
-                    _string(item.get("payload"), f"{item_name}.payload")
-                    if "payload" in item
-                    else None
-                ),
+                parameters=_mapping(item.get("parameters", {}), f"{item_name}.parameters"),
+                payload=(_string(item.get("payload"), f"{item_name}.payload") if "payload" in item else None),
             )
         )
     return tuple(overrides)
@@ -142,45 +128,32 @@ def parse_game_profile(document: object) -> GameProfile:
     for index, raw in enumerate(revisions_value):
         item = _mapping(raw, f"revisions[{index}]")
         revision_capabilities = (
-            _capabilities(
-                item.get("capabilities"), f"revisions[{index}].capabilities"
-            )
+            _capabilities(item.get("capabilities"), f"revisions[{index}].capabilities")
             if "capabilities" in item
             else None
         )
         revision_resources = (
-            _resources(item.get("resources"), f"revisions[{index}].resources")
-            if "resources" in item
-            else None
+            _resources(item.get("resources"), f"revisions[{index}].resources") if "resources" in item else None
         )
         revision_resource_overrides = _resource_overrides(
             item.get("resource_overrides", []),
             f"revisions[{index}].resource_overrides",
         )
-        revision_payloads = _payloads(
-            item.get("payloads", []), f"revisions[{index}].payloads"
-        )
+        revision_payloads = _payloads(item.get("payloads", []), f"revisions[{index}].payloads")
         revisions.append(
             RevisionSpec(
                 revision_id=_string(item.get("id"), f"revisions[{index}].id"),
                 name=_string(item.get("name"), f"revisions[{index}].name"),
                 size=item.get("size"),
                 sha1=_string(item.get("sha1"), f"revisions[{index}].sha1"),
-                sha256=_string(
-                    item.get("sha256"), f"revisions[{index}].sha256"
-                ),
-                container=_string(
-                    item.get("container"), f"revisions[{index}].container"
-                ),
+                sha256=_string(item.get("sha256"), f"revisions[{index}].sha256"),
+                container=_string(item.get("container"), f"revisions[{index}].container"),
                 mapper=item.get("mapper"),
                 capabilities=revision_capabilities,
                 resources=revision_resources,
                 resource_overrides=revision_resource_overrides,
                 payloads=revision_payloads,
-                playtest=(
-                    _mapping(item["playtest"], f"revisions[{index}].playtest")
-                    if "playtest" in item else None
-                ),
+                playtest=(_mapping(item["playtest"], f"revisions[{index}].playtest") if "playtest" in item else None),
             )
         )
 
@@ -251,9 +224,7 @@ def game_profiles() -> Registry[GameProfile]:
     return registry
 
 
-def recognize_revision(
-    image: bytes, profiles: Iterable[GameProfile] | None = None
-) -> tuple[GameProfile, RevisionSpec]:
+def recognize_revision(image: bytes, profiles: Iterable[GameProfile] | None = None) -> tuple[GameProfile, RevisionSpec]:
     if profiles is None:
         registry = game_profiles()
         candidates = tuple(registry.get(identifier) for identifier in registry.identifiers())
@@ -264,10 +235,6 @@ def recognize_revision(
         for revision in profile.revisions:
             if revision.size == len(image) and revision.sha256 == sha256:
                 if hashlib.sha1(image).hexdigest() != revision.sha1:
-                    raise AuthoringError(
-                        f"revision {revision.revision_id} SHA-1 contradicts SHA-256"
-                    )
+                    raise AuthoringError(f"revision {revision.revision_id} SHA-1 contradicts SHA-256")
                 return profile, revision
-    raise AuthoringError(
-        f"unsupported game revision: size={len(image)} sha256={sha256}"
-    )
+    raise AuthoringError(f"unsupported game revision: size={len(image)} sha256={sha256}")

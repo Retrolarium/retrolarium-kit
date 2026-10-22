@@ -45,16 +45,13 @@ def mapping_bytes(mapping: dict) -> bytes:
     return bytes(output)
 
 
-def assert_rom_delta(original: bytes, edited: bytes,
-                     expected_payload_offsets: list[int], label: str) -> None:
+def assert_rom_delta(original: bytes, edited: bytes, expected_payload_offsets: list[int], label: str) -> None:
     """Allow only the intended payload edit and its required header checksum."""
     assert len(original) == len(edited)
     checksum = cartridge_checksum(edited).to_bytes(2, "big")
     assert edited[0x18E:0x190] == checksum, f"{label} ROM has stale checksum"
-    header_offsets = [0x18E + index for index in range(2)
-                      if original[0x18E + index] != checksum[index]]
-    differences = [index for index, pair in enumerate(zip(original, edited))
-                   if pair[0] != pair[1]]
+    header_offsets = [0x18E + index for index in range(2) if original[0x18E + index] != checksum[index]]
+    differences = [index for index, pair in enumerate(zip(original, edited)) if pair[0] != pair[1]]
     assert differences == sorted(header_offsets + expected_payload_offsets), (
         f"{label} changed unexpected ROM offsets: {differences[:16]}"
     )
@@ -72,8 +69,9 @@ def timer_animation_address(rom: bytes, delay: int) -> tuple[int, list[int]]:
         payload = b"".join(word.to_bytes(2, "big") for word in words)
         assert rom.count(payload) == 1, "timer data table is not unique in ROM"
         addresses.append(rom.find(payload))
-    header = bytes((4, delay)) + b"".join(address.to_bytes(4, "big")
-        for address in (addresses[0], addresses[1], addresses[2], addresses[0]))
+    header = bytes((4, delay)) + b"".join(
+        address.to_bytes(4, "big") for address in (addresses[0], addresses[1], addresses[2], addresses[0])
+    )
     assert rom.count(header) == 1, "UI_TimerAnim header is not unique in ROM"
     return rom.find(header), addresses
 
@@ -90,16 +88,19 @@ def main() -> int:
     parser.add_argument("--source-root", type=Path, required=True)
     parser.add_argument("--rom", type=Path, required=True)
     parser.add_argument("--native-writer", type=Path, required=True)
-    parser.add_argument("--native-level-editor", type=Path,
-                        help="exercise the Qt editor's save path before ROM build")
-    parser.add_argument("--native-graphics-editor", type=Path,
-                        help="exercise 1bpp Qt pixel edit and independent ROM readback")
-    parser.add_argument("--native-semantics-editor", type=Path,
-                        help="exercise Qt text/palette edits and independent ROM readback")
-    parser.add_argument("--native-sequences-editor", type=Path,
-                        help="exercise Qt sprite mapping/animation edits and ROM readback")
-    parser.add_argument("--native-sound-editor", type=Path,
-                        help="exercise Qt note/FM voice/tempo edits and ROM readback")
+    parser.add_argument("--native-level-editor", type=Path, help="exercise the Qt editor's save path before ROM build")
+    parser.add_argument(
+        "--native-graphics-editor", type=Path, help="exercise 1bpp Qt pixel edit and independent ROM readback"
+    )
+    parser.add_argument(
+        "--native-semantics-editor", type=Path, help="exercise Qt text/palette edits and independent ROM readback"
+    )
+    parser.add_argument(
+        "--native-sequences-editor", type=Path, help="exercise Qt sprite mapping/animation edits and ROM readback"
+    )
+    parser.add_argument(
+        "--native-sound-editor", type=Path, help="exercise Qt note/FM voice/tempo edits and ROM readback"
+    )
     args = parser.parse_args()
     os.environ["RETROLARIUM_FLICKY_LEVEL_WRITER"] = str(args.native_writer.resolve())
 
@@ -122,10 +123,18 @@ def main() -> int:
         document = json.loads(original)
         cell = document["layouts"][0]["collision"][4][0]
         if args.native_level_editor:
-            subprocess.run([
-                str(args.native_level_editor.resolve()), "--edit",
-                str(level_path), "0", "0", "4", str(1 - cell),
-            ], check=True)
+            subprocess.run(
+                [
+                    str(args.native_level_editor.resolve()),
+                    "--edit",
+                    str(level_path),
+                    "0",
+                    "0",
+                    "4",
+                    str(1 - cell),
+                ],
+                check=True,
+            )
             saved = json.loads(level_path.read_text(encoding="utf-8"))
             assert saved["layouts"][0]["collision"][4][0] == 1 - cell
         else:
@@ -138,19 +147,19 @@ def main() -> int:
         assert verify_studio_project(project_file)["status"] == "current"
         edited_bytes = (project / edited["artifact"]["path"]).read_bytes()
         original_bytes = args.rom.read_bytes()
-        changed = [index for index, pair in enumerate(zip(edited_bytes, original_bytes))
-                   if pair[0] != pair[1]]
+        changed = [index for index, pair in enumerate(zip(edited_bytes, original_bytes)) if pair[0] != pair[1]]
         changed_payload = [index for index in changed if index >= 0x200]
-        assert changed_payload and min(changed_payload) >= 0x400, \
-            "edit touched no level data"
-        assert all(index >= 0x400 or index in (0x18E, 0x18F)
-                   for index in changed), "collision edit touched unrelated ROM bytes"
+        assert changed_payload and min(changed_payload) >= 0x400, "edit touched no level data"
+        assert all(index >= 0x400 or index in (0x18E, 0x18F) for index in changed), (
+            "collision edit touched unrelated ROM bytes"
+        )
         edited_artifact = project / edited["artifact"]["path"]
         damaged = bytearray(edited_bytes)
         damaged[0x18E] ^= 1
         edited_artifact.write_bytes(damaged)
-        assert "artifact-checksum" in verify_studio_project(
-            project_file)["differences"], "Verify accepted a stale Mega Drive checksum"
+        assert "artifact-checksum" in verify_studio_project(project_file)["differences"], (
+            "Verify accepted a stale Mega Drive checksum"
+        )
         edited_artifact.write_bytes(edited_bytes)
         assert verify_studio_project(project_file)["status"] == "current"
 
@@ -162,12 +171,9 @@ def main() -> int:
         layout_zero = level_document["layouts"][0]
         level_payload = bytes(layout_zero["baseline_bytes"])
         special_payload = bytes(layout_zero["baseline_special_bytes"])
-        assert original_bytes.count(level_payload) == 1, \
-            "round 1 level payload has no unique ROM address"
-        assert original_bytes.count(special_payload) == 1, \
-            "round 1 special payload has no unique ROM address"
-        player_address = (original_bytes.find(level_payload)
-                          + len(layout_zero["baseline_collision_stream"]))
+        assert original_bytes.count(level_payload) == 1, "round 1 level payload has no unique ROM address"
+        assert original_bytes.count(special_payload) == 1, "round 1 special payload has no unique ROM address"
+        player_address = original_bytes.find(level_payload) + len(layout_zero["baseline_collision_stream"])
         special_address = original_bytes.find(special_payload) + 1
         for field, coordinate, address in (
             ("player", layout_zero["player"], player_address),
@@ -176,19 +182,26 @@ def main() -> int:
             changed_x = coordinate[0] + 1
             assert changed_x < 32
             if args.native_level_editor:
-                subprocess.run([
-                    str(args.native_level_editor.resolve()), "--edit-object",
-                    str(level_path), "0", field, "0", str(changed_x),
-                    str(coordinate[1]),
-                ], check=True)
+                subprocess.run(
+                    [
+                        str(args.native_level_editor.resolve()),
+                        "--edit-object",
+                        str(level_path),
+                        "0",
+                        field,
+                        "0",
+                        str(changed_x),
+                        str(coordinate[1]),
+                    ],
+                    check=True,
+                )
             else:
                 copy = json.loads(level_path.read_text(encoding="utf-8"))
                 if field == "player":
                     copy["layouts"][0][field][0] = changed_x
                 else:
                     copy["layouts"][0][field][0][0] = changed_x
-                level_path.write_text(json.dumps(copy, indent=2) + "\n",
-                                      encoding="utf-8")
+                level_path.write_text(json.dumps(copy, indent=2) + "\n", encoding="utf-8")
             saved_level = json.loads(level_path.read_text(encoding="utf-8"))
             saved_coordinate = saved_level["layouts"][0][field]
             if field != "player":
@@ -198,204 +211,251 @@ def main() -> int:
             object_build = build_studio_project(project_file)
             assert verify_studio_project(project_file)["status"] == "current"
             object_rom = (project / object_build["artifact"]["path"]).read_bytes()
-            assert_rom_delta(original_bytes, object_rom, [address],
-                             f"{field} placement")
-            assert object_rom[address] == changed_x, \
-                f"{field} placement did not read back from ROM"
+            assert_rom_delta(original_bytes, object_rom, [address], f"{field} placement")
+            assert object_rom[address] == changed_x, f"{field} placement did not read back from ROM"
             level_path.write_bytes(original)
-            assert build_studio_project(project_file)["artifact"]["sha256"] \
-                == CANONICAL_SHA256, f"{field} placement restore must be exact"
+            assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, (
+                f"{field} placement restore must be exact"
+            )
 
         graphics_path = project / SOURCE_DIRECTORY / WORKSPACE_FILES["graphics_assets"]
         graphics_original = graphics_path.read_bytes()
         graphics_document = json.loads(graphics_original)
-        font = next(asset for asset in graphics_document["assets"]
-                    if asset["id"] == "japanese_font")
+        font = next(asset for asset in graphics_document["assets"] if asset["id"] == "japanese_font")
         original_pixel = font["tiles"][0][0][0]
         edited_pixel = 1 - original_pixel
         if args.native_graphics_editor:
-            subprocess.run([
-                str(args.native_graphics_editor.resolve()), "--edit",
-                str(graphics_path), "japanese_font", "0", "0", "0",
-                str(edited_pixel),
-            ], check=True)
+            subprocess.run(
+                [
+                    str(args.native_graphics_editor.resolve()),
+                    "--edit",
+                    str(graphics_path),
+                    "japanese_font",
+                    "0",
+                    "0",
+                    "0",
+                    str(edited_pixel),
+                ],
+                check=True,
+            )
             saved_graphics = json.loads(graphics_path.read_text(encoding="utf-8"))
-            saved_font = next(asset for asset in saved_graphics["assets"]
-                              if asset["id"] == "japanese_font")
+            saved_font = next(asset for asset in saved_graphics["assets"] if asset["id"] == "japanese_font")
             assert saved_font["tiles"][0][0][0] == edited_pixel
         else:
             font["tiles"][0][0][0] = edited_pixel
-            graphics_path.write_text(json.dumps(graphics_document, indent=2) + "\n",
-                                     encoding="utf-8")
+            graphics_path.write_text(json.dumps(graphics_document, indent=2) + "\n", encoding="utf-8")
         assert verify_studio_project(project_file)["status"] == "mismatch"
         graphics_build = build_studio_project(project_file)
         assert verify_studio_project(project_file)["status"] == "current"
         graphics_rom = (project / graphics_build["artifact"]["path"]).read_bytes()
         font_address = 0x2372  # assets/manifest.json: Jap1BPPTiles, tile 0 row 0
-        assert graphics_rom[font_address] ^ original_bytes[font_address] == 0x80, \
+        assert graphics_rom[font_address] ^ original_bytes[font_address] == 0x80, (
             "edited font pixel did not read back as the high bit of its ROM byte"
+        )
         assert (graphics_rom[font_address] >> 7) & 1 == edited_pixel
-        assert_rom_delta(original_bytes, graphics_rom, [font_address],
-                         "1bpp pixel edit")
+        assert_rom_delta(original_bytes, graphics_rom, [font_address], "1bpp pixel edit")
         graphics_path.write_bytes(graphics_original)
         graphics_restored = build_studio_project(project_file)
-        assert graphics_restored["artifact"]["sha256"] == CANONICAL_SHA256, \
-            "graphics restore must be exact"
+        assert graphics_restored["artifact"]["sha256"] == CANONICAL_SHA256, "graphics restore must be exact"
 
         semantics_path = project / SOURCE_DIRECTORY / WORKSPACE_FILES["graphics_semantics"]
         semantics_original = semantics_path.read_bytes()
         semantics_document = json.loads(semantics_original)
-        text = next(record for record in semantics_document["texts"]
-                    if record["id"] == "Ending_CongratulationsText")
+        text = next(record for record in semantics_document["texts"] if record["id"] == "Ending_CongratulationsText")
         old_text = text["value"]
         new_text = "D" + old_text[1:]
         old_text_bytes = old_text.encode("ascii")
         text_address = original_bytes.find(old_text_bytes)
-        assert text_address >= 0 and original_bytes.find(
-            old_text_bytes, text_address + 1) < 0, "text ROM address is not unique"
+        assert text_address >= 0 and original_bytes.find(old_text_bytes, text_address + 1) < 0, (
+            "text ROM address is not unique"
+        )
         if args.native_semantics_editor:
-            subprocess.run([
-                str(args.native_semantics_editor.resolve()), "--edit-text",
-                str(semantics_path), text["id"], new_text,
-            ], check=True)
+            subprocess.run(
+                [
+                    str(args.native_semantics_editor.resolve()),
+                    "--edit-text",
+                    str(semantics_path),
+                    text["id"],
+                    new_text,
+                ],
+                check=True,
+            )
         else:
             text["value"] = new_text
-            semantics_path.write_text(json.dumps(semantics_document, indent=2) + "\n",
-                                      encoding="utf-8")
-        assert json.loads(semantics_path.read_text(encoding="utf-8"))["texts"][
-            semantics_document["texts"].index(text)]["value"] == new_text
+            semantics_path.write_text(json.dumps(semantics_document, indent=2) + "\n", encoding="utf-8")
+        assert (
+            json.loads(semantics_path.read_text(encoding="utf-8"))["texts"][semantics_document["texts"].index(text)][
+                "value"
+            ]
+            == new_text
+        )
         assert verify_studio_project(project_file)["status"] == "mismatch"
         text_build = build_studio_project(project_file)
         assert verify_studio_project(project_file)["status"] == "current"
         text_rom = (project / text_build["artifact"]["path"]).read_bytes()
-        assert text_rom[text_address:text_address + len(old_text_bytes)] == new_text.encode("ascii"), \
+        assert text_rom[text_address : text_address + len(old_text_bytes)] == new_text.encode("ascii"), (
             "GUI text did not read back from ROM"
+        )
         assert_rom_delta(original_bytes, text_rom, [text_address], "text edit")
         semantics_path.write_bytes(semantics_original)
-        assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, \
+        assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, (
             "text restore must be exact"
+        )
 
         semantics_document = json.loads(semantics_original)
-        palette = next(record for record in semantics_document["palettes"]
-                       if record["id"] == "Level_Palette0")
+        palette = next(record for record in semantics_document["palettes"] if record["id"] == "Level_Palette0")
         colours = palette["colours"]
         old_palette_bytes = b"".join(colour.to_bytes(2, "big") for colour in colours)
         palette_address = original_bytes.find(old_palette_bytes)
-        assert palette_address >= 0 and original_bytes.find(
-            old_palette_bytes, palette_address + 1) < 0, "palette ROM address is not unique"
+        assert palette_address >= 0 and original_bytes.find(old_palette_bytes, palette_address + 1) < 0, (
+            "palette ROM address is not unique"
+        )
         new_colour = 8 if colours[1] != 8 else 6
         if args.native_semantics_editor:
-            subprocess.run([
-                str(args.native_semantics_editor.resolve()), "--edit-colour",
-                str(semantics_path), palette["id"], "1", str(new_colour),
-            ], check=True)
+            subprocess.run(
+                [
+                    str(args.native_semantics_editor.resolve()),
+                    "--edit-colour",
+                    str(semantics_path),
+                    palette["id"],
+                    "1",
+                    str(new_colour),
+                ],
+                check=True,
+            )
         else:
             colours[1] = new_colour
-            semantics_path.write_text(json.dumps(semantics_document, indent=2) + "\n",
-                                      encoding="utf-8")
-        saved_palette = next(record for record in json.loads(
-            semantics_path.read_text(encoding="utf-8"))["palettes"]
-            if record["id"] == palette["id"])
+            semantics_path.write_text(json.dumps(semantics_document, indent=2) + "\n", encoding="utf-8")
+        saved_palette = next(
+            record
+            for record in json.loads(semantics_path.read_text(encoding="utf-8"))["palettes"]
+            if record["id"] == palette["id"]
+        )
         assert saved_palette["colours"][1] == new_colour
         assert verify_studio_project(project_file)["status"] == "mismatch"
         palette_build = build_studio_project(project_file)
         assert verify_studio_project(project_file)["status"] == "current"
         palette_rom = (project / palette_build["artifact"]["path"]).read_bytes()
         palette_word = palette_address + 2
-        assert palette_rom[palette_word:palette_word + 2] == new_colour.to_bytes(2, "big"), \
+        assert palette_rom[palette_word : palette_word + 2] == new_colour.to_bytes(2, "big"), (
             "GUI CRAM colour did not read back from ROM"
-        assert_rom_delta(original_bytes, palette_rom, [palette_word + 1],
-                         "palette edit")
+        )
+        assert_rom_delta(original_bytes, palette_rom, [palette_word + 1], "palette edit")
         semantics_path.write_bytes(semantics_original)
-        assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, \
+        assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, (
             "palette restore must be exact"
+        )
 
         sequences_path = project / SOURCE_DIRECTORY / WORKSPACE_FILES["graphics_sequences"]
         sequences_original = sequences_path.read_bytes()
         sequences_document = json.loads(sequences_original)
-        mapping = next(record for record in sequences_document["mappings"]
-                       if record["id"] in ("Obj_TitlePushStartData", "Obj_TitleCursorData"))
+        mapping = next(
+            record
+            for record in sequences_document["mappings"]
+            if record["id"] in ("Obj_TitlePushStartData", "Obj_TitleCursorData")
+        )
         original_mapping = mapping_bytes(mapping)
-        assert original_bytes.count(original_mapping) == 1, \
-            "source mapping has no unique ROM address"
+        assert original_bytes.count(original_mapping) == 1, "source mapping has no unique ROM address"
         mapping_address = original_bytes.find(original_mapping)
         old_x = mapping["pieces"][0]["x"]
         new_x = old_x + 1 if old_x < 127 else old_x - 1
         if args.native_sequences_editor:
-            subprocess.run([
-                str(args.native_sequences_editor.resolve()), "--edit-mapping-x",
-                str(sequences_path), mapping["id"], "0", str(new_x),
-            ], check=True)
+            subprocess.run(
+                [
+                    str(args.native_sequences_editor.resolve()),
+                    "--edit-mapping-x",
+                    str(sequences_path),
+                    mapping["id"],
+                    "0",
+                    str(new_x),
+                ],
+                check=True,
+            )
         else:
             mapping["pieces"][0]["x"] = new_x
-            sequences_path.write_text(json.dumps(sequences_document, indent=2) + "\n",
-                                      encoding="utf-8")
-        saved_mapping = next(record for record in json.loads(
-            sequences_path.read_text(encoding="utf-8"))["mappings"]
-            if record["id"] == mapping["id"])
+            sequences_path.write_text(json.dumps(sequences_document, indent=2) + "\n", encoding="utf-8")
+        saved_mapping = next(
+            record
+            for record in json.loads(sequences_path.read_text(encoding="utf-8"))["mappings"]
+            if record["id"] == mapping["id"]
+        )
         assert saved_mapping["pieces"][0]["x"] == new_x
         assert verify_studio_project(project_file)["status"] == "mismatch"
         mapping_build = build_studio_project(project_file)
         assert verify_studio_project(project_file)["status"] == "current"
         mapping_rom = (project / mapping_build["artifact"]["path"]).read_bytes()
         mapping_x_address = mapping_address + 2 + 4
-        assert mapping_rom[mapping_x_address] == new_x & 0xFF, \
-            "GUI sprite x did not read back from ROM"
-        assert_rom_delta(original_bytes, mapping_rom, [mapping_x_address],
-                         "mapping edit")
+        assert mapping_rom[mapping_x_address] == new_x & 0xFF, "GUI sprite x did not read back from ROM"
+        assert_rom_delta(original_bytes, mapping_rom, [mapping_x_address], "mapping edit")
         sequences_path.write_bytes(sequences_original)
-        assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, \
+        assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, (
             "mapping restore must be exact"
+        )
 
         sequences_document = json.loads(sequences_original)
-        animation = next(record for record in sequences_document["animations"]
-                         if record["id"] == "UI_TimerAnim")
+        animation = next(record for record in sequences_document["animations"] if record["id"] == "UI_TimerAnim")
         assert animation["kind"] == "tilemap" and animation["frames"] == [
-            "UI_TimerData0", "UI_TimerData1", "UI_TimerData2", "UI_TimerData0"]
-        animation_address, timer_addresses = timer_animation_address(
-            original_bytes, animation["delay"])
+            "UI_TimerData0",
+            "UI_TimerData1",
+            "UI_TimerData2",
+            "UI_TimerData0",
+        ]
+        animation_address, timer_addresses = timer_animation_address(original_bytes, animation["delay"])
         new_delay = animation["delay"] - 1
         if args.native_sequences_editor:
-            subprocess.run([
-                str(args.native_sequences_editor.resolve()), "--edit-animation-delay",
-                str(sequences_path), animation["id"], str(new_delay),
-            ], check=True)
+            subprocess.run(
+                [
+                    str(args.native_sequences_editor.resolve()),
+                    "--edit-animation-delay",
+                    str(sequences_path),
+                    animation["id"],
+                    str(new_delay),
+                ],
+                check=True,
+            )
         else:
             animation["delay"] = new_delay
-            sequences_path.write_text(json.dumps(sequences_document, indent=2) + "\n",
-                                      encoding="utf-8")
-        saved_animation = next(record for record in json.loads(
-            sequences_path.read_text(encoding="utf-8"))["animations"]
-            if record["id"] == animation["id"])
+            sequences_path.write_text(json.dumps(sequences_document, indent=2) + "\n", encoding="utf-8")
+        saved_animation = next(
+            record
+            for record in json.loads(sequences_path.read_text(encoding="utf-8"))["animations"]
+            if record["id"] == animation["id"]
+        )
         assert saved_animation["delay"] == new_delay
         assert verify_studio_project(project_file)["status"] == "mismatch"
         animation_build = build_studio_project(project_file)
         assert verify_studio_project(project_file)["status"] == "current"
         animation_rom = (project / animation_build["artifact"]["path"]).read_bytes()
-        assert animation_rom[animation_address + 1] == new_delay, \
-            "GUI animation delay did not read back from ROM"
-        assert_rom_delta(original_bytes, animation_rom, [animation_address + 1],
-                         "animation edit")
+        assert animation_rom[animation_address + 1] == new_delay, "GUI animation delay did not read back from ROM"
+        assert_rom_delta(original_bytes, animation_rom, [animation_address + 1], "animation edit")
         sequences_path.write_bytes(sequences_original)
-        assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, \
+        assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, (
             "animation restore must be exact"
+        )
 
         sequences_document = json.loads(sequences_original)
-        animation = next(record for record in sequences_document["animations"]
-                         if record["id"] == "UI_TimerAnim")
+        animation = next(record for record in sequences_document["animations"] if record["id"] == "UI_TimerAnim")
         new_frame = "UI_TimerData1"
         if args.native_sequences_editor:
-            subprocess.run([
-                str(args.native_sequences_editor.resolve()), "--edit-animation-frame",
-                str(sequences_path), animation["id"], "0", new_frame,
-            ], check=True)
+            subprocess.run(
+                [
+                    str(args.native_sequences_editor.resolve()),
+                    "--edit-animation-frame",
+                    str(sequences_path),
+                    animation["id"],
+                    "0",
+                    new_frame,
+                ],
+                check=True,
+            )
         else:
             animation["frames"][0] = new_frame
-            sequences_path.write_text(json.dumps(sequences_document, indent=2) + "\n",
-                                      encoding="utf-8")
-        saved_animation = next(record for record in json.loads(
-            sequences_path.read_text(encoding="utf-8"))["animations"]
-            if record["id"] == animation["id"])
+            sequences_path.write_text(json.dumps(sequences_document, indent=2) + "\n", encoding="utf-8")
+        saved_animation = next(
+            record
+            for record in json.loads(sequences_path.read_text(encoding="utf-8"))["animations"]
+            if record["id"] == animation["id"]
+        )
         assert saved_animation["frames"][0] == new_frame
         assert verify_studio_project(project_file)["status"] == "mismatch"
         frame_build = build_studio_project(project_file)
@@ -403,56 +463,68 @@ def main() -> int:
         frame_rom = (project / frame_build["artifact"]["path"]).read_bytes()
         pointer_address = animation_address + 2
         new_pointer = timer_addresses[1].to_bytes(4, "big")
-        assert frame_rom[pointer_address:pointer_address + 4] == new_pointer, \
+        assert frame_rom[pointer_address : pointer_address + 4] == new_pointer, (
             "GUI animation frame pointer did not read back from ROM"
-        expected_pointer_differences = [pointer_address + index
-            for index, (before, after) in enumerate(zip(
-                timer_addresses[0].to_bytes(4, "big"), new_pointer))
-            if before != after]
-        assert_rom_delta(original_bytes, frame_rom, expected_pointer_differences,
-                         "animation frame edit")
+        )
+        expected_pointer_differences = [
+            pointer_address + index
+            for index, (before, after) in enumerate(zip(timer_addresses[0].to_bytes(4, "big"), new_pointer))
+            if before != after
+        ]
+        assert_rom_delta(original_bytes, frame_rom, expected_pointer_differences, "animation frame edit")
         sequences_path.write_bytes(sequences_original)
-        assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, \
+        assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, (
             "animation frame restore must be exact"
+        )
 
         sequences_document = json.loads(sequences_original)
-        bonus = next(record for record in sequences_document["bonus_motion"]
-                     if record["id"] == "Bonus_ChickDelays0")
+        bonus = next(record for record in sequences_document["bonus_motion"] if record["id"] == "Bonus_ChickDelays0")
         bonus_payload = b"".join(word.to_bytes(2, "big") for word in bonus["words"])
-        assert original_bytes.count(bonus_payload) == 1, \
-            "bonus delay table has no unique ROM address"
+        assert original_bytes.count(bonus_payload) == 1, "bonus delay table has no unique ROM address"
         bonus_address = original_bytes.find(bonus_payload)
         old_bonus_word = bonus["words"][1]
         new_bonus_word = old_bonus_word - 1
         if args.native_sequences_editor:
-            subprocess.run([
-                str(args.native_sequences_editor.resolve()), "--edit-bonus-word",
-                str(sequences_path), bonus["id"], "1", str(new_bonus_word),
-            ], check=True)
+            subprocess.run(
+                [
+                    str(args.native_sequences_editor.resolve()),
+                    "--edit-bonus-word",
+                    str(sequences_path),
+                    bonus["id"],
+                    "1",
+                    str(new_bonus_word),
+                ],
+                check=True,
+            )
         else:
             bonus["words"][1] = new_bonus_word
-            sequences_path.write_text(json.dumps(sequences_document, indent=2) + "\n",
-                                      encoding="utf-8")
-        saved_bonus = next(record for record in json.loads(
-            sequences_path.read_text(encoding="utf-8"))["bonus_motion"]
-            if record["id"] == bonus["id"])
+            sequences_path.write_text(json.dumps(sequences_document, indent=2) + "\n", encoding="utf-8")
+        saved_bonus = next(
+            record
+            for record in json.loads(sequences_path.read_text(encoding="utf-8"))["bonus_motion"]
+            if record["id"] == bonus["id"]
+        )
         assert saved_bonus["words"][1] == new_bonus_word
         assert verify_studio_project(project_file)["status"] == "mismatch"
         bonus_build = build_studio_project(project_file)
         assert verify_studio_project(project_file)["status"] == "current"
         bonus_rom = (project / bonus_build["artifact"]["path"]).read_bytes()
         bonus_word_address = bonus_address + 2
-        assert bonus_rom[bonus_word_address:bonus_word_address + 2] \
-            == new_bonus_word.to_bytes(2, "big"), \
+        assert bonus_rom[bonus_word_address : bonus_word_address + 2] == new_bonus_word.to_bytes(2, "big"), (
             "GUI bonus delay did not read back from ROM"
-        changed_bonus_bytes = [bonus_word_address + index for index, (before, after)
-            in enumerate(zip(old_bonus_word.to_bytes(2, "big"),
-                             new_bonus_word.to_bytes(2, "big"))) if before != after]
-        assert_rom_delta(original_bytes, bonus_rom, changed_bonus_bytes,
-                         "bonus delay edit")
+        )
+        changed_bonus_bytes = [
+            bonus_word_address + index
+            for index, (before, after) in enumerate(
+                zip(old_bonus_word.to_bytes(2, "big"), new_bonus_word.to_bytes(2, "big"))
+            )
+            if before != after
+        ]
+        assert_rom_delta(original_bytes, bonus_rom, changed_bonus_bytes, "bonus delay edit")
         sequences_path.write_bytes(sequences_original)
-        assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, \
+        assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, (
             "bonus delay restore must be exact"
+        )
 
         source_copy = project / SOURCE_DIRECTORY
         sound_path = source_copy / WORKSPACE_FILES["z80_sound_banks"]
@@ -460,78 +532,87 @@ def main() -> int:
         sound_model = sound_source_model(source_copy)
         baseline_sound = source_copy / "src/sound/z80/data.asm"
         sound_document = sound_model.export_document(sound_path)
-        sequence = next(record for record in sound_document["sequences"]
-                        if record["id"] == "zSFX90Sequence")
+        sequence = next(record for record in sound_document["sequences"] if record["id"] == "zSFX90Sequence")
         original_sequence = bytes(sequence["bytes"])
-        assert original_bytes.count(original_sequence) == 1, \
-            "SFX stream has no unique ROM address"
+        assert original_bytes.count(original_sequence) == 1, "SFX stream has no unique ROM address"
         sequence_address = original_bytes.find(original_sequence)
         note = sound_model.piano_roll_notes(sequence["bytes"])[0]
         new_note = note["note"] + 1
         if args.native_sound_editor:
-            subprocess.run([
-                str(args.native_sound_editor.resolve()), "--edit-note",
-                str(sound_path), sequence["id"], "0", str(new_note),
-            ], check=True)
+            subprocess.run(
+                [
+                    str(args.native_sound_editor.resolve()),
+                    "--edit-note",
+                    str(sound_path),
+                    sequence["id"],
+                    "0",
+                    str(new_note),
+                ],
+                check=True,
+            )
         else:
             sequence["bytes"][note["offset"]] = 0x81 + new_note
             sound_model.apply_document(sound_document, baseline_sound, sound_path)
-        saved_sequence = next(record for record in sound_model.export_document(
-            sound_path)["sequences"] if record["id"] == sequence["id"])
+        saved_sequence = next(
+            record for record in sound_model.export_document(sound_path)["sequences"] if record["id"] == sequence["id"]
+        )
         assert saved_sequence["bytes"][note["offset"]] == 0x81 + new_note
         assert verify_studio_project(project_file)["status"] == "mismatch"
         note_build = build_studio_project(project_file)
         assert verify_studio_project(project_file)["status"] == "current"
         note_rom = (project / note_build["artifact"]["path"]).read_bytes()
         note_address = sequence_address + note["offset"]
-        assert note_rom[note_address] == 0x81 + new_note, \
-            "GUI SFX note did not read back from ROM"
+        assert note_rom[note_address] == 0x81 + new_note, "GUI SFX note did not read back from ROM"
         assert_rom_delta(original_bytes, note_rom, [note_address], "SFX note")
         sound_path.write_bytes(sound_original)
-        assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, \
+        assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, (
             "sound note restore must be exact"
+        )
 
         sound_document = sound_model.export_document(sound_path)
-        voice_bank = next(record for record in sound_document["voice_banks"]
-                          if record["id"] == "zSFX90Voices")
+        voice_bank = next(record for record in sound_document["voice_banks"] if record["id"] == "zSFX90Voices")
         original_voice = bytes(voice_bank["voices"][0])
-        assert original_bytes.count(original_voice) == 1, \
-            "FM voice has no unique ROM address"
+        assert original_bytes.count(original_voice) == 1, "FM voice has no unique ROM address"
         voice_address = original_bytes.find(original_voice)
         new_algorithm = (original_voice[0] & 7) + 1
         assert new_algorithm <= 7
         if args.native_sound_editor:
-            subprocess.run([
-                str(args.native_sound_editor.resolve()), "--edit-voice-algorithm",
-                str(sound_path), voice_bank["id"], "0", str(new_algorithm),
-            ], check=True)
+            subprocess.run(
+                [
+                    str(args.native_sound_editor.resolve()),
+                    "--edit-voice-algorithm",
+                    str(sound_path),
+                    voice_bank["id"],
+                    "0",
+                    str(new_algorithm),
+                ],
+                check=True,
+            )
         else:
             voice_bank["voices"][0][0] = (original_voice[0] & 0xF8) | new_algorithm
             sound_model.apply_document(sound_document, baseline_sound, sound_path)
-        saved_voice = next(record for record in sound_model.export_document(
-            sound_path)["voice_banks"] if record["id"] == voice_bank["id"])
+        saved_voice = next(
+            record
+            for record in sound_model.export_document(sound_path)["voice_banks"]
+            if record["id"] == voice_bank["id"]
+        )
         assert saved_voice["voices"][0][0] == (original_voice[0] & 0xF8) | new_algorithm
         assert verify_studio_project(project_file)["status"] == "mismatch"
         voice_build = build_studio_project(project_file)
         assert verify_studio_project(project_file)["status"] == "current"
         voice_rom = (project / voice_build["artifact"]["path"]).read_bytes()
-        assert voice_rom[voice_address] == saved_voice["voices"][0][0], \
-            "GUI FM algorithm did not read back from ROM"
-        assert_rom_delta(original_bytes, voice_rom, [voice_address],
-                         "FM voice edit")
+        assert voice_rom[voice_address] == saved_voice["voices"][0][0], "GUI FM algorithm did not read back from ROM"
+        assert_rom_delta(original_bytes, voice_rom, [voice_address], "FM voice edit")
         sound_path.write_bytes(sound_original)
-        assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, \
+        assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, (
             "FM voice restore must be exact"
+        )
 
         sound_document = sound_model.export_document(sound_path)
-        music = next(record for record in sound_document["headers"]
-                     if record["id"] == "zMusic81Header")
-        music_voices = next(record for record in sound_document["voice_banks"]
-                            if record["id"] == music["voices"])
-        music_voice_bytes = bytes(sum(music_voices["voices"], [])
-                                  + music_voices["tail"])
-        assert original_bytes.count(music_voice_bytes) == 1, \
-            "music voice bank has no unique ROM address"
+        music = next(record for record in sound_document["headers"] if record["id"] == "zMusic81Header")
+        music_voices = next(record for record in sound_document["voice_banks"] if record["id"] == music["voices"])
+        music_voice_bytes = bytes(sum(music_voices["voices"], []) + music_voices["tail"])
+        assert original_bytes.count(music_voice_bytes) == 1, "music voice bank has no unique ROM address"
         music_voice_address = original_bytes.find(music_voice_bytes)
         # Canonical source copies 0x1C8 bytes of the SFX bank from ROM $101E0;
         # the music bank starts immediately after at Z80 $1200.
@@ -539,34 +620,40 @@ def main() -> int:
         music_voice_z80 = 0x1200 + music_voice_address - music_rom_base
         fm_count = sum(track["type"] == "fm" for track in music["tracks"])
         psg_count = sum(track["type"] == "psg" for track in music["tracks"])
-        music_header = music_voice_z80.to_bytes(2, "little") + bytes((
-            fm_count, psg_count, music["scale"], music["tempo"]))
-        assert original_bytes.count(music_header) == 1, \
-            "music header has no unique ROM address"
+        music_header = music_voice_z80.to_bytes(2, "little") + bytes(
+            (fm_count, psg_count, music["scale"], music["tempo"])
+        )
+        assert original_bytes.count(music_header) == 1, "music header has no unique ROM address"
         tempo_address = original_bytes.find(music_header) + 5
         new_tempo = music["tempo"] + 1
         if args.native_sound_editor:
-            subprocess.run([
-                str(args.native_sound_editor.resolve()), "--edit-tempo",
-                str(sound_path), music["id"], str(new_tempo),
-            ], check=True)
+            subprocess.run(
+                [
+                    str(args.native_sound_editor.resolve()),
+                    "--edit-tempo",
+                    str(sound_path),
+                    music["id"],
+                    str(new_tempo),
+                ],
+                check=True,
+            )
         else:
             music["tempo"] = new_tempo
             sound_model.apply_document(sound_document, baseline_sound, sound_path)
-        saved_music = next(record for record in sound_model.export_document(
-            sound_path)["headers"] if record["id"] == music["id"])
+        saved_music = next(
+            record for record in sound_model.export_document(sound_path)["headers"] if record["id"] == music["id"]
+        )
         assert saved_music["tempo"] == new_tempo
         assert verify_studio_project(project_file)["status"] == "mismatch"
         tempo_build = build_studio_project(project_file)
         assert verify_studio_project(project_file)["status"] == "current"
         tempo_rom = (project / tempo_build["artifact"]["path"]).read_bytes()
-        assert tempo_rom[tempo_address] == new_tempo, \
-            "GUI music tempo did not read back from ROM"
-        assert_rom_delta(original_bytes, tempo_rom, [tempo_address],
-                         "music tempo")
+        assert tempo_rom[tempo_address] == new_tempo, "GUI music tempo did not read back from ROM"
+        assert_rom_delta(original_bytes, tempo_rom, [tempo_address], "music tempo")
         sound_path.write_bytes(sound_original)
-        assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, \
+        assert build_studio_project(project_file)["artifact"]["sha256"] == CANONICAL_SHA256, (
             "music tempo restore must be exact"
+        )
 
         relocated_project = project / "relocated"
         relocated_project.mkdir()
@@ -593,12 +680,14 @@ def main() -> int:
     semantics_editor = "Qt GUI" if args.native_semantics_editor else "document"
     sequences_editor = "Qt GUI" if args.native_sequences_editor else "document"
     sound_editor = "Qt GUI" if args.native_sound_editor else "document"
-    print(f"Flicky isolated content build: zero edit, {level_editor} collision/player/special edit, "
-          f"{graphics_editor} 1bpp edit/ROM readback, "
-          f"{semantics_editor} text/CRAM edit/ROM readback, "
-          f"{sequences_editor} mapping/animation/bonus-motion edit/ROM readback, "
-          f"{sound_editor} SFX note/FM voice/music tempo edit/ROM readback, "
-          "restore, relocate, source drift")
+    print(
+        f"Flicky isolated content build: zero edit, {level_editor} collision/player/special edit, "
+        f"{graphics_editor} 1bpp edit/ROM readback, "
+        f"{semantics_editor} text/CRAM edit/ROM readback, "
+        f"{sequences_editor} mapping/animation/bonus-motion edit/ROM readback, "
+        f"{sound_editor} SFX note/FM voice/music tempo edit/ROM readback, "
+        "restore, relocate, source drift"
+    )
     return 0
 
 

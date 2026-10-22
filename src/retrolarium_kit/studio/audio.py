@@ -44,32 +44,21 @@ def _load_document(path: Path) -> dict[str, Any]:
         raise AuthoringError(f"cannot read audio document {path}: {exc}") from exc
     if not isinstance(value, dict):
         raise AuthoringError("audio document must be a JSON object")
-    if (value.get("schema"), value.get("schema_version")) != (
-        "retrolarium.nes-resource-bundle", 1
-    ):
+    if (value.get("schema"), value.get("schema_version")) != ("retrolarium.nes-resource-bundle", 1):
         raise AuthoringError("audio document is not a NES resource bundle v1")
     return value
 
 
-def _profile(
-    document: Mapping[str, object], profile_path: Path | None
-) -> tuple[GameProfile, RevisionSpec]:
+def _profile(document: Mapping[str, object], profile_path: Path | None) -> tuple[GameProfile, RevisionSpec]:
     game = document.get("game")
     if not isinstance(game, str) or not game:
         raise AuthoringError("audio document game must be a non-empty string")
-    profile = (
-        load_game_profile(profile_path)
-        if profile_path is not None
-        else game_profiles().get(game)
-    )
+    profile = load_game_profile(profile_path) if profile_path is not None else game_profiles().get(game)
     if profile.game_id != game:
         raise AuthoringError("audio document game differs from the selected profile")
     digest = document.get("source_sha256")
     revision = document.get("revision")
-    matches = [
-        item for item in profile.revisions
-        if item.sha256 == digest and item.revision_id == revision
-    ]
+    matches = [item for item in profile.revisions if item.sha256 == digest and item.revision_id == revision]
     if len(matches) != 1:
         raise AuthoringError("audio document revision differs from the selected profile")
     return profile, matches[0]
@@ -84,12 +73,8 @@ def _sound_resource(
     resources = document.get("resources")
     if not isinstance(resources, list):
         raise AuthoringError("audio document resources must be an array")
-    matches = [item for item in resources
-               if isinstance(item, dict) and item.get("id") == resource_id]
-    specs = [
-        item for item in profile.resources_for(revision)
-        if item.resource_id == resource_id
-    ]
+    matches = [item for item in resources if isinstance(item, dict) and item.get("id") == resource_id]
+    specs = [item for item in profile.resources_for(revision) if item.resource_id == resource_id]
     if len(matches) != 1 or len(specs) != 1:
         raise AuthoringError(f"audio resource {resource_id!r} is not uniquely defined")
     resource = matches[0]
@@ -109,26 +94,15 @@ def _smb_music_resource(
     resources = document.get("resources")
     if not isinstance(resources, list):
         raise AuthoringError("audio document resources must be an array")
-    matches = [
-        item for item in resources
-        if isinstance(item, dict) and item.get("id") == resource_id
-    ]
-    specs = [
-        item for item in profile.resources_for(revision)
-        if item.resource_id == resource_id
-    ]
+    matches = [item for item in resources if isinstance(item, dict) and item.get("id") == resource_id]
+    specs = [item for item in profile.resources_for(revision) if item.resource_id == resource_id]
     if len(matches) != 1 or len(specs) != 1:
         raise AuthoringError(f"audio resource {resource_id!r} is not uniquely defined")
     resource = matches[0]
     spec = specs[0]
     if resource.get("codec") != SMB_APU_CODEC or spec.codec != SMB_APU_CODEC:
-        raise AuthoringError(
-            f"resource {resource_id!r} does not use {SMB_APU_CODEC}"
-        )
-    music = {
-        key: value for key, value in resource.items()
-        if key not in {"id", "kind", "codec"}
-    }
+        raise AuthoringError(f"resource {resource_id!r} does not use {SMB_APU_CODEC}")
+    music = {key: value for key, value in resource.items() if key not in {"id", "kind", "codec"}}
     encode_smb_music(music, spec.parameters)
     return music, spec
 
@@ -148,9 +122,7 @@ def _slot(resource: Mapping[str, object], slot: int) -> dict[str, Any]:
 def _atomic_write(path: Path, payload: bytes) -> None:
     destination = path.resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(
-        dir=destination.parent, prefix=f".{destination.name}.", suffix=".tmp"
-    )
+    descriptor, temporary_name = tempfile.mkstemp(dir=destination.parent, prefix=f".{destination.name}.", suffix=".tmp")
     temporary = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "wb") as stream:
@@ -200,10 +172,13 @@ def export_document_midi(
                 raise AuthoringError("Pac-Man note duration is invalid")
             start = _midi_tick(frame, PACMAN_NTSC_FRAME_RATE)
             end = _midi_tick(frame + duration, PACMAN_NTSC_FRAME_RATE)
-            notes.append(MidiNote(
-                sound_byte_to_midi(int(command.get("value", -1))),
-                start, max(start + 1, end),
-            ))
+            notes.append(
+                MidiNote(
+                    sound_byte_to_midi(int(command.get("value", -1))),
+                    start,
+                    max(start + 1, end),
+                )
+            )
         if isinstance(duration, int) and duration > 0:
             frame += duration
     payload = encode_midi(tuple(notes), division=MIDI_DIVISION, tempo=MIDI_TEMPO)
@@ -236,8 +211,13 @@ def import_midi_into_document(
     """Replace one slot's commands with a validated, atomic MIDI conversion."""
 
     edited, report = _prepare_midi_import(
-        document_path, midi_path, resource_id=resource_id, slot=slot,
-        track=track, channel=channel, profile_path=profile_path,
+        document_path,
+        midi_path,
+        resource_id=resource_id,
+        slot=slot,
+        track=track,
+        channel=channel,
+        profile_path=profile_path,
     )
     _atomic_write(
         output_path,
@@ -270,9 +250,7 @@ def _prepare_midi_import(
         raise AuthoringError(f"cannot read MIDI file {midi_path}: {exc}") from exc
     commands, conversion = import_midi_commands(midi_data, track, channel)
     edited = copy.deepcopy(document)
-    edited_resource, edited_spec = _sound_resource(
-        edited, profile, revision, resource_id
-    )
+    edited_resource, edited_spec = _sound_resource(edited, profile, revision, resource_id)
     edited_slot = _slot(edited_resource, slot)
     stream = edited_slot.get("stream")
     if not isinstance(stream, dict):
@@ -301,8 +279,13 @@ def preview_midi_import(
     """Validate and describe a MIDI conversion without writing a document."""
 
     _edited, report = _prepare_midi_import(
-        document_path, midi_path, resource_id=resource_id, slot=slot,
-        track=track, channel=channel, profile_path=profile_path,
+        document_path,
+        midi_path,
+        resource_id=resource_id,
+        slot=slot,
+        track=track,
+        channel=channel,
+        profile_path=profile_path,
     )
     return {**report, "operation": "preview"}
 
@@ -334,13 +317,22 @@ def render_document_wav(
 
     item = _slot(resource, slot)
     stream = slot_stream(slot)
-    tables = next((item for item in document.get("resources", [])
-                   if isinstance(item, dict) and item.get("id") == "render-tables"), None)
+    tables = next(
+        (
+            item
+            for item in document.get("resources", [])
+            if isinstance(item, dict) and item.get("id") == "render-tables"
+        ),
+        None,
+    )
     if tables is None:
         raise AuthoringError("the project lacks the game's sound tables; upgrade it with this kit")
-    payload = render_stream_wav(stream, sample_rate,
-                                periods=note_periods(tables["tables"]["note_period_base_pairs"]),
-                                also=tuple(slot_stream(number) for number in mix_slots))
+    payload = render_stream_wav(
+        stream,
+        sample_rate,
+        periods=note_periods(tables["tables"]["note_period_base_pairs"]),
+        also=tuple(slot_stream(number) for number in mix_slots),
+    )
     _atomic_write(output_path, payload)
     return {
         "schema": "retrolarium.audio-preview",
@@ -373,24 +365,21 @@ def render_smb_document_wav(
 
     document = _load_document(document_path)
     profile, revision = _profile(document, profile_path)
-    resource, spec = _smb_music_resource(
-        document, profile, revision, resource_id
-    )
-    selector_context = (
-        music_selector_context(resource, spec.parameters, selector)
-        if selector is not None else None
-    )
+    resource, spec = _smb_music_resource(document, profile, revision, resource_id)
+    selector_context = music_selector_context(resource, spec.parameters, selector) if selector is not None else None
     if selector_context is not None and selector_context["header"] != header:
-        raise AuthoringError(
-            f"SMB music selector {selector!r} does not select header {header!r}"
-        )
+        raise AuthoringError(f"SMB music selector {selector!r} does not select header {header!r}")
     resolved_length_adder = (
         int(selector_context["length_table_adder"])
         if length_table_adder is None and selector_context is not None
-        else 0 if length_table_adder is None else length_table_adder
+        else 0
+        if length_table_adder is None
+        else length_table_adder
     )
     timeline = music_header_timeline(
-        resource, spec.parameters, header,
+        resource,
+        spec.parameters,
+        header,
         length_table_adder=resolved_length_adder,
     )
     payload = render_music_header_wav(
@@ -410,18 +399,13 @@ def render_smb_document_wav(
         "resource": resource_id,
         "header": header,
         "selector": selector,
-        "envelope": (
-            selector_context["envelope"]
-            if selector_context is not None else None
-        ),
+        "envelope": (selector_context["envelope"] if selector_context is not None else None),
         "length_table_adder": resolved_length_adder,
         "duration_ticks": timeline["duration"],
         "muted_channels": list(muted_channels),
         "sample_rate": sample_rate,
         "frame_rate": spec.parameters.get("frame_rate", NTSC_FRAME_RATE),
-        "cpu_frequency": spec.parameters.get(
-            "cpu_frequency", NTSC_CPU_FREQUENCY
-        ),
+        "cpu_frequency": spec.parameters.get("cpu_frequency", NTSC_CPU_FREQUENCY),
         "output": str(output_path.resolve()),
         "size": len(payload),
         "sha256": hashlib.sha256(payload).hexdigest(),
@@ -440,45 +424,37 @@ def encode_smb_music_midi(
     """The resource-level conversion used by both CLI export and parity tests."""
     if channel not in {"all", "square2", "square1", "triangle", "noise"}:
         raise AuthoringError("unknown SMB MIDI export channel")
-    selector_context = (
-        music_selector_context(resource, parameters, selector)
-        if selector is not None else None
-    )
+    selector_context = music_selector_context(resource, parameters, selector) if selector is not None else None
     if selector_context is not None and selector_context["header"] != header:
-        raise AuthoringError(
-            f"SMB music selector {selector!r} does not select header {header!r}"
-        )
+        raise AuthoringError(f"SMB music selector {selector!r} does not select header {header!r}")
     resolved_adder = (
         int(selector_context["length_table_adder"])
         if length_table_adder is None and selector_context is not None
-        else 0 if length_table_adder is None else length_table_adder
+        else 0
+        if length_table_adder is None
+        else length_table_adder
     )
     timeline = music_header_timeline(
-        resource, parameters, header,
+        resource,
+        parameters,
+        header,
         length_table_adder=resolved_adder,
     )
     frame_rate = float(parameters.get("frame_rate", NTSC_FRAME_RATE))
-    cpu_frequency = float(parameters.get(
-        "cpu_frequency", NTSC_CPU_FREQUENCY
-    ))
+    cpu_frequency = float(parameters.get("cpu_frequency", NTSC_CPU_FREQUENCY))
     channel_numbers = {"square2": 0, "square1": 1, "triangle": 2, "noise": 9}
-    selected = (
-        tuple(channel_numbers) if channel == "all" else (channel,)
-    )
+    selected = tuple(channel_numbers) if channel == "all" else (channel,)
     exported: dict[int, tuple[MidiNote, ...]] = {}
     exported_names: list[str] = []
     for channel_name in selected:
         raw_channel = next(
-            (item for item in timeline["channels"]
-             if item["channel"] == channel_name),
+            (item for item in timeline["channels"] if item["channel"] == channel_name),
             None,
         )
         if raw_channel is None:
             if channel == "all":
                 continue
-            raise AuthoringError(
-                f"SMB header {header!r} has no {channel_name} channel"
-            )
+            raise AuthoringError(f"SMB header {header!r} has no {channel_name} channel")
         notes: list[MidiNote] = []
         if channel_name == "noise":
             percussion = {"short": 42, "strong": 38, "long": 49}
@@ -500,9 +476,7 @@ def encode_smb_music_midi(
                 if period < 8 or (period & 0xFF) == 0:
                     continue
                 frequency = cpu_frequency / (divider * ((period & 0x7FF) + 1))
-                pitch = max(0, min(127, round(
-                    69.0 + 12.0 * math.log2(frequency / 440.0)
-                )))
+                pitch = max(0, min(127, round(69.0 + 12.0 * math.log2(frequency / 440.0))))
                 start_frame = int(event["tick"])
                 end_frame = start_frame + int(event["duration"])
                 start = _midi_tick(start_frame, frame_rate)
@@ -512,11 +486,14 @@ def encode_smb_music_midi(
         exported_names.append(channel_name)
     end_tick = _midi_tick(int(timeline["duration"]), frame_rate)
     payload = encode_midi_channels(
-        exported, division=MIDI_DIVISION, tempo=MIDI_TEMPO,
+        exported,
+        division=MIDI_DIVISION,
+        tempo=MIDI_TEMPO,
         end_tick=end_tick,
     )
     return (
-        payload, exported_names,
+        payload,
+        exported_names,
         sum(len(notes) for notes in exported.values()),
         int(timeline["duration"]),
     )
@@ -538,12 +515,14 @@ def export_smb_document_midi(
         raise AuthoringError("unknown SMB MIDI export channel")
     document = _load_document(document_path)
     profile, revision = _profile(document, profile_path)
-    resource, spec = _smb_music_resource(
-        document, profile, revision, resource_id
-    )
+    resource, spec = _smb_music_resource(document, profile, revision, resource_id)
     payload, exported_names, note_count, duration_ticks = encode_smb_music_midi(
-        resource, spec.parameters, header, channel,
-        selector=selector, length_table_adder=length_table_adder,
+        resource,
+        spec.parameters,
+        header,
+        channel,
+        selector=selector,
+        length_table_adder=length_table_adder,
     )
     _atomic_write(output_path, payload)
     return {
@@ -578,9 +557,7 @@ def _prepare_smb_midi_import(
 ) -> tuple[dict[str, Any], dict[str, object]]:
     document = _load_document(document_path)
     profile, revision = _profile(document, profile_path)
-    music, spec = _smb_music_resource(
-        document, profile, revision, resource_id
-    )
+    music, spec = _smb_music_resource(document, profile, revision, resource_id)
     try:
         midi_data = midi_path.read_bytes()
     except OSError as exc:
@@ -610,10 +587,7 @@ def _prepare_smb_midi_import(
     edited = copy.deepcopy(document)
     resources = edited["resources"]
     assert isinstance(resources, list)
-    edited_resource = next(
-        item for item in resources
-        if isinstance(item, dict) and item.get("id") == resource_id
-    )
+    edited_resource = next(item for item in resources if isinstance(item, dict) and item.get("id") == resource_id)
     edited_resource["shared_stream_arena"] = edited_music["shared_stream_arena"]
     _smb_music_resource(edited, profile, revision, resource_id)
     return edited, {**report, "resource": resource_id}

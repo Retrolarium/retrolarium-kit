@@ -130,9 +130,14 @@ def load(path: Path, root: Path | None = None) -> Manifest:
     for index, item in enumerate(raw.get("images") or ()):
         if not isinstance(item, Mapping):
             raise AssetsError(f"images[{index}] must be an object")
-        images.append(Image(str(item.get("id") or ""), _relative(item.get("file"), f"images[{index}].file"),
-                            _number(item.get("size"), f"images[{index}].size"),
-                            _hash(item.get("sha1"), f"images[{index}].sha1")))
+        images.append(
+            Image(
+                str(item.get("id") or ""),
+                _relative(item.get("file"), f"images[{index}].file"),
+                _number(item.get("size"), f"images[{index}].size"),
+                _hash(item.get("sha1"), f"images[{index}].sha1"),
+            )
+        )
     ids = [image.id for image in images]
     if not images or "" in ids or len(set(ids)) != len(ids):
         raise AssetsError("images must have unique, non-empty ids")
@@ -141,10 +146,13 @@ def load(path: Path, root: Path | None = None) -> Manifest:
     for index, item in enumerate(raw.get("assets") or ()):
         if not isinstance(item, Mapping):
             raise AssetsError(f"assets[{index}] must be an object")
-        asset = Asset(_relative(item.get("path"), f"assets[{index}].path"), str(item.get("image") or ""),
-                      _number(item.get("offset"), f"assets[{index}].offset"),
-                      _number(item.get("size"), f"assets[{index}].size"),
-                      _hash(item.get("sha1"), f"assets[{index}].sha1"))
+        asset = Asset(
+            _relative(item.get("path"), f"assets[{index}].path"),
+            str(item.get("image") or ""),
+            _number(item.get("offset"), f"assets[{index}].offset"),
+            _number(item.get("size"), f"assets[{index}].size"),
+            _hash(item.get("sha1"), f"assets[{index}].sha1"),
+        )
         image = by_id.get(asset.image)
         if image is None:
             raise AssetsError(f"assets[{index}] ({asset.path}) names no image of the manifest")
@@ -167,8 +175,10 @@ def read_image(manifest: Manifest, image: Image, override: Path | None = None) -
     except OSError as exc:
         raise AssetsError(f"{image.id}: cannot read {path}: {exc.strerror or exc}") from exc
     if len(data) != image.size or sha1(data) != image.sha1:
-        raise AssetsError(f"{path.name} is not {image.id}: expected {image.size} bytes with SHA-1 {image.sha1}, "
-                          f"found {len(data)} bytes with SHA-1 {sha1(data)}")
+        raise AssetsError(
+            f"{path.name} is not {image.id}: expected {image.size} bytes with SHA-1 {image.sha1}, "
+            f"found {len(data)} bytes with SHA-1 {sha1(data)}"
+        )
     return data
 
 
@@ -176,8 +186,7 @@ def present(manifest: Manifest, image: Image) -> bool:
     return (manifest.root / image.file).is_file()
 
 
-def split(manifest: Manifest, image_ids: Iterable[str] = (),
-          overrides: Mapping[str, Path] | None = None) -> list[str]:
+def split(manifest: Manifest, image_ids: Iterable[str] = (), overrides: Mapping[str, Path] | None = None) -> list[str]:
     """Cut the assets out of the images asked for (all whose file is present
     when none is), writing only files whose bytes change; return the report."""
     overrides = dict(overrides or {})
@@ -195,10 +204,12 @@ def split(manifest: Manifest, image_ids: Iterable[str] = (),
         data = read_image(manifest, image, overrides.get(image.id))
         written = kept = 0
         for asset in manifest.assets_of(image.id):
-            payload = data[asset.offset:asset.offset + asset.size]
+            payload = data[asset.offset : asset.offset + asset.size]
             if sha1(payload) != asset.sha1:
-                raise AssetsError(f"{asset.path}: bytes {asset.offset:#x}+{asset.size:#x} of {image.id} "
-                                  f"have SHA-1 {sha1(payload)}, the manifest says {asset.sha1}")
+                raise AssetsError(
+                    f"{asset.path}: bytes {asset.offset:#x}+{asset.size:#x} of {image.id} "
+                    f"have SHA-1 {sha1(payload)}, the manifest says {asset.sha1}"
+                )
             target = manifest.output_path(asset)
             if target.is_file() and target.read_bytes() == payload:
                 kept += 1
@@ -241,12 +252,16 @@ def verify(manifest: Manifest, image_id: str, built: Path) -> str:
         raise AssetsError(f"cannot read {built}: {exc.strerror or exc}") from exc
     if len(data) == image.size and sha1(data) == image.sha1:
         return f"[OK] {built.name} is {image.id} byte for byte ({image.size} bytes, SHA-1 {image.sha1})"
-    message = f"{built.name} differs from {image.id}: {len(data)} bytes with SHA-1 {sha1(data)}, " \
-              f"expected {image.size} bytes with SHA-1 {image.sha1}"
+    message = (
+        f"{built.name} differs from {image.id}: {len(data)} bytes with SHA-1 {sha1(data)}, "
+        f"expected {image.size} bytes with SHA-1 {image.sha1}"
+    )
     original = manifest.root / image.file
     if original.is_file():
         reference = original.read_bytes()
-        first = next((i for i in range(min(len(data), len(reference))) if data[i] != reference[i]),
-                     min(len(data), len(reference)))
+        first = next(
+            (i for i in range(min(len(data), len(reference))) if data[i] != reference[i]),
+            min(len(data), len(reference)),
+        )
         message += f"; first difference at file offset {first:#x}"
     raise AssetsError(message)

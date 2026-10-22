@@ -23,8 +23,7 @@ EXPECTED = {
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source-root", type=Path, required=True,
-                        help="exact path to doraemon_src (not its parent)")
+    parser.add_argument("--source-root", type=Path, required=True, help="exact path to doraemon_src (not its parent)")
     args = parser.parse_args()
     root = args.source_root.resolve()
     if root.name != "doraemon_src":
@@ -37,11 +36,9 @@ def main() -> int:
         document_path = root / "data" / world / "hierarchical_world.json"
         source_document = json.loads(document_path.read_text(encoding="utf-8"))
         payload = encode_source(source_document)
-        actual_crc = f"{zlib.crc32(payload) & 0xffffffff:08x}"
+        actual_crc = f"{zlib.crc32(payload) & 0xFFFFFFFF:08x}"
         if len(payload) != size or actual_crc != crc:
-            raise AssertionError(
-                f"{world} source differs: size={len(payload)}, crc32={actual_crc}"
-            )
+            raise AssertionError(f"{world} source differs: size={len(payload)}, crc32={actual_crc}")
         if encode_hierarchy(decode_hierarchy(payload, world), world) != payload:
             raise AssertionError(f"{world} Retrolarium round-trip differs")
         print(f"{world}: {size} bytes, CRC32 {crc}, exact round-trip")

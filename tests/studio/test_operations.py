@@ -105,13 +105,16 @@ class StudioOperationTests(unittest.TestCase):
                 "schema": "retrolarium.game-document-validation",
                 "status": "valid",
             }
-            with patch(
-                "retrolarium_kit.studio.project.load_studio_project",
-                return_value=state,
-            ), patch(
-                "retrolarium_kit.studio.project.validate_game_document_for_revision",
-                return_value=semantic,
-            ) as validate:
+            with (
+                patch(
+                    "retrolarium_kit.studio.project.load_studio_project",
+                    return_value=state,
+                ),
+                patch(
+                    "retrolarium_kit.studio.project.validate_game_document_for_revision",
+                    return_value=semantic,
+                ) as validate,
+            ):
                 result = validate_studio_project(root / "fixture.rlj")
             self.assertEqual([semantic], result["documents"])
             validate.assert_called_once_with(
@@ -175,21 +178,24 @@ class StudioOperationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             state = self.prepare(root)
-            (root / "documents/resources.json").write_text(
-                '{"schema":"unknown"}\n', encoding="utf-8"
-            )
-            with patch(
-                "retrolarium_kit.studio.project.load_studio_project",
-                return_value=state,
-            ), patch(
-                "retrolarium_kit.studio.project.validate_studio_project",
-                return_value={"status": "valid"},
-            ), patch(
-                "retrolarium_kit.studio.project.build_project",
-                return_value={"artifact": {"path": "generated/base.nes"}},
-            ), patch(
-                "retrolarium_kit.studio.project.verify_project",
-                return_value={"status": "exact"},
+            (root / "documents/resources.json").write_text('{"schema":"unknown"}\n', encoding="utf-8")
+            with (
+                patch(
+                    "retrolarium_kit.studio.project.load_studio_project",
+                    return_value=state,
+                ),
+                patch(
+                    "retrolarium_kit.studio.project.validate_studio_project",
+                    return_value={"status": "valid"},
+                ),
+                patch(
+                    "retrolarium_kit.studio.project.build_project",
+                    return_value={"artifact": {"path": "generated/base.nes"}},
+                ),
+                patch(
+                    "retrolarium_kit.studio.project.verify_project",
+                    return_value={"status": "exact"},
+                ),
             ):
                 with self.assertRaisesRegex(StudioProjectError, "no registered writer"):
                     build_studio_project(root / "fixture.rlj")
@@ -199,21 +205,22 @@ class StudioOperationTests(unittest.TestCase):
             root = Path(temporary)
             state = self.prepare(root)
             rooms = root / "documents/rooms.json"
-            rooms.write_text(
-                '{"schema":"retrolarium.castle-excellent-levels"}', encoding="utf-8"
+            rooms.write_text('{"schema":"retrolarium.castle-excellent-levels"}', encoding="utf-8")
+            state["workspace"]["tabs"].insert(
+                0,
+                {
+                    "id": "rooms",
+                    "title": "Rooms",
+                    "kind": "castle-excellent.rooms",
+                    "group": "content",
+                    "document": "documents/rooms.json",
+                    "document_path": str(rooms.resolve()),
+                    "codec": "castle-excellent.prefix-rooms@1",
+                    "capabilities": ["edit"],
+                    "depends_on": [],
+                    "enabled": True,
+                },
             )
-            state["workspace"]["tabs"].insert(0, {
-                "id": "rooms",
-                "title": "Rooms",
-                "kind": "castle-excellent.rooms",
-                "group": "content",
-                "document": "documents/rooms.json",
-                "document_path": str(rooms.resolve()),
-                "codec": "castle-excellent.prefix-rooms@1",
-                "capabilities": ["edit"],
-                "depends_on": [],
-                "enabled": True,
-            })
 
             def composed(source: Path, documents: list[Path], output: Path):
                 output.parent.mkdir(parents=True, exist_ok=True)
@@ -223,22 +230,28 @@ class StudioOperationTests(unittest.TestCase):
                     "documents": len(documents),
                 }
 
-            with patch(
-                "retrolarium_kit.studio.project.load_studio_project",
-                return_value=state,
-            ), patch(
-                "retrolarium_kit.studio.project.validate_game_document_for_revision",
-                return_value={"status": "valid"},
-            ), patch(
-                "retrolarium_kit.studio.project.build_project",
-                return_value={"artifact": {"path": "generated/base.nes"}},
-            ), patch(
-                "retrolarium_kit.studio.project.verify_project",
-                return_value={"status": "exact"},
-            ), patch(
-                "retrolarium_kit.studio.project.build_game_documents",
-                side_effect=composed,
-            ) as build_documents:
+            with (
+                patch(
+                    "retrolarium_kit.studio.project.load_studio_project",
+                    return_value=state,
+                ),
+                patch(
+                    "retrolarium_kit.studio.project.validate_game_document_for_revision",
+                    return_value={"status": "valid"},
+                ),
+                patch(
+                    "retrolarium_kit.studio.project.build_project",
+                    return_value={"artifact": {"path": "generated/base.nes"}},
+                ),
+                patch(
+                    "retrolarium_kit.studio.project.verify_project",
+                    return_value={"status": "exact"},
+                ),
+                patch(
+                    "retrolarium_kit.studio.project.build_game_documents",
+                    side_effect=composed,
+                ) as build_documents,
+            ):
                 result = build_studio_project(root / "fixture.rlj")
             self.assertEqual("retrolarium.composed-game-build", result["authoring"]["schema"])
             build_documents.assert_called_once_with(
@@ -279,24 +292,29 @@ class StudioOperationTests(unittest.TestCase):
                         "id": "world",
                         "kind": "world",
                         "codec": "smb.world.v1",
-                        "worlds": [{"world": 1, "areas": [{
-                            "area_type": 1,
-                            "area_index": 0,
-                            "alternate_bit": False,
-                        }]}],
+                        "worlds": [
+                            {
+                                "world": 1,
+                                "areas": [
+                                    {
+                                        "area_type": 1,
+                                        "area_index": 0,
+                                        "alternate_bit": False,
+                                    }
+                                ],
+                            }
+                        ],
                     },
                     {
                         "id": "palettes",
                         "kind": "palette",
                         "codec": "nes.ppu-palette-packets.v1",
                         "day_background": 0x22,
-                        "night_background": 0x0f,
+                        "night_background": 0x0F,
                     },
                 ],
             }
-            (root / "documents/resources.json").write_text(
-                json.dumps(document), encoding="utf-8"
-            )
+            (root / "documents/resources.json").write_text(json.dumps(document), encoding="utf-8")
             mame = root / "mame.exe"
             mame.write_bytes(b"fixture")
             artifact = root / "disassembly/generated/base.nes"
@@ -304,12 +322,15 @@ class StudioOperationTests(unittest.TestCase):
                 "status": "current",
                 "artifact": {"absolute_path": str(artifact)},
             }
-            with patch(
-                "retrolarium_kit.studio.playtest.load_studio_project",
-                return_value=state,
-            ), patch(
-                "retrolarium_kit.studio.playtest.verify_studio_project",
-                return_value=verification,
+            with (
+                patch(
+                    "retrolarium_kit.studio.playtest.load_studio_project",
+                    return_value=state,
+                ),
+                patch(
+                    "retrolarium_kit.studio.playtest.verify_studio_project",
+                    return_value=verification,
+                ),
             ):
                 plan = studio_smb_point_playtest_plan(
                     root / "fixture.rlj",
@@ -341,44 +362,57 @@ class StudioOperationTests(unittest.TestCase):
                 self.assertEqual("0", plan["environment"]["SMB1_PLAYTEST_INVINCIBLE"])
                 self.assertEqual("noise", plan["environment"]["SMB1_PLAYTEST_SFX_CHANNEL"])
                 self.assertEqual("128", plan["environment"]["SMB1_PLAYTEST_SFX_VALUE"])
-                self.assertEqual(
-                    {"channel": "noise", "value": 0x80}, plan["point"]["sfx"]
-                )
+                self.assertEqual({"channel": "noise", "value": 0x80}, plan["point"]["sfx"])
                 self.assertTrue(plan["point"]["route_matches_area"])
                 # The fixture area has no objects: page 1 has none to find.
                 self.assertEqual("1", plan["environment"]["SMB1_PLAYTEST_EMPTY_PAGE"])
                 self.assertNotIn("SMB1_PLAYTEST_TIMER", plan["environment"])
                 first_page = studio_smb_point_playtest_plan(
-                    root / "fixture.rlj", mame=mame, course_bank="levels",
-                    area="ground_1", world=1, course=1, column=5, row=8, theme="day",
+                    root / "fixture.rlj",
+                    mame=mame,
+                    course_bank="levels",
+                    area="ground_1",
+                    world=1,
+                    course=1,
+                    column=5,
+                    row=8,
+                    theme="day",
                 )
                 self.assertNotIn("SMB1_PLAYTEST_EMPTY_PAGE", first_page["environment"])
                 # All Night Nippon: the later Disk System engine's timer and
                 # running task; worlds 1-4 need no file from the disk.
                 document["revision"] = "ann_fds"
-                (root / "documents/resources.json").write_text(
-                    json.dumps(document), encoding="utf-8"
-                )
+                (root / "documents/resources.json").write_text(json.dumps(document), encoding="utf-8")
                 late = studio_smb_point_playtest_plan(
-                    root / "fixture.rlj", mame=mame, course_bank="levels",
-                    area="ground_1", world=1, course=1, column=5, row=8, theme="day",
+                    root / "fixture.rlj",
+                    mame=mame,
+                    course_bank="levels",
+                    area="ground_1",
+                    world=1,
+                    course=1,
+                    column=5,
+                    row=8,
+                    theme="day",
                 )
                 self.assertEqual(str(0x07EC), late["environment"]["SMB1_PLAYTEST_TIMER"])
                 self.assertEqual("5", late["environment"]["SMB1_PLAYTEST_RUNNING_TASK"])
                 self.assertNotIn("SMB1_PLAYTEST_DISK_FILE", late["environment"])
                 document["revision"] = "vs_smb"
-                (root / "documents/resources.json").write_text(
-                    json.dumps(document), encoding="utf-8"
-                )
+                (root / "documents/resources.json").write_text(json.dumps(document), encoding="utf-8")
                 with self.assertRaisesRegex(StudioProjectError, "does not work in this version"):
                     studio_smb_point_playtest_plan(
-                        root / "fixture.rlj", mame=mame, course_bank="levels",
-                        area="ground_1", world=1, course=1, column=5, row=8, theme="day",
+                        root / "fixture.rlj",
+                        mame=mame,
+                        course_bank="levels",
+                        area="ground_1",
+                        world=1,
+                        course=1,
+                        column=5,
+                        row=8,
+                        theme="day",
                     )
                 document["revision"] = "ju"
-                (root / "documents/resources.json").write_text(
-                    json.dumps(document), encoding="utf-8"
-                )
+                (root / "documents/resources.json").write_text(json.dumps(document), encoding="utf-8")
                 with self.assertRaisesRegex(StudioProjectError, "column must be"):
                     studio_smb_point_playtest_plan(
                         root / "fixture.rlj",
@@ -407,13 +441,15 @@ class StudioOperationTests(unittest.TestCase):
                     )
 
     def test_smb_object_pages_follow_the_area_parser(self) -> None:
-        area = {"objects": [
-            {"row": 15, "object_control": 0x26, "page_advance": False},
-            {"row": 13, "object_control": 0x02, "page_advance": False},
-            {"row": 8, "object_control": 0x72, "page_advance": False},
-            {"row": 12, "object_control": 0x01, "page_advance": True},
-            {"row": 13, "object_control": 0x41, "page_advance": False},
-        ]}
+        area = {
+            "objects": [
+                {"row": 15, "object_control": 0x26, "page_advance": False},
+                {"row": 13, "object_control": 0x02, "page_advance": False},
+                {"row": 8, "object_control": 0x72, "page_advance": False},
+                {"row": 12, "object_control": 0x01, "page_advance": True},
+                {"row": 13, "object_control": 0x41, "page_advance": False},
+            ]
+        }
         # A page control is not an object: page 1 is skipped over.
         self.assertEqual({0, 2, 3}, _smb_object_pages(area))
         self.assertEqual(set(), _smb_object_pages({}))
@@ -431,9 +467,9 @@ class StudioOperationTests(unittest.TestCase):
             header[3:11] = f"FILE{number:04d}".encode("ascii")
             header[11:13] = address.to_bytes(2, "little")
             header[13:15] = len(payload).to_bytes(2, "little")
-            side[position:position + 16] = header
+            side[position : position + 16] = header
             side[position + 16] = 4
-            side[position + 17:position + 17 + len(payload)] = payload
+            side[position + 17 : position + 17 + len(payload)] = payload
             position += 17 + len(payload)
         with tempfile.TemporaryDirectory() as temporary:
             image = Path(temporary) / "game.fds"
@@ -457,16 +493,21 @@ class StudioOperationTests(unittest.TestCase):
                 tab = state["workspace"]["tabs"][0]
                 tab["codec"] = "castle-excellent.prefix-rooms@1"
                 tab["capabilities"] = ["edit", "playtest"]
-                (root / "documents/resources.json").write_text(json.dumps({
-                    "schema": "retrolarium.castle-excellent-levels",
-                    "schema_version": 1,
-                    "game": "castle-excellent",
-                    "revision": revision,
-                    "rooms": [{} for _ in range(100)],
-                }), encoding="utf-8")
+                (root / "documents/resources.json").write_text(
+                    json.dumps(
+                        {
+                            "schema": "retrolarium.castle-excellent-levels",
+                            "schema_version": 1,
+                            "game": "castle-excellent",
+                            "revision": revision,
+                            "rooms": [{} for _ in range(100)],
+                        }
+                    ),
+                    encoding="utf-8",
+                )
                 source = bytearray(65552)
                 source[:16] = b"NES\x1a" + bytes([2, 4, 0x30]) + bytes(9)
-                source[0x22c1:0x22c5] = b"\xa9\x47\x85\x37"
+                source[0x22C1:0x22C5] = b"\xa9\x47\x85\x37"
                 artifact = root / "disassembly/generated/base.nes"
                 artifact.write_bytes(source)
                 mame = root / "mame.exe"
@@ -475,40 +516,58 @@ class StudioOperationTests(unittest.TestCase):
                     "status": "current",
                     "artifact": {"absolute_path": str(artifact)},
                 }
-                with patch(
-                    "retrolarium_kit.studio.playtest.load_studio_project",
-                    return_value=state,
-                ), patch(
-                    "retrolarium_kit.studio.playtest.verify_studio_project",
-                    return_value=verification,
+                with (
+                    patch(
+                        "retrolarium_kit.studio.playtest.load_studio_project",
+                        return_value=state,
+                    ),
+                    patch(
+                        "retrolarium_kit.studio.playtest.verify_studio_project",
+                        return_value=verification,
+                    ),
                 ):
                     plan = studio_castle_excellent_point_playtest_plan(
-                        root / "fixture.rlj", mame=mame, room=42, x=312, y=156,
+                        root / "fixture.rlj",
+                        mame=mame,
+                        room=42,
+                        x=312,
+                        y=156,
                     )
                     preview = Path(plan["arguments"][2])
                     expected = bytearray(source)
-                    expected[0x22c2] = 42
+                    expected[0x22C2] = 42
                     self.assertEqual(bytes(expected), preview.read_bytes())
                     self.assertEqual(bytes(source), artifact.read_bytes())
                     self.assertEqual("42", plan["environment"]["CASTLE_EXCELLENT_PLAYTEST_ROOM"])
                     self.assertEqual("312", plan["environment"]["CASTLE_EXCELLENT_PLAYTEST_X"])
                     self.assertEqual("156", plan["environment"]["CASTLE_EXCELLENT_PLAYTEST_Y"])
-                    self.assertEqual("retrolarium.studio.castle-excellent-point-playtest",
-                                     plan["operation"])
+                    self.assertEqual("retrolarium.studio.castle-excellent-point-playtest", plan["operation"])
                     self.assertTrue(Path(plan["arguments"][-1]).is_file())
                     with self.assertRaisesRegex(StudioProjectError, "room must be"):
                         studio_castle_excellent_point_playtest_plan(
-                            root / "fixture.rlj", mame=mame, room=101, x=0, y=0,
+                            root / "fixture.rlj",
+                            mame=mame,
+                            room=101,
+                            x=0,
+                            y=0,
                         )
                     with self.assertRaisesRegex(StudioProjectError, "x must be"):
                         studio_castle_excellent_point_playtest_plan(
-                            root / "fixture.rlj", mame=mame, room=1, x=320, y=0,
+                            root / "fixture.rlj",
+                            mame=mame,
+                            room=1,
+                            x=320,
+                            y=0,
                         )
-                    source[0x22c3] = 0
+                    source[0x22C3] = 0
                     artifact.write_bytes(source)
                     with self.assertRaisesRegex(StudioProjectError, "guarded"):
                         studio_castle_excellent_point_playtest_plan(
-                            root / "fixture.rlj", mame=mame, room=1, x=0, y=0,
+                            root / "fixture.rlj",
+                            mame=mame,
+                            room=1,
+                            x=0,
+                            y=0,
                         )
 
     def test_bundle_upgrade_adds_new_profile_resources_and_keeps_edits(self) -> None:
@@ -519,24 +578,54 @@ class StudioOperationTests(unittest.TestCase):
             state = self.prepare(root)
             state["project"]["profile"] = "doraemon.v1"
             bundle = root / "documents/resources.json"
-            bundle.write_text(json.dumps({"schema": "x", "resources": [
-                {"id": "a", "values": [9]}, {"id": "c", "values": [3]},
-            ]}), encoding="utf-8")
+            bundle.write_text(
+                json.dumps(
+                    {
+                        "schema": "x",
+                        "resources": [
+                            {"id": "a", "values": [9]},
+                            {"id": "c", "values": [3]},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
 
             def extract(_source: Path, output: Path, resource: str | None = None) -> None:
-                output.write_text(json.dumps({"schema": "x", "resources": [
-                    {"id": "a", "values": [1]}, {"id": "b", "values": [2]}, {"id": "c", "values": [3]},
-                ]}), encoding="utf-8")
+                output.write_text(
+                    json.dumps(
+                        {
+                            "schema": "x",
+                            "resources": [
+                                {"id": "a", "values": [1]},
+                                {"id": "b", "values": [2]},
+                                {"id": "c", "values": [3]},
+                            ],
+                        }
+                    ),
+                    encoding="utf-8",
+                )
 
-            with patch("retrolarium_kit.studio.create.load_studio_project", return_value=state),                     patch("retrolarium_kit.studio.create._project_source", return_value=root / "base.nes"),                     patch("retrolarium_kit.games.catalog.extract_game", side_effect=extract):
+            with (
+                patch("retrolarium_kit.studio.create.load_studio_project", return_value=state),
+                patch("retrolarium_kit.studio.create._project_source", return_value=root / "base.nes"),
+                patch("retrolarium_kit.games.catalog.extract_game", side_effect=extract),
+            ):
                 added = studio_create._add_bundle_resources(
-                    root / "fixture.rlj", profile="doraemon.v1", codec="nes.chr-2bpp.v1")
+                    root / "fixture.rlj", profile="doraemon.v1", codec="nes.chr-2bpp.v1"
+                )
                 self.assertEqual(["b"], added)
                 merged = json.loads(bundle.read_text(encoding="utf-8"))
-                self.assertEqual([{"id": "a", "values": [9]}, {"id": "b", "values": [2]},
-                                  {"id": "c", "values": [3]}], merged["resources"])
-                self.assertEqual([], studio_create._add_bundle_resources(
-                    root / "fixture.rlj", profile="doraemon.v1", codec="nes.chr-2bpp.v1"))
+                self.assertEqual(
+                    [{"id": "a", "values": [9]}, {"id": "b", "values": [2]}, {"id": "c", "values": [3]}],
+                    merged["resources"],
+                )
+                self.assertEqual(
+                    [],
+                    studio_create._add_bundle_resources(
+                        root / "fixture.rlj", profile="doraemon.v1", codec="nes.chr-2bpp.v1"
+                    ),
+                )
 
     def test_pacman_round_playtest_runs_the_build_with_a_round(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -548,10 +637,15 @@ class StudioOperationTests(unittest.TestCase):
             mame = root / "mame.exe"
             mame.write_bytes(b"fixture")
             verification = {"status": "current", "artifact": {"absolute_path": str(artifact)}}
-            with patch(
-                "retrolarium_kit.studio.playtest.load_studio_project", return_value=state,
-            ), patch(
-                "retrolarium_kit.studio.playtest.verify_studio_project", return_value=verification,
+            with (
+                patch(
+                    "retrolarium_kit.studio.playtest.load_studio_project",
+                    return_value=state,
+                ),
+                patch(
+                    "retrolarium_kit.studio.playtest.verify_studio_project",
+                    return_value=verification,
+                ),
             ):
                 plan = studio_pacman_round_playtest_plan(root / "fixture.rlj", mame=mame, round=7)
                 self.assertEqual({"PACMAN_PLAYTEST_ROUND": "7"}, plan["environment"])
@@ -564,15 +658,15 @@ class StudioOperationTests(unittest.TestCase):
                 with self.assertRaisesRegex(StudioProjectError, "pacman.v1"):
                     studio_pacman_round_playtest_plan(root / "fixture.rlj", mame=mame, round=1)
 
-    @unittest.skipUnless((game_repository("solomon_no_kagi_src") / "config" / "game_profile.json").is_file(),
-                         "the Solomon's Key repository is not available")
+    @unittest.skipUnless(
+        (game_repository("solomon_no_kagi_src") / "config" / "game_profile.json").is_file(),
+        "the Solomon's Key repository is not available",
+    )
     def test_solomon_point_playtest_uses_profile_hooks_without_rom_patch(self) -> None:
         # The hooks come from the repository's profile, which the studio has
         # opened by the time a playtest runs.
         repository_profile(game_repository("solomon_no_kagi_src"))
-        for revision, hook, machine in (
-            ("usa", 0x9021, "nes"), ("europe", 0x9030, "nespal")
-        ):
+        for revision, hook, machine in (("usa", 0x9021, "nes"), ("europe", 0x9030, "nespal")):
             with self.subTest(revision=revision), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 state = self.prepare(root)
@@ -580,18 +674,21 @@ class StudioOperationTests(unittest.TestCase):
                 tab = state["workspace"]["tabs"][0]
                 tab["codec"] = "solomon.rooms@3"
                 tab["capabilities"] = ["edit", "playtest"]
-                (root / "documents/resources.json").write_text(json.dumps({
-                    "schema": "retrolarium.solomon-rooms",
-                    "schema_version": 3,
-                    "game": "solomons-key",
-                    "revision": revision,
-                    "rooms": [{} for _ in range(53)],
-                }), encoding="utf-8")
+                (root / "documents/resources.json").write_text(
+                    json.dumps(
+                        {
+                            "schema": "retrolarium.solomon-rooms",
+                            "schema_version": 3,
+                            "game": "solomons-key",
+                            "revision": revision,
+                            "rooms": [{} for _ in range(53)],
+                        }
+                    ),
+                    encoding="utf-8",
+                )
                 source = bytearray(65552)
                 source[:16] = b"NES\x1a" + bytes([2, 4, 0x30]) + bytes(9)
-                source[16 + hook - 0x8000:22 + hook - 0x8000] = (
-                    b"\xa9\xfd\x25\x7c\x85\x7c"
-                )
+                source[16 + hook - 0x8000 : 22 + hook - 0x8000] = b"\xa9\xfd\x25\x7c\x85\x7c"
                 artifact = root / "disassembly/generated/base.nes"
                 artifact.write_bytes(source)
                 mame = root / "mame.exe"
@@ -600,34 +697,40 @@ class StudioOperationTests(unittest.TestCase):
                     "status": "current",
                     "artifact": {"absolute_path": str(artifact)},
                 }
-                with patch(
-                    "retrolarium_kit.studio.playtest.load_studio_project",
-                    return_value=state,
-                ), patch(
-                    "retrolarium_kit.studio.playtest.verify_studio_project",
-                    return_value=verification,
+                with (
+                    patch(
+                        "retrolarium_kit.studio.playtest.load_studio_project",
+                        return_value=state,
+                    ),
+                    patch(
+                        "retrolarium_kit.studio.playtest.verify_studio_project",
+                        return_value=verification,
+                    ),
                 ):
                     plan = studio_solomon_point_playtest_plan(
-                        root / "fixture.rlj", mame=mame, room=29,
+                        root / "fixture.rlj",
+                        mame=mame,
+                        room=29,
                     )
                     self.assertEqual(machine, plan["arguments"][0])
                     self.assertEqual(str(artifact.resolve()), plan["arguments"][2])
                     self.assertEqual("29", plan["environment"]["SOLOMON_PLAYTEST_ROOM"])
-                    self.assertEqual(
-                        str(hook), plan["environment"]["SOLOMON_PLAYTEST_ROOM_LOAD"]
-                    )
+                    self.assertEqual(str(hook), plan["environment"]["SOLOMON_PLAYTEST_ROOM_LOAD"])
                     self.assertEqual(bytes(source), artifact.read_bytes())
-                    self.assertEqual("retrolarium.studio.solomon-point-playtest",
-                                     plan["operation"])
+                    self.assertEqual("retrolarium.studio.solomon-point-playtest", plan["operation"])
                     with self.assertRaisesRegex(StudioProjectError, "room must be"):
                         studio_solomon_point_playtest_plan(
-                            root / "fixture.rlj", mame=mame, room=53,
+                            root / "fixture.rlj",
+                            mame=mame,
+                            room=53,
                         )
                     source[16 + hook - 0x8000] = 0
                     artifact.write_bytes(source)
                     with self.assertRaisesRegex(StudioProjectError, "guarded"):
                         studio_solomon_point_playtest_plan(
-                            root / "fixture.rlj", mame=mame, room=0,
+                            root / "fixture.rlj",
+                            mame=mame,
+                            room=0,
                         )
 
 

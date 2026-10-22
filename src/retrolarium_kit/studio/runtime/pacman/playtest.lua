@@ -7,15 +7,14 @@
 
 local function setting(name, minimum, maximum)
     local value = tonumber(os.getenv(name) or "")
-    if value == nil or value < minimum or value > maximum
-            or value ~= math.floor(value) then
+    if value == nil or value < minimum or value > maximum or value ~= math.floor(value) then
         error(name .. " must be in range " .. minimum .. ".." .. maximum)
     end
     return value
 end
 
-local STAGE = 0x0068        -- ram_stage_p1: the round, 0-based
-local DEMO = 0x0048         -- ram_flag_demo
+local STAGE = 0x0068 -- ram_stage_p1: the round, 0-based
+local DEMO = 0x0048 -- ram_flag_demo
 
 local round = setting("PACMAN_PLAYTEST_ROUND", 1, 23)
 local ready_path = os.getenv("PACMAN_PLAYTEST_READY")
@@ -34,26 +33,31 @@ for _, port in pairs(machine.ioport.ports) do
             break
         end
     end
-    if start_field ~= nil then break end
+    if start_field ~= nil then
+        break
+    end
 end
 if start_field == nil then
     error("MAME NES player-one Start input is unavailable")
 end
 
 local frame = 0
-local entered = false       -- a real game's setup has run
-local started = 0           -- the frame the round was counted up to
+local entered = false -- a real game's setup has run
+local started = 0 -- the frame the round was counted up to
 local placed = false
-stage_tap = memory:install_write_tap(STAGE, STAGE, "pacman-round-playtest",
-    function(_, value)
-        if memory:read_u8(DEMO) ~= 0 then return value end
-        if not entered and value == 0xff then
-            entered = true
-            return (round - 2) & 0xff
-        end
-        if entered and started == 0 and value == round - 1 then started = frame end
+stage_tap = memory:install_write_tap(STAGE, STAGE, "pacman-round-playtest", function(_, value)
+    if memory:read_u8(DEMO) ~= 0 then
         return value
-    end)
+    end
+    if not entered and value == 0xff then
+        entered = true
+        return (round - 2) & 0xff
+    end
+    if entered and started == 0 and value == round - 1 then
+        started = frame
+    end
+    return value
+end)
 
 local function on_frame()
     frame = frame + 1
@@ -65,12 +69,18 @@ local function on_frame()
     -- in a game Start would pause it.
     if not entered then
         local phase = frame % 60
-        if frame >= 120 and phase == 0 then start_field:set_value(1) end
-        if phase == 3 then start_field:clear_value() end
+        if frame >= 120 and phase == 0 then
+            start_field:set_value(1)
+        end
+        if phase == 3 then
+            start_field:clear_value()
+        end
     elseif frame % 60 >= 3 then
         start_field:clear_value()
     end
-    if placed then return end
+    if placed then
+        return
+    end
     if frame > 3600 then
         error("Pac-Man did not start a game for the round playtest")
     end

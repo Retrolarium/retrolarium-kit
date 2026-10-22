@@ -20,15 +20,18 @@ FIXTURE = Path(__file__).resolve().parents[2] / "fixtures" / "flicky_project"
 class FlickyStudioContractTests(unittest.TestCase):
     def test_cli_uses_explicit_source_and_project_root(self) -> None:
         output = StringIO()
-        with patch("retrolarium_kit.games.flicky.content.import_flicky_source") as importing, \
-                patch("retrolarium_kit.studio.create.create_flicky_studio_project",
-                      return_value={"schema": "inspection"}) as creating, \
-                redirect_stdout(output):
-            status = cli_main(["studio", "flicky-create", "original.bin",
-                               "--source-root", "source", "--project-root", "project"])
+        with (
+            patch("retrolarium_kit.games.flicky.content.import_flicky_source") as importing,
+            patch(
+                "retrolarium_kit.studio.create.create_flicky_studio_project", return_value={"schema": "inspection"}
+            ) as creating,
+            redirect_stdout(output),
+        ):
+            status = cli_main(
+                ["studio", "flicky-create", "original.bin", "--source-root", "source", "--project-root", "project"]
+            )
         self.assertEqual(0, status)
-        importing.assert_called_once_with(Path("source"), Path("original.bin"),
-                                          Path("project"))
+        importing.assert_called_once_with(Path("source"), Path("original.bin"), Path("project"))
         creating.assert_called_once_with(Path("project"))
         self.assertIn("inspection", output.getvalue())
 
@@ -38,48 +41,72 @@ class FlickyStudioContractTests(unittest.TestCase):
         self.assertEqual("retrolarium.flicky-source-snapshot", inspection["source"]["schema"])
         self.assertEqual(5, len(inspection["workspace"]["tabs"]))
         self.assertEqual("levels", inspection["workspace"]["startup_tab"])
-        levels = next(tab for tab in inspection["workspace"]["tabs"]
-                      if tab["id"] == "levels")
-        self.assertEqual(["graphics", "semantics", "animations"],
-                         levels["depends_on"])
-        self.assertTrue({"paint", "edit", "preview", "playtest"}.issubset(
-            levels["capabilities"]))
-        sound = next(tab for tab in inspection["workspace"]["tabs"]
-                     if tab["id"] == "sound")
+        levels = next(tab for tab in inspection["workspace"]["tabs"] if tab["id"] == "levels")
+        self.assertEqual(["graphics", "semantics", "animations"], levels["depends_on"])
+        self.assertTrue({"paint", "edit", "preview", "playtest"}.issubset(levels["capabilities"]))
+        sound = next(tab for tab in inspection["workspace"]["tabs"] if tab["id"] == "sound")
         self.assertIn("preview", sound["capabilities"])
 
     def test_round_playtest_cli_forwards_one_based_round(self) -> None:
         output = StringIO()
-        with patch("retrolarium_kit.studio.playtest.studio_flicky_round_playtest_plan",
-                   return_value={"operation": "flicky-round"}) as planning, \
-                redirect_stdout(output):
-            status = cli_main([
-                "studio", "flicky-round-playtest-plan", "flicky-ue.rlj",
-                "--mame", "consoles.exe", "--round", "26",
-            ])
+        with (
+            patch(
+                "retrolarium_kit.studio.playtest.studio_flicky_round_playtest_plan",
+                return_value={"operation": "flicky-round"},
+            ) as planning,
+            redirect_stdout(output),
+        ):
+            status = cli_main(
+                [
+                    "studio",
+                    "flicky-round-playtest-plan",
+                    "flicky-ue.rlj",
+                    "--mame",
+                    "consoles.exe",
+                    "--round",
+                    "26",
+                ]
+            )
         self.assertEqual(0, status)
         planning.assert_called_once_with(
-            Path("flicky-ue.rlj"), mame=Path("consoles.exe"), round=26,
+            Path("flicky-ue.rlj"),
+            mame=Path("consoles.exe"),
+            round=26,
         )
         self.assertIn("flicky-round", output.getvalue())
 
     def test_sound_preview_cli_forwards_header_and_mixer(self) -> None:
         output = StringIO()
-        with patch("retrolarium_kit.studio.playtest.studio_flicky_sound_preview",
-                   return_value={"status": "rendered"}) as rendering, \
-                redirect_stdout(output):
-            status = cli_main([
-                "studio", "flicky-sound-preview", "flicky-ue.rlj",
-                "--header", "zMusic81Header", "--seconds", "2",
-                "--channel", "1", "--channel", "3",
-                "--document-override", "build/sound-preview/.flicky-unsaved-123.asm",
-            ])
+        with (
+            patch(
+                "retrolarium_kit.studio.playtest.studio_flicky_sound_preview", return_value={"status": "rendered"}
+            ) as rendering,
+            redirect_stdout(output),
+        ):
+            status = cli_main(
+                [
+                    "studio",
+                    "flicky-sound-preview",
+                    "flicky-ue.rlj",
+                    "--header",
+                    "zMusic81Header",
+                    "--seconds",
+                    "2",
+                    "--channel",
+                    "1",
+                    "--channel",
+                    "3",
+                    "--document-override",
+                    "build/sound-preview/.flicky-unsaved-123.asm",
+                ]
+            )
         self.assertEqual(0, status)
         rendering.assert_called_once_with(
-            Path("flicky-ue.rlj"), header="zMusic81Header", seconds=2,
+            Path("flicky-ue.rlj"),
+            header="zMusic81Header",
+            seconds=2,
             enabled_channels=(1, 3),
-            document_override=Path(
-                "build/sound-preview/.flicky-unsaved-123.asm"),
+            document_override=Path("build/sound-preview/.flicky-unsaved-123.asm"),
         )
         self.assertIn("rendered", output.getvalue())
 
@@ -88,16 +115,11 @@ class FlickyStudioContractTests(unittest.TestCase):
             root = Path(directory)
             shutil.copytree(FIXTURE / "flicky-source", root / "flicky-source")
             project = root / "flicky-ue.rlj"
-            payload = (FIXTURE / "accept-flicky-content.rlj").read_text(
-                encoding="utf-8"
-            )
+            payload = (FIXTURE / "accept-flicky-content.rlj").read_text(encoding="utf-8")
             payload = payload.replace('"preview", "playtest",', '"preview",', 1)
             sound_start = payload.index('id = "sound"')
-            payload = (payload[:sound_start]
-                       + payload[sound_start:].replace('"edit", "preview",',
-                                                        '"edit",', 1))
-            project.write_bytes((payload + "# user's Flicky note\n")
-                                .replace("\n", "\r\n").encode("utf-8"))
+            payload = payload[:sound_start] + payload[sound_start:].replace('"edit", "preview",', '"edit",', 1)
+            project.write_bytes((payload + "# user's Flicky note\n").replace("\n", "\r\n").encode("utf-8"))
             output = StringIO()
             with redirect_stdout(output):
                 status = cli_main(["studio", "flicky-upgrade", str(project)])
@@ -105,8 +127,7 @@ class FlickyStudioContractTests(unittest.TestCase):
             self.assertIn('"status": "upgraded"', output.getvalue())
             result = upgrade_flicky_studio_project(project)
             self.assertEqual("current", result["status"])
-            self.assertEqual(["levels.bonus_placements"],
-                             result["skipped_documents"])
+            self.assertEqual(["levels.bonus_placements"], result["skipped_documents"])
             self.assertIn("# user's Flicky note", project.read_text(encoding="utf-8"))
             tabs = {tab["id"]: tab for tab in result["inspection"]["workspace"]["tabs"]}
             self.assertEqual("Palettes", tabs["semantics"]["title"])
@@ -122,9 +143,12 @@ class FlickyStudioContractTests(unittest.TestCase):
 
     def test_flicky_upgrade_cli_forwards_project(self) -> None:
         output = StringIO()
-        with patch("retrolarium_kit.studio.create.upgrade_flicky_studio_project",
-                   return_value={"status": "upgraded"}) as upgrading, \
-                redirect_stdout(output):
+        with (
+            patch(
+                "retrolarium_kit.studio.create.upgrade_flicky_studio_project", return_value={"status": "upgraded"}
+            ) as upgrading,
+            redirect_stdout(output),
+        ):
             status = cli_main(["studio", "flicky-upgrade", "flicky-ue.rlj"])
         self.assertEqual(0, status)
         upgrading.assert_called_once_with(Path("flicky-ue.rlj"), output=None)
@@ -149,13 +173,14 @@ class FlickyStudioContractTests(unittest.TestCase):
             root = Path(directory)
             shutil.copytree(FIXTURE / "flicky-source", root / "flicky-source")
             project = root / "flicky-ue.rlj"
-            original = (FIXTURE / "accept-flicky-content.rlj").read_text(
-                encoding="utf-8"
+            original = (FIXTURE / "accept-flicky-content.rlj").read_text(encoding="utf-8")
+            project.write_text(
+                original.replace(
+                    'document = "flicky-source/content/workspace/level/levels.json"',
+                    'document = "flicky-source/content/workspace/graphics/graphics.json"',
+                ),
+                encoding="utf-8",
             )
-            project.write_text(original.replace(
-                'document = "flicky-source/content/workspace/level/levels.json"',
-                'document = "flicky-source/content/workspace/graphics/graphics.json"',
-            ), encoding="utf-8")
             with self.assertRaisesRegex(StudioProjectError, "Flicky tab"):
                 load_studio_project(project)
 

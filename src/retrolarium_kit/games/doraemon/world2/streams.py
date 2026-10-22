@@ -54,9 +54,7 @@ def _decode_screen(region: bytes, start: int) -> list[list[int]]:
         cells: list[int] = []
         while len(cells) < MINIMUM_CELLS:
             if cursor >= len(region):
-                raise DoraemonWorld2StreamError(
-                    f"World 2 row {row_index} reads past the stream region"
-                )
+                raise DoraemonWorld2StreamError(f"World 2 row {row_index} reads past the stream region")
             token = region[cursor]
             cursor += 1
             if token < 0xD0:
@@ -69,9 +67,7 @@ def _decode_screen(region: bytes, start: int) -> list[list[int]]:
                 raise DoraemonWorld2StreamError("World 2 contains reserved $F0 token")
             else:
                 if cursor >= len(region) or region[cursor] >= 0xD0:
-                    raise DoraemonWorld2StreamError(
-                        "World 2 RLE token has no valid metatile operand"
-                    )
+                    raise DoraemonWorld2StreamError("World 2 RLE token has no valid metatile operand")
                 cells.extend([region[cursor]] * ((token & 0x0F) + 1))
                 cursor += 1
         rows.append(cells)
@@ -80,13 +76,11 @@ def _decode_screen(region: bytes, start: int) -> list[list[int]]:
 
 def _decode_payload(payload: bytes) -> list[list[list[int]]]:
     if len(payload) != PAYLOAD_SIZE:
-        raise DoraemonWorld2StreamError(
-            f"World 2 screens need exactly {PAYLOAD_SIZE} bytes"
-        )
+        raise DoraemonWorld2StreamError(f"World 2 screens need exactly {PAYLOAD_SIZE} bytes")
     region = payload[POINTER_SIZE:]
     screens = []
     for selector in range(SELECTOR_COUNT):
-        pointer = int.from_bytes(payload[selector * 2:selector * 2 + 2], "little")
+        pointer = int.from_bytes(payload[selector * 2 : selector * 2 + 2], "little")
         screens.append(_decode_screen(region, pointer - REGION_ADDRESS))
     return screens
 
@@ -101,20 +95,13 @@ def _validate_screens(value: object) -> list[list[list[int]]]:
     result = []
     for selector, screen in enumerate(value):
         if not isinstance(screen, list) or len(screen) != ROWS_PER_SCREEN:
-            raise DoraemonWorld2StreamError(
-                f"World 2 selector {selector} needs 16 rows"
-            )
+            raise DoraemonWorld2StreamError(f"World 2 selector {selector} needs 16 rows")
         rows = []
         for row_index, row in enumerate(screen):
             if not isinstance(row, list) or not MINIMUM_CELLS <= len(row) <= 30:
-                raise DoraemonWorld2StreamError(
-                    f"World 2 selector {selector} row {row_index} has invalid width"
-                )
-            if any(not isinstance(cell, int) or isinstance(cell, bool)
-                   or not 0 <= cell <= PADDING for cell in row):
-                raise DoraemonWorld2StreamError(
-                    f"World 2 selector {selector} row {row_index} has invalid cells"
-                )
+                raise DoraemonWorld2StreamError(f"World 2 selector {selector} row {row_index} has invalid width")
+            if any(not isinstance(cell, int) or isinstance(cell, bool) or not 0 <= cell <= PADDING for cell in row):
+                raise DoraemonWorld2StreamError(f"World 2 selector {selector} row {row_index} has invalid cells")
             rows.append(row)
         result.append(rows)
     return result
@@ -141,17 +128,14 @@ def _encode_row(row: list[int]) -> _Screen:
 
         if value == PADDING:
             if width != 16 or any(cell != PADDING for cell in row[index:]):
-                raise DoraemonWorld2StreamError(
-                    "World 2 row-end padding must be one suffix to width 16"
-                )
-            append(b"\xEF", b"T", width)
+                raise DoraemonWorld2StreamError("World 2 row-end padding must be one suffix to width 16")
+            append(b"\xef", b"T", width)
         elif value >= SPAWN_BASE:
             append(bytes((0xD0 + value - SPAWN_BASE,)), b"T", index + 1)
         else:
             append(bytes((value,)), b"T", index + 1)
             run = 1
-            while (run < 16 and index + run < width
-                   and row[index + run] == value):
+            while run < 16 and index + run < width and row[index + run] == value:
                 run += 1
                 if run >= 2:
                     append(bytes((0xF0 + run - 1, value)), b"TO", index + run)
@@ -161,16 +145,13 @@ def _encode_row(row: list[int]) -> _Screen:
 
     encoded = solve(0)
     if encoded is None:
-        raise DoraemonWorld2StreamError(
-            "World 2 row cannot preserve its overrun width after this edit"
-        )
+        raise DoraemonWorld2StreamError("World 2 row cannot preserve its overrun width after this edit")
     return _Screen(*encoded)
 
 
 def _encode_screen(rows: list[list[int]]) -> _Screen:
     encoded = [_encode_row(row) for row in rows]
-    return _Screen(b"".join(item.data for item in encoded),
-                   b"".join(item.roles for item in encoded))
+    return _Screen(b"".join(item.data for item in encoded), b"".join(item.roles for item in encoded))
 
 
 def _placement(left: _Chunk, right: _Chunk) -> tuple[int, int]:
@@ -179,7 +160,7 @@ def _placement(left: _Chunk, right: _Chunk) -> tuple[int, int]:
         position = left.data.find(right.data, start)
         if position < 0:
             break
-        if left.roles[position:position + len(right.roles)] == right.roles:
+        if left.roles[position : position + len(right.roles)] == right.roles:
             return len(right.data), position
         start = position + 1
     # The longest suffix of left that starts right: only positions holding
@@ -188,16 +169,14 @@ def _placement(left: _Chunk, right: _Chunk) -> tuple[int, int]:
         first = right.data[:1]
         position = left.data.find(first, max(0, len(left.data) - len(right.data)))
         while position >= 0:
-            if (right.data.startswith(left.data[position:])
-                    and right.roles.startswith(left.roles[position:])):
+            if right.data.startswith(left.data[position:]) and right.roles.startswith(left.roles[position:]):
                 return len(left.data) - position, position
             position = left.data.find(first, position + 1)
     return 0, len(left.data)
 
 
 def _pack_screens(screens: list[_Screen]) -> tuple[bytes, list[int]]:
-    active = {index: _Chunk(screen.data, screen.roles, {index: 0})
-              for index, screen in enumerate(screens)}
+    active = {index: _Chunk(screen.data, screen.roles, {index: 0}) for index, screen in enumerate(screens)}
     queue: list[tuple[int, int, int]] = []
     next_id = len(active)
 
@@ -256,25 +235,18 @@ def encode_screens(value: Any) -> bytes:
     screens = _validate_screens(value["screens"])
     first_alias: dict[int, int] = {}
     for selector in range(SELECTOR_COUNT):
-        pointer = int.from_bytes(
-            original[selector * 2:selector * 2 + 2], "little"
-        )
+        pointer = int.from_bytes(original[selector * 2 : selector * 2 + 2], "little")
         first = first_alias.setdefault(pointer, selector)
         if screens[selector] != screens[first]:
-            raise DoraemonWorld2StreamError(
-                f"World 2 selectors {first} and {selector} share a physical alias"
-            )
+            raise DoraemonWorld2StreamError(f"World 2 selectors {first} and {selector} share a physical alias")
     if screens == original_screens:
         return original
     encoded = [_encode_screen(screen) for screen in screens]
     packed, offsets = _pack_screens(encoded)
     if len(packed) > REGION_SIZE - 1:
-        raise DoraemonWorld2StreamError(
-            f"World 2 repack needs {len(packed) + 1} bytes; capacity is {REGION_SIZE}"
-        )
+        raise DoraemonWorld2StreamError(f"World 2 repack needs {len(packed) + 1} bytes; capacity is {REGION_SIZE}")
     region = packed + bytes(REGION_SIZE - len(packed) - 1) + original[-1:]
-    pointers = b"".join((REGION_ADDRESS + offset).to_bytes(2, "little")
-                        for offset in offsets)
+    pointers = b"".join((REGION_ADDRESS + offset).to_bytes(2, "little") for offset in offsets)
     payload = pointers + region
     if _decode_payload(payload) != screens:
         raise DoraemonWorld2StreamError("World 2 repack changed logical screens")

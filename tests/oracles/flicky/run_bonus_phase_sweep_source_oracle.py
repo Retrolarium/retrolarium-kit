@@ -22,8 +22,7 @@ from run_round_playtest_source_oracle import (
 
 
 VIEWPORT = (256, 224)
-DAC = {0: 0, 36: 52, 72: 87, 108: 116,
-       144: 144, 180: 172, 216: 206, 252: 255}
+DAC = {0: 0, 36: 52, 72: 87, 108: 116, 144: 144, 180: 172, 216: 206, 252: 255}
 DAC_TRANSLATION = bytes(DAC.get(value, value) for value in range(256))
 
 
@@ -32,11 +31,11 @@ def matching_pixels(native_path: Path, mame_path: Path) -> int:
 
     with Image.open(native_path) as native_image, Image.open(mame_path) as mame_image:
         assert native_image.size == mame_image.size == VIEWPORT, (
-            f"unexpected bonus VDP dimensions: {native_image.size}, {mame_image.size}")
+            f"unexpected bonus VDP dimensions: {native_image.size}, {mame_image.size}"
+        )
         native = native_image.convert("RGB").tobytes().translate(DAC_TRANSLATION)
         mame = mame_image.convert("RGB").tobytes()
-    return sum(native[offset:offset + 3] == mame[offset:offset + 3]
-               for offset in range(0, len(native), 3))
+    return sum(native[offset : offset + 3] == mame[offset : offset + 3] for offset in range(0, len(native), 3))
 
 
 def main() -> int:
@@ -49,12 +48,9 @@ def main() -> int:
     parser.add_argument("--round", type=int, default=3)
     parser.add_argument("--start-phase", type=int, required=True)
     parser.add_argument("--end-phase", type=int, required=True)
-    parser.add_argument("--report", type=Path,
-                        help="retain per-phase matching-pixel counts as JSON")
-    parser.add_argument("--diagnostics-dir", type=Path,
-                        help="retain native/MAME PNG pairs for differing phases")
-    parser.add_argument("--require-exact", action="store_true",
-                        help="fail if any phase differs from MAME")
+    parser.add_argument("--report", type=Path, help="retain per-phase matching-pixel counts as JSON")
+    parser.add_argument("--diagnostics-dir", type=Path, help="retain native/MAME PNG pairs for differing phases")
+    parser.add_argument("--require-exact", action="store_true", help="fail if any phase differs from MAME")
     args = parser.parse_args()
     if not 1 <= args.round <= 48 or args.round % 4 != 3:
         parser.error("--round must select one of the 12 bonus rounds")
@@ -76,14 +72,22 @@ def main() -> int:
         prefix = root / "bonus-sweep"
         final_snapshot = root / f"bonus-sweep-{args.end_phase:03d}.png"
         earlier = tuple(range(args.start_phase, args.end_phase))
-        extra_environment = ({
-            "FLICKY_PLAYTEST_SNAPSHOT_PHASES": ",".join(map(str, earlier)),
-            "FLICKY_PLAYTEST_SNAPSHOT_PREFIX": str(prefix.resolve()),
-        } if earlier else None)
-        launch(studio_flicky_round_playtest_plan(
-            project, mame=args.mame, round=args.round), args.round, root,
-            final_snapshot, snapshot_delay=args.end_phase,
-            extra_environment=extra_environment)
+        extra_environment = (
+            {
+                "FLICKY_PLAYTEST_SNAPSHOT_PHASES": ",".join(map(str, earlier)),
+                "FLICKY_PLAYTEST_SNAPSHOT_PREFIX": str(prefix.resolve()),
+            }
+            if earlier
+            else None
+        )
+        launch(
+            studio_flicky_round_playtest_plan(project, mame=args.mame, round=args.round),
+            args.round,
+            root,
+            final_snapshot,
+            snapshot_delay=args.end_phase,
+            extra_environment=extra_environment,
+        )
 
         results = []
         total = VIEWPORT[0] * VIEWPORT[1]
@@ -91,11 +95,9 @@ def main() -> int:
             native = root / f"native-{phase:03d}.png"
             mame = root / f"bonus-sweep-{phase:03d}.png"
             assert mame.is_file(), f"MAME missed bonus snapshot +{phase}"
-            render_native_bonus_phase(args.native_renderer, source, args.round,
-                                      phase, native)
+            render_native_bonus_phase(args.native_renderer, source, args.round, phase, native)
             matches = matching_pixels(native, mame)
-            results.append({"phase": phase, "matching_pixels": matches,
-                            "mismatching_pixels": total - matches})
+            results.append({"phase": phase, "matching_pixels": matches, "mismatching_pixels": total - matches})
             if matches != total and args.diagnostics_dir is not None:
                 stem = f"round-{args.round}-phase-{phase:03d}"
                 shutil.copyfile(native, args.diagnostics_dir / f"{stem}-native.png")
@@ -103,35 +105,43 @@ def main() -> int:
 
     mismatches = [item for item in results if item["mismatching_pixels"]]
     worst = max(results, key=lambda item: item["mismatching_pixels"])
-    mean_agreement = sum(item["matching_pixels"] for item in results) \
-        / (len(results) * total)
-    print(f"Flicky bonus round {args.round} phase sweep "
-          f"+{args.start_phase}..+{args.end_phase}: "
-          f"{len(results) - len(mismatches)}/{len(results)} exact frames; "
-          f"worst +{worst['phase']}={worst['matching_pixels']}/{total} "
-          f"({worst['matching_pixels'] / total:.2%}); "
-          f"mean pixel agreement {mean_agreement:.2%}")
+    mean_agreement = sum(item["matching_pixels"] for item in results) / (len(results) * total)
+    print(
+        f"Flicky bonus round {args.round} phase sweep "
+        f"+{args.start_phase}..+{args.end_phase}: "
+        f"{len(results) - len(mismatches)}/{len(results)} exact frames; "
+        f"worst +{worst['phase']}={worst['matching_pixels']}/{total} "
+        f"({worst['matching_pixels'] / total:.2%}); "
+        f"mean pixel agreement {mean_agreement:.2%}"
+    )
     if mismatches:
         sample = mismatches[:20]
-        print("Non-exact phases: " + ", ".join(
-            f"+{item['phase']} ({item['mismatching_pixels']} pixels)"
-            for item in sample)
-            + (f", … and {len(mismatches) - len(sample)} more"
-               if len(mismatches) > len(sample) else ""))
+        print(
+            "Non-exact phases: "
+            + ", ".join(f"+{item['phase']} ({item['mismatching_pixels']} pixels)" for item in sample)
+            + (f", … and {len(mismatches) - len(sample)} more" if len(mismatches) > len(sample) else "")
+        )
     if args.report is not None:
         args.report.parent.mkdir(parents=True, exist_ok=True)
-        args.report.write_text(json.dumps({
-            "round": args.round,
-            "viewport": list(VIEWPORT),
-            "summary": {
-                "exact_frames": len(results) - len(mismatches),
-                "total_frames": len(results),
-                "worst_phase": worst["phase"],
-                "minimum_pixel_agreement": worst["matching_pixels"] / total,
-                "mean_pixel_agreement": mean_agreement,
-            },
-            "phases": results,
-        }, indent=2) + "\n", encoding="utf-8")
+        args.report.write_text(
+            json.dumps(
+                {
+                    "round": args.round,
+                    "viewport": list(VIEWPORT),
+                    "summary": {
+                        "exact_frames": len(results) - len(mismatches),
+                        "total_frames": len(results),
+                        "worst_phase": worst["phase"],
+                        "minimum_pixel_agreement": worst["matching_pixels"] / total,
+                        "mean_pixel_agreement": mean_agreement,
+                    },
+                    "phases": results,
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
     if args.require_exact:
         assert not mismatches, f"{len(mismatches)} bonus phases differ from MAME"
     return 0

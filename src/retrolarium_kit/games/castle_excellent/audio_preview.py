@@ -31,7 +31,7 @@ PREVIEW_GAIN = 1.25
 CHANNELS = (("pulse1", 0), ("pulse2", 4), ("triangle", 8))
 NOTE_OFFSETS = {ord(c): i for c, i in zip("abcdefg", (9, 11, 0, 2, 4, 5, 7))}
 DEFAULT_LENGTH_INDICES = {ord("@"): 0, ord("8"): 1, ord("4"): 2, ord("2"): 3, ord("1"): 4}
-SEMITONE_TABLE = 0          # offsets into the playback prefix
+SEMITONE_TABLE = 0  # offsets into the playback prefix
 LENGTH_TABLE = 7
 PERIOD_TABLE = 0x3F
 
@@ -81,7 +81,7 @@ class _Memory:
         for index, stream in enumerate(streams):
             end = starts[stream["id"]] - self.mml_cpu + len(stream["text"])
             restart = starts.get(stream["restart"], 0) if stream["restart"] else 0
-            arena[end + 1:end + 3] = restart.to_bytes(2, "little")
+            arena[end + 1 : end + 3] = restart.to_bytes(2, "little")
         self.arena = bytes(arena)
         self.starts = starts
 
@@ -222,6 +222,7 @@ class _OutputFilter:
         def high(cutoff: float) -> float:
             constant = 1.0 / (2.0 * math.pi * cutoff)
             return constant / (constant + 1.0 / rate)
+
         constant = 1.0 / (2.0 * math.pi * 14_000.0)
         self.hp90 = high(90.0)
         self.hp440 = high(440.0)
@@ -243,7 +244,11 @@ class _OutputFilter:
 
 
 def render_wav(
-    music: Mapping[str, Any], track: int, *, seconds: float = 20.0, muted: frozenset[str] = frozenset(),
+    music: Mapping[str, Any],
+    track: int,
+    *,
+    seconds: float = 20.0,
+    muted: frozenset[str] = frozenset(),
 ) -> bytes:
     frames = max(1, round(seconds * NTSC_FRAME_RATE))
     lanes = track_lanes(music, track, frames)
@@ -260,8 +265,10 @@ def render_wav(
             events = lanes[name]
             if name in muted or not events:
                 continue
-            while cursors[index] + 1 < len(events) and \
-                    frame >= events[cursors[index]].start + events[cursors[index]].duration:
+            while (
+                cursors[index] + 1 < len(events)
+                and frame >= events[cursors[index]].start + events[cursors[index]].duration
+            ):
                 cursors[index] += 1
             event = events[cursors[index]]
             if not event.start <= frame < event.start + event.duration:
@@ -270,8 +277,11 @@ def render_wav(
             if event.duration > 3 and frame >= event.start + event.duration - 3:
                 continue
             elapsed = (frame - event.start) / NTSC_FRAME_RATE
-            values[index] = _triangle(event.frequency, elapsed) if index == 2 \
+            values[index] = (
+                _triangle(event.frequency, elapsed)
+                if index == 2
                 else _pulse(event.frequency, elapsed, parameters[index])
+            )
         value = max(-1.0, min(1.0, output.process(_mix(*values)) * PREVIEW_GAIN))
         pcm += struct.pack("<h", round(value * 32767))
     buffer = io.BytesIO()
@@ -284,7 +294,12 @@ def render_wav(
 
 
 def render_castle_excellent_wav(
-    document: Path, output: Path, *, track: int, seconds: float = 20.0, muted: tuple[str, ...] = (),
+    document: Path,
+    output: Path,
+    *,
+    track: int,
+    seconds: float = 20.0,
+    muted: tuple[str, ...] = (),
 ) -> dict[str, object]:
     try:
         value = json.loads(document.read_text(encoding="utf-8"))
@@ -299,5 +314,10 @@ def render_castle_excellent_wav(
     payload = render_wav(music, track, seconds=seconds, muted=frozenset(muted))
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_bytes(payload)
-    return {"schema": "retrolarium.castle-excellent-wav", "output": str(output), "track": track,
-            "bytes": len(payload), "seconds": seconds}
+    return {
+        "schema": "retrolarium.castle-excellent-wav",
+        "output": str(output),
+        "track": track,
+        "bytes": len(payload),
+        "seconds": seconds,
+    }

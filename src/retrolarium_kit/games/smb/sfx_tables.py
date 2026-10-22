@@ -58,7 +58,7 @@ def table_specs(parameters: Mapping[str, Any]) -> list[tuple[str, int, int, str]
 def decode(image: bytes, parameters: Mapping[str, Any]) -> dict[str, object]:
     records = []
     for name, offset, size, _kind in table_specs(parameters):
-        payload = image[offset:offset + size]
+        payload = image[offset : offset + size]
         if len(payload) != size:
             raise SmbSfxTableError(f"sfx table {name} exceeds the image")
         records.append({"id": name, "values": list(payload)})
@@ -132,6 +132,5 @@ def source_sound(source: bytes) -> tuple[int | None, int | None]:
     profile names for this image; None where it names none."""
     for parameters, base in _source_resources(source):
         engine, periods = (parameters.get(key) for key in OFFSETS)
-        return (base + engine if engine is not None else None,
-                base + periods if periods is not None else None)
+        return (base + engine if engine is not None else None, base + periods if periods is not None else None)
     return None, None

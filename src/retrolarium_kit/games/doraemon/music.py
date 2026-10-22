@@ -16,8 +16,15 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from retrolarium_kit.core.authoring import (
-    Address, AddressRange, AuthoringError, BuildPlan, Change, ChangeSet,
-    GameProfile, Provenance, RevisionSpec,
+    Address,
+    AddressRange,
+    AuthoringError,
+    BuildPlan,
+    Change,
+    ChangeSet,
+    GameProfile,
+    Provenance,
+    RevisionSpec,
 )
 from retrolarium_kit.games.doraemon import audio_streams as streams
 from retrolarium_kit.games.doraemon import sound_synth as synth
@@ -43,8 +50,10 @@ class DoraemonMusicDocument:
 
     def as_dict(self) -> dict[str, Any]:
         return {
-            "schema": SCHEMA, "schema_version": VERSION,
-            "game": self.game_id, "revision": self.revision_id,
+            "schema": SCHEMA,
+            "schema_version": VERSION,
+            "game": self.game_id,
+            "revision": self.revision_id,
             "source_sha256": self.source_sha256,
             "drivers": [dict(driver) for driver in self.drivers],
         }
@@ -75,8 +84,9 @@ def _plain(value: Any) -> Any:
     return value
 
 
-def decode_music(source: bytes, profile: GameProfile, revision: RevisionSpec,
-                 *, _verify_identity: bool = True) -> DoraemonMusicDocument:
+def decode_music(
+    source: bytes, profile: GameProfile, revision: RevisionSpec, *, _verify_identity: bool = True
+) -> DoraemonMusicDocument:
     prg = _prg(source, revision, verify=_verify_identity)
     try:
         decoded = streams.decode_authoring(prg, _plain(_manifest(profile, revision)))
@@ -90,12 +100,20 @@ def decode_music(source: bytes, profile: GameProfile, revision: RevisionSpec,
 def parse_music_document(value: object, profile: GameProfile, revision: RevisionSpec) -> DoraemonMusicDocument:
     _manifest(profile, revision)
     if not isinstance(value, Mapping) or set(value) != {
-        "schema", "schema_version", "game", "revision", "source_sha256", "drivers",
+        "schema",
+        "schema_version",
+        "game",
+        "revision",
+        "source_sha256",
+        "drivers",
     }:
         raise DoraemonMusicError("music document fields differ")
     for key, expected in (
-        ("schema", SCHEMA), ("schema_version", VERSION), ("game", profile.game_id),
-        ("revision", revision.revision_id), ("source_sha256", revision.sha256),
+        ("schema", SCHEMA),
+        ("schema_version", VERSION),
+        ("game", profile.game_id),
+        ("revision", revision.revision_id),
+        ("source_sha256", revision.sha256),
     ):
         if value[key] != expected:
             raise DoraemonMusicError(f"music {key} differs from profile")
@@ -114,8 +132,9 @@ def _layout(driver: Mapping[str, Any]) -> list[tuple[int, int]]:
     return spans
 
 
-def build_music(source: bytes, document: DoraemonMusicDocument, profile: GameProfile,
-                revision: RevisionSpec) -> tuple[bytes, dict[str, object]]:
+def build_music(
+    source: bytes, document: DoraemonMusicDocument, profile: GameProfile, revision: RevisionSpec
+) -> tuple[bytes, dict[str, object]]:
     image = parse_ines(source)
     original = decode_music(source, profile, revision)
     checked = parse_music_document(document.as_dict(), profile, revision)
@@ -129,15 +148,23 @@ def build_music(source: bytes, document: DoraemonMusicDocument, profile: GamePro
         cursor = 0
         for address, size in _layout(after):
             start = base + bank * BANK_SIZE + address - 0x8000
-            raw = payload[cursor:cursor + size]
+            raw = payload[cursor : cursor + size]
             cursor += size
-            if source[start:start + size] != raw:
-                changes.append(Change(AddressRange(Address("file", start), size), source[start:start + size], raw,
-                                      Provenance(revision.sha256, "music", f"bank{bank}-{address:04x}")))
+            if source[start : start + size] != raw:
+                changes.append(
+                    Change(
+                        AddressRange(Address("file", start), size),
+                        source[start : start + size],
+                        raw,
+                        Provenance(revision.sha256, "music", f"bank{bank}-{address:04x}"),
+                    )
+                )
     output = BuildPlan(revision.sha256, ChangeSet(tuple(changes))).apply(source) if changes else source
     return output, {
-        "schema": "retrolarium.doraemon-music-build", "schema_version": 1,
-        "game": profile.game_id, "revision": revision.revision_id,
+        "schema": "retrolarium.doraemon-music-build",
+        "schema_version": 1,
+        "game": profile.game_id,
+        "revision": revision.revision_id,
         "source_sha256": revision.sha256,
         "output_sha256": hashlib.sha256(output).hexdigest(),
         "size": len(output),
@@ -157,24 +184,53 @@ def trace_track(document: Mapping[str, Any], prg: bytes, driver: int, track: int
     except (KeyError, TypeError, ValueError) as exc:
         raise DoraemonMusicError(str(exc)) from exc
     import math
+
     lanes = []
     for lane in decoded.lanes:
         events = []
         for event in lane.events:
             pitch = -1 if event.frequency <= 0 else round(69 + 12 * math.log2(event.frequency / 440.0))
-            events.append({"start": event.start_frame, "length": event.duration_frames, "pitch": pitch,
-                           "address": event.source_address, "volume": event.volume})
+            events.append(
+                {
+                    "start": event.start_frame,
+                    "length": event.duration_frames,
+                    "pitch": pitch,
+                    "address": event.source_address,
+                    "volume": event.volume,
+                }
+            )
         lanes.append({"name": lane.name, "events": events})
-    return {"schema": "retrolarium.doraemon-music-trace", "schema_version": 1,
-            "driver": driver, "track": track, "frames": frames, "lanes": lanes}
+    return {
+        "schema": "retrolarium.doraemon-music-trace",
+        "schema_version": 1,
+        "driver": driver,
+        "track": track,
+        "frames": frames,
+        "lanes": lanes,
+    }
 
 
-def render_track(document: Mapping[str, Any], prg: bytes, driver: int, track: int, frames: int, output: Path,
-                 channels: set[str] | None = None) -> dict[str, Any]:
+def render_track(
+    document: Mapping[str, Any],
+    prg: bytes,
+    driver: int,
+    track: int,
+    frames: int,
+    output: Path,
+    channels: set[str] | None = None,
+) -> dict[str, Any]:
     try:
-        synth.write_preview(_streams_document(document), prg, driver, track, output,
-                            enabled_channels=channels, max_frames=frames)
+        synth.write_preview(
+            _streams_document(document), prg, driver, track, output, enabled_channels=channels, max_frames=frames
+        )
     except (KeyError, TypeError, ValueError) as exc:
         raise DoraemonMusicError(str(exc)) from exc
-    return {"schema": "retrolarium.audio-preview", "schema_version": 1, "engine": CODEC,
-            "driver": driver, "track": track, "frames": frames, "output": str(output.resolve())}
+    return {
+        "schema": "retrolarium.audio-preview",
+        "schema_version": 1,
+        "engine": CODEC,
+        "driver": driver,
+        "track": track,
+        "frames": frames,
+        "output": str(output.resolve()),
+    }

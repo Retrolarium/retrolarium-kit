@@ -7,8 +7,15 @@ import hashlib
 from typing import Any, Mapping
 
 from retrolarium_kit.core.authoring import (
-    Address, AddressRange, AuthoringError, BuildPlan, Change, ChangeSet,
-    GameProfile, Provenance, RevisionSpec,
+    Address,
+    AddressRange,
+    AuthoringError,
+    BuildPlan,
+    Change,
+    ChangeSet,
+    GameProfile,
+    Provenance,
+    RevisionSpec,
 )
 from retrolarium_core.ines import parse_ines
 
@@ -20,18 +27,31 @@ PERIOD_COUNT = 12
 ENVELOPE_COUNT = 8
 EFFECT_COUNT = 26
 STREAM_COUNT = 114
-ARGUMENT_SIZES = {0xF0: 1, 0xF1: 1, 0xF2: 2, 0xF3: 2, 0xF4: 0,
-                  0xF5: 1, 0xF6: 0, 0xF7: 1, 0xF8: 1, 0xF9: 0}
-NAMES = {0xF0: "set_sequence", 0xF1: "set_control", 0xF2: "jump",
-         0xF3: "call", 0xF4: "return", 0xF5: "begin_loop",
-         0xF6: "end_loop", 0xF7: "set_sweep", 0xF8: "set_volume",
-         0xF9: "stop"}
+ARGUMENT_SIZES = {0xF0: 1, 0xF1: 1, 0xF2: 2, 0xF3: 2, 0xF4: 0, 0xF5: 1, 0xF6: 0, 0xF7: 1, 0xF8: 1, 0xF9: 0}
+NAMES = {
+    0xF0: "set_sequence",
+    0xF1: "set_control",
+    0xF2: "jump",
+    0xF3: "call",
+    0xF4: "return",
+    0xF5: "begin_loop",
+    0xF6: "end_loop",
+    0xF7: "set_sweep",
+    0xF8: "set_volume",
+    0xF9: "stop",
+}
 VALUES = {NAMES[opcode]: opcode for opcode in (0xF0, 0xF1, 0xF5, 0xF7, 0xF8)}
 POINTERS = {"jump": 0xF2, "call": 0xF3}
 SIMPLE = {NAMES[opcode]: opcode for opcode in (0xF4, 0xF6, 0xF9)}
 LAYOUT_FIELDS = (
-    "period_cpu", "duration_cpu", "envelope_pointer_cpu", "envelope_data_cpu",
-    "effect_pointer_cpu", "effect_data_cpu", "stream_cpu", "stream_end_cpu",
+    "period_cpu",
+    "duration_cpu",
+    "envelope_pointer_cpu",
+    "envelope_data_cpu",
+    "effect_pointer_cpu",
+    "effect_data_cpu",
+    "stream_cpu",
+    "stream_end_cpu",
 )
 
 
@@ -54,19 +74,19 @@ class SolomonAudioDocument:
 
     def as_dict(self) -> dict[str, Any]:
         return {
-            "schema": SCHEMA, "schema_version": VERSION,
-            "game": self.game_id, "revision": self.revision_id,
+            "schema": SCHEMA,
+            "schema_version": VERSION,
+            "game": self.game_id,
+            "revision": self.revision_id,
             "source_sha256": self.source_sha256,
-            "periods": list(self.periods), "durations": list(self.durations),
+            "periods": list(self.periods),
+            "durations": list(self.durations),
             "timing_tail": list(self.timing_tail),
             "envelopes": [
-                {"index": item["index"], "steps": [
-                    dict(step) for step in item["steps"]]}
-                for item in self.envelopes
+                {"index": item["index"], "steps": [dict(step) for step in item["steps"]]} for item in self.envelopes
             ],
             "effects": [
-                {"number": item["number"], "channels": [
-                    dict(channel) for channel in item["channels"]]}
+                {"number": item["number"], "channels": [dict(channel) for channel in item["channels"]]}
                 for item in self.effects
             ],
             "commands": [dict(item) for item in self.commands],
@@ -75,9 +95,7 @@ class SolomonAudioDocument:
 
 
 def _layout(profile: GameProfile, revision: RevisionSpec) -> dict[str, int]:
-    resources = [
-        item for item in profile.resources_for(revision) if item.codec == CODEC
-    ]
+    resources = [item for item in profile.resources_for(revision) if item.codec == CODEC]
     if len(resources) != 1:
         raise SolomonAudioError("Solomon profile needs one audio resource")
     parameters = resources[0].parameters
@@ -85,12 +103,24 @@ def _layout(profile: GameProfile, revision: RevisionSpec) -> dict[str, int]:
         raise SolomonAudioError("audio layout requires eight CPU addresses")
     layout = {key: parameters[key] for key in LAYOUT_FIELDS}
     values = list(layout.values())
-    if not (0x8000 <= values[0] < values[1] < values[2] < values[3]
-            < values[4] < values[5] < values[6] <= values[7] <= 0xFFF9):
+    if not (
+        0x8000
+        <= values[0]
+        < values[1]
+        < values[2]
+        < values[3]
+        < values[4]
+        < values[5]
+        < values[6]
+        <= values[7]
+        <= 0xFFF9
+    ):
         raise SolomonAudioError("audio layout addresses are unordered")
-    if (values[1] - values[0] != PERIOD_COUNT * 2
-            or values[3] - values[2] != ENVELOPE_COUNT * 2
-            or values[5] - values[4] != EFFECT_COUNT * 2):
+    if (
+        values[1] - values[0] != PERIOD_COUNT * 2
+        or values[3] - values[2] != ENVELOPE_COUNT * 2
+        or values[5] - values[4] != EFFECT_COUNT * 2
+    ):
         raise SolomonAudioError("audio pointer or timing table size differs")
     return layout
 
@@ -107,7 +137,7 @@ def _source(source: bytes, revision: RevisionSpec, *, verify_identity: bool = Tr
 def _slice(prg: bytes, start: int, stop: int) -> bytes:
     if not 0x8000 <= start <= stop <= 0x10000:
         raise SolomonAudioError(f"audio address range ${start:04X}..${stop:04X} is invalid")
-    result = prg[start - 0x8000:stop - 0x8000]
+    result = prg[start - 0x8000 : stop - 0x8000]
     if len(result) != stop - start:
         raise SolomonAudioError("audio range escapes PRG")
     return result
@@ -138,8 +168,11 @@ def _records(value: object, count: int, key: str, context: str) -> list[Mapping]
 
 
 def decode_audio(
-    source: bytes, profile: GameProfile, revision: RevisionSpec,
-    *, _verify_identity: bool = True,
+    source: bytes,
+    profile: GameProfile,
+    revision: RevisionSpec,
+    *,
+    _verify_identity: bool = True,
 ) -> SolomonAudioDocument:
     layout = _layout(profile, revision)
     prg = _source(source, revision, verify_identity=_verify_identity).prg
@@ -153,16 +186,13 @@ def decode_audio(
     if envelope_pointers[0] != ed or envelope_pointers != sorted(envelope_pointers):
         raise SolomonAudioError("envelope pointers are invalid")
     envelopes = []
-    for i, (start, stop) in enumerate(zip(
-        envelope_pointers, envelope_pointers[1:] + [fp]
-    )):
+    for i, (start, stop) in enumerate(zip(envelope_pointers, envelope_pointers[1:] + [fp])):
         data = _slice(prg, start, stop)
         if not data or len(data) % 2:
             raise SolomonAudioError(f"envelope {i} has invalid size")
-        envelopes.append({"index": i, "steps": [
-            {"duration": data[j], "volume": data[j + 1]}
-            for j in range(0, len(data), 2)
-        ]})
+        envelopes.append(
+            {"index": i, "steps": [{"duration": data[j], "volume": data[j + 1]} for j in range(0, len(data), 2)]}
+        )
     effect_pointers = [_word(prg, fp + 2 * i) for i in range(EFFECT_COUNT)]
     if effect_pointers[0] != fd or effect_pointers != sorted(effect_pointers):
         raise SolomonAudioError("effect pointers are invalid")
@@ -170,17 +200,15 @@ def decode_audio(
         raise SolomonAudioError("effect descriptors lack terminator")
     effects_raw = []
     pending: set[int] = set()
-    for i, (start, stop) in enumerate(zip(
-        effect_pointers, effect_pointers[1:] + [stream_start - 1]
-    )):
+    for i, (start, stop) in enumerate(zip(effect_pointers, effect_pointers[1:] + [stream_start - 1])):
         data = _slice(prg, start, stop)
         if not data or len(data) % 3:
             raise SolomonAudioError(f"effect {i + 1} has invalid size")
         channels = []
         for j in range(0, len(data), 3):
             selector = data[j]
-            address = int.from_bytes(data[j + 1:j + 3], "little")
-            if (j == 0) != bool(selector & 0x80) or selector & 0x7f > 7:
+            address = int.from_bytes(data[j + 1 : j + 3], "little")
+            if (j == 0) != bool(selector & 0x80) or selector & 0x7F > 7:
                 raise SolomonAudioError(f"effect {i + 1} selector is invalid")
             if not stream_start <= address <= stream_end:
                 raise SolomonAudioError("effect stream escapes sound bank")
@@ -245,15 +273,20 @@ def decode_audio(
     duration_start = layout["duration_cpu"]
     duration_count = min(64, ep - duration_start)
     return SolomonAudioDocument(
-        profile.game_id, revision.revision_id, revision.sha256,
+        profile.game_id,
+        revision.revision_id,
+        revision.sha256,
         tuple(_word(prg, layout["period_cpu"] + 2 * i) for i in range(PERIOD_COUNT)),
         tuple(_slice(prg, duration_start, duration_start + duration_count)),
         tuple(_slice(prg, duration_start + duration_count, ep)),
         tuple(envelopes),
-        tuple({"number": i + 1, "channels": [
-            {"selector": selector, "stream": labels[address]}
-            for selector, address in channels
-        ]} for i, channels in enumerate(effects_raw)),
+        tuple(
+            {
+                "number": i + 1,
+                "channels": [{"selector": selector, "stream": labels[address]} for selector, address in channels],
+            }
+            for i, channels in enumerate(effects_raw)
+        ),
         tuple(commands),
         tuple(_slice(prg, stream_end + 1, 0xFFFA)),
     )
@@ -295,10 +328,12 @@ def _encode(value: Mapping, layout: dict[str, int]) -> bytes:
         for step in steps:
             if not isinstance(step, Mapping):
                 raise SolomonAudioError("audio envelope step is invalid")
-            envelope_data.extend((
-                _byte(step.get("duration"), "envelope duration"),
-                _byte(step.get("volume"), "envelope volume"),
-            ))
+            envelope_data.extend(
+                (
+                    _byte(step.get("duration"), "envelope duration"),
+                    _byte(step.get("volume"), "envelope volume"),
+                )
+            )
     if len(envelope_data) != fp - ed:
         raise SolomonAudioError("audio envelopes exceed or underfill fixed allocation")
     raw_commands = value.get("commands")
@@ -357,7 +392,7 @@ def _encode(value: Mapping, layout: dict[str, int]) -> bytes:
             if not isinstance(channel, Mapping):
                 raise SolomonAudioError("audio effect channel is invalid")
             selector = _byte(channel.get("selector"), "audio channel selector")
-            if selector & 0x7f > 7 or bool(selector & 0x80) != (index == 0):
+            if selector & 0x7F > 7 or bool(selector & 0x80) != (index == 0):
                 raise SolomonAudioError("audio channel selector is invalid")
             target = channel.get("stream")
             if target not in entries:
@@ -369,73 +404,101 @@ def _encode(value: Mapping, layout: dict[str, int]) -> bytes:
     trailing = value.get("trailing_bytes")
     if not isinstance(trailing, list) or len(trailing) != 0xFFFA - stream_end - 1:
         raise SolomonAudioError("audio trailing data size differs")
-    result = (timing + bytes(envelope_pointers) + bytes(envelope_data)
-              + bytes(effect_pointers) + bytes(effect_data) + b"\xff"
-              + bytes(stream_data)
-              + bytes(_byte(item, "trailing audio data") for item in trailing))
+    result = (
+        timing
+        + bytes(envelope_pointers)
+        + bytes(envelope_data)
+        + bytes(effect_pointers)
+        + bytes(effect_data)
+        + b"\xff"
+        + bytes(stream_data)
+        + bytes(_byte(item, "trailing audio data") for item in trailing)
+    )
     if len(result) != 0xFFFA - period_start:
         raise SolomonAudioError("audio bank size differs")
     return result
 
 
 def parse_audio_document(
-    value: object, profile: GameProfile, revision: RevisionSpec,
+    value: object,
+    profile: GameProfile,
+    revision: RevisionSpec,
 ) -> SolomonAudioDocument:
     layout = _layout(profile, revision)
     if not isinstance(value, Mapping) or set(value) != {
-        "schema", "schema_version", "game", "revision", "source_sha256",
-        "periods", "durations", "timing_tail", "envelopes", "effects",
-        "commands", "trailing_bytes",
+        "schema",
+        "schema_version",
+        "game",
+        "revision",
+        "source_sha256",
+        "periods",
+        "durations",
+        "timing_tail",
+        "envelopes",
+        "effects",
+        "commands",
+        "trailing_bytes",
     }:
         raise SolomonAudioError("audio document fields differ")
     for key, expected in (
-        ("schema", SCHEMA), ("schema_version", VERSION),
-        ("game", profile.game_id), ("revision", revision.revision_id),
+        ("schema", SCHEMA),
+        ("schema_version", VERSION),
+        ("game", profile.game_id),
+        ("revision", revision.revision_id),
         ("source_sha256", revision.sha256),
     ):
         if value[key] != expected:
             raise SolomonAudioError(f"audio {key} differs from profile")
     _encode(value, layout)
     return SolomonAudioDocument(
-        profile.game_id, revision.revision_id, revision.sha256,
-        tuple(value["periods"]), tuple(value["durations"]),
-        tuple(value["timing_tail"]), tuple(value["envelopes"]),
-        tuple(value["effects"]), tuple(value["commands"]),
+        profile.game_id,
+        revision.revision_id,
+        revision.sha256,
+        tuple(value["periods"]),
+        tuple(value["durations"]),
+        tuple(value["timing_tail"]),
+        tuple(value["envelopes"]),
+        tuple(value["effects"]),
+        tuple(value["commands"]),
         tuple(value["trailing_bytes"]),
     )
 
 
 def build_audio(
-    source: bytes, document: SolomonAudioDocument,
-    profile: GameProfile, revision: RevisionSpec,
+    source: bytes,
+    document: SolomonAudioDocument,
+    profile: GameProfile,
+    revision: RevisionSpec,
 ) -> tuple[bytes, dict[str, object]]:
     image = _source(source, revision)
     layout = _layout(profile, revision)
     checked = parse_audio_document(document.as_dict(), profile, revision)
     encoded = _encode(checked.as_dict(), layout)
     start = layout["period_cpu"] - 0x8000
-    if encoded == image.prg[start:start + len(encoded)]:
+    if encoded == image.prg[start : start + len(encoded)]:
         output = source
     else:
         base = len(image.header) + len(image.trainer)
         file_start = base + start
         change = Change(
             AddressRange(Address("file", file_start), len(encoded)),
-            source[file_start:file_start + len(encoded)], encoded,
+            source[file_start : file_start + len(encoded)],
+            encoded,
             Provenance(revision.sha256, "audio", "encode"),
         )
         output = BuildPlan(revision.sha256, ChangeSet((change,))).apply(source)
-    rebuilt_document = decode_audio(
-        output, profile, revision, _verify_identity=False
-    )
+    rebuilt_document = decode_audio(output, profile, revision, _verify_identity=False)
     if rebuilt_document.as_dict() != checked.as_dict():
         raise SolomonAudioError("rebuilt audio does not decode to the document")
     return output, {
-        "schema": "retrolarium.solomon-audio-build", "schema_version": 1,
-        "game": profile.game_id, "revision": revision.revision_id,
+        "schema": "retrolarium.solomon-audio-build",
+        "schema_version": 1,
+        "game": profile.game_id,
+        "revision": revision.revision_id,
         "source_sha256": revision.sha256,
         "output_sha256": hashlib.sha256(output).hexdigest(),
         "size": len(output),
         "changed_bytes": sum(a != b for a, b in zip(source, output)),
-        "effects": len(checked.effects), "streams": STREAM_COUNT,
+        "effects": len(checked.effects),
+        "streams": STREAM_COUNT,
     }

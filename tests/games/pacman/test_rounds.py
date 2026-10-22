@@ -16,8 +16,7 @@ REPOSITORY = game_repository("pacman_src")
 V10 = REPOSITORY / "Pac-Man (J) (V1.0) [!].nes"
 # make build-expanded, or Retrolarium opening the expanded revision, makes it.
 EXPANDED = REPOSITORY / "build/expanded/pacman.nes"
-TABLES = ("round-profiles", "round-speed-sets", "round-timing-sets", "round-pellet-thresholds",
-          "round-release-targets")
+TABLES = ("round-profiles", "round-speed-sets", "round-timing-sets", "round-pellet-thresholds", "round-release-targets")
 
 
 def revision(revision_id: str):
@@ -36,8 +35,10 @@ class RoundTableTests(unittest.TestCase):
     def test_round_one_and_the_restart_set(self) -> None:
         decoded = tables(V10, "japan-v10")
         self.assertEqual(23, len(decoded["round-profiles"]["records"]))
-        self.assertEqual({"speed_set": 0, "frightened_time": 7}, {
-            key: decoded["round-profiles"]["records"][0][key] for key in ("speed_set", "frightened_time")})
+        self.assertEqual(
+            {"speed_set": 0, "frightened_time": 7},
+            {key: decoded["round-profiles"]["records"][0][key] for key in ("speed_set", "frightened_time")},
+        )
         self.assertEqual("Restart", decoded["round-release-targets"]["record_labels"][3])
 
     def test_an_edited_round_lands_in_the_stage_table(self) -> None:

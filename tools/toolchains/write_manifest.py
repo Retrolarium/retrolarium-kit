@@ -86,16 +86,19 @@ def component(definition: dict) -> dict:
     if definition["license"].startswith("GPL"):
         # The source the binaries are built from ships beside them.
         archive = f"sources/asl-flamewing-{ASL_REVISION}.tar.gz"
-        source = {"revision": ASL_REVISION,
-                  "source_url": f"https://github.com/flamewing/asl-releases/archive/{ASL_REVISION}.tar.gz",
-                  **record(archive)}
+        source = {
+            "revision": ASL_REVISION,
+            "source_url": f"https://github.com/flamewing/asl-releases/archive/{ASL_REVISION}.tar.gz",
+            **record(archive),
+        }
         result["corresponding_sources"] = {host: source for host in HOSTS}
     hosts = {}
     for host, suffix in HOSTS.items():
-        files = [record(f"payloads/{host}/{folder}/{name}{suffix}", f"{folder}/{name}{suffix}", executable=True)
-                 for name in definition["commands"].values()]
-        files += [record(f"payloads/{host}/{folder}/{name}", f"{folder}/{name}")
-                  for name in definition["extra_files"]]
+        files = [
+            record(f"payloads/{host}/{folder}/{name}{suffix}", f"{folder}/{name}{suffix}", executable=True)
+            for name in definition["commands"].values()
+        ]
+        files += [record(f"payloads/{host}/{folder}/{name}", f"{folder}/{name}") for name in definition["extra_files"]]
         hosts[host] = {
             "commands": {command: f"{folder}/{name}{suffix}" for command, name in definition["commands"].items()},
             **({"environment": definition["environment"]} if definition["environment"] else {}),

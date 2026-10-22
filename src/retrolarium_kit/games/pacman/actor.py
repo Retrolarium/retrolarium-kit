@@ -29,13 +29,9 @@ def _records(
         normalized = []
         for byte_index, item in enumerate(record):
             if not isinstance(item, int) or isinstance(item, bool) or not 0 <= item <= 0xFF:
-                raise PacmanActorError(
-                    f"{name}[{index}][{byte_index}] must be a byte"
-                )
+                raise PacmanActorError(f"{name}[{index}][{byte_index}] must be a byte")
             if attributes and item & 0x1C:
-                raise PacmanActorError(
-                    f"{name}[{index}][{byte_index}] uses unsupported OAM attribute bits"
-                )
+                raise PacmanActorError(f"{name}[{index}][{byte_index}] uses unsupported OAM attribute bits")
             normalized.append(item)
         result.append(tuple(normalized))
     return tuple(result)
@@ -43,17 +39,12 @@ def _records(
 
 def decode_actor_mapping(payload: bytes) -> dict[str, object]:
     if len(payload) != ENCODED_SIZE:
-        raise PacmanActorError(
-            f"actor mapping must contain {ENCODED_SIZE} bytes"
-        )
+        raise PacmanActorError(f"actor mapping must contain {ENCODED_SIZE} bytes")
     cursor = 0
 
     def take(count: int, width: int) -> list[list[int]]:
         nonlocal cursor
-        result = [
-            list(payload[start : start + width])
-            for start in range(cursor, cursor + count * width, width)
-        ]
+        result = [list(payload[start : start + width]) for start in range(cursor, cursor + count * width, width)]
         cursor += count * width
         return result
 
@@ -81,27 +72,20 @@ def encode_actor_mapping(value: object) -> bytes:
     if set(value) != expected:
         raise PacmanActorError("actor mapping fields differ from codec v1")
     sections = (
-        _records(value["standard_tile_quads"], STANDARD_FRAMES, 4,
-                 "standard_tile_quads"),
-        _records(value["alternate_tile_quads"], ALTERNATE_FRAMES, 4,
-                 "alternate_tile_quads"),
-        _records(value["standard_attribute_quads"], STANDARD_FRAMES, 4,
-                 "standard_attribute_quads", attributes=True),
-        _records(value["alternate_attribute_quads"], ALTERNATE_FRAMES, 4,
-                 "alternate_attribute_quads", attributes=True),
+        _records(value["standard_tile_quads"], STANDARD_FRAMES, 4, "standard_tile_quads"),
+        _records(value["alternate_tile_quads"], ALTERNATE_FRAMES, 4, "alternate_tile_quads"),
+        _records(value["standard_attribute_quads"], STANDARD_FRAMES, 4, "standard_attribute_quads", attributes=True),
+        _records(value["alternate_attribute_quads"], ALTERNATE_FRAMES, 4, "alternate_attribute_quads", attributes=True),
         _records(value["oam_offsets_yx"], 4, 2, "oam_offsets_yx"),
     )
     offsets = sections[-1]
     signed = tuple(
-        ((row[0] if row[0] < 0x80 else row[0] - 0x100),
-         (row[1] if row[1] < 0x80 else row[1] - 0x100))
+        ((row[0] if row[0] < 0x80 else row[0] - 0x100), (row[1] if row[1] < 0x80 else row[1] - 0x100))
         for row in offsets
     )
     min_y = min(y for y, _x in signed)
     min_x = min(x for _y, x in signed)
-    if {(y - min_y, x - min_x) for y, x in signed} != {
-        (0, 0), (0, 8), (8, 0), (8, 8)
-    }:
+    if {(y - min_y, x - min_x) for y, x in signed} != {(0, 0), (0, 8), (8, 0), (8, 8)}:
         raise PacmanActorError("OAM offsets must form one 16x16 four-tile layout")
     payload = bytes(item for section in sections for row in section for item in row)
     if len(payload) != ENCODED_SIZE:

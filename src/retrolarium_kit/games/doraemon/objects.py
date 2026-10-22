@@ -25,8 +25,8 @@ from retrolarium_kit.core.authoring import AuthoringError
 PLACEMENTS_CODEC = "doraemon.world1-placements.v1"
 ENEMY_PROPERTIES_CODEC = "doraemon.world1-enemy-properties.v1"
 DESCRIPTORS_CODEC = "doraemon.world1-descriptors.v1"
-ENEMY_TYPES = 12            # placement types $00-$0B
-DESCRIPTORS = 13            # descriptor indexes $00-$0C
+ENEMY_TYPES = 12  # placement types $00-$0B
+DESCRIPTORS = 13  # descriptor indexes $00-$0C
 ALWAYS_SCANNED = 45
 
 
@@ -49,7 +49,7 @@ def decode_placements(payload: bytes) -> list[dict[str, int]]:
         raise DoraemonObjectError("a placement list is whole records and a zero terminator")
     records = []
     for at in range(0, len(payload) - 1, 3):
-        x, y, kind = payload[at:at + 3]
+        x, y, kind = payload[at : at + 3]
         if x == 0:
             raise DoraemonObjectError("a placement list ends before its span")
         records.append({"x": x, "y": y, "type": kind})
@@ -80,8 +80,7 @@ def encode_placements(value: Any, size: int, *, sorted_tail: bool) -> bytes:
 def decode_enemy_properties(payload: bytes) -> dict[str, list[int]]:
     if len(payload) != 48:
         raise DoraemonObjectError("the enemy property tables are three 16-byte columns")
-    return {"metasprites": list(payload[0:16]), "render_flags": list(payload[16:32]),
-            "health": list(payload[32:48])}
+    return {"metasprites": list(payload[0:16]), "render_flags": list(payload[16:32]), "health": list(payload[32:48])}
 
 
 def encode_enemy_properties(value: Any) -> bytes:
@@ -102,7 +101,7 @@ DESCRIPTOR_FIELDS = ("runtime_type", "metasprite", "render_flags", "behavior")
 def decode_descriptors(payload: bytes) -> list[dict[str, int]]:
     if len(payload) != DESCRIPTORS * 4:
         raise DoraemonObjectError("the descriptor table is thirteen four-byte records")
-    return [dict(zip(DESCRIPTOR_FIELDS, payload[i * 4:i * 4 + 4])) for i in range(DESCRIPTORS)]
+    return [dict(zip(DESCRIPTOR_FIELDS, payload[i * 4 : i * 4 + 4])) for i in range(DESCRIPTORS)]
 
 
 def encode_descriptors(value: Any) -> bytes:
@@ -127,8 +126,10 @@ def decode_registry(payload: bytes) -> list[dict[str, int]]:
     At start the game shuffles the types of slots 0-3 and of slots 4-11."""
     if len(payload) != REGISTRY_RECORDS * len(REGISTRY_FIELDS):
         raise DoraemonObjectError("the World 3 registry is five 13-byte columns")
-    return [{name: payload[c * REGISTRY_RECORDS + i] for c, name in enumerate(REGISTRY_FIELDS)}
-            for i in range(REGISTRY_RECORDS)]
+    return [
+        {name: payload[c * REGISTRY_RECORDS + i] for c, name in enumerate(REGISTRY_FIELDS)}
+        for i in range(REGISTRY_RECORDS)
+    ]
 
 
 def encode_registry(value: Any) -> bytes:
@@ -163,8 +164,12 @@ def decode_schedule(payload: bytes) -> list[dict[str, object]]:
     for room in range(SCHEDULE_ROOMS):
         channels = []
         for channel in range(SCHEDULE_CHANNELS):
-            channels.append({name: payload[(f * SCHEDULE_CHANNELS + channel) * SCHEDULE_ROOMS + room]
-                             for f, name in enumerate(SCHEDULE_FIELDS)})
+            channels.append(
+                {
+                    name: payload[(f * SCHEDULE_CHANNELS + channel) * SCHEDULE_ROOMS + room]
+                    for f, name in enumerate(SCHEDULE_FIELDS)
+                }
+            )
         rooms.append({"channels": channels})
     return rooms
 
@@ -182,7 +187,8 @@ def encode_schedule(value: Any) -> bytes:
                 raise DoraemonObjectError(f"World 3 room {room} channel {channel} fields differ")
             for f, name in enumerate(SCHEDULE_FIELDS):
                 payload[(f * SCHEDULE_CHANNELS + channel) * SCHEDULE_ROOMS + room] = _byte(
-                    entry[name], f"World 3 room {room} channel {channel} {name}")
+                    entry[name], f"World 3 room {room} channel {channel} {name}"
+                )
             if entry["type"] > 0x0F:
                 raise DoraemonObjectError(f"World 3 room {room} channel {channel} type is $00-$0F")
     return bytes(payload)

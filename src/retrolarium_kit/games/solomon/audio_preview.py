@@ -96,11 +96,7 @@ class TraceSegment:
 
 
 def entry_indices(document: dict[str, Any]) -> dict[str, int]:
-    return {
-        command["entry"]: index
-        for index, command in enumerate(document["commands"])
-        if "entry" in command
-    }
+    return {command["entry"]: index for index, command in enumerate(document["commands"]) if "entry" in command}
 
 
 def byte_value(command: dict[str, Any], name: str) -> int:
@@ -195,9 +191,7 @@ class EffectSequencer:
             elif kind == "begin_loop":
                 if len(channel.loop_stack) >= MAX_STACK_DEPTH:
                     raise AudioPreviewError("audio loop stack exceeds engine storage")
-                channel.loop_stack.append(
-                    LoopFrame(channel.pc, byte_value(command, "loop count"))
-                )
+                channel.loop_stack.append(LoopFrame(channel.pc, byte_value(command, "loop count")))
             elif kind == "end_loop":
                 if not channel.loop_stack:
                     raise AudioPreviewError("audio loop end has no matching start")
@@ -271,9 +265,7 @@ class EffectSequencer:
         return not any(channel.active for channel in self.channels.values())
 
 
-def trace_effect(
-    document: dict[str, Any], effect_number: int, maximum_frames: int
-) -> PreviewTrace:
+def trace_effect(document: dict[str, Any], effect_number: int, maximum_frames: int) -> PreviewTrace:
     if maximum_frames <= 0:
         raise AudioPreviewError("preview frame limit must be positive")
     sequencer = EffectSequencer(document, effect_number)
@@ -326,9 +318,7 @@ class OutputFilter:
     def process(self, value: float) -> float:
         first = self.hp90 * (self.hp90_output + value - self.hp90_input)
         self.hp90_input, self.hp90_output = value, first
-        second = self.hp440 * (
-            self.hp440_output + first - self.hp440_input
-        )
+        second = self.hp440 * (self.hp440_output + first - self.hp440_input)
         self.hp440_input, self.hp440_output = first, second
         self.low_output += self.lp14k * (second - self.low_output)
         return self.low_output
@@ -355,9 +345,7 @@ class ApuRenderer:
         self.noise_shift = 1
         self.filter = OutputFilter(sample_rate)
 
-    def pulse(
-        self, index: int, frame: HardwareFrame, reload_period: bool = True
-    ) -> float:
+    def pulse(self, index: int, frame: HardwareFrame, reload_period: bool = True) -> float:
         if reload_period and frame.period_reload:
             self.phases[index] = 0.0
         if frame.volume == 0 or frame.period < 8:
@@ -365,18 +353,14 @@ class ApuRenderer:
         frequency = self.clock / (16.0 * (frame.period + 1))
         sequence_index = int(self.phases[index] * 8.0) & 7
         value = frame.volume * PULSE_DUTY_SEQUENCES[frame.duty][sequence_index]
-        self.phases[index] = (
-            self.phases[index] + frequency / self.synthesis_rate
-        ) % 1.0
+        self.phases[index] = (self.phases[index] + frequency / self.synthesis_rate) % 1.0
         return float(value)
 
     def triangle(self, frame: HardwareFrame) -> float:
         if frame.volume == 0:
             return 0.0
         frequency = self.clock / (32.0 * (frame.period + 1))
-        self.phases[2] = (
-            self.phases[2] + frequency / self.synthesis_rate
-        ) % 1.0
+        self.phases[2] = (self.phases[2] + frequency / self.synthesis_rate) % 1.0
         phase = self.phases[2]
         return 15.0 * (phase * 2.0 if phase < 0.5 else 2.0 - phase * 2.0)
 
@@ -435,8 +419,7 @@ def render_trace(
     emitted = 0
     for frame_number, frame in enumerate(trace.frames, 1):
         audible = tuple(
-            value if voice in enabled_voices else HardwareFrame(None, 0, 0, 0, 0)
-            for voice, value in enumerate(frame)
+            value if voice in enabled_voices else HardwareFrame(None, 0, 0, 0, 0) for voice, value in enumerate(frame)
         )
         boundary = frame_number * sample_rate / frame_rate
         first_sample = True

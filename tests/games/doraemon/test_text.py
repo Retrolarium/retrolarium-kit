@@ -15,14 +15,20 @@ MANIFEST = {
     "bank": 3,
     "game_over": {"address": "0x8000", "size": 9},
     "title_stream": {
-        "address": "0x8010", "end_address": "0x8021", "record_count": 2,
+        "address": "0x8010",
+        "end_address": "0x8021",
+        "record_count": 2,
         "text_records": [{"id": "push", "ppu_address": "0x21E7"}],
     },
     "ending_nametable": {"address": "0x8030", "row_width": 4, "row_count": 2},
     "chapter_help_screens": {
-        "address": "0x8040", "size": 16, "screen_size": 16, "count": 1,
-        "screens": [{"id": "world1", "address": "0x8040",
-                     "text_spans": [{"id": "candy", "address": "0x8044", "size": 5}]}],
+        "address": "0x8040",
+        "size": 16,
+        "screen_size": 16,
+        "count": 1,
+        "screens": [
+            {"id": "world1", "address": "0x8040", "text_spans": [{"id": "candy", "address": "0x8044", "size": 5}]}
+        ],
     },
     "ending_credits": {"address": "0x8050", "row_width": 8, "row_count": 2},
     "signatures": [{"address": "0x8060", "size": 2, "crc32": "461bdcfd"}],
@@ -34,7 +40,7 @@ def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
 
     def put(address: int, payload: bytes) -> None:
         at = 3 * 0x8000 + address - 0x8000
-        prg[at:at + len(payload)] = payload
+        prg[at : at + len(payload)] = payload
 
     put(0x8000, b"GAME\x00OVER")
     # A graphics record, the text record and the terminator.
@@ -45,10 +51,24 @@ def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
     put(0x8060, b"\xa9\x48")
     header = b"NES\x1a" + bytes((8, 4, 0x20, 0x40)) + bytes(8)
     source = header + bytes(prg) + bytes(0x8000)
-    revision = RevisionSpec("probe", "Doraemon probe", len(source), hashlib.sha1(source).hexdigest(),
-                            hashlib.sha256(source).hexdigest(), "ines", 66)
-    profile = GameProfile("doraemon", 1, "Doraemon probe", "nes", ("text",), (revision,),
-                          (ResourceSpec("text", "text", "doraemon.shell-text.v1", "fixed", MANIFEST),))
+    revision = RevisionSpec(
+        "probe",
+        "Doraemon probe",
+        len(source),
+        hashlib.sha1(source).hexdigest(),
+        hashlib.sha256(source).hexdigest(),
+        "ines",
+        66,
+    )
+    profile = GameProfile(
+        "doraemon",
+        1,
+        "Doraemon probe",
+        "nes",
+        ("text",),
+        (revision,),
+        (ResourceSpec("text", "text", "doraemon.shell-text.v1", "fixed", MANIFEST),),
+    )
     return source, profile, revision
 
 
@@ -69,10 +89,13 @@ class DoraemonTextTests(unittest.TestCase):
         value["chapter_help_screens"][0]["segments"][1]["text"] = "SWEET"
         value["ending_credit_rows"][1] = "FIN.    "
         output, report = build_text(source, parse_text_document(value, profile, revision), profile, revision)
-        self.assertEqual(value, decode_text(output, profile, revision, _verify_identity=False).as_dict() | {
-            "source_sha256": revision.sha256})
+        self.assertEqual(
+            value,
+            decode_text(output, profile, revision, _verify_identity=False).as_dict()
+            | {"source_sha256": revision.sha256},
+        )
         base = 16 + 3 * 0x8000 - 0x8000
-        self.assertEqual(b"START\x5b\x00\x00", output[base + 0x8019:base + 0x8021])
+        self.assertEqual(b"START\x5b\x00\x00", output[base + 0x8019 : base + 0x8021])
         self.assertGreater(report["changed_bytes"], 0)
 
     def test_fixed_sizes(self) -> None:

@@ -15,18 +15,15 @@ from retrolarium_kit.games.doraemon.palettes import decode_room_selectors, encod
 
 
 def check_payload(label: str, payload: bytes, size: int, crc: str) -> None:
-    actual_crc = f"{zlib.crc32(payload) & 0xffffffff:08x}"
+    actual_crc = f"{zlib.crc32(payload) & 0xFFFFFFFF:08x}"
     if len(payload) != size or actual_crc != crc:
-        raise AssertionError(
-            f"{label} source differs: size={len(payload)}, crc32={actual_crc}"
-        )
+        raise AssertionError(f"{label} source differs: size={len(payload)}, crc32={actual_crc}")
     print(f"{label}: {size} bytes, CRC32 {crc}")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source-root", type=Path, required=True,
-                        help="exact path to doraemon_src (not its parent)")
+    parser.add_argument("--source-root", type=Path, required=True, help="exact path to doraemon_src (not its parent)")
     args = parser.parse_args()
     root = args.source_root.resolve()
     if root.name != "doraemon_src":
@@ -34,20 +31,12 @@ def main() -> int:
 
     world1 = json.loads((root / "data/world1/palettes.json").read_text(encoding="utf-8"))
     palettes1 = sorted(world1["palettes"], key=lambda item: item["id"])
-    payload1 = bytes(
-        int(color, 16)
-        for palette in palettes1
-        for color in palette["colors"].split()
-    )
+    payload1 = bytes(int(color, 16) for palette in palettes1 for color in palette["colors"].split())
     check_payload("world1 palettes", payload1, 384, "f26c2516")
 
     world3 = json.loads((root / "data/world3/metasprites.json").read_text(encoding="utf-8"))
     palettes3 = sorted(world3["palettes"], key=lambda item: item["id"])
-    payload3 = bytes(
-        int(color, 16)
-        for palette in palettes3
-        for color in palette["colors"]
-    )
+    payload3 = bytes(int(color, 16) for palette in palettes3 for color in palette["colors"])
     check_payload("world3 palettes", payload3, 352, "81e21c09")
 
     rooms = sorted(world3["room_palettes"], key=lambda item: item["room"])

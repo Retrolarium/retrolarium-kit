@@ -24,9 +24,9 @@ def cnrom_image() -> bytes:
     prg = bytearray(0x8000)
 
     def put(address: int, payload: bytes) -> None:
-        prg[address - 0x8000:address - 0x8000 + len(payload)] = payload
+        prg[address - 0x8000 : address - 0x8000 + len(payload)] = payload
 
-    put(layout.chr_consume, b"\xA9\x80\x85\x7D")
+    put(layout.chr_consume, b"\xa9\x80\x85\x7d")
     put(layout.item_call, b"\x20" + layout.item_decoder.to_bytes(2, "little"))
     put(layout.enemy_call, b"\x20" + layout.enemy_decoder.to_bytes(2, "little"))
     put(0xFFFC, layout.reset.to_bytes(2, "little"))
@@ -35,11 +35,11 @@ def cnrom_image() -> bytes:
 
 
 def bank(output: bytes, index: int) -> bytes:
-    return output[16 + index * 0x8000:16 + (index + 1) * 0x8000]
+    return output[16 + index * 0x8000 : 16 + (index + 1) * 0x8000]
 
 
 def at(prg: bytes, address: int, count: int) -> bytes:
-    return prg[address - 0x8000:address - 0x8000 + count]
+    return prg[address - 0x8000 : address - 0x8000 + count]
 
 
 class SolomonExpansionTests(unittest.TestCase):
@@ -52,7 +52,7 @@ class SolomonExpansionTests(unittest.TestCase):
         # iNES: mapper 66, 64 KiB PRG, the CHR unchanged after both banks.
         self.assertEqual(len(output), 16 + 0x10000 + 0x8000)
         self.assertEqual((output[4], output[5], output[6], output[7]), (4, 4, 0x20, 0x40))
-        self.assertEqual(output[16 + 0x10000:], cnrom_image()[16 + 0x8000:])
+        self.assertEqual(output[16 + 0x10000 :], cnrom_image()[16 + 0x8000 :])
 
         data, game = bank(output, 0), bank(output, 1)
         code, labels = wrapper_code(layout)

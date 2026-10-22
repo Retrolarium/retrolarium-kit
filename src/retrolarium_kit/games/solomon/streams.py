@@ -106,10 +106,12 @@ def parse_enemy_stream(value: object, name: str) -> EnemyStream:
         enemy_type = _byte(record["type"], f"{name}.enemies[{index}].type")
         if not 0x18 <= enemy_type <= 0x83:
             raise SolomonStreamError("enemy type is outside the proven range")
-        records.append(EnemyRecord(
-            enemy_type,
-            parse_position(record["position"], f"{name}.enemies[{index}].position"),
-        ))
+        records.append(
+            EnemyRecord(
+                enemy_type,
+                parse_position(record["position"], f"{name}.enemies[{index}].position"),
+            )
+        )
     return EnemyStream(lifetime, tuple(records))
 
 
@@ -128,8 +130,10 @@ def encode_enemy_stream(stream: EnemyStream) -> bytes:
 
 _POSITION_FIELDS = ("door", "key", "player_start", "mirror_1", "mirror_2")
 _MIRROR_FIELDS = (
-    "mirror_2_schedule", "mirror_1_schedule",
-    "mirror_2_enemy_set", "mirror_1_enemy_set",
+    "mirror_2_schedule",
+    "mirror_1_schedule",
+    "mirror_2_enemy_set",
+    "mirror_1_enemy_set",
 )
 
 
@@ -147,12 +151,8 @@ class ItemMetadata:
     mirror_2: Position
 
     def as_dict(self) -> dict[str, object]:
-        result: dict[str, object] = {
-            field: getattr(self, field)
-            for field in (*_MIRROR_FIELDS, "status_rate_raw")
-        }
-        result.update({field: getattr(self, field).as_dict()
-                       for field in _POSITION_FIELDS})
+        result: dict[str, object] = {field: getattr(self, field) for field in (*_MIRROR_FIELDS, "status_rate_raw")}
+        result.update({field: getattr(self, field).as_dict() for field in _POSITION_FIELDS})
         return result
 
 
@@ -168,14 +168,15 @@ class ItemCommand:
         if self.kind == "end":
             return {"kind": "end", "opcode": self.opcode}
         if self.kind == "constellation":
-            return {"kind": "constellation", "opcode": self.opcode,
-                    "position": self.position.as_dict()}
+            return {"kind": "constellation", "opcode": self.opcode, "position": self.position.as_dict()}
         if self.kind == "repeat":
-            return {"kind": "repeat", "opcode": self.opcode,
-                    "type": self.item_type,
-                    "positions": [position.as_dict() for position in self.positions]}
-        return {"kind": "item", "type": self.item_type,
-                "position": self.position.as_dict()}
+            return {
+                "kind": "repeat",
+                "opcode": self.opcode,
+                "type": self.item_type,
+                "positions": [position.as_dict() for position in self.positions],
+            }
+        return {"kind": "item", "type": self.item_type, "position": self.position.as_dict()}
 
 
 @dataclass(frozen=True)
@@ -193,7 +194,7 @@ class ItemStream:
 def decode_item_stream(prg: bytes, start: int, limit: int) -> tuple[ItemStream, int]:
     if not 0 <= start < limit <= len(prg) or start + 10 > limit:
         raise SolomonStreamError("item stream pointer escapes its arena")
-    header = prg[start:start + 10]
+    header = prg[start : start + 10]
     metadata = ItemMetadata(*header[:5], *(decode_position(raw) for raw in header[5:]))
     cursor = start + 10
     commands = []
@@ -206,30 +207,39 @@ def decode_item_stream(prg: bytes, start: int, limit: int) -> tuple[ItemStream, 
         if 0xF0 <= code <= 0xFB:
             if cursor >= limit:
                 break
-            commands.append(ItemCommand(
-                "constellation", opcode=code,
-                position=decode_position(prg[cursor]),
-            ))
+            commands.append(
+                ItemCommand(
+                    "constellation",
+                    opcode=code,
+                    position=decode_position(prg[cursor]),
+                )
+            )
             return ItemStream(metadata, tuple(commands)), cursor + 1
         if 0xC0 <= code <= 0xDF:
             count = code - 0xC0 + 1
             if cursor + 1 + count > limit:
                 break
             item_type = prg[cursor]
-            positions = tuple(decode_position(raw)
-                              for raw in prg[cursor + 1:cursor + 1 + count])
-            commands.append(ItemCommand(
-                "repeat", opcode=code, item_type=item_type,
-                positions=positions,
-            ))
+            positions = tuple(decode_position(raw) for raw in prg[cursor + 1 : cursor + 1 + count])
+            commands.append(
+                ItemCommand(
+                    "repeat",
+                    opcode=code,
+                    item_type=item_type,
+                    positions=positions,
+                )
+            )
             cursor += 1 + count
             continue
         if not (1 <= code < 0xC0 or 0xFC <= code <= 0xFF) or cursor >= limit:
             break
-        commands.append(ItemCommand(
-            "item", item_type=code,
-            position=decode_position(prg[cursor]),
-        ))
+        commands.append(
+            ItemCommand(
+                "item",
+                item_type=code,
+                position=decode_position(prg[cursor]),
+            )
+        )
         cursor += 1
     raise SolomonStreamError("invalid or unterminated item stream")
 
@@ -250,8 +260,7 @@ def parse_item_stream(value: object, name: str) -> ItemStream:
     metadata = ItemMetadata(
         *mirror_values,
         _byte(raw_meta["status_rate_raw"], f"{name}.status_rate_raw"),
-        *(parse_position(raw_meta[field], f"{name}.{field}")
-          for field in _POSITION_FIELDS),
+        *(parse_position(raw_meta[field], f"{name}.{field}") for field in _POSITION_FIELDS),
     )
     raw_commands = item["commands"]
     if not isinstance(raw_commands, list) or not raw_commands:
@@ -274,7 +283,8 @@ def parse_item_stream(value: object, name: str) -> ItemStream:
             if not 0xF0 <= opcode <= 0xFB:
                 raise SolomonStreamError(f"{label} has an invalid constellation opcode")
             command = ItemCommand(
-                "constellation", opcode=opcode,
+                "constellation",
+                opcode=opcode,
                 position=parse_position(data["position"], f"{label}.position"),
             )
         elif kind == "repeat":
@@ -282,13 +292,13 @@ def parse_item_stream(value: object, name: str) -> ItemStream:
             opcode = _byte(data["opcode"], f"{label}.opcode")
             item_type = _byte(data["type"], f"{label}.type")
             positions = data["positions"]
-            if not 0xC0 <= opcode <= 0xDF or not isinstance(positions, list) \
-                    or len(positions) != opcode - 0xC0 + 1:
+            if not 0xC0 <= opcode <= 0xDF or not isinstance(positions, list) or len(positions) != opcode - 0xC0 + 1:
                 raise SolomonStreamError(f"{label} has an invalid repeated-item count")
             command = ItemCommand(
-                "repeat", opcode=opcode, item_type=item_type,
-                positions=tuple(parse_position(position, f"{label}.positions")
-                                for position in positions),
+                "repeat",
+                opcode=opcode,
+                item_type=item_type,
+                positions=tuple(parse_position(position, f"{label}.positions") for position in positions),
             )
         elif kind == "item":
             data = _fields(raw, {"kind", "type", "position"}, label)
@@ -296,7 +306,8 @@ def parse_item_stream(value: object, name: str) -> ItemStream:
             if not (1 <= item_type < 0xC0 or 0xFC <= item_type <= 0xFF):
                 raise SolomonStreamError(f"{label} has an invalid item type")
             command = ItemCommand(
-                "item", item_type=item_type,
+                "item",
+                item_type=item_type,
                 position=parse_position(data["position"], f"{label}.position"),
             )
         else:
@@ -311,8 +322,7 @@ def parse_item_stream(value: object, name: str) -> ItemStream:
 
 def encode_item_stream(stream: ItemStream) -> bytes:
     metadata = stream.metadata
-    output = bytearray(_byte(getattr(metadata, field), field)
-                       for field in _MIRROR_FIELDS)
+    output = bytearray(_byte(getattr(metadata, field), field) for field in _MIRROR_FIELDS)
     output.append(_byte(metadata.status_rate_raw, "status_rate_raw"))
     output.extend(getattr(metadata, field).encode() for field in _POSITION_FIELDS)
     for command in stream.commands:

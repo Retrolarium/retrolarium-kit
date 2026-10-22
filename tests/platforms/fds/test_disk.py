@@ -47,8 +47,8 @@ class FdsTests(unittest.TestCase):
         records = parse_fds_side(image)
         for record in records:
             self.assertEqual(
-                replaced[record.header_offset:record.data_offset],
-                image[record.header_offset:record.data_offset],
+                replaced[record.header_offset : record.data_offset],
+                image[record.header_offset : record.data_offset],
             )
         self.assertEqual(len(replaced), len(image))
 
@@ -82,26 +82,42 @@ class FdsTests(unittest.TestCase):
     def test_resource_bundle_maps_edits_across_fds_records(self) -> None:
         image = fixture()
         revision = RevisionSpec(
-            "fds", "FDS probe", len(image), hashlib.sha1(image).hexdigest(),
-            hashlib.sha256(image).hexdigest(), "fds",
+            "fds",
+            "FDS probe",
+            len(image),
+            hashlib.sha1(image).hexdigest(),
+            hashlib.sha256(image).hexdigest(),
+            "fds",
             payloads=(
                 PayloadSpec(
-                    "main", "fds-records", 5,
-                    hashlib.sha1(b"ABCDE").hexdigest(), record_ids=(3, 4),
+                    "main",
+                    "fds-records",
+                    5,
+                    hashlib.sha1(b"ABCDE").hexdigest(),
+                    record_ids=(3, 4),
                 ),
             ),
         )
         profile = GameProfile(
-            "fds-probe", 1, "FDS probe", "nes", ("screens",), (revision,),
+            "fds-probe",
+            1,
+            "FDS probe",
+            "nes",
+            ("screens",),
+            (revision,),
             (
+                ResourceSpec("bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"),
                 ResourceSpec(
-                    "bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"
-                ),
-                ResourceSpec(
-                    "screen", "screen", "nes.nametable.v1", "fixed",
+                    "screen",
+                    "screen",
+                    "nes.nametable.v1",
+                    "fixed",
                     {
-                        "file_offset": 1, "size": 2, "width": 1,
-                        "height": 1, "attribute_bytes": 1,
+                        "file_offset": 1,
+                        "size": 2,
+                        "width": 1,
+                        "height": 1,
+                        "attribute_bytes": 1,
                     },
                     payload="main",
                 ),

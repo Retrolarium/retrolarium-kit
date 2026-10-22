@@ -7,8 +7,15 @@ import hashlib
 from typing import Any, Mapping
 
 from retrolarium_kit.core.authoring import (
-    Address, AddressRange, AuthoringError, BuildPlan, Change, ChangeSet,
-    GameProfile, Provenance, RevisionSpec,
+    Address,
+    AddressRange,
+    AuthoringError,
+    BuildPlan,
+    Change,
+    ChangeSet,
+    GameProfile,
+    Provenance,
+    RevisionSpec,
 )
 from retrolarium_core.ines import parse_ines
 
@@ -17,7 +24,7 @@ CODEC = "solomon.presentation.v1"
 SCHEMA = "retrolarium.solomon-presentation"
 VERSION = 1
 STREAMS = (("record", 155), ("logo", 247))
-DEMO_STEPS = 34                 # the game's own demo; longer ones grow into the filler
+DEMO_STEPS = 34  # the game's own demo; longer ones grow into the filler
 # Offsets from RunDemoInputPlayback (the demo_code_cpu parameter) of the
 # operands the build patches when the demo changes length: LDA durations,X,
 # CPX #count and LDA values,X.
@@ -25,11 +32,20 @@ DEMO_DURATIONS_OPERAND = 0x1B
 DEMO_COUNT_OPERAND = 0x22
 DEMO_VALUES_OPERAND = 0x26
 BUTTON_BITS = (
-    (0x80, "A"), (0x40, "B"), (0x20, "SELECT"), (0x10, "START"),
-    (0x08, "UP"), (0x04, "DOWN"), (0x02, "LEFT"), (0x01, "RIGHT"),
+    (0x80, "A"),
+    (0x40, "B"),
+    (0x20, "SELECT"),
+    (0x10, "START"),
+    (0x08, "UP"),
+    (0x04, "DOWN"),
+    (0x02, "LEFT"),
+    (0x01, "RIGHT"),
 )
 FIELDS = (
-    "record_cpu", "logo_cpu", "demo_duration_cpu", "demo_input_cpu",
+    "record_cpu",
+    "logo_cpu",
+    "demo_duration_cpu",
+    "demo_input_cpu",
 )
 
 
@@ -48,24 +64,27 @@ class SolomonPresentationDocument:
 
     def as_dict(self) -> dict[str, Any]:
         return {
-            "schema": SCHEMA, "schema_version": VERSION,
-            "game": self.game_id, "revision": self.revision_id,
+            "schema": SCHEMA,
+            "schema_version": VERSION,
+            "game": self.game_id,
+            "revision": self.revision_id,
             "source_sha256": self.source_sha256,
             "layout": {
                 "streams": [dict(item) for item in self.layout["streams"]],
                 "demo": dict(self.layout["demo"]),
             },
             "streams": [
-                {"name": stream["name"], "tokens": [
-                    {key: list(value) if key == "tiles" else value
-                     for key, value in token.items()}
-                    for token in stream["tokens"]
-                ]}
+                {
+                    "name": stream["name"],
+                    "tokens": [
+                        {key: list(value) if key == "tiles" else value for key, value in token.items()}
+                        for token in stream["tokens"]
+                    ],
+                }
                 for stream in self.streams
             ],
             "demo_steps": [
-                {"index": step["index"], "duration": step["duration"],
-                 "buttons": list(step["buttons"])}
+                {"index": step["index"], "duration": step["duration"], "buttons": list(step["buttons"])}
                 for step in self.demo_steps
             ],
         }
@@ -78,21 +97,20 @@ def _byte(value: object, name: str) -> int:
 
 
 def _layout(profile: GameProfile, revision: RevisionSpec) -> dict[str, Any]:
-    resources = [
-        resource for resource in profile.resources_for(revision)
-        if resource.codec == CODEC
-    ]
+    resources = [resource for resource in profile.resources_for(revision) if resource.codec == CODEC]
     if len(resources) != 1:
         raise SolomonPresentationError("Solomon profile needs one presentation resource")
     parameters = resources[0].parameters
     if any(type(parameters.get(name)) is not int for name in FIELDS):
         raise SolomonPresentationError("presentation needs four CPU addresses")
     record, logo, duration, inputs = (parameters[name] for name in FIELDS)
-    if (not 0x8000 <= record < logo < duration < inputs <= 0xFFFF
-            or logo - record != STREAMS[0][1]
-            or duration - logo != STREAMS[1][1]
-            or inputs - duration != DEMO_STEPS
-            or inputs + DEMO_STEPS > 0x10000):
+    if (
+        not 0x8000 <= record < logo < duration < inputs <= 0xFFFF
+        or logo - record != STREAMS[0][1]
+        or duration - logo != STREAMS[1][1]
+        or inputs - duration != DEMO_STEPS
+        or inputs + DEMO_STEPS > 0x10000
+    ):
         raise SolomonPresentationError("presentation layout ranges differ")
     return {
         "streams": [
@@ -110,16 +128,18 @@ def _layout(profile: GameProfile, revision: RevisionSpec) -> dict[str, Any]:
 def _demo_room(profile: GameProfile, revision: RevisionSpec) -> dict[str, int] | None:
     """Where a demo of another length may live: its code and the end of the
     free filler after the tables. None keeps the game's 34 steps."""
-    resource = next(
-        resource for resource in profile.resources_for(revision) if resource.codec == CODEC
-    )
+    resource = next(resource for resource in profile.resources_for(revision) if resource.codec == CODEC)
     parameters = resource.parameters
     if "demo_code_cpu" not in parameters and "demo_end_cpu" not in parameters:
         return None
     code, end = parameters.get("demo_code_cpu"), parameters.get("demo_end_cpu")
     start = parameters["demo_duration_cpu"]
-    if type(code) is not int or type(end) is not int or not 0x8000 <= code <= 0xFFC0 \
-            or not start + 2 * DEMO_STEPS <= end <= 0x10000:
+    if (
+        type(code) is not int
+        or type(end) is not int
+        or not 0x8000 <= code <= 0xFFC0
+        or not start + 2 * DEMO_STEPS <= end <= 0x10000
+    ):
         raise SolomonPresentationError("presentation demo room is invalid")
     return {"code": code, "end": end, "capacity": (end - start) // 2}
 
@@ -137,10 +157,14 @@ def _demo_count(prg: bytes, layout: dict[str, Any], room: dict[str, int] | None)
     start = layout["demo"]["duration_address"]
     count = prg[code + DEMO_COUNT_OPERAND]
     word = lambda offset: prg[code + offset] | (prg[code + offset + 1] << 8)
-    if prg[code + DEMO_DURATIONS_OPERAND - 1] != 0xBD or word(DEMO_DURATIONS_OPERAND) != start \
-            or prg[code + DEMO_COUNT_OPERAND - 1] != 0xE0 \
-            or prg[code + DEMO_VALUES_OPERAND - 1] != 0xBD or word(DEMO_VALUES_OPERAND) != start + count \
-            or not 1 <= count <= room["capacity"]:
+    if (
+        prg[code + DEMO_DURATIONS_OPERAND - 1] != 0xBD
+        or word(DEMO_DURATIONS_OPERAND) != start
+        or prg[code + DEMO_COUNT_OPERAND - 1] != 0xE0
+        or prg[code + DEMO_VALUES_OPERAND - 1] != 0xBD
+        or word(DEMO_VALUES_OPERAND) != start + count
+        or not 1 <= count <= room["capacity"]
+    ):
         raise SolomonPresentationError("demo playback code differs from the guarded layout")
     return count
 
@@ -157,7 +181,7 @@ def _source(source: bytes, revision: RevisionSpec, *, verify: bool = True):
 def _slice(prg: bytes, start: int, count: int) -> bytes:
     if not 0x8000 <= start <= 0x10000 - count:
         raise SolomonPresentationError("presentation range escapes PRG")
-    result = prg[start - 0x8000:start - 0x8000 + count]
+    result = prg[start - 0x8000 : start - 0x8000 + count]
     if len(result) != count:
         raise SolomonPresentationError("presentation range is truncated")
     return result
@@ -206,7 +230,8 @@ def _decode_stream(data: bytes) -> list[dict[str, Any]]:
 
 
 def project_title_surface(
-    document: SolomonPresentationDocument, stream_index: int,
+    document: SolomonPresentationDocument,
+    stream_index: int,
 ) -> list[list[int | None]]:
     if stream_index not in (0, 1):
         raise SolomonPresentationError("title stream index is invalid")
@@ -226,42 +251,45 @@ def project_title_surface(
             for delta, tile in enumerate(token["tiles"]):
                 address = start + delta
                 if not 0x2800 <= address < 0x2BC0:
-                    raise SolomonPresentationError(
-                        "title literal targets unsupported nametable address"
-                    )
+                    raise SolomonPresentationError("title literal targets unsupported nametable address")
                 target_row, target_column = divmod(address - 0x2800, 32)
                 surface[target_row][target_column] = tile
     return surface
 
 
 def decode_presentation(
-    source: bytes, profile: GameProfile, revision: RevisionSpec,
-    *, _verify_identity: bool = True,
+    source: bytes,
+    profile: GameProfile,
+    revision: RevisionSpec,
+    *,
+    _verify_identity: bool = True,
 ) -> SolomonPresentationDocument:
     layout = _layout(profile, revision)
     prg = _source(source, revision, verify=_verify_identity).prg
     streams = []
     for declaration in layout["streams"]:
-        payload = _slice(
-            prg, declaration["address"], declaration["encoded_size"]
+        payload = _slice(prg, declaration["address"], declaration["encoded_size"])
+        streams.append(
+            {
+                "name": declaration["name"],
+                "tokens": _decode_stream(payload),
+            }
         )
-        streams.append({
-            "name": declaration["name"],
-            "tokens": _decode_stream(payload),
-        })
     demo = layout["demo"]
     count = _demo_count(prg, layout, _demo_room(profile, revision))
     durations = _slice(prg, demo["duration_address"], count)
     inputs = _slice(prg, demo["duration_address"] + count, count)
     steps = [
-        {"index": index, "duration": duration, "buttons": [
-            name for mask, name in BUTTON_BITS if buttons & mask
-        ]}
+        {"index": index, "duration": duration, "buttons": [name for mask, name in BUTTON_BITS if buttons & mask]}
         for index, (duration, buttons) in enumerate(zip(durations, inputs))
     ]
     result = SolomonPresentationDocument(
-        profile.game_id, revision.revision_id, revision.sha256,
-        layout, tuple(streams), tuple(steps),
+        profile.game_id,
+        revision.revision_id,
+        revision.sha256,
+        layout,
+        tuple(streams),
+        tuple(steps),
     )
     for index in range(2):
         project_title_surface(result, index)
@@ -293,8 +321,7 @@ def _encode(value: Mapping[str, Any], layout: dict[str, Any], capacity: int = DE
                 tiles = token.get("tiles")
                 if not isinstance(tiles, list) or not tiles:
                     raise SolomonPresentationError("title literal run is empty")
-                if any(type(tile) is not int or not 0x80 <= tile <= 255
-                       for tile in tiles):
+                if any(type(tile) is not int or not 0x80 <= tile <= 255 for tile in tiles):
                     raise SolomonPresentationError("title literal tiles must be $80-$FF")
                 encoded.extend(tiles)
             elif kind == "set_column":
@@ -320,16 +347,17 @@ def _encode(value: Mapping[str, Any], layout: dict[str, Any], capacity: int = DE
             else:
                 raise SolomonPresentationError(f"unknown title token kind {kind!r}")
         if not terminated or len(encoded) != declaration["encoded_size"]:
-            raise SolomonPresentationError(
-                f"title stream {index} exceeds or underfills allocation"
-            )
+            raise SolomonPresentationError(f"title stream {index} exceeds or underfills allocation")
         output.extend(encoded)
     steps = value.get("demo_steps")
-    if not isinstance(steps, list) or not steps or len(steps) > capacity \
-            or (capacity == DEMO_STEPS and len(steps) != DEMO_STEPS):
+    if (
+        not isinstance(steps, list)
+        or not steps
+        or len(steps) > capacity
+        or (capacity == DEMO_STEPS and len(steps) != DEMO_STEPS)
+    ):
         raise SolomonPresentationError(
-            "demo needs 34 input steps" if capacity == DEMO_STEPS
-            else f"demo needs 1-{capacity} input steps"
+            "demo needs 34 input steps" if capacity == DEMO_STEPS else f"demo needs 1-{capacity} input steps"
         )
     durations = bytearray()
     inputs = bytearray()
@@ -346,12 +374,9 @@ def _encode(value: Mapping[str, Any], layout: dict[str, Any], capacity: int = DE
             )
         durations.append(duration)
         buttons = step.get("buttons")
-        if (not isinstance(buttons, list)
-                or buttons != [name for name in button_names if name in buttons]):
+        if not isinstance(buttons, list) or buttons != [name for name in button_names if name in buttons]:
             raise SolomonPresentationError("demo buttons are unknown or unordered")
-        inputs.append(sum(
-            mask for mask, name in BUTTON_BITS if name in buttons
-        ))
+        inputs.append(sum(mask for mask, name in BUTTON_BITS if name in buttons))
     output.extend(durations)
     output.extend(inputs)
     if len(output) != 155 + 247 + 2 * len(steps):
@@ -360,25 +385,39 @@ def _encode(value: Mapping[str, Any], layout: dict[str, Any], capacity: int = DE
 
 
 def parse_presentation_document(
-    value: object, profile: GameProfile, revision: RevisionSpec,
+    value: object,
+    profile: GameProfile,
+    revision: RevisionSpec,
 ) -> SolomonPresentationDocument:
     layout = _layout(profile, revision)
     if not isinstance(value, Mapping) or set(value) != {
-        "schema", "schema_version", "game", "revision", "source_sha256",
-        "layout", "streams", "demo_steps",
+        "schema",
+        "schema_version",
+        "game",
+        "revision",
+        "source_sha256",
+        "layout",
+        "streams",
+        "demo_steps",
     }:
         raise SolomonPresentationError("presentation document fields differ")
     for key, expected in (
-        ("schema", SCHEMA), ("schema_version", VERSION),
-        ("game", profile.game_id), ("revision", revision.revision_id),
+        ("schema", SCHEMA),
+        ("schema_version", VERSION),
+        ("game", profile.game_id),
+        ("revision", revision.revision_id),
         ("source_sha256", revision.sha256),
     ):
         if value[key] != expected:
             raise SolomonPresentationError(f"presentation {key} differs from profile")
     _encode(value, layout, demo_capacity(profile, revision))
     result = SolomonPresentationDocument(
-        profile.game_id, revision.revision_id, revision.sha256,
-        layout, tuple(value["streams"]), tuple(value["demo_steps"]),
+        profile.game_id,
+        revision.revision_id,
+        revision.sha256,
+        layout,
+        tuple(value["streams"]),
+        tuple(value["demo_steps"]),
     )
     for index in range(2):
         project_title_surface(result, index)
@@ -386,13 +425,13 @@ def parse_presentation_document(
 
 
 def build_presentation(
-    source: bytes, document: SolomonPresentationDocument,
-    profile: GameProfile, revision: RevisionSpec,
+    source: bytes,
+    document: SolomonPresentationDocument,
+    profile: GameProfile,
+    revision: RevisionSpec,
 ) -> tuple[bytes, dict[str, object]]:
     image = _source(source, revision)
-    checked = parse_presentation_document(
-        document.as_dict(), profile, revision
-    )
+    checked = parse_presentation_document(document.as_dict(), profile, revision)
     layout = _layout(profile, revision)
     room = _demo_room(profile, revision)
     encoded = _encode(checked.as_dict(), layout, demo_capacity(profile, revision))
@@ -408,27 +447,28 @@ def build_presentation(
     changes = []
     for address, payload in pieces:
         file_start = base + address - 0x8000
-        if source[file_start:file_start + len(payload)] != payload:
-            changes.append(Change(
-                AddressRange(Address("file", file_start), len(payload)),
-                source[file_start:file_start + len(payload)], payload,
-                Provenance(revision.sha256, "presentation", "encode"),
-            ))
+        if source[file_start : file_start + len(payload)] != payload:
+            changes.append(
+                Change(
+                    AddressRange(Address("file", file_start), len(payload)),
+                    source[file_start : file_start + len(payload)],
+                    payload,
+                    Provenance(revision.sha256, "presentation", "encode"),
+                )
+            )
     output = BuildPlan(revision.sha256, ChangeSet(tuple(changes))).apply(source) if changes else source
-    rebuilt = decode_presentation(
-        output, profile, revision, _verify_identity=False
-    )
+    rebuilt = decode_presentation(output, profile, revision, _verify_identity=False)
     if rebuilt.as_dict() != checked.as_dict():
-        raise SolomonPresentationError(
-            "rebuilt presentation does not decode to document"
-        )
+        raise SolomonPresentationError("rebuilt presentation does not decode to document")
     return output, {
         "schema": "retrolarium.solomon-presentation-build",
         "schema_version": 1,
-        "game": profile.game_id, "revision": revision.revision_id,
+        "game": profile.game_id,
+        "revision": revision.revision_id,
         "source_sha256": revision.sha256,
         "output_sha256": hashlib.sha256(output).hexdigest(),
         "size": len(output),
         "changed_bytes": sum(a != b for a, b in zip(source, output)),
-        "title_streams": 2, "demo_steps": count,
+        "title_streams": 2,
+        "demo_steps": count,
     }

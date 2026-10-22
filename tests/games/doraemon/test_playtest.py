@@ -16,9 +16,17 @@ from retrolarium_kit.studio.project import StudioProjectError
 
 # World1_UndergroundRoomCameraProfiles: camera X, camera Y, axis limit and
 # axis start of the nine rooms (data/world1/underground_rooms.json).
-ROOMS = [(0x40, 0x22, 0x20, 0x00), (0x80, 0x22, 0x20, 0x00), (0xCA, 0x22, 0x20, 0x0A),
-         (0x00, 0x42, 0x20, 0x00), (0x40, 0x42, 0x40, 0x00), (0x20, 0x02, 0xC0, 0x00),
-         (0xE0, 0x02, 0xC0, 0xC0), (0xA0, 0x42, 0x40, 0x40), (0x60, 0x42, 0x40, 0x00)]
+ROOMS = [
+    (0x40, 0x22, 0x20, 0x00),
+    (0x80, 0x22, 0x20, 0x00),
+    (0xCA, 0x22, 0x20, 0x0A),
+    (0x00, 0x42, 0x20, 0x00),
+    (0x40, 0x42, 0x40, 0x00),
+    (0x20, 0x02, 0xC0, 0x00),
+    (0xE0, 0x02, 0xC0, 0xC0),
+    (0xA0, 0x42, 0x40, 0x40),
+    (0x60, 0x42, 0x40, 0x00),
+]
 
 
 class DoraemonPlaytestPointTests(unittest.TestCase):
@@ -44,8 +52,9 @@ class DoraemonPlaytestPointTests(unittest.TestCase):
         self.assertEqual("underground 0 128 128 66 2", point)
         self.assertEqual(DORAEMON_UNDERGROUND_WRITES, writes)
         # Rooms 5 and 6 share one long region; the first is used, scrolled.
-        self.assertEqual("underground 5 128 96 146 114",
-                         _doraemon_playtest_point(1, None, None, None, (40, 3), ROOMS)[0])
+        self.assertEqual(
+            "underground 5 128 96 146 114", _doraemon_playtest_point(1, None, None, None, (40, 3), ROOMS)[0]
+        )
         # The vertical finale is not a room a manhole leads to.
         with self.assertRaises(StudioProjectError):
             _doraemon_playtest_point(1, None, None, None, (4, 10), ROOMS)

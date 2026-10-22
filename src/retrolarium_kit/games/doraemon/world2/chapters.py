@@ -28,21 +28,19 @@ def decode_chapters(payload: bytes) -> dict[str, object]:
 
 
 def encode_chapters(value: Any) -> bytes:
-    if not isinstance(value, dict) or set(value) != {
-        "background_palette_ids", "sprite_offsets"
-    }:
+    if not isinstance(value, dict) or set(value) != {"background_palette_ids", "sprite_offsets"}:
         raise DoraemonWorld2ChapterError("World 2 chapter fields differ")
     background = value["background_palette_ids"]
     sprite = value["sprite_offsets"]
-    if (not isinstance(background, list) or len(background) != CHAPTER_COUNT
-            or not isinstance(sprite, list) or len(sprite) != CHAPTER_COUNT):
+    if (
+        not isinstance(background, list)
+        or len(background) != CHAPTER_COUNT
+        or not isinstance(sprite, list)
+        or len(sprite) != CHAPTER_COUNT
+    ):
         raise DoraemonWorld2ChapterError("World 2 needs three palette selectors")
-    if any(not isinstance(item, int) or isinstance(item, bool)
-           or not 1 <= item <= 9 for item in background):
-        raise DoraemonWorld2ChapterError(
-            "World 2 background palette ID is outside 1..9")
-    if any(not isinstance(item, int) or isinstance(item, bool)
-           or item not in (0, 16, 32, 48) for item in sprite):
-        raise DoraemonWorld2ChapterError(
-            "World 2 sprite palette offset is not a catalog-aligned record")
+    if any(not isinstance(item, int) or isinstance(item, bool) or not 1 <= item <= 9 for item in background):
+        raise DoraemonWorld2ChapterError("World 2 background palette ID is outside 1..9")
+    if any(not isinstance(item, int) or isinstance(item, bool) or item not in (0, 16, 32, 48) for item in sprite):
+        raise DoraemonWorld2ChapterError("World 2 sprite palette offset is not a catalog-aligned record")
     return bytes(background + sprite)

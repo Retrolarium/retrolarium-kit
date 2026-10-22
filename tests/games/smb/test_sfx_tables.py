@@ -9,7 +9,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from helpers import game_profile
 from retrolarium_kit.platform.nes.resources import (
-    NesResourceBundleDocument, NesResourceError, _decode_profile_resource, _resource_specs, build_resources,
+    NesResourceBundleDocument,
+    NesResourceError,
+    _decode_profile_resource,
+    _resource_specs,
+    build_resources,
     decode_resources,
 )
 from retrolarium_kit.games.smb.sfx_tables import SmbSfxTableError, encode
@@ -75,7 +79,9 @@ class SmbSfxTableTests(unittest.TestCase):
                 records[0]["values"][0] = 0x5A
                 item["records"] = records
             resources.append(item)
-        edited = NesResourceBundleDocument(document.game_id, document.revision_id, document.source_sha256, tuple(resources))
+        edited = NesResourceBundleDocument(
+            document.game_id, document.revision_id, document.source_sha256, tuple(resources)
+        )
         output, _report = build_resources(data, edited, profile, revision)
         self.assertEqual(0x5A, output[29924])
         self.assertEqual(1, sum(a != b for a, b in zip(data, output)))
@@ -83,8 +89,12 @@ class SmbSfxTableTests(unittest.TestCase):
         records[3] = {"id": "brick_shatter_noise", "values": [0] * 15}
         broken = tuple(dict(item, records=records) if item["id"] == "sfx-tables" else item for item in resources)
         with self.assertRaises(NesResourceError):
-            build_resources(data, NesResourceBundleDocument(document.game_id, document.revision_id, document.source_sha256, broken),
-                            profile, revision)
+            build_resources(
+                data,
+                NesResourceBundleDocument(document.game_id, document.revision_id, document.source_sha256, broken),
+                profile,
+                revision,
+            )
 
 
 if __name__ == "__main__":

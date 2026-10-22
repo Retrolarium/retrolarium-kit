@@ -50,15 +50,14 @@ def layout(parameters: Mapping[str, Any], context: str) -> dict[str, tuple[int, 
 def decode_tables(image: bytes, parameters: Mapping[str, Any], context: str) -> dict[str, object]:
     tables = {}
     for name, (offset, size) in layout(parameters, context).items():
-        chunk = image[offset:offset + size]
+        chunk = image[offset : offset + size]
         if len(chunk) != size:
             raise ByteTableError(f"{context}.tables.{name} escapes the image")
         tables[name] = list(chunk)
     return {"tables": tables}
 
 
-def encode_tables(raw: Mapping[str, Any], parameters: Mapping[str, Any],
-                  context: str) -> list[tuple[int, bytes]]:
+def encode_tables(raw: Mapping[str, Any], parameters: Mapping[str, Any], context: str) -> list[tuple[int, bytes]]:
     """The bytes a document writes back, as (file offset, bytes) runs."""
     expected = layout(parameters, context)
     tables = raw.get("tables")
@@ -67,8 +66,11 @@ def encode_tables(raw: Mapping[str, Any], parameters: Mapping[str, Any],
     runs = []
     for name, (offset, size) in expected.items():
         values = tables[name]
-        if (not isinstance(values, list) or len(values) != size
-                or any(type(value) is not int or not 0 <= value <= 0xFF for value in values)):
+        if (
+            not isinstance(values, list)
+            or len(values) != size
+            or any(type(value) is not int or not 0 <= value <= 0xFF for value in values)
+        ):
             raise ByteTableError(f"{context}.tables.{name} must be {size} bytes")
         runs.append((offset, bytes(values)))
     return runs

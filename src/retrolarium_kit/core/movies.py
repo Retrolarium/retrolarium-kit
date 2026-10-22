@@ -158,7 +158,7 @@ def read_gmv(path: Path) -> Movie:
     frames = []
     for index in range(0, len(body), 3):
         pads = []
-        for value in body[index:index + 2]:
+        for value in body[index : index + 2]:
             mask = 0
             for bit, name in enumerate(_GMV_BITS):
                 if not value & (1 << bit):
@@ -225,7 +225,7 @@ def read_rlmovie(path: Path) -> Movie:
     if platform not in PLATFORMS:
         raise MovieError(f"{path}: unknown platform {platform!r}")
     frames: list[Frame] = []
-    for number, line in enumerate(lines[position + 1:], position + 2):
+    for number, line in enumerate(lines[position + 1 :], position + 2):
         parts = line.split()
         if len(parts) not in (3, 4) or (len(parts) == 4 and parts[3] not in COMMANDS):
             raise MovieError(f"{path}:{number}: not a run of frames")
@@ -257,6 +257,7 @@ class Cell:
     big or little) that may differ from the reference by that much: on the
     NES a moved routine can cross a page boundary and cost the odd lag
     frame, so a position may trail by a few pixels."""
+
     name: str
     address: int
     length: int = 1
@@ -272,6 +273,7 @@ class Cell:
 class Check:
     """What a run reads: named RAM cells after each listed frame (``end`` is
     the movie's last frame)."""
+
     cells: tuple[Cell, ...]
     frames: tuple[int | str, ...]
 
@@ -290,8 +292,17 @@ def _resolve_frames(check: Check, total: int) -> list[int]:
     return sorted(set(result))
 
 
-def run_in_mame(movie: Movie, rom: Path, check: Check, *, mame: Path, machine: str | None = None,
-                timeout: float = 3600.0, watch: bool = False, stay: bool | None = None) -> dict[str, dict[str, str]]:
+def run_in_mame(
+    movie: Movie,
+    rom: Path,
+    check: Check,
+    *,
+    mame: Path,
+    machine: str | None = None,
+    timeout: float = 3600.0,
+    watch: bool = False,
+    stay: bool | None = None,
+) -> dict[str, dict[str, str]]:
     """Play the movie on rom in MAME (no window, no sound, unthrottled) and
     return {frame label: {cell: hex bytes}}; a frame label is the number, or
     ``end`` for the movie's last frame. ``watch`` shows it instead: a window
@@ -313,33 +324,72 @@ def run_in_mame(movie: Movie, rom: Path, check: Check, *, mame: Path, machine: s
         folder = Path(directory)
         inputs = folder / "input.txt"
         inputs.write_text(
-            "".join(f"{count} {frame.pad1} {frame.pad2} {COMMANDS.index(frame.command) + 1 if frame.command else 0}\n"
-                    for count, frame in Movie(movie.platform, played).runs()), encoding="utf-8", newline="\n")
+            "".join(
+                f"{count} {frame.pad1} {frame.pad2} {COMMANDS.index(frame.command) + 1 if frame.command else 0}\n"
+                for count, frame in Movie(movie.platform, played).runs()
+            ),
+            encoding="utf-8",
+            newline="\n",
+        )
         reads = folder / "reads.txt"
-        reads.write_text("".join(f"{frame - trail} {cell.space} {cell.address} {cell.length} {cell.name}\n"
-                                 for frame in frames for cell in check.cells),
-                         encoding="utf-8", newline="\n")
+        reads.write_text(
+            "".join(
+                f"{frame - trail} {cell.space} {cell.address} {cell.length} {cell.name}\n"
+                for frame in frames
+                for cell in check.cells
+            ),
+            encoding="utf-8",
+            newline="\n",
+        )
         output = folder / "out.txt"
-        environment = dict(os.environ, RL_MOVIE_INPUT=str(inputs), RL_MOVIE_READS=str(reads),
-                           RL_MOVIE_OUTPUT=str(output), RL_MOVIE_OFFSET="0", RL_MOVIE_FRAMES=str(len(played)),
-                           RL_MOVIE_STAY="1" if stay else "0", RL_MOVIE_DRAW="1" if watch else "0")
+        environment = dict(
+            os.environ,
+            RL_MOVIE_INPUT=str(inputs),
+            RL_MOVIE_READS=str(reads),
+            RL_MOVIE_OUTPUT=str(output),
+            RL_MOVIE_OFFSET="0",
+            RL_MOVIE_FRAMES=str(len(played)),
+            RL_MOVIE_STAY="1" if stay else "0",
+            RL_MOVIE_DRAW="1" if watch else "0",
+        )
         headless = ["-nofilter"] if watch else ["-video", "none", "-sound", "none", "-nothrottle"]
         fill = power_on(movie)
         plugin = []
         if fill:
             environment.update(RL_MOVIE_RAM_FILL=fill[0], RL_MOVIE_RAM_SIZE=str(fill[1]))
             plugin = ["-pluginspath", f"{mame.parent / 'plugins'};{PLUGINS}", "-plugin", "rlpoweron"]
-        command = [str(mame), machine or machine_for(movie.platform), "-cart", str(rom), *headless,
-                   *plugin, "-skip_gameinfo", "-nomouse", "-window", "-autoboot_delay", "0",
-                   "-autoboot_script", str(LUA)]
-        result = subprocess.run(command, cwd=mame.parent, env=environment, capture_output=True, text=True,
-                                errors="replace", timeout=None if watch else timeout)
+        command = [
+            str(mame),
+            machine or machine_for(movie.platform),
+            "-cart",
+            str(rom),
+            *headless,
+            *plugin,
+            "-skip_gameinfo",
+            "-nomouse",
+            "-window",
+            "-autoboot_delay",
+            "0",
+            "-autoboot_script",
+            str(LUA),
+        ]
+        result = subprocess.run(
+            command,
+            cwd=mame.parent,
+            env=environment,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=None if watch else timeout,
+        )
         error = Path(str(output) + ".error")
         if error.is_file():
             raise MovieError(f"the MAME movie script failed: {error.read_text(encoding='utf-8').strip()}")
         if not output.is_file():
-            raise MovieError(f"MAME stopped before the movie ended (exit {result.returncode}): "
-                             f"{(result.stdout + result.stderr).strip()[-600:]}")
+            raise MovieError(
+                f"MAME stopped before the movie ended (exit {result.returncode}): "
+                f"{(result.stdout + result.stderr).strip()[-600:]}"
+            )
         snapshot: dict[str, dict[str, str]] = {}
         for line in output.read_text(encoding="utf-8").splitlines():
             frame, name, value = line.split(" ", 2)
@@ -356,14 +406,23 @@ def load_check(path: Path) -> tuple[dict, Check]:
     spec = json.loads(path.read_text(encoding="utf-8"))
     if spec.get("schema") != "retrolarium.movie-check" or spec.get("schema_version") != 1:
         raise MovieError(f"{path}: not a retrolarium.movie-check v1 file")
-    cells = tuple(Cell(name, int(str(item["address"]), 0), int(item.get("length", 1)), item.get("space", "program"),
-                       int(item.get("tolerance", 0)), item.get("endian", "big"))
-                  for name, item in spec["cells"].items())
+    cells = tuple(
+        Cell(
+            name,
+            int(str(item["address"]), 0),
+            int(item.get("length", 1)),
+            item.get("space", "program"),
+            int(item.get("tolerance", 0)),
+            item.get("endian", "big"),
+        )
+        for name, item in spec["cells"].items()
+    )
     return spec, Check(cells, tuple(spec["frames"]))
 
 
-def compare(expected: dict[str, dict[str, str]], actual: dict[str, dict[str, str]],
-            cells: tuple[Cell, ...] = ()) -> list[str]:
+def compare(
+    expected: dict[str, dict[str, str]], actual: dict[str, dict[str, str]], cells: tuple[Cell, ...] = ()
+) -> list[str]:
     """The differences between two snapshots, one line each; a cell with a
     tolerance only counts when it is further off than that."""
     by_name = {cell.name: cell for cell in cells}
@@ -374,8 +433,12 @@ def compare(expected: dict[str, dict[str, str]], actual: dict[str, dict[str, str
             if got == value:
                 continue
             cell = by_name.get(name)
-            if (got is not None and cell is not None and cell.tolerance
-                    and abs(cell.value(got) - cell.value(value)) <= cell.tolerance):
+            if (
+                got is not None
+                and cell is not None
+                and cell.tolerance
+                and abs(cell.value(got) - cell.value(value)) <= cell.tolerance
+            ):
                 continue
             problems.append(f"frame {label}: {name} is {got}, expected {value}")
     return problems
@@ -413,14 +476,16 @@ def describe_movies(folder: Path) -> list[dict]:
         if path.suffix.lower() == ".rlmovie":
             notes = {**notes, **movie.notes}
         frames = len(movie.frames)
-        result.append({
-            "path": str(path),
-            "file": path.name,
-            "platform": movie.platform,
-            "source": movie.source.split(" ")[0],
-            "frames": frames,
-            "seconds": round(frames / FRAME_RATES[movie.platform], 2),
-            "checked": path.name in checks,
-            **{key: notes.get(key, "") for key in DESCRIPTION_KEYS},
-        })
+        result.append(
+            {
+                "path": str(path),
+                "file": path.name,
+                "platform": movie.platform,
+                "source": movie.source.split(" ")[0],
+                "frames": frames,
+                "seconds": round(frames / FRAME_RATES[movie.platform], 2),
+                "checked": path.name in checks,
+                **{key: notes.get(key, "") for key in DESCRIPTION_KEYS},
+            }
+        )
     return result

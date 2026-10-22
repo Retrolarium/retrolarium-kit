@@ -16,8 +16,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from retrolarium_kit.studio import repository
 from retrolarium_kit.studio.repository import (
-    GameRepositoryError, check_release, check_repository, fetch_repository, identify_rom, ips_patch, load_descriptor, open_rom, prepare_revision,
-    profile_views, reset_revision, revision_statuses,
+    GameRepositoryError,
+    check_release,
+    check_repository,
+    fetch_repository,
+    identify_rom,
+    ips_patch,
+    load_descriptor,
+    open_rom,
+    prepare_revision,
+    profile_views,
+    reset_revision,
+    revision_statuses,
 )
 from retrolarium_kit.studio.project import build_studio_project, load_studio_project, verify_studio_project
 from retrolarium_kit.core.game_profiles import game_profiles, repository_profile
@@ -28,13 +38,13 @@ def apply_ips(original: bytes, patch: bytes) -> bytes:
     assert patch[:5] == b"PATCH"
     out = bytearray(original)
     at = 5
-    while patch[at:at + 3] != b"EOF":
-        offset = int.from_bytes(patch[at:at + 3], "big")
-        size = int.from_bytes(patch[at + 3:at + 5], "big")
-        data = patch[at + 5:at + 5 + size]
+    while patch[at : at + 3] != b"EOF":
+        offset = int.from_bytes(patch[at : at + 3], "big")
+        size = int.from_bytes(patch[at + 3 : at + 5], "big")
+        data = patch[at + 5 : at + 5 + size]
         if len(out) < offset + size:
             out.extend(bytes(offset + size - len(out)))
-        out[offset:offset + size] = data
+        out[offset : offset + size] = data
         at += 5 + size
     return bytes(out)
 
@@ -110,13 +120,13 @@ class IpsTests(unittest.TestCase):
         edited = bytearray(original)
         edited[0x454F46] = 1
         patch = ips_patch(original, bytes(edited))
-        self.assertEqual(b"\x45\x4F\x45", patch[5:8])
+        self.assertEqual(b"\x45\x4f\x45", patch[5:8])
         self.assertEqual(bytes(edited), apply_ips(original, patch))
 
     def test_a_longest_run_at_eof_offset_still_fits_a_record(self) -> None:
         original = bytes(0x454F46 + 0x10000)
         edited = bytearray(original)
-        edited[0x454F46:0x454F46 + 0xFFFF] = b"\x01" * 0xFFFF
+        edited[0x454F46 : 0x454F46 + 0xFFFF] = b"\x01" * 0xFFFF
         patch = ips_patch(original, bytes(edited))
         self.assertEqual(bytes(edited), apply_ips(original, patch))
 
@@ -141,9 +151,11 @@ class IpsTests(unittest.TestCase):
                 'schema = "retrolarium.project"\nschema_version = 1\n\n[project]\nid = "game"\n'
                 'name = "game"\nplatform = "unknown"\nprofile = "rom.v1"\nsource_mode = "rom"\n\n'
                 '[source]\nrom = "game.bin"\noriginal = "original/game.bin"\nsha256 = "00"\n',
-                encoding="utf-8")
-            self.assertEqual(((root / "original" / "game.bin").resolve(), (root / "game.bin").resolve()),
-                             rom_as_is(project))
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                ((root / "original" / "game.bin").resolve(), (root / "game.bin").resolve()), rom_as_is(project)
+            )
             output = root / "game.ips"
             with contextlib.redirect_stdout(io.StringIO()):
                 main(["studio", "patch", str(project), "--output", str(output)])
@@ -172,8 +184,7 @@ class DescriptorTests(unittest.TestCase):
         ready = prepare_revision(self.descriptor, "japan-v10", rom=V10)
         self.assertEqual("ready", ready["status"])
         self.assertEqual(V10.read_bytes(), (self.root / "pacman10.nes").read_bytes())
-        self.assertEqual({"hack/japan-v10/resources.json", "hack/japan-v10/demo.json"},
-                         set(ready["created_documents"]))
+        self.assertEqual({"hack/japan-v10/resources.json", "hack/japan-v10/demo.json"}, set(ready["created_documents"]))
         project = Path(ready["project"])
         self.assertEqual(self.root / ".retrolarium" / "japan-v10", project.parent)
         inspection = load_studio_project(project)
@@ -245,13 +256,15 @@ class DescriptorTests(unittest.TestCase):
             self.assertRegex(entry["ref"], r"^(tags|heads)/[\w.-]+$", game)
         self.assertEqual(
             "https://github.com/RetrolariumLab/pacman_src/archive/refs/tags/source-reconstruction-3.1.zip",
-            repository._archive_url(catalog, catalog["games"]["pacman"], None))
+            repository._archive_url(catalog, catalog["games"]["pacman"], None),
+        )
 
     def test_a_view_can_belong_to_some_revisions(self) -> None:
         views = profile_views("pacman.v1")
-        only_v11 = {**views, "tabs": [
-            {**tab, "revisions": ["japan-v11"]} if tab["id"] == "demo" else tab for tab in views["tabs"]
-        ]}
+        only_v11 = {
+            **views,
+            "tabs": [{**tab, "revisions": ["japan-v11"]} if tab["id"] == "demo" else tab for tab in views["tabs"]],
+        }
         with mock.patch.object(repository, "profile_views", return_value=only_v11):
             descriptor = load_descriptor(self.root / "pacman.rlj")
         ready = prepare_revision(descriptor, "japan-v10", rom=V10)
@@ -259,8 +272,10 @@ class DescriptorTests(unittest.TestCase):
         tabs = load_studio_project(Path(ready["project"]))["workspace"]["tabs"]
         self.assertNotIn("demo", [tab["id"] for tab in tabs])
         only_v12 = {**views, "tabs": [{**views["tabs"][0], "revisions": ["japan-v12"]}]}
-        with mock.patch.object(repository, "profile_views", return_value=only_v12), \
-                self.assertRaises(GameRepositoryError):
+        with (
+            mock.patch.object(repository, "profile_views", return_value=only_v12),
+            self.assertRaises(GameRepositoryError),
+        ):
             load_descriptor(self.root / "pacman.rlj")
 
     def test_a_newer_kit_adds_its_resources_and_keeps_edits(self) -> None:
@@ -286,8 +301,10 @@ class DescriptorTests(unittest.TestCase):
         shutil.copyfile(V11, self.root / "pacman11.nes")
         report = check_repository(self.descriptor)
         self.assertEqual("ok", report["status"])
-        self.assertEqual([("japan-v10", "ok"), ("japan-v11", "ok")],
-                         [(entry["revision"], entry["status"]) for entry in report["revisions"]])
+        self.assertEqual(
+            [("japan-v10", "ok"), ("japan-v11", "ok")],
+            [(entry["revision"], entry["status"]) for entry in report["revisions"]],
+        )
         # The check leaves the user's folders alone: it never made them here.
         self.assertFalse((self.root / "hack").exists())
         self.assertFalse((self.root / ".retrolarium").exists())
@@ -301,8 +318,10 @@ class DescriptorTests(unittest.TestCase):
         # Only the ROMs that are here: the missing one is skipped, not failed.
         here = check_repository(self.descriptor, present=True)
         self.assertEqual("ok", here["status"])
-        self.assertEqual({("japan-v10", "ok"), ("japan-v11", "skipped")},
-                         {(entry["revision"], entry["status"]) for entry in here["revisions"]})
+        self.assertEqual(
+            {("japan-v10", "ok"), ("japan-v11", "skipped")},
+            {(entry["revision"], entry["status"]) for entry in here["revisions"]},
+        )
         (self.root / "pacman10.nes").unlink()
         self.assertEqual("failed", check_repository(self.descriptor, present=True)["status"])
 
@@ -320,7 +339,8 @@ class DescriptorTests(unittest.TestCase):
         # A stand-in build: it copies the ROM it is given, which is not the
         # expanded image, so the kit names the failed build.
         (self.root / "copy.py").write_text(
-            "import shutil, sys\nshutil.copyfile(sys.argv[1], sys.argv[2])\n", encoding="utf-8")
+            "import shutil, sys\nshutil.copyfile(sys.argv[1], sys.argv[2])\n", encoding="utf-8"
+        )
         self.built('from = "japan-v10"\ncommand = ["copy.py", "{rom}", "{output}"]\n')
         expanded = revision_statuses(self.descriptor)["revisions"][2]
         self.assertEqual(("missing", "japan-v10"), (expanded["rom_status"], expanded["built_from"]["id"]))
@@ -336,14 +356,18 @@ class DescriptorTests(unittest.TestCase):
         self.assertEqual("buildable", revision_statuses(self.descriptor)["revisions"][2]["rom_status"])
 
     def test_a_built_revision_names_a_dumped_one(self) -> None:
-        for build, message in (('from = "japan-v12"\ncommand = ["x.py"]\n', "built from a dumped revision"),
-                               ('command = ["x.py"]\n', "build needs from and command")):
+        for build, message in (
+            ('from = "japan-v12"\ncommand = ["x.py"]\n', "built from a dumped revision"),
+            ('command = ["x.py"]\n', "build needs from and command"),
+        ):
             with self.subTest(build=build), self.assertRaisesRegex(GameRepositoryError, message):
                 self.built(build)
 
-    @unittest.skipUnless((PACMAN / "pacman.rlj").is_file()
-                         and "japan-v10-nrom256" in (PACMAN / "pacman.rlj").read_text(encoding="utf-8"),
-                         "the Pac-Man repository keeps no expanded revision")
+    @unittest.skipUnless(
+        (PACMAN / "pacman.rlj").is_file()
+        and "japan-v10-nrom256" in (PACMAN / "pacman.rlj").read_text(encoding="utf-8"),
+        "the Pac-Man repository keeps no expanded revision",
+    )
     def test_the_repository_builds_its_expanded_revision(self) -> None:
         report = check_repository(load_descriptor(PACMAN / "pacman.rlj"), ["japan-v10-nrom256"])
         self.assertEqual(("ok", "ok"), (report["status"], report["revisions"][0]["status"]))
@@ -361,8 +385,10 @@ class RepositoryProfileTests(unittest.TestCase):
             with self.assertRaisesRegex(GameRepositoryError, "profile of pacman.v1, not pacman.v2"):
                 load_descriptor(root / "pacman.rlj")
             self.assertEqual("pacman.v1", load_descriptor(write_repository(root)).profile)
-            self.assertEqual(["japan-v10", "japan-v11", "japan-v10-nrom256"],
-                             [item.revision_id for item in game_profiles().get("pacman").revisions])
+            self.assertEqual(
+                ["japan-v10", "japan-v11", "japan-v10-nrom256"],
+                [item.revision_id for item in game_profiles().get("pacman").revisions],
+            )
 
     def test_open_rom_knows_the_revisions_the_repositories_keep(self) -> None:
         games = repository.repository_catalog()["games"]
@@ -373,7 +399,8 @@ class RepositoryProfileTests(unittest.TestCase):
             with self.subTest(game=game_id):
                 self.assertEqual(
                     [(item.revision_id, item.name, item.sha256) for item in profile.revisions],
-                    [(item["id"], item["name"], item["sha256"]) for item in games[game_id]["revisions"]])
+                    [(item["id"], item["name"], item["sha256"]) for item in games[game_id]["revisions"]],
+                )
 
 
 @unittest.skipUnless(PROFILE.is_file(), "the Pac-Man repository is not available")
@@ -382,6 +409,7 @@ class ReleaseManifestTests(unittest.TestCase):
 
     def setUp(self) -> None:
         from retrolarium_kit import __version__
+
         self.version = __version__
         self.root = Path(tempfile.mkdtemp())
         self.descriptor = load_descriptor(write_repository(self.root))
@@ -391,12 +419,18 @@ class ReleaseManifestTests(unittest.TestCase):
         shutil.rmtree(self.root)
 
     def check(self, **changes) -> dict:
-        document = {"release_line": "3.0", "release_kind": "retrolarium", "status": "development",
-                    "retrolarium": {"descriptor": "pacman.rlj", "profile": "pacman.v1",
-                                    "revisions": ["japan-v10", "japan-v11"],
-                                    "kit": {"version": None, "commit": None},
-                                    "removed_authoring": [{"path": "scripts/authoring/maze_studio.py",
-                                                           "replaced_by": "Levels view"}]}}
+        document = {
+            "release_line": "3.0",
+            "release_kind": "retrolarium",
+            "status": "development",
+            "retrolarium": {
+                "descriptor": "pacman.rlj",
+                "profile": "pacman.v1",
+                "revisions": ["japan-v10", "japan-v11"],
+                "kit": {"version": None, "commit": None},
+                "removed_authoring": [{"path": "scripts/authoring/maze_studio.py", "replaced_by": "Levels view"}],
+            },
+        }
         for key, value in changes.items():
             target = document["retrolarium"] if key in document["retrolarium"] else document
             target[key] = value
@@ -442,8 +476,10 @@ rom = "build/expanded/pacman.nes"
 FLICKY = game_repository("flicky_src")
 
 
-@unittest.skipUnless((FLICKY / "Flicky (UE) [!].bin").is_file() and (FLICKY / "flicky.rlj").is_file(),
-                     "the Flicky repository and ROM are not available")
+@unittest.skipUnless(
+    (FLICKY / "Flicky (UE) [!].bin").is_file() and (FLICKY / "flicky.rlj").is_file(),
+    "the Flicky repository and ROM are not available",
+)
 class FlickyDescriptorTests(unittest.TestCase):
     def test_a_downloaded_repository_opens_through_its_snapshot(self) -> None:
         listed = subprocess.run(["git", "ls-files", "-z"], cwd=FLICKY, capture_output=True, check=True).stdout

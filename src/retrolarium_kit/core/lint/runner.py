@@ -110,8 +110,15 @@ def assembly_files(root: Path, config: LintConfig, paths: tuple[str, ...] = ()) 
     return sorted(files, key=lambda item: item.as_posix().lower())
 
 
-def run(root: Path, config: LintConfig, *, fix: bool = False, only: tuple[str, ...] = (),
-        paths: tuple[str, ...] = (), report: Callable[[str], None] = print) -> list[Issue]:
+def run(
+    root: Path,
+    config: LintConfig,
+    *,
+    fix: bool = False,
+    only: tuple[str, ...] = (),
+    paths: tuple[str, ...] = (),
+    report: Callable[[str], None] = print,
+) -> list[Issue]:
     """Check (and with fix, first normalize) the tree; return what is left.
     `paths` narrows the assembly section to those files or folders."""
     root = root.resolve()
@@ -126,8 +133,10 @@ def run(root: Path, config: LintConfig, *, fix: bool = False, only: tuple[str, .
         found = [issue for path in files for issue in module.lint_file(path, config.style)]
         issues += found
         action = f"formatted {changed}, checked" if fix else "checked"
-        report(f"[{'OK' if not found else 'FAIL'}] {config.dialect} style: {action} {len(files)} source(s)"
-               + (f", {len(found)} issue(s)" if found else ""))
+        report(
+            f"[{'OK' if not found else 'FAIL'}] {config.dialect} style: {action} {len(files)} source(s)"
+            + (f", {len(found)} issue(s)" if found else "")
+        )
     if "text" in selected:
         files = text.project_files(root, config.text_skip or ())
         changed = 0
@@ -140,8 +149,10 @@ def run(root: Path, config: LintConfig, *, fix: bool = False, only: tuple[str, .
         found = [issue for path in files for issue in text.lint_file(path, config.json_layout)]
         issues += found
         action = f"formatted {changed}, checked" if fix else "checked"
-        report(f"[{'OK' if not found else 'FAIL'}] text format: {action} {len(files)} file(s)"
-               + (f", {len(found)} issue(s)" if found else ""))
+        report(
+            f"[{'OK' if not found else 'FAIL'}] text format: {action} {len(files)} file(s)"
+            + (f", {len(found)} issue(s)" if found else "")
+        )
     if "code" in selected:
         from retrolarium_core import formatting
 
@@ -155,9 +166,13 @@ def run(root: Path, config: LintConfig, *, fix: bool = False, only: tuple[str, .
                 issues.append(Issue(root, 0, "code-format", f"{result.language}: {result.error}"))
                 report(f"[FAIL] {result.language} format: the formatter failed")
                 continue
-            issues += [Issue(root / name, 0, "code-format", f"the {result.language} formatter would change it")
-                       for name in result.changed]
-            report(f"[{'OK' if not result.changed else 'FAIL'}] {result.language} format: "
-                   f"{'formatted, ' if fix else ''}checked {result.files} file(s)"
-                   + (f", {len(result.changed)} to format" if result.changed else ""))
+            issues += [
+                Issue(root / name, 0, "code-format", f"the {result.language} formatter would change it")
+                for name in result.changed
+            ]
+            report(
+                f"[{'OK' if not result.changed else 'FAIL'}] {result.language} format: "
+                f"{'formatted, ' if fix else ''}checked {result.files} file(s)"
+                + (f", {len(result.changed)} to format" if result.changed else "")
+            )
     return issues

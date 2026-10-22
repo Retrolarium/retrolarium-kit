@@ -32,7 +32,7 @@ local ready_path = os.getenv("CASTLE_EXCELLENT_DEMO_READY")
 local JOYPAD1 = 0x4016
 local TERMINATOR = 0xff
 local START = 0x08
-local GAMEPLAY = 0xf3       -- the script's mask: Select and Start never play
+local GAMEPLAY = 0xf3 -- the script's mask: Select and Start never play
 
 local machine = manager.machine
 local cpu = machine.devices[":maincpu"]
@@ -47,12 +47,12 @@ local reset = memory:read_u16(0xfffc)
 local script_read = reader + 10
 
 local in_demo = false
-local active = false        -- recording now
-local command = -1          -- the script index being played
-local value = 0             -- its buttons
-local bit = 8               -- the controller bit the next port read returns
+local active = false -- recording now
+local command = -1 -- the script index being played
+local value = 0 -- its buttons
+local bit = 8 -- the controller bit the next port read returns
 local polled = 0
-local live = 0              -- the buttons the player holds
+local live = 0 -- the buttons the player holds
 local output = nil
 
 local function close_recording()
@@ -94,51 +94,61 @@ local function demo_over()
 end
 
 -- ReadDemoController1 reads the script once a frame.
-script_tap = memory:install_read_tap(script, script + capacity, "castle-excellent-demo-script",
-    function(offset, data)
-        if pc.value ~= script_read then return data end
-        if not in_demo then start_demo() end
-        if not active then return data end
-        local index = offset - script
-        if index ~= command then
-            command = index
-            if index >= capacity then
-                value = TERMINATOR
-            else
-                value = live & GAMEPLAY
-                output:write(string.format("command %d\n", value))
-                output:flush()
-            end
-        end
-        return value
-    end)
--- The demo ends at its terminator with a jump to Reset.
-reset_tap = memory:install_read_tap(reset, reset, "castle-excellent-demo-reset",
-    function(_, data)
-        if pc.value == reset and in_demo then demo_over() end
+script_tap = memory:install_read_tap(script, script + capacity, "castle-excellent-demo-script", function(offset, data)
+    if pc.value ~= script_read then
         return data
-    end)
+    end
+    if not in_demo then
+        start_demo()
+    end
+    if not active then
+        return data
+    end
+    local index = offset - script
+    if index ~= command then
+        command = index
+        if index >= capacity then
+            value = TERMINATOR
+        else
+            value = live & GAMEPLAY
+            output:write(string.format("command %d\n", value))
+            output:flush()
+        end
+    end
+    return value
+end)
+-- The demo ends at its terminator with a jump to Reset.
+reset_tap = memory:install_read_tap(reset, reset, "castle-excellent-demo-reset", function(_, data)
+    if pc.value == reset and in_demo then
+        demo_over()
+    end
+    return data
+end)
 if recording then
     -- A strobe write restarts the controller's serial bits.
-    strobe_tap = memory:install_write_tap(JOYPAD1, JOYPAD1, "castle-excellent-demo-strobe",
-        function(_, data)
-            bit = 0
-            polled = 0
-            return data
-        end)
+    strobe_tap = memory:install_write_tap(JOYPAD1, JOYPAD1, "castle-excellent-demo-strobe", function(_, data)
+        bit = 0
+        polled = 0
+        return data
+    end)
     -- PollController1 shifts eight reads into A, B, Select, Start, Up,
     -- Down, Left, Right from bit 0 up; the game reads the port idle.
-    port_tap = memory:install_read_tap(JOYPAD1, JOYPAD1, "castle-excellent-demo-port",
-        function(_, data)
-            if bit < 8 then
-                if data & 0x03 ~= 0 then polled = polled | (1 << bit) end
-                bit = bit + 1
-                if bit == 8 then live = polled end
+    port_tap = memory:install_read_tap(JOYPAD1, JOYPAD1, "castle-excellent-demo-port", function(_, data)
+        if bit < 8 then
+            if data & 0x03 ~= 0 then
+                polled = polled | (1 << bit)
             end
-            return data & 0xfc
-        end)
+            bit = bit + 1
+            if bit == 8 then
+                live = polled
+            end
+        end
+        return data & 0xfc
+    end)
     stop_subscription = emu.add_machine_stop_notifier(function()
-        if active then close_recording() end
+        if active then
+            close_recording()
+        end
     end)
 end
 

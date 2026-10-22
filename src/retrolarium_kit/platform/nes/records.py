@@ -29,8 +29,9 @@ from retrolarium_kit.core.authoring import AuthoringError
 
 
 CODEC = "nes.record-table.v1"
-FIELD_KEYS = frozenset({"name", "label", "minimum", "maximum", "signed", "choices", "names", "none", "locked",
-                        "unique"})
+FIELD_KEYS = frozenset(
+    {"name", "label", "minimum", "maximum", "signed", "choices", "names", "none", "locked", "unique"}
+)
 
 
 class RecordTableError(AuthoringError):
@@ -60,8 +61,13 @@ def _field(raw: object, records: int, context: str) -> dict[str, Any]:
     low, high = (-128, 127) if signed else (0, 255)
     minimum = _integer(raw.get("minimum", low), f"{context}.minimum", minimum=low, maximum=high)
     maximum = _integer(raw.get("maximum", high), f"{context}.maximum", minimum=minimum, maximum=high)
-    field: dict[str, Any] = {"name": name, "label": raw.get("label", name.replace("_", " ").capitalize()),
-                             "minimum": minimum, "maximum": maximum, "signed": signed}
+    field: dict[str, Any] = {
+        "name": name,
+        "label": raw.get("label", name.replace("_", " ").capitalize()),
+        "minimum": minimum,
+        "maximum": maximum,
+        "signed": signed,
+    }
     if not isinstance(field["label"], str) or not field["label"]:
         raise RecordTableError(f"{context}.label must be a non-empty string")
     if "choices" in raw:
@@ -70,8 +76,12 @@ def _field(raw: object, records: int, context: str) -> dict[str, Any]:
             raise RecordTableError(f"{context}.choices must be a non-empty list")
         seen = set()
         for i, choice in enumerate(choices):
-            if not isinstance(choice, Mapping) or set(choice) != {"value", "label"} \
-                    or not isinstance(choice["label"], str) or not choice["label"]:
+            if (
+                not isinstance(choice, Mapping)
+                or set(choice) != {"value", "label"}
+                or not isinstance(choice["label"], str)
+                or not choice["label"]
+            ):
                 raise RecordTableError(f"{context}.choices[{i}] needs a value and a label")
             value = _integer(choice["value"], f"{context}.choices[{i}].value", minimum=minimum, maximum=maximum)
             if value in seen:
@@ -90,8 +100,11 @@ def _field(raw: object, records: int, context: str) -> dict[str, Any]:
         field["unique"] = True
     if "locked" in raw:
         locked = raw["locked"]
-        if not isinstance(locked, list) or any(type(r) is not int or not 0 <= r < records for r in locked) \
-                or len(set(locked)) != len(locked):
+        if (
+            not isinstance(locked, list)
+            or any(type(r) is not int or not 0 <= r < records for r in locked)
+            or len(set(locked)) != len(locked)
+        ):
             raise RecordTableError(f"{context}.locked must list distinct record indexes")
         field["locked"] = sorted(locked)
     return field
@@ -131,10 +144,15 @@ def layout(parameters: Mapping[str, Any], context: str) -> dict[str, Any]:
         template = parameters.get("record_label", "Record {n}")
         if not isinstance(template, str) or not any(key in template for key in ("{n}", "{i}", "{hex}")):
             raise RecordTableError(f"{context}.record_label must hold {{n}}, {{i}} or {{hex}}")
-        labels = [template.replace("{n}", str(i + 1)).replace("{i}", str(i)).replace("{hex}", f"${i:02X}")
-                  for i in range(records)]
-    if not isinstance(labels, list) or len(labels) != records \
-            or any(not isinstance(label, str) or not label for label in labels):
+        labels = [
+            template.replace("{n}", str(i + 1)).replace("{i}", str(i)).replace("{hex}", f"${i:02X}")
+            for i in range(records)
+        ]
+    if (
+        not isinstance(labels, list)
+        or len(labels) != records
+        or any(not isinstance(label, str) or not label for label in labels)
+    ):
         raise RecordTableError(f"{context}.record_labels must name every record")
     return {"records": records, "record_labels": list(labels), "fields": fields, "tables": tables}
 
@@ -181,8 +199,7 @@ def _encode_value(value: object, field: Mapping[str, Any], context: str) -> int:
     return byte
 
 
-def encode_records(raw: Mapping[str, Any], parameters: Mapping[str, Any],
-                   context: str) -> list[tuple[int, bytes]]:
+def encode_records(raw: Mapping[str, Any], parameters: Mapping[str, Any], context: str) -> list[tuple[int, bytes]]:
     """The bytes an edited document writes, as (file offset, bytes) runs.
     Locked records are skipped; a shared byte must get one value."""
     shape = layout(parameters, context)

@@ -6,6 +6,7 @@ apart: the Disk System is NES hardware, so platform.nes may use platform.fds
 (not the other way round), and a game never imports another game, except the
 two dispatchers that exist to reach them all (games.catalog, games.nes_codecs).
 """
+
 from __future__ import annotations
 
 import ast
@@ -40,8 +41,11 @@ def imports() -> list[tuple[tuple[str, ...], tuple[str, ...], int]]:
 
 class LayerTests(unittest.TestCase):
     def test_the_kit_does_not_import_the_disassembler(self) -> None:
-        offenders = [f"{'/'.join(module)}:{line}" for module, target, line in imports()
-                     if target[0] == "retrolarium_disassembler"]
+        offenders = [
+            f"{'/'.join(module)}:{line}"
+            for module, target, line in imports()
+            if target[0] == "retrolarium_disassembler"
+        ]
         self.assertEqual([], offenders)
 
     def test_layers_import_downwards(self) -> None:

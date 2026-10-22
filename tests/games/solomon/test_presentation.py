@@ -9,8 +9,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from retrolarium_kit.core.authoring import GameProfile, ResourceSpec, RevisionSpec
 from retrolarium_kit.games.solomon.presentation import (
-    SolomonPresentationError, build_presentation, decode_presentation,
-    parse_presentation_document, project_title_surface,
+    SolomonPresentationError,
+    build_presentation,
+    decode_presentation,
+    parse_presentation_document,
+    project_title_surface,
 )
 
 
@@ -29,17 +32,30 @@ def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
     header = b"NES\x1a" + bytes((2, 4, 0x30, 0)) + bytes(8)
     source = header + bytes(prg) + bytes(0x8000)
     revision = RevisionSpec(
-        "probe", "Solomon presentation probe", len(source),
+        "probe",
+        "Solomon presentation probe",
+        len(source),
         hashlib.sha1(source).hexdigest(),
-        hashlib.sha256(source).hexdigest(), "ines", 3,
+        hashlib.sha256(source).hexdigest(),
+        "ines",
+        3,
     )
     profile = GameProfile(
-        "solomons-key", 1, "Solomon presentation probe", "nes",
-        ("presentation", "exact-round-trip"), (revision,),
-        (ResourceSpec(
-            "presentation", "presentation", "solomon.presentation.v1",
-            "fixed", addresses,
-        ),),
+        "solomons-key",
+        1,
+        "Solomon presentation probe",
+        "nes",
+        ("presentation", "exact-round-trip"),
+        (revision,),
+        (
+            ResourceSpec(
+                "presentation",
+                "presentation",
+                "solomon.presentation.v1",
+                "fixed",
+                addresses,
+            ),
+        ),
     )
     return source, profile, revision
 
@@ -51,9 +67,7 @@ class SolomonPresentationTests(unittest.TestCase):
         self.assertEqual(2, len(document.streams))
         self.assertEqual(34, len(document.demo_steps))
         self.assertEqual(0x80, project_title_surface(document, 0)[0][0])
-        self.assertEqual(
-            source, build_presentation(source, document, profile, revision)[0]
-        )
+        self.assertEqual(source, build_presentation(source, document, profile, revision)[0])
         value = document.as_dict()
         value["streams"][0]["tokens"][1]["tiles"][0] = 0x82
         value["demo_steps"][1]["duration"] = 47

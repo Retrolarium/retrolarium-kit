@@ -28,8 +28,7 @@ TABLE_LAYOUTS = {
     2: (0xC92C, 0xA7, 0xC7),
     3: (0xA30F, 0xA7, 0xC7),
 }
-NOISE_DIVISORS = (4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508,
-                  762, 1016, 2034, 4068)
+NOISE_DIVISORS = (4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068)
 
 
 @dataclass(frozen=True)
@@ -146,17 +145,12 @@ class _Sequencer:
         self.bank = int(self.driver["bank"])
         if self.bank not in TABLE_LAYOUTS:
             raise SynthError(f"unsupported audio bank {self.bank}")
-        self.period_base, self.noise_relative, self.envelope_relative = (
-            TABLE_LAYOUTS[self.bank]
-        )
+        self.period_base, self.noise_relative, self.envelope_relative = TABLE_LAYOUTS[self.bank]
         self.memory = _stream_memory(self.driver)
         pointers = [audio_streams.number(value) for value in self.header["channels"]]
         if len(pointers) != 4:
             raise SynthError("track header does not contain four channels")
-        self.channels = [
-            _ChannelState(index, pointer, pointer)
-            for index, pointer in enumerate(pointers)
-        ]
+        self.channels = [_ChannelState(index, pointer, pointer) for index, pointer in enumerate(pointers)]
         self.global_pitch_offset = 0
 
     def read(self, state: _ChannelState) -> tuple[int, int]:
@@ -164,9 +158,7 @@ class _Sequencer:
         try:
             value = self.memory[address]
         except KeyError as exc:
-            raise SynthError(
-                f"channel {state.index} reads outside reachable streams at ${address:04X}"
-            ) from exc
+            raise SynthError(f"channel {state.index} reads outside reachable streams at ${address:04X}") from exc
         state.pointer = (state.pointer + 1) & 0xFFFF
         return address, value
 
@@ -190,9 +182,7 @@ class _Sequencer:
         base = self.table(0x94, state.index)
         pitch = (note + base + self.global_pitch_offset + state.pitch_offset) & 0xFF
         if pitch >= 74:
-            raise SynthError(
-                f"channel {state.index} pitch index ${pitch:02X} is outside the APU table"
-            )
+            raise SynthError(f"channel {state.index} pitch index ${pitch:02X} is outside the APU table")
         lo = self.table(0, pitch * 2)
         hi = self.table(0, pitch * 2 + 1)
         period = lo | hi << 8
@@ -214,9 +204,7 @@ class _Sequencer:
         self.clock_hardware_envelope(state)
 
     @staticmethod
-    def restart_hardware_envelope(
-        state: _ChannelState, period: int, loop: bool
-    ) -> None:
+    def restart_hardware_envelope(state: _ChannelState, period: int, loop: bool) -> None:
         state.hardware_envelope_period = period
         state.hardware_envelope_divider = period
         state.hardware_envelope_volume = 15
@@ -240,9 +228,7 @@ class _Sequencer:
                 state.hardware_envelope_volume = 15
         state.volume = state.hardware_envelope_volume
 
-    def noise_event(
-        self, state: _ChannelState, address: int, value: int, frame: int
-    ) -> None:
+    def noise_event(self, state: _ChannelState, address: int, value: int, frame: int) -> None:
         repeats = value & 0x0F
         repeats = 256 if repeats == 0 else repeats
         state.noise_repeats = repeats - 1
@@ -276,9 +262,7 @@ class _Sequencer:
             state.hardware_envelope_active = False
             state.volume = control & 0x0F
         else:
-            self.restart_hardware_envelope(
-                state, control & 0x0F, bool(control & 0x20)
-            )
+            self.restart_hardware_envelope(state, control & 0x0F, bool(control & 0x20))
         state.frequency = CPU_FREQUENCY / NOISE_DIVISORS[period & 0x0F]
         state.noise_mode = bool(period & 0x80)
         state.events.append(
@@ -292,9 +276,7 @@ class _Sequencer:
             )
         )
 
-    def note_event(
-        self, state: _ChannelState, address: int, value: int, frame: int
-    ) -> None:
+    def note_event(self, state: _ChannelState, address: int, value: int, frame: int) -> None:
         duration = max(1, state.duration_code)
         state.duration = duration
         if value == 0:
@@ -312,14 +294,8 @@ class _Sequencer:
                 state.envelope_volume = state.base_volume
                 state.hardware_envelope_active = False
             else:
-                self.restart_hardware_envelope(
-                    state, state.hardware_envelope_period, False
-                )
-        state.events.append(
-            LaneEvent(
-                frame, duration, state.frequency, note, address, state.volume
-            )
-        )
+                self.restart_hardware_envelope(state, state.hardware_envelope_period, False)
+        state.events.append(LaneEvent(frame, duration, state.frequency, note, address, state.volume))
 
     def command(self, state: _ChannelState, opcode: int) -> None:
         if opcode == 0xFF:
@@ -389,11 +365,7 @@ class _Sequencer:
         if state.index == 3 and state.noise_repeats:
             state.noise_repeats -= 1
             state.duration = max(1, state.duration_code)
-            if (
-                state.noise_retrigger_enabled
-                and not state.envelope_enabled
-                and state.hardware_envelope_active
-            ):
+            if state.noise_retrigger_enabled and not state.envelope_enabled and state.hardware_envelope_active:
                 self.restart_hardware_envelope(
                     state,
                     state.hardware_envelope_period,
@@ -443,10 +415,7 @@ class _Sequencer:
             if all(state.ended for state in self.channels):
                 break
         return DecodedTrack(
-            tuple(
-                ChannelLane(CHANNEL_NAMES[index], tuple(state.events))
-                for index, state in enumerate(self.channels)
-            ),
+            tuple(ChannelLane(CHANNEL_NAMES[index], tuple(state.events)) for index, state in enumerate(self.channels)),
             tuple(frames),
         )
 
@@ -551,9 +520,7 @@ def render_pcm(
             if not channel.frequency or not channel.volume:
                 continue
             if index < 2:
-                values[index] = float(channel.volume) * _pulse_level(
-                    phases[index], phase_step, duties[channel.duty]
-                )
+                values[index] = float(channel.volume) * _pulse_level(phases[index], phase_step, duties[channel.duty])
             else:
                 values[index] = abs(phases[index] * 4.0 - 2.0) * 7.5
         noise = channels[3]
@@ -582,12 +549,8 @@ def write_preview(
     max_frames: int = DEFAULT_PREVIEW_FRAMES,
     sample_rate: int = DEFAULT_SAMPLE_RATE,
 ) -> DecodedTrack:
-    decoded = decode_track(
-        document, prg, driver_index, header_index, max_frames=max_frames
-    )
-    pcm = render_pcm(
-        decoded, enabled_channels=enabled_channels, sample_rate=sample_rate
-    )
+    decoded = decode_track(document, prg, driver_index, header_index, max_frames=max_frames)
+    pcm = render_pcm(decoded, enabled_channels=enabled_channels, sample_rate=sample_rate)
     path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(path), "wb") as output:
         output.setnchannels(1)

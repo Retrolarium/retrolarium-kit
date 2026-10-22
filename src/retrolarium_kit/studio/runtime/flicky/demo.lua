@@ -43,12 +43,12 @@ end
 local memory = cpu.spaces["program"]
 
 local in_demo = false
-local active = false        -- recording now
-local stream = nil          -- the stream's start, as the game's 16-bit pointer
-local live = 0              -- the buttons the player holds
-local installed = nil       -- the buttons of the step being recorded
-local frames = 0            -- how long that step has played
-local demo_write = false    -- Demo_ReadInput's Ram_Joypad write comes next
+local active = false -- recording now
+local stream = nil -- the stream's start, as the game's 16-bit pointer
+local live = 0 -- the buttons the player holds
+local installed = nil -- the buttons of the step being recorded
+local frames = 0 -- how long that step has played
+local demo_write = false -- Demo_ReadInput's Ram_Joypad write comes next
 local output = nil
 
 local function finish_step()
@@ -80,64 +80,72 @@ local function demo_over()
 end
 
 -- Only Demo_Init reads and increments Ram_DemoIndex.
-index_read_tap = memory:install_read_tap(DEMO_INDEX, DEMO_INDEX + 1, "flicky-demo-index",
-    function(_, value, mask)
-        if in_demo then return value end
-        return demo & mask
-    end)
-index_write_tap = memory:install_write_tap(DEMO_INDEX, DEMO_INDEX + 1, "flicky-demo-start",
-    function(_, value)
-        -- Boot clears the index; Demo_Init writes the demo's number plus one.
-        if in_demo or value == 0 then return value end
-        in_demo = true
-        machine.video.throttled = true
-        machine.sound.ui_mute = false
-        if ready_path ~= nil and ready_path ~= "" then
-            local file = io.open(ready_path, "w")
-            if file ~= nil then
-                file:write("ready")
-                file:close()
-            end
-        end
-        if recording and output == nil then
-            active = true
-            output = assert(io.open(record_path, "w"))
-            print("Flicky demo: recording; press Start or stop the emulator to finish")
-        end
+index_read_tap = memory:install_read_tap(DEMO_INDEX, DEMO_INDEX + 1, "flicky-demo-index", function(_, value, mask)
+    if in_demo then
         return value
-    end)
+    end
+    return demo & mask
+end)
+index_write_tap = memory:install_write_tap(DEMO_INDEX, DEMO_INDEX + 1, "flicky-demo-start", function(_, value)
+    -- Boot clears the index; Demo_Init writes the demo's number plus one.
+    if in_demo or value == 0 then
+        return value
+    end
+    in_demo = true
+    machine.video.throttled = true
+    machine.sound.ui_mute = false
+    if ready_path ~= nil and ready_path ~= "" then
+        local file = io.open(ready_path, "w")
+        if file ~= nil then
+            file:write("ready")
+            file:close()
+        end
+    end
+    if recording and output == nil then
+        active = true
+        output = assert(io.open(record_path, "w"))
+        print("Flicky demo: recording; press Start or stop the emulator to finish")
+    end
+    return value
+end)
 
 if recording then
     -- VBlank writes the pad's held and pressed bytes; the game sees them
     -- idle. Demo_ReadInput's own write passes.
-    joypad_tap = memory:install_write_tap(JOYPAD, JOYPAD + 1, "flicky-demo-joypad",
-        function(_, value, mask)
-            if mask & 0xff00 ~= 0 and demo_write then
-                demo_write = false
-                return value
-            end
-            if mask & 0xff00 ~= 0 then live = (value >> 8) & 0xff end
-            return value & ~mask & 0xffff
-        end)
+    joypad_tap = memory:install_write_tap(JOYPAD, JOYPAD + 1, "flicky-demo-joypad", function(_, value, mask)
+        if mask & 0xff00 ~= 0 and demo_write then
+            demo_write = false
+            return value
+        end
+        if mask & 0xff00 ~= 0 then
+            live = (value >> 8) & 0xff
+        end
+        return value & ~mask & 0xffff
+    end)
     -- Read once a frame, by Demo_ReadInput.
-    pointer_tap = memory:install_read_tap(STREAM_PTR, STREAM_PTR + 1, "flicky-demo-pointer",
-        function(_, value, mask)
-            if not active or mask ~= 0xffff then return value end
-            if stream == nil then stream = value end
-            local buttons = live & ~START & 0xff
-            if installed == nil or buttons ~= installed or frames == LONGEST then
-                finish_step()
-                installed = buttons
-                frames = 0
-            end
-            frames = frames + 1
-            memory:write_u8(RAM + stream, installed)
-            memory:write_u8(HOLD_FRAMES, 1)
-            demo_write = true
-            return stream
-        end)
+    pointer_tap = memory:install_read_tap(STREAM_PTR, STREAM_PTR + 1, "flicky-demo-pointer", function(_, value, mask)
+        if not active or mask ~= 0xffff then
+            return value
+        end
+        if stream == nil then
+            stream = value
+        end
+        local buttons = live & ~START & 0xff
+        if installed == nil or buttons ~= installed or frames == LONGEST then
+            finish_step()
+            installed = buttons
+            frames = 0
+        end
+        frames = frames + 1
+        memory:write_u8(RAM + stream, installed)
+        memory:write_u8(HOLD_FRAMES, 1)
+        demo_write = true
+        return stream
+    end)
     stop_subscription = emu.add_machine_stop_notifier(function()
-        if active then close_recording() end
+        if active then
+            close_recording()
+        end
     end)
 end
 

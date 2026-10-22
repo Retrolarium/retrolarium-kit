@@ -15,37 +15,24 @@ class NesVisualError(AuthoringError):
     """A metatile or palette-packet resource is malformed."""
 
 
-def _integer(
-    value: object, name: str, *, minimum: int = 0, maximum: int = 0xFFFF
-) -> int:
-    if (
-        not isinstance(value, int)
-        or isinstance(value, bool)
-        or not minimum <= value <= maximum
-    ):
+def _integer(value: object, name: str, *, minimum: int = 0, maximum: int = 0xFFFF) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or not minimum <= value <= maximum:
         raise NesVisualError(f"{name} must be an integer in {minimum}..{maximum}")
     return value
 
 
 def _string_array(value: object, name: str) -> list[str]:
-    if not isinstance(value, list) or not value or not all(
-        isinstance(item, str) and item for item in value
-    ):
+    if not isinstance(value, list) or not value or not all(isinstance(item, str) and item for item in value):
         raise NesVisualError(f"{name} must be a non-empty string array")
     if len(set(value)) != len(value):
         raise NesVisualError(f"{name} must contain unique values")
     return list(value)
 
 
-def _integer_array(
-    value: object, name: str, *, minimum: int = 0, maximum: int = 0xFFFF
-) -> list[int]:
+def _integer_array(value: object, name: str, *, minimum: int = 0, maximum: int = 0xFFFF) -> list[int]:
     if not isinstance(value, list) or not value:
         raise NesVisualError(f"{name} must be a non-empty integer array")
-    return [
-        _integer(item, f"{name}[{index}]", minimum=minimum, maximum=maximum)
-        for index, item in enumerate(value)
-    ]
+    return [_integer(item, f"{name}[{index}]", minimum=minimum, maximum=maximum) for index, item in enumerate(value)]
 
 
 def _metatile_layout(parameters: Mapping[str, object]) -> tuple[list[str], list[int], int]:
@@ -90,8 +77,7 @@ def encode_metatiles(value: Mapping[str, object], parameters: Mapping[str, objec
         if not isinstance(record, list) or len(record) != 4:
             raise NesVisualError(f"records[{record_index}] must contain four tile indexes")
         output.extend(
-            _integer(item, f"records[{record_index}][{index}]", maximum=0xFF)
-            for index, item in enumerate(record)
+            _integer(item, f"records[{record_index}][{index}]", maximum=0xFF) for index, item in enumerate(record)
         )
     return bytes(output)
 
@@ -100,30 +86,20 @@ def _packet_layout(
     parameters: Mapping[str, object],
 ) -> tuple[list[str], list[int], int, int, int]:
     names = _string_array(parameters.get("packet_names"), "packet_names")
-    capacities = _integer_array(
-        parameters.get("packet_capacities"), "packet_capacities", minimum=5
-    )
+    capacities = _integer_array(parameters.get("packet_capacities"), "packet_capacities", minimum=5)
     if len(names) != len(capacities):
         raise NesVisualError("packet_names and packet_capacities must have equal lengths")
     terminator = _integer(parameters.get("terminator", 0), "terminator", maximum=0xFF)
     day = _integer(parameters.get("day_background", 0), "day_background", maximum=0x3F)
-    night = _integer(
-        parameters.get("night_background", 0x0F), "night_background", maximum=0x3F
-    )
+    night = _integer(parameters.get("night_background", 0x0F), "night_background", maximum=0x3F)
     return names, capacities, terminator, day, night
 
 
-def decode_palette_packets(
-    payload: bytes, parameters: Mapping[str, object]
-) -> dict[str, object]:
+def decode_palette_packets(payload: bytes, parameters: Mapping[str, object]) -> dict[str, object]:
     """Decode independently named, fixed-capacity NES PPU palette packets."""
-    names, capacities, terminator, day_background, night_background = _packet_layout(
-        parameters
-    )
+    names, capacities, terminator, day_background, night_background = _packet_layout(parameters)
     if len(payload) != sum(capacities):
-        raise NesVisualError(
-            f"palette packet range has {len(payload)} bytes, expected {sum(capacities)}"
-        )
+        raise NesVisualError(f"palette packet range has {len(payload)} bytes, expected {sum(capacities)}")
     packets = []
     offset = 0
     for name, capacity in zip(names, capacities):
@@ -158,13 +134,9 @@ def decode_palette_packets(
     }
 
 
-def encode_palette_packets(
-    value: Mapping[str, object], parameters: Mapping[str, object]
-) -> bytes:
+def encode_palette_packets(value: Mapping[str, object], parameters: Mapping[str, object]) -> bytes:
     """Validate and encode named fixed-capacity NES PPU palette packets."""
-    names, capacities, terminator, day_background, night_background = _packet_layout(
-        parameters
-    )
+    names, capacities, terminator, day_background, night_background = _packet_layout(parameters)
     if set(value) != {"day_background", "night_background", "packets"}:
         raise NesVisualError("palette packet resource fields differ from its codec contract")
     if value.get("day_background") != day_background:
@@ -193,16 +165,19 @@ def encode_palette_packets(
         if not isinstance(values, list) or len(values) != expected_values:
             raise NesVisualError(f"{context}.values has the wrong length")
         colors = bytes(
-            _integer(item, f"{context}.values[{value_index}]", maximum=0x3F)
-            for value_index, item in enumerate(values)
+            _integer(item, f"{context}.values[{value_index}]", maximum=0x3F) for value_index, item in enumerate(values)
         )
-        packet_bytes = bytes(
-            (
-                address >> 8,
-                address & 0xFF,
-                (0x80 if vertical else 0) | (0x40 if repeat else 0) | length,
+        packet_bytes = (
+            bytes(
+                (
+                    address >> 8,
+                    address & 0xFF,
+                    (0x80 if vertical else 0) | (0x40 if repeat else 0) | length,
+                )
             )
-        ) + colors + bytes((terminator,))
+            + colors
+            + bytes((terminator,))
+        )
         if len(packet_bytes) != capacity:
             raise NesVisualError(f"{context} encoded size differs from its capacity")
         output.extend(packet_bytes)

@@ -21,8 +21,7 @@ from retrolarium_kit.core.build_toolchains import (
 
 # The assemblers are built by tools/build_toolchains.ps1 and not tracked; the
 # tests that run them skip in a checkout that has not built them.
-PAYLOADS = (Path(__file__).resolve().parents[2] / "src" / "retrolarium_kit" / "core"
-            / "toolchains" / "payloads")
+PAYLOADS = Path(__file__).resolve().parents[2] / "src" / "retrolarium_kit" / "core" / "toolchains" / "payloads"
 BUILT = (PAYLOADS / "windows-x86_64").is_dir() and (PAYLOADS / "linux-x86_64").is_dir()
 needs_payloads = unittest.skipUnless(BUILT, "the assemblers are not built (tools/build_toolchains.ps1)")
 
@@ -38,14 +37,13 @@ class BuildToolchainTests(unittest.TestCase):
         self.assertEqual(manifest["schema_version"], 1)
         self.assertEqual(set(manifest["suites"]), {"nes", "megadrive"})
         self.assertEqual(manifest["suites"]["nes"]["components"], ["cc65"])
-        self.assertEqual(
-            manifest["suites"]["megadrive"]["components"], ["asl", "p2bin"]
-        )
+        self.assertEqual(manifest["suites"]["megadrive"]["components"], ["asl", "p2bin"])
         # Both hosts' AS builds come from the one source archive the kit
         # ships, and every component names the script that builds it.
         sources = manifest["components"]["asl"]["corresponding_sources"]
-        self.assertEqual({source["revision"] for source in sources.values()},
-                         {"721a327a803585e2d1f59acac93cbd0768213d06"})
+        self.assertEqual(
+            {source["revision"] for source in sources.values()}, {"721a327a803585e2d1f59acac93cbd0768213d06"}
+        )
         self.assertEqual(set(sources), {"windows-x86_64", "linux-x86_64"})
         for component in manifest["components"].values():
             self.assertEqual(component["build"], "tools/toolchains/build.sh")
@@ -62,31 +60,21 @@ class BuildToolchainTests(unittest.TestCase):
     def test_materializes_verified_commands_and_as_environment(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            nes = materialize_build_toolchain(
-                "nes", cache_root=root, host="windows-x86_64"
-            )
-            sega = materialize_build_toolchain(
-                "megadrive", cache_root=root, host="windows-x86_64"
-            )
+            nes = materialize_build_toolchain("nes", cache_root=root, host="windows-x86_64")
+            sega = materialize_build_toolchain("megadrive", cache_root=root, host="windows-x86_64")
             self.assertTrue(nes.command("ca65").is_file())
             self.assertTrue(nes.command("ld65").is_file())
             self.assertTrue(sega.command("asl").is_file())
             self.assertTrue(sega.command("p2bin").is_file())
             self.assertEqual(Path(sega.environment["AS_MSGPATH"]), sega.root / "asl")
-            self.assertEqual(
-                sega.process_environment({"EXISTING": "yes"})["EXISTING"], "yes"
-            )
+            self.assertEqual(sega.process_environment({"EXISTING": "yes"})["EXISTING"], "yes")
 
     @needs_payloads
     def test_unknown_suite_and_command_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaisesRegex(BuildToolchainError, "unknown"):
-                materialize_build_toolchain(
-                    "unknown", cache_root=Path(directory), host="windows-x86_64"
-                )
-            suite = materialize_build_toolchain(
-                "nes", cache_root=Path(directory), host="windows-x86_64"
-            )
+                materialize_build_toolchain("unknown", cache_root=Path(directory), host="windows-x86_64")
+            suite = materialize_build_toolchain("nes", cache_root=Path(directory), host="windows-x86_64")
             with self.assertRaisesRegex(BuildToolchainError, "no command"):
                 suite.command("asl")
 
@@ -95,12 +83,8 @@ class BuildToolchainTests(unittest.TestCase):
     def test_windows_compilers_report_pinned_versions(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            nes = materialize_build_toolchain(
-                "nes", cache_root=root, host="windows-x86_64"
-            )
-            sega = materialize_build_toolchain(
-                "megadrive", cache_root=root, host="windows-x86_64"
-            )
+            nes = materialize_build_toolchain("nes", cache_root=root, host="windows-x86_64")
+            sega = materialize_build_toolchain("megadrive", cache_root=root, host="windows-x86_64")
             ca65 = subprocess.run(
                 [str(nes.command("ca65")), "--version"],
                 capture_output=True,
@@ -122,19 +106,14 @@ class BuildToolchainTests(unittest.TestCase):
     def test_windows_nes_suite_builds_a_binary(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            suite = materialize_build_toolchain(
-                "nes", cache_root=root / "cache", host="windows-x86_64"
-            )
+            suite = materialize_build_toolchain("nes", cache_root=root / "cache", host="windows-x86_64")
             source = root / "probe.asm"
             config = root / "probe.cfg"
             object_file = root / "probe.o"
             output = root / "probe.bin"
-            source.write_text(
-                '.segment "ROM"\n.byte $52, $4C\n', encoding="utf-8", newline="\n"
-            )
+            source.write_text('.segment "ROM"\n.byte $52, $4C\n', encoding="utf-8", newline="\n")
             config.write_text(
-                "MEMORY { ROM: start = $8000, size = $0002, file = %O; }\n"
-                "SEGMENTS { ROM: load = ROM, type = ro; }\n",
+                "MEMORY { ROM: start = $8000, size = $0002, file = %O; }\nSEGMENTS { ROM: load = ROM, type = ro; }\n",
                 encoding="utf-8",
                 newline="\n",
             )
@@ -162,9 +141,7 @@ class BuildToolchainTests(unittest.TestCase):
     def test_windows_megadrive_suite_builds_a_binary(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            suite = materialize_build_toolchain(
-                "megadrive", cache_root=root / "cache", host="windows-x86_64"
-            )
+            suite = materialize_build_toolchain("megadrive", cache_root=root / "cache", host="windows-x86_64")
             source = root / "probe.asm"
             object_file = root / "probe.p"
             output = root / "probe.bin"

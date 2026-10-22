@@ -69,8 +69,11 @@ EDITOR_KINDS = frozenset(
         "doraemon.world2-metatiles",
         "doraemon.world2-screens",
         "doraemon.world2-routes",
-        "flicky.levels", "flicky.graphics", "flicky.semantics",
-        "flicky.animations", "flicky.sound",
+        "flicky.levels",
+        "flicky.graphics",
+        "flicky.semantics",
+        "flicky.animations",
+        "flicky.sound",
         "code.analysis",
         "graphics.tile-set",
         "level.procedural",
@@ -111,8 +114,11 @@ CODECS = frozenset(
         "castle-excellent.prefix-rooms@1",
         "fds.synthesis.v1",
         "fds.music.v1",
-        "flicky.levels.v1", "flicky.graphics.v1", "flicky.semantics.v1",
-        "flicky.animations.v1", "flicky.sound.v1",
+        "flicky.levels.v1",
+        "flicky.graphics.v1",
+        "flicky.semantics.v1",
+        "flicky.animations.v1",
+        "flicky.sound.v1",
         "nes.chr-2bpp.v1",
         "castle-excellent.room-cell-visuals.v1",
         "castle-excellent.metasprite-descriptors.v1",
@@ -184,21 +190,29 @@ CAPABILITIES = frozenset(
     }
 )
 
-OPERATIONS = frozenset(
-    {"project.build", "project.launch", "project.validate", "project.verify"}
-)
+OPERATIONS = frozenset({"project.build", "project.launch", "project.validate", "project.verify"})
 
 _IDENTIFIER = re.compile(r"^[a-z][a-z0-9_.-]*$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _AUTHORING_SCHEMAS = frozenset(
-    {"retrolarium.castle-excellent-levels", "retrolarium.nes-resource-bundle",
-     "retrolarium.solomon-rooms", "retrolarium.solomon-room-art",
-     "retrolarium.solomon-sprite-frames", "retrolarium.solomon-animations",
-     "retrolarium.solomon-audio",
-     "retrolarium.solomon-presentation", "retrolarium.solomon-text",
-     "retrolarium.smb-demo", "retrolarium.castle-excellent-demo", "retrolarium.castle-excellent-screens",
-     "retrolarium.pacman-demo", "retrolarium.doraemon-text", "retrolarium.doraemon-music",
-     "retrolarium.doraemon-demo"}
+    {
+        "retrolarium.castle-excellent-levels",
+        "retrolarium.nes-resource-bundle",
+        "retrolarium.solomon-rooms",
+        "retrolarium.solomon-room-art",
+        "retrolarium.solomon-sprite-frames",
+        "retrolarium.solomon-animations",
+        "retrolarium.solomon-audio",
+        "retrolarium.solomon-presentation",
+        "retrolarium.solomon-text",
+        "retrolarium.smb-demo",
+        "retrolarium.castle-excellent-demo",
+        "retrolarium.castle-excellent-screens",
+        "retrolarium.pacman-demo",
+        "retrolarium.doraemon-text",
+        "retrolarium.doraemon-music",
+        "retrolarium.doraemon-demo",
+    }
 )
 
 
@@ -212,9 +226,7 @@ def _mapping(value: object, context: str) -> Mapping[str, Any]:
     return value
 
 
-def _check_keys(
-    value: Mapping[str, Any], context: str, allowed: set[str], required: set[str]
-) -> None:
+def _check_keys(value: Mapping[str, Any], context: str, allowed: set[str], required: set[str]) -> None:
     unknown = sorted(set(value) - allowed)
     if unknown:
         raise _error(context, f"unknown field {unknown[0]!r}")
@@ -255,7 +267,11 @@ def _string_list(value: object, context: str) -> list[str]:
 
 
 def _project_path(
-    root: Path, value: object, context: str, *, must_exist: bool = True,
+    root: Path,
+    value: object,
+    context: str,
+    *,
+    must_exist: bool = True,
     boundary: Path | None = None,
 ) -> tuple[str, Path]:
     """A portable path relative to `root`. With a `boundary` (a generated
@@ -292,9 +308,7 @@ def _portable(path: Path, root: Path) -> str:
 
 def _read_toml(path: Path) -> Mapping[str, Any]:
     if path.suffix.lower() != PROJECT_SUFFIX:
-        raise StudioProjectError(
-            f"{path}: project file must use the {PROJECT_SUFFIX} extension"
-        )
+        raise StudioProjectError(f"{path}: project file must use the {PROJECT_SUFFIX} extension")
     try:
         payload = path.read_text(encoding="utf-8")
         return _mapping(tomllib.loads(payload), str(path))
@@ -313,9 +327,7 @@ def _read_toml(path: Path) -> Mapping[str, Any]:
                 line = len(lines)
                 column = len(lines[-1]) + 1
                 rendered = rendered.removesuffix(" (at end of document)")
-        raise StudioProjectError(
-            f"{path}:{line}:{column}: {message or rendered}"
-        ) from exc
+        raise StudioProjectError(f"{path}:{line}:{column}: {message or rendered}") from exc
     except (OSError, UnicodeError) as exc:
         raise StudioProjectError(f"cannot read Studio project {path}: {exc}") from exc
 
@@ -339,10 +351,7 @@ def _replace_schema_version(payload: str, version: int) -> str:
 
     def insert(match: re.Match[str]) -> str:
         newline = match.group("newline")
-        return (
-            match.group("line") + newline
-            + f"schema_version = {version}" + newline
-        )
+        return match.group("line") + newline + f"schema_version = {version}" + newline
 
     migrated, count = schema.subn(insert, payload, count=1)
     if count != 1:
@@ -360,26 +369,17 @@ def migrate_studio_project(
 
     source_path = path.resolve()
     destination = (output or source_path).resolve()
-    if source_path.suffix.lower() != PROJECT_SUFFIX \
-            or destination.suffix.lower() != PROJECT_SUFFIX:
-        raise StudioProjectError(
-            f"Studio migrations require the {PROJECT_SUFFIX} extension"
-        )
+    if source_path.suffix.lower() != PROJECT_SUFFIX or destination.suffix.lower() != PROJECT_SUFFIX:
+        raise StudioProjectError(f"Studio migrations require the {PROJECT_SUFFIX} extension")
     if destination.parent != source_path.parent:
-        raise StudioProjectError(
-            "migration output must stay beside the source so relative paths remain valid"
-        )
+        raise StudioProjectError("migration output must stay beside the source so relative paths remain valid")
     if target_version != SCHEMA_VERSION:
-        raise StudioProjectError(
-            f"unsupported Studio migration target version {target_version}"
-        )
+        raise StudioProjectError(f"unsupported Studio migration target version {target_version}")
     try:
         payload = source_path.read_bytes().decode("utf-8")
         parsed = _mapping(tomllib.loads(payload), str(source_path))
     except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
-        raise StudioProjectError(
-            f"cannot read Studio project for migration {source_path}: {exc}"
-        ) from exc
+        raise StudioProjectError(f"cannot read Studio project for migration {source_path}: {exc}") from exc
     if parsed.get("schema") != SCHEMA:
         raise _error("project.schema", f"expected {SCHEMA!r}")
     raw_version = parsed.get("schema_version", 0)
@@ -398,9 +398,7 @@ def migrate_studio_project(
             migrated = _replace_schema_version(migrated, 1)
             version = 1
         else:
-            raise StudioProjectError(
-                f"no Studio migration is registered for version {version}"
-            )
+            raise StudioProjectError(f"no Studio migration is registered for version {version}")
     if destination != source_path or migrated != payload:
         _atomic_write(destination, migrated)
     inspection = load_studio_project(destination)
@@ -499,9 +497,7 @@ def load_studio_project(path: Path) -> dict[str, Any]:
         "name": _string(metadata["name"], "project.name"),
         "platform": _choice(metadata["platform"], "project.platform", PLATFORMS),
         "profile": _identifier(metadata["profile"], "project.profile"),
-        "source_mode": _choice(
-            metadata["source_mode"], "project.source_mode", SOURCE_MODES
-        ),
+        "source_mode": _choice(metadata["source_mode"], "project.source_mode", SOURCE_MODES),
     }
 
     source_table = _mapping(source["source"], "source")
@@ -510,8 +506,7 @@ def load_studio_project(path: Path) -> dict[str, Any]:
     boundary: Path | None = None
     if rom_mode:
         source_key = "rom"
-        _check_keys(source_table, "source", {"rom", "sha256", "repository"},
-                    {"rom", "sha256", "repository"})
+        _check_keys(source_table, "source", {"rom", "sha256", "repository"}, {"rom", "sha256", "repository"})
         repository = PurePosixPath(_string(source_table["repository"], "source.repository"))
         if not repository.parts or any(part != ".." for part in repository.parts):
             raise _error("source.repository", "must name the repository root as '../..'")
@@ -520,8 +515,7 @@ def load_studio_project(path: Path) -> dict[str, Any]:
         repository_profile(boundary)
     else:
         source_key = "manifest" if flicky_content else "disassembly"
-        _check_keys(source_table, "source", {source_key, "sha256"},
-                    {source_key, "sha256"})
+        _check_keys(source_table, "source", {source_key, "sha256"}, {source_key, "sha256"})
     source_relative, source_path = _project_path(
         root, source_table[source_key], f"source.{source_key}", boundary=boundary
     )
@@ -533,8 +527,7 @@ def load_studio_project(path: Path) -> dict[str, Any]:
             raise _error("source.rom", "the ROM differs from this revision")
         manifest_schema = "retrolarium.rom"
     elif flicky_content:
-        if normalized_metadata["platform"] != "megadrive" \
-                or normalized_metadata["profile"] != "flicky-ue.v1":
+        if normalized_metadata["platform"] != "megadrive" or normalized_metadata["profile"] != "flicky-ue.v1":
             raise _error("project", "Flicky content requires megadrive/flicky-ue.v1")
         if source_relative != "flicky-source/retrolarium-flicky-snapshot.json":
             raise _error("source.manifest", "must name the Flicky source snapshot record")
@@ -544,9 +537,12 @@ def load_studio_project(path: Path) -> dict[str, Any]:
             manifest = json.loads(source_path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as exc:
             raise _error("source.manifest", f"cannot read the snapshot record: {exc}") from exc
-        if (not isinstance(manifest, Mapping)
-                or manifest.get("schema") != "retrolarium.flicky-source-snapshot"
-                or manifest.get("schema_version") != 1 or manifest.get("canonical_sha256") != FLICKY_SHA256):
+        if (
+            not isinstance(manifest, Mapping)
+            or manifest.get("schema") != "retrolarium.flicky-source-snapshot"
+            or manifest.get("schema_version") != 1
+            or manifest.get("canonical_sha256") != FLICKY_SHA256
+        ):
             raise _error("source.manifest", "is not a canonical Flicky source snapshot record")
         manifest_schema = "retrolarium.flicky-source-snapshot"
     else:
@@ -586,8 +582,15 @@ def load_studio_project(path: Path) -> dict[str, Any]:
             tab,
             context,
             {
-                "id", "title", "kind", "group", "document", "codec",
-                "capabilities", "depends_on", "enabled",
+                "id",
+                "title",
+                "kind",
+                "group",
+                "document",
+                "codec",
+                "capabilities",
+                "depends_on",
+                "enabled",
             },
             {"id", "title", "kind", "group", "codec"},
         )
@@ -600,9 +603,7 @@ def load_studio_project(path: Path) -> dict[str, Any]:
         enabled = tab.get("enabled", True)
         if not isinstance(enabled, bool):
             raise _error(f"{context}.enabled", "must be a boolean")
-        capabilities = _string_list(
-            tab.get("capabilities", []), f"{context}.capabilities"
-        )
+        capabilities = _string_list(tab.get("capabilities", []), f"{context}.capabilities")
         unknown_capabilities = sorted(set(capabilities) - CAPABILITIES)
         if unknown_capabilities:
             raise _error(
@@ -613,9 +614,7 @@ def load_studio_project(path: Path) -> dict[str, Any]:
         document: str | None = None
         document_path: str | None = None
         if "document" in tab:
-            document, resolved_document = _project_path(
-                root, tab["document"], f"{context}.document", boundary=boundary
-            )
+            document, resolved_document = _project_path(root, tab["document"], f"{context}.document", boundary=boundary)
             document_path = str(resolved_document)
         elif kind != "code.analysis":
             raise _error(f"{context}.document", "is required for this editor kind")
@@ -644,24 +643,17 @@ def load_studio_project(path: Path) -> dict[str, Any]:
             "flicky.sound": "z80_sound_banks",
         }
         kinds = {tab["kind"] for tab in tabs}
-        if len(tabs) not in {len(expected_tabs), len(expected_tabs) + 1} \
-                or kinds != set(expected_tabs):
+        if len(tabs) not in {len(expected_tabs), len(expected_tabs) + 1} or kinds != set(expected_tabs):
             raise _error("workspace.tabs", "Flicky requires five content documents and optional Text view")
-        if len(tabs) == len(expected_tabs) + 1 and sum(
-            tab["kind"] == "flicky.semantics" for tab in tabs
-        ) != 2:
+        if len(tabs) == len(expected_tabs) + 1 and sum(tab["kind"] == "flicky.semantics" for tab in tabs) != 2:
             raise _error("workspace.tabs", "Flicky permits only one extra Text view")
         if len(tabs) == len(expected_tabs) + 1 and not any(
-            tab["id"] == "text" and tab["kind"] == "flicky.semantics"
-            for tab in tabs
+            tab["id"] == "text" and tab["kind"] == "flicky.semantics" for tab in tabs
         ):
             raise _error("workspace.tabs", "Flicky Text view must use the text tab id")
         for tab in tabs:
-            expected_document = "flicky-source/" + FLICKY_WORKSPACE_FILES[
-                expected_tabs[tab["kind"]]
-            ]
-            if tab["document"] != expected_document \
-                    or tab["codec"] != tab["kind"] + ".v1" or not tab["enabled"]:
+            expected_document = "flicky-source/" + FLICKY_WORKSPACE_FILES[expected_tabs[tab["kind"]]]
+            if tab["document"] != expected_document or tab["codec"] != tab["kind"] + ".v1" or not tab["enabled"]:
                 raise _error("workspace.tabs", "Flicky tab must use its enabled source workspace document and codec")
     enabled_ids = [tab["id"] for tab in tabs if tab["enabled"]]
     if not enabled_ids:
@@ -683,9 +675,7 @@ def load_studio_project(path: Path) -> dict[str, Any]:
         operation = _choice(value, f"operations.{name}", OPERATIONS)
         expected = f"project.{name}"
         if operation != expected:
-            raise _error(
-                f"operations.{name}", f"must use registered operation {expected!r}"
-            )
+            raise _error(f"operations.{name}", f"must use registered operation {expected!r}")
         operations[name] = operation
 
     return {
@@ -719,38 +709,33 @@ def validate_studio_project(path: Path) -> dict[str, Any]:
         "status": "valid",
         "project_file": inspection["project_file"],
         "project_id": inspection["project"]["id"],
-        "enabled_tabs": [
-            tab["id"] for tab in inspection["workspace"]["tabs"] if tab["enabled"]
-        ],
+        "enabled_tabs": [tab["id"] for tab in inspection["workspace"]["tabs"] if tab["enabled"]],
         "documents": documents,
     }
 
 
-def _require_declared_operation(
-    inspection: Mapping[str, Any], name: str
-) -> None:
+def _require_declared_operation(inspection: Mapping[str, Any], name: str) -> None:
     operations = _mapping(inspection.get("operations", {}), "inspection.operations")
     if operations.get(name) != f"project.{name}":
-        raise StudioProjectError(
-            f"Studio project does not declare the {name!r} operation"
-        )
+        raise StudioProjectError(f"Studio project does not declare the {name!r} operation")
 
 
-def _validate_editor_documents(
-    inspection: Mapping[str, Any]
-) -> list[dict[str, object]]:
+def _validate_editor_documents(inspection: Mapping[str, Any]) -> list[dict[str, object]]:
     if inspection["project"]["source_mode"] == "flicky-content":
         try:
             hashes = validate_flicky_source_snapshot(Path(inspection["project_root"]))
         except FlickyContentError as exc:
             raise StudioProjectError(str(exc)) from exc
         root = Path(inspection["project_root"])
-        by_path = {"flicky-source/" + relative: digest
-                   for key, relative in FLICKY_WORKSPACE_FILES.items()
-                   for digest in [hashes[key]]}
-        return [{"status": "valid", "document": str(document),
-                 "sha256": by_path[_portable(document, root)]}
-                for document in _unique_editor_documents(inspection)]
+        by_path = {
+            "flicky-source/" + relative: digest
+            for key, relative in FLICKY_WORKSPACE_FILES.items()
+            for digest in [hashes[key]]
+        }
+        return [
+            {"status": "valid", "document": str(document), "sha256": by_path[_portable(document, root)]}
+            for document in _unique_editor_documents(inspection)
+        ]
     documents = []
     for document_path in _unique_editor_documents(inspection):
         schema = _document_schema(document_path)
@@ -848,26 +833,26 @@ def build_studio_project(
     if inspection["project"]["source_mode"] == "rom":
         # The revision's own ROM: what its repository assembles, byte for byte.
         base_artifact = Path(inspection["source"]["rom_path"])
-        base_build = {"artifact": {"path": inspection["source"]["rom"],
-                                   "size": base_artifact.stat().st_size,
-                                   "sha256": inspection["source"]["sha256"]}}
+        base_build = {
+            "artifact": {
+                "path": inspection["source"]["rom"],
+                "size": base_artifact.stat().st_size,
+                "sha256": inspection["source"]["sha256"],
+            }
+        }
     else:
         manifest_path = Path(inspection["source"]["disassembly_path"])
-        base_build = build_project(
-            manifest_path, container=container, toolchain_cache=toolchain_cache
-        )
+        base_build = build_project(manifest_path, container=container, toolchain_cache=toolchain_cache)
         base_verification = verify_project(manifest_path)
         if base_verification["status"] != "exact":
-            raise StudioProjectError(
-                "Studio source project does not rebuild the immutable source exactly"
-            )
-        base_artifact = (
-            manifest_path.parent / base_build["artifact"]["path"]
-        ).resolve()
+            raise StudioProjectError("Studio source project does not rebuild the immutable source exactly")
+        base_artifact = (manifest_path.parent / base_build["artifact"]["path"]).resolve()
     root = Path(inspection["project_root"])
     rom_mode = inspection["project"]["source_mode"] == "rom"
     output = _studio_output(
-        root, inspection["project"]["id"], inspection["project"]["platform"],
+        root,
+        inspection["project"]["id"],
+        inspection["project"]["platform"],
         base_artifact.suffix.lower() if rom_mode else None,
     ).resolve()
     if not output.is_relative_to(root.resolve()):
@@ -875,16 +860,12 @@ def build_studio_project(
 
     editor_documents = _unique_editor_documents(inspection)
     authoring_documents = [
-        document for document in editor_documents
-        if _document_schema(document) in _AUTHORING_SCHEMAS
+        document for document in editor_documents if _document_schema(document) in _AUTHORING_SCHEMAS
     ]
-    unhandled = [
-        document for document in editor_documents if document not in authoring_documents
-    ]
+    unhandled = [document for document in editor_documents if document not in authoring_documents]
     if unhandled:
         raise StudioProjectError(
-            "Studio build has no registered writer for "
-            + ", ".join(str(document) for document in unhandled)
+            "Studio build has no registered writer for " + ", ".join(str(document) for document in unhandled)
         )
     authoring: dict[str, object] | None = None
     if len(authoring_documents) == 1:
@@ -893,9 +874,7 @@ def build_studio_project(
         authoring = build_game_documents(base_artifact, authoring_documents, output)
     else:
         output.parent.mkdir(parents=True, exist_ok=True)
-        descriptor, temporary_name = tempfile.mkstemp(
-            prefix=f".{output.name}.", suffix=".tmp", dir=output.parent
-        )
+        descriptor, temporary_name = tempfile.mkstemp(prefix=f".{output.name}.", suffix=".tmp", dir=output.parent)
         temporary = Path(temporary_name)
         try:
             with os.fdopen(descriptor, "wb") as stream:
@@ -938,7 +917,9 @@ def build_studio_project(
 
 
 def _expand_solomon_build(
-    base_artifact: Path, output: Path, documents: list[Path],
+    base_artifact: Path,
+    output: Path,
+    documents: list[Path],
 ) -> dict[str, Any] | None:
     """Rewrite a Solomon's Key build in the expanded mapper-66 layout when its
     rooms document asks for it (solomon_expansion)."""
@@ -950,15 +931,16 @@ def _expand_solomon_build(
             value = json.loads(document_path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as exc:
             raise StudioProjectError(f"cannot read {document_path}: {exc}") from exc
-        if not isinstance(value, Mapping) or value.get("schema") != "retrolarium.solomon-rooms" \
-                or value.get("expanded_rom") is not True:
+        if (
+            not isinstance(value, Mapping)
+            or value.get("schema") != "retrolarium.solomon-rooms"
+            or value.get("expanded_rom") is not True
+        ):
             continue
         _payload, profile, revision = _read_image(base_artifact, None)
         document = parse_room_document(value, profile, revision)
         expanded, report = expand_room_build(output.read_bytes(), document, revision)
-        descriptor, temporary_name = tempfile.mkstemp(
-            prefix=f".{output.name}.", suffix=".tmp", dir=output.parent
-        )
+        descriptor, temporary_name = tempfile.mkstemp(prefix=f".{output.name}.", suffix=".tmp", dir=output.parent)
         temporary = Path(temporary_name)
         try:
             with os.fdopen(descriptor, "wb") as stream:
@@ -972,7 +954,8 @@ def _expand_solomon_build(
 
 
 def _build_flicky_studio_project(
-    inspection: Mapping[str, Any], native_writer: Path | None = None,
+    inspection: Mapping[str, Any],
+    native_writer: Path | None = None,
 ) -> dict[str, Any]:
     root = Path(inspection["project_root"])
     try:
@@ -985,18 +968,20 @@ def _build_flicky_studio_project(
         "schema": "retrolarium.studio-build-result",
         "schema_version": 1,
         "status": "built",
-        "project": {"path": Path(inspection["project_file"]).name,
-                    "sha256": sha256_file(Path(inspection["project_file"]))},
+        "project": {
+            "path": Path(inspection["project_file"]).name,
+            "sha256": sha256_file(Path(inspection["project_file"])),
+        },
         "source_sha256": FLICKY_SHA256,
         "base": {"mode": "flicky-content", "sha256": FLICKY_SHA256},
         "documents": [
-            {"path": _portable(document, root),
-             "sha256": sha256_file(document)}
-            for document in editor_documents
+            {"path": _portable(document, root), "sha256": sha256_file(document)} for document in editor_documents
         ],
-        "artifact": {"path": output.relative_to(root).as_posix(),
-                     "size": output.stat().st_size,
-                     "sha256": sha256_file(output)},
+        "artifact": {
+            "path": output.relative_to(root).as_posix(),
+            "size": output.stat().st_size,
+            "sha256": sha256_file(output),
+        },
         "authoring": {"mode": "flicky-content", "documents": built["documents"]},
     }
     write_document(root / "build" / "studio-build-result.json", report)
@@ -1014,8 +999,11 @@ def verify_studio_project(path: Path) -> dict[str, Any]:
         report = json.loads(report_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise StudioProjectError(f"cannot read Studio build result: {exc}") from exc
-    if not isinstance(report, Mapping) or report.get("schema") != "retrolarium.studio-build-result" \
-            or report.get("schema_version") != 1:
+    if (
+        not isinstance(report, Mapping)
+        or report.get("schema") != "retrolarium.studio-build-result"
+        or report.get("schema_version") != 1
+    ):
         raise StudioProjectError("Studio build result has an unsupported schema")
 
     differences: list[str] = []
@@ -1026,25 +1014,24 @@ def verify_studio_project(path: Path) -> dict[str, Any]:
         differences.append("source")
 
     expected_documents = {
-        _portable(document, root): sha256_file(document)
-        for document in _unique_editor_documents(inspection)
+        _portable(document, root): sha256_file(document) for document in _unique_editor_documents(inspection)
     }
     records = report.get("documents")
     built_documents: dict[str, str] = {}
     if isinstance(records, list):
         for record in records:
-            if isinstance(record, Mapping) and isinstance(record.get("path"), str) \
-                    and isinstance(record.get("sha256"), str):
+            if (
+                isinstance(record, Mapping)
+                and isinstance(record.get("path"), str)
+                and isinstance(record.get("sha256"), str)
+            ):
                 built_documents[record["path"]] = record["sha256"]
     if built_documents != expected_documents:
         differences.append("documents")
 
     artifact_record = _mapping(report.get("artifact"), "build result artifact")
-    artifact_relative, artifact = _project_path(
-        root, artifact_record.get("path"), "build result artifact.path"
-    )
-    if artifact_record.get("size") != artifact.stat().st_size \
-            or artifact_record.get("sha256") != sha256_file(artifact):
+    artifact_relative, artifact = _project_path(root, artifact_record.get("path"), "build result artifact.path")
+    if artifact_record.get("size") != artifact.stat().st_size or artifact_record.get("sha256") != sha256_file(artifact):
         differences.append("artifact")
     if inspection["project"]["source_mode"] == "flicky-content":
         if artifact.stat().st_size != 131072:
@@ -1059,17 +1046,16 @@ def verify_studio_project(path: Path) -> dict[str, Any]:
         if inspection["project"]["source_mode"] == "rom":
             expected_size = Path(inspection["source"]["rom_path"]).stat().st_size
         else:
-            manifest = load_disassembly_manifest(
-                Path(inspection["source"]["disassembly_path"]), verify_rebuilt=False
-            )
+            manifest = load_disassembly_manifest(Path(inspection["source"]["disassembly_path"]), verify_rebuilt=False)
             expected_size = manifest["input"]["size"]
         # An expanded Solomon build adds a second 32 KiB PRG bank.
         if isinstance(report.get("expansion"), Mapping):
             expected_size += 0x8000
         if artifact.stat().st_size != expected_size:
             differences.append("artifact-size")
-    _validate_container(artifact, inspection["project"]["platform"],
-                        rom_mode=inspection["project"]["source_mode"] == "rom")
+    _validate_container(
+        artifact, inspection["project"]["platform"], rom_mode=inspection["project"]["source_mode"] == "rom"
+    )
 
     result = {
         "schema": "retrolarium.studio-verification-result",
@@ -1097,9 +1083,7 @@ def _toml_string(value: str) -> str:
 
 def _atomic_write(path: Path, payload: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
-    )
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     temporary = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:

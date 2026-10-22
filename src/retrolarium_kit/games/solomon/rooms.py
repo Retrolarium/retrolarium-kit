@@ -66,7 +66,7 @@ MIRROR_SET_CODEC = "solomon.mirror-enemy-sets.v1"
 SPECIAL_CODEC = "solomon.special-rooms.v1"
 
 
-STREAM_LIMIT = 256      # the decoders index a stream with Y
+STREAM_LIMIT = 256  # the decoders index a stream with Y
 
 
 class SolomonError(AuthoringError):
@@ -121,12 +121,8 @@ class SolomonRoomDocument:
             "rooms": [room.as_dict(self.width, self.height) for room in self.rooms],
         }
         if self.schema_version == DOCUMENT_VERSION and self.special_rooms is not None:
-            result["mirror_schedules"] = [
-                record.as_dict() for record in self.mirror_schedules
-            ]
-            result["mirror_enemy_sets"] = [
-                record.as_dict() for record in self.mirror_enemy_sets
-            ]
+            result["mirror_schedules"] = [record.as_dict() for record in self.mirror_schedules]
+            result["mirror_enemy_sets"] = [record.as_dict() for record in self.mirror_enemy_sets]
             result["special_rooms"] = self.special_rooms.as_dict()
             if self.expanded_rom:
                 result["expanded_rom"] = True
@@ -135,7 +131,8 @@ class SolomonRoomDocument:
 
 def _resource(profile: GameProfile, revision: RevisionSpec) -> ResourceSpec:
     matches = [
-        item for item in profile.resources_for(revision)
+        item
+        for item in profile.resources_for(revision)
         if item.resource_id == "room-blocks" and item.codec == BLOCK_CODEC
     ]
     if len(matches) != 1:
@@ -143,13 +140,10 @@ def _resource(profile: GameProfile, revision: RevisionSpec) -> ResourceSpec:
     return matches[0]
 
 
-def _stream_resources(
-    profile: GameProfile, revision: RevisionSpec
-) -> tuple[ResourceSpec, ResourceSpec] | None:
+def _stream_resources(profile: GameProfile, revision: RevisionSpec) -> tuple[ResourceSpec, ResourceSpec] | None:
     resources = profile.resources_for(revision)
     matches = []
-    for identifier, codec in (("enemy-streams", ENEMY_CODEC),
-                              ("item-streams", ITEM_CODEC)):
+    for identifier, codec in (("enemy-streams", ENEMY_CODEC), ("item-streams", ITEM_CODEC)):
         found = [item for item in resources if item.resource_id == identifier]
         if len(found) > 1 or (found and found[0].codec != codec):
             raise SolomonError(f"profile has invalid {identifier} resource")
@@ -183,10 +177,7 @@ def _special_resources(
 
 
 def _special_offsets(resource: ResourceSpec) -> dict[str, int]:
-    offsets = {
-        name: _integer(resource.parameters.get(name), name)
-        for name in SPECIAL_SIZES
-    }
+    offsets = {name: _integer(resource.parameters.get(name), name) for name in SPECIAL_SIZES}
     spans = []
     for name, start in offsets.items():
         end = start + SPECIAL_SIZES[name]
@@ -210,15 +201,10 @@ def _stream_geometry(resource: ResourceSpec, count: int) -> tuple[int, int, int]
 
 
 def _pointers(prg: bytes, pointer: int, count: int) -> tuple[int, ...]:
-    return tuple(
-        (prg[pointer + index] | (prg[pointer + count + index] << 8)) - 0x8000
-        for index in range(count)
-    )
+    return tuple((prg[pointer + index] | (prg[pointer + count + index] << 8)) - 0x8000 for index in range(count))
 
 
-def _decode_streams(
-    prg: bytes, resource: ResourceSpec, count: int, decoder
-) -> tuple[object, ...]:
+def _decode_streams(prg: bytes, resource: ResourceSpec, count: int, decoder) -> tuple[object, ...]:
     pointer, start, end = _stream_geometry(resource, count)
     offsets = _pointers(prg, pointer, count)
     if offsets[0] != start or any(not start <= value < end for value in offsets):
@@ -230,9 +216,7 @@ def _decode_streams(
             raise SolomonError(f"{resource.resource_id} pointers are not ordered")
         record, cursor = decoder(prg, offset, limit)
         if cursor != limit:
-            raise SolomonError(
-                f"{resource.resource_id} record {index + 1} has unowned gap bytes"
-            )
+            raise SolomonError(f"{resource.resource_id} record {index + 1} has unowned gap bytes")
         records.append(record)
     return tuple(records)
 
@@ -248,9 +232,7 @@ def _geometry(resource: ResourceSpec) -> tuple[int, int, int, int, int]:
     count = _integer(parameters.get("room_count"), "room_count", minimum=1)
     width = _integer(parameters.get("width"), "width", minimum=1)
     height = _integer(parameters.get("height"), "height", minimum=1)
-    plane_size = _integer(
-        parameters.get("bytes_per_plane"), "bytes_per_plane", minimum=1
-    )
+    plane_size = _integer(parameters.get("bytes_per_plane"), "bytes_per_plane", minimum=1)
     offset = _integer(parameters.get("prg_offset"), "prg_offset")
     if width % 8 or width * height != plane_size * 8:
         raise SolomonError("room bitplane geometry disagrees with the profile")
@@ -260,11 +242,7 @@ def _geometry(resource: ResourceSpec) -> tuple[int, int, int, int, int]:
 
 
 def _unpack_plane(data: bytes, width: int, height: int) -> list[list[int]]:
-    return [
-        [int(bool(data[(y * width + x) // 8] & (0x80 >> (x % 8))))
-         for x in range(width)]
-        for y in range(height)
-    ]
+    return [[int(bool(data[(y * width + x) // 8] & (0x80 >> (x % 8)))) for x in range(width)] for y in range(height)]
 
 
 def _pack_plane(value: object, width: int, height: int, name: str) -> bytes:
@@ -291,9 +269,7 @@ def _source_image(source: bytes, revision: RevisionSpec):
     return image
 
 
-def decode_rooms(
-    source: bytes, profile: GameProfile, revision: RevisionSpec
-) -> SolomonRoomDocument:
+def decode_rooms(source: bytes, profile: GameProfile, revision: RevisionSpec) -> SolomonRoomDocument:
     image = _source_image(source, revision)
     count, width, height, plane_size, offset = _geometry(_resource(profile, revision))
     streams = _stream_resources(profile, revision)
@@ -306,49 +282,43 @@ def decode_rooms(
     mirror_sets: tuple[object, ...] = ()
     special_rooms = None
     if streams is not None:
-        enemies = _decode_streams(
-            image.prg, streams[0], count, decode_enemy_stream
-        )
-        items = _decode_streams(
-            image.prg, streams[1], count, decode_item_stream
-        )
+        enemies = _decode_streams(image.prg, streams[0], count, decode_enemy_stream)
+        items = _decode_streams(image.prg, streams[1], count, decode_item_stream)
     if special is not None:
-        schedules = _decode_streams(
-            image.prg, special[0], 16, decode_mirror_schedule
-        )
-        mirror_sets = _decode_streams(
-            image.prg, special[1], 17, decode_mirror_enemy_set
-        )
-        special_rooms = decode_special_rooms(
-            image.prg, _special_offsets(special[2])
-        )
+        schedules = _decode_streams(image.prg, special[0], 16, decode_mirror_schedule)
+        mirror_sets = _decode_streams(image.prg, special[1], 17, decode_mirror_enemy_set)
+        special_rooms = decode_special_rooms(image.prg, _special_offsets(special[2]))
     rooms = []
     for index in range(count):
         start = offset + index * plane_size * 2
-        rooms.append(SolomonRoom(
-            index + 1,
-            image.prg[start:start + plane_size],
-            image.prg[start + plane_size:start + plane_size * 2],
-            enemies[index] if streams is not None else None,
-            items[index] if streams is not None else None,
-        ))
+        rooms.append(
+            SolomonRoom(
+                index + 1,
+                image.prg[start : start + plane_size],
+                image.prg[start + plane_size : start + plane_size * 2],
+                enemies[index] if streams is not None else None,
+                items[index] if streams is not None else None,
+            )
+        )
     return SolomonRoomDocument(
-        profile.game_id, revision.revision_id, revision.sha256,
-        width, height, tuple(rooms),
-        (DOCUMENT_VERSION if special is not None else
-         STREAM_DOCUMENT_VERSION if streams is not None else 1),
-        schedules, mirror_sets, special_rooms,
+        profile.game_id,
+        revision.revision_id,
+        revision.sha256,
+        width,
+        height,
+        tuple(rooms),
+        (DOCUMENT_VERSION if special is not None else STREAM_DOCUMENT_VERSION if streams is not None else 1),
+        schedules,
+        mirror_sets,
+        special_rooms,
     )
 
 
-def parse_room_document(
-    document: object, profile: GameProfile, revision: RevisionSpec
-) -> SolomonRoomDocument:
+def parse_room_document(document: object, profile: GameProfile, revision: RevisionSpec) -> SolomonRoomDocument:
     if not isinstance(document, Mapping):
         raise SolomonError("Solomon room document must be an object")
     version = document.get("schema_version")
-    if type(version) is not int or version not in (1, STREAM_DOCUMENT_VERSION,
-                                                   DOCUMENT_VERSION):
+    if type(version) is not int or version not in (1, STREAM_DOCUMENT_VERSION, DOCUMENT_VERSION):
         raise SolomonError("unsupported Solomon room document schema version")
     expected = {
         "schema": DOCUMENT_SCHEMA,
@@ -370,8 +340,7 @@ def parse_room_document(
     if set(document) != root_fields:
         raise SolomonError("Solomon room document has invalid fields")
     count, width, height, _, _ = _geometry(_resource(profile, revision))
-    if version >= STREAM_DOCUMENT_VERSION \
-            and _stream_resources(profile, revision) is None:
+    if version >= STREAM_DOCUMENT_VERSION and _stream_resources(profile, revision) is None:
         raise SolomonError("Solomon room streams need a version-2 profile")
     if version == DOCUMENT_VERSION and _special_resources(profile, revision) is None:
         raise SolomonError("mirror tables need a version-3 profile")
@@ -389,15 +358,23 @@ def parse_room_document(
             raise SolomonError(f"room {index + 1} has invalid fields")
         if type(raw.get("number")) is not int or raw["number"] != index + 1:
             raise SolomonError(f"room {index + 1} has an invalid number")
-        rooms.append(SolomonRoom(
-            index + 1,
-            _pack_plane(raw["brown"], width, height, f"room {index + 1}.brown"),
-            _pack_plane(raw["white"], width, height, f"room {index + 1}.white"),
-            (parse_enemy_stream(raw["enemy_stream"], f"room {index + 1}.enemy_stream")
-             if version >= STREAM_DOCUMENT_VERSION else None),
-            (parse_item_stream(raw["item_stream"], f"room {index + 1}.item_stream")
-             if version >= STREAM_DOCUMENT_VERSION else None),
-        ))
+        rooms.append(
+            SolomonRoom(
+                index + 1,
+                _pack_plane(raw["brown"], width, height, f"room {index + 1}.brown"),
+                _pack_plane(raw["white"], width, height, f"room {index + 1}.white"),
+                (
+                    parse_enemy_stream(raw["enemy_stream"], f"room {index + 1}.enemy_stream")
+                    if version >= STREAM_DOCUMENT_VERSION
+                    else None
+                ),
+                (
+                    parse_item_stream(raw["item_stream"], f"room {index + 1}.item_stream")
+                    if version >= STREAM_DOCUMENT_VERSION
+                    else None
+                ),
+            )
+        )
     schedules: tuple[MirrorSchedule, ...] = ()
     mirror_sets: tuple[MirrorEnemySet, ...] = ()
     special_rooms = None
@@ -408,15 +385,24 @@ def parse_room_document(
             raise SolomonError("mirror needs 16 schedules")
         if not isinstance(raw_sets, list) or len(raw_sets) != 17:
             raise SolomonError("mirror needs 17 enemy sets")
-        schedules = tuple(parse_mirror_schedule(record, f"mirror_schedules[{index}]")
-                          for index, record in enumerate(raw_schedules))
-        mirror_sets = tuple(parse_mirror_enemy_set(record, f"mirror_enemy_sets[{index}]")
-                            for index, record in enumerate(raw_sets))
+        schedules = tuple(
+            parse_mirror_schedule(record, f"mirror_schedules[{index}]") for index, record in enumerate(raw_schedules)
+        )
+        mirror_sets = tuple(
+            parse_mirror_enemy_set(record, f"mirror_enemy_sets[{index}]") for index, record in enumerate(raw_sets)
+        )
         special_rooms = parse_special_rooms(document["special_rooms"])
     return SolomonRoomDocument(
-        profile.game_id, revision.revision_id, revision.sha256,
-        width, height, tuple(rooms), version,
-        schedules, mirror_sets, special_rooms,
+        profile.game_id,
+        revision.revision_id,
+        revision.sha256,
+        width,
+        height,
+        tuple(rooms),
+        version,
+        schedules,
+        mirror_sets,
+        special_rooms,
         document.get("expanded_rom") is True,
     )
 
@@ -446,26 +432,22 @@ def _stream_changes(
     capacity = end - start
     used = len(encoded)
     if used > capacity:
-        raise SolomonError(
-            f"{resource.resource_id} needs {used} bytes; arena capacity is {capacity}"
-        )
-    pointer_bytes = (
-        bytes(value & 0xFF for value in offsets)
-        + bytes(value >> 8 for value in offsets)
-    )
-    encoded.extend(image.prg[start + used:end])
+        raise SolomonError(f"{resource.resource_id} needs {used} bytes; arena capacity is {capacity}")
+    pointer_bytes = bytes(value & 0xFF for value in offsets) + bytes(value >> 8 for value in offsets)
+    encoded.extend(image.prg[start + used : end])
     base = len(image.header) + len(image.trainer)
     changes = []
     for offset, replacement in ((pointer, pointer_bytes), (start, bytes(encoded))):
         file_offset = base + offset
-        changes.append(Change(
-            AddressRange(Address("file", file_offset), len(replacement)),
-            source[file_offset:file_offset + len(replacement)],
-            replacement,
-            Provenance(source_sha256, resource.resource_id, "encode"),
-        ))
-    return changes, {"used_bytes": used, "capacity_bytes": capacity,
-                     "free_bytes": capacity - used}
+        changes.append(
+            Change(
+                AddressRange(Address("file", file_offset), len(replacement)),
+                source[file_offset : file_offset + len(replacement)],
+                replacement,
+                Provenance(source_sha256, resource.resource_id, "encode"),
+            )
+        )
+    return changes, {"used_bytes": used, "capacity_bytes": capacity, "free_bytes": capacity - used}
 
 
 def build_rooms(
@@ -475,31 +457,33 @@ def build_rooms(
     revision: RevisionSpec,
 ) -> tuple[bytes, dict[str, object]]:
     if (document.game_id, document.revision_id, document.source_sha256) != (
-        profile.game_id, revision.revision_id, revision.sha256
+        profile.game_id,
+        revision.revision_id,
+        revision.sha256,
     ):
         raise SolomonError("Solomon room document identity mismatch")
     image = _source_image(source, revision)
     count, width, height, plane_size, offset = _geometry(_resource(profile, revision))
     if (len(document.rooms), document.width, document.height) != (count, width, height):
         raise SolomonError("Solomon room document geometry mismatch")
-    if document.schema_version not in (1, STREAM_DOCUMENT_VERSION,
-                                      DOCUMENT_VERSION):
+    if document.schema_version not in (1, STREAM_DOCUMENT_VERSION, DOCUMENT_VERSION):
         raise SolomonError("unsupported Solomon room document schema version")
     encoded = bytearray()
     for index, room in enumerate(document.rooms):
-        if room.number != index + 1 or len(room.brown) != plane_size \
-                or len(room.white) != plane_size:
+        if room.number != index + 1 or len(room.brown) != plane_size or len(room.white) != plane_size:
             raise SolomonError(f"room {index + 1} has invalid plane size or number")
         encoded.extend(room.brown)
         encoded.extend(room.white)
     file_offset = len(image.header) + len(image.trainer) + offset
-    expected = source[file_offset:file_offset + len(encoded)]
-    changes = [Change(
-        AddressRange(Address("file", file_offset), len(encoded)),
-        expected,
-        bytes(encoded),
-        Provenance(revision.sha256, "room-blocks", "encode"),
-    )]
+    expected = source[file_offset : file_offset + len(encoded)]
+    changes = [
+        Change(
+            AddressRange(Address("file", file_offset), len(encoded)),
+            expected,
+            bytes(encoded),
+            Provenance(revision.sha256, "room-blocks", "encode"),
+        )
+    ]
     stream_reports: dict[str, dict[str, int]] = {}
     if document.schema_version >= STREAM_DOCUMENT_VERSION and document.expanded_rom:
         # The streams go to bank 0 of the expanded image (expand_room_build);
@@ -507,8 +491,10 @@ def build_rooms(
         for room in document.rooms:
             if room.item_stream is None or room.enemy_stream is None:
                 raise SolomonError("expanded rooms need item and enemy streams")
-            for label, stream in (("item", encode_item_stream(room.item_stream)),
-                                  ("enemy", encode_enemy_stream(room.enemy_stream))):
+            for label, stream in (
+                ("item", encode_item_stream(room.item_stream)),
+                ("enemy", encode_enemy_stream(room.enemy_stream)),
+            ):
                 if len(stream) > STREAM_LIMIT:
                     raise SolomonError(
                         f"room {room.number} {label} stream is {len(stream)} bytes; "
@@ -519,33 +505,30 @@ def build_rooms(
         if resources is None:
             raise SolomonError("Solomon room streams need a version-2 profile")
         for key, resource, records, encoder in (
-            ("enemy_streams", resources[0],
-             [room.enemy_stream for room in document.rooms], encode_enemy_stream),
-            ("item_streams", resources[1],
-             [room.item_stream for room in document.rooms], encode_item_stream),
+            ("enemy_streams", resources[0], [room.enemy_stream for room in document.rooms], encode_enemy_stream),
+            ("item_streams", resources[1], [room.item_stream for room in document.rooms], encode_item_stream),
         ):
             if any(record is None for record in records):
                 raise SolomonError(f"{key} are missing from a version-2 document")
-            stream_changes, report = _stream_changes(
-                source, image, resource, records, encoder, revision.sha256
-            )
+            stream_changes, report = _stream_changes(source, image, resource, records, encoder, revision.sha256)
             changes.extend(stream_changes)
             stream_reports[key] = report
     if document.schema_version == DOCUMENT_VERSION:
         resources = _special_resources(profile, revision)
-        if resources is None or document.special_rooms is None \
-                or len(document.mirror_schedules) != 16 \
-                or len(document.mirror_enemy_sets) != 17:
+        if (
+            resources is None
+            or document.special_rooms is None
+            or len(document.mirror_schedules) != 16
+            or len(document.mirror_enemy_sets) != 17
+        ):
             raise SolomonError("mirror and special-room records are incomplete")
-        mirror_records = [("mirror_schedules", resources[0],
-                           list(document.mirror_schedules), encode_mirror_schedule)]
+        mirror_records = [("mirror_schedules", resources[0], list(document.mirror_schedules), encode_mirror_schedule)]
         if not document.expanded_rom:
-            mirror_records.append(("mirror_enemy_sets", resources[1],
-                                   list(document.mirror_enemy_sets), encode_mirror_enemy_set))
-        for key, resource, records, encoder in mirror_records:
-            mirror_changes, report = _stream_changes(
-                source, image, resource, records, encoder, revision.sha256
+            mirror_records.append(
+                ("mirror_enemy_sets", resources[1], list(document.mirror_enemy_sets), encode_mirror_enemy_set)
             )
+        for key, resource, records, encoder in mirror_records:
+            mirror_changes, report = _stream_changes(source, image, resource, records, encoder, revision.sha256)
             changes.extend(mirror_changes)
             stream_reports[key] = report
         if document.expanded_rom:
@@ -559,12 +542,14 @@ def build_rooms(
                 raise SolomonError(str(exc)) from exc
             for address, replacement in writes:
                 file_offset = base + address - 0x8000
-                changes.append(Change(
-                    AddressRange(Address("file", file_offset), len(replacement)),
-                    source[file_offset:file_offset + len(replacement)],
-                    replacement,
-                    Provenance(revision.sha256, resources[1].resource_id, "encode"),
-                ))
+                changes.append(
+                    Change(
+                        AddressRange(Address("file", file_offset), len(replacement)),
+                        source[file_offset : file_offset + len(replacement)],
+                        replacement,
+                        Provenance(revision.sha256, resources[1].resource_id, "encode"),
+                    )
+                )
             stream_reports["mirror_enemy_sets"] = {
                 "used_bytes": sum(map(len, sets)),
                 "capacity_bytes": mirror_set_capacity(revision.revision_id),
@@ -575,15 +560,15 @@ def build_rooms(
         for name, replacement in encoded_special.items():
             prg_offset = offsets[name]
             file_offset = base + prg_offset
-            changes.append(Change(
-                AddressRange(Address("file", file_offset), len(replacement)),
-                source[file_offset:file_offset + len(replacement)],
-                replacement,
-                Provenance(revision.sha256, resources[2].resource_id, "encode"),
-            ))
-        stream_reports["special_rooms"] = {
-            "encoded_bytes": sum(map(len, encoded_special.values()))
-        }
+            changes.append(
+                Change(
+                    AddressRange(Address("file", file_offset), len(replacement)),
+                    source[file_offset : file_offset + len(replacement)],
+                    replacement,
+                    Provenance(revision.sha256, resources[2].resource_id, "encode"),
+                )
+            )
+        stream_reports["special_rooms"] = {"encoded_bytes": sum(map(len, encoded_special.values()))}
     output = BuildPlan(revision.sha256, ChangeSet(tuple(changes))).apply(source)
     if document.expanded_rom:
         stream_reports["expanded_rom"] = True
@@ -604,7 +589,9 @@ def build_rooms(
 
 
 def expand_room_build(
-    image: bytes, document: SolomonRoomDocument, revision: RevisionSpec,
+    image: bytes,
+    document: SolomonRoomDocument,
+    revision: RevisionSpec,
 ) -> tuple[bytes, dict[str, object]]:
     """The expanded mapper-66 image of a build whose rooms are expanded."""
     if not document.expanded_rom:

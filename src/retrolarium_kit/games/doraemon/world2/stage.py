@@ -49,10 +49,8 @@ def encode_stage(value: Any) -> tuple[bytes, bytes]:
         raise DoraemonWorld2StageError("World 2 stage needs three chapter starts")
     if not isinstance(tokens, list) or len(tokens) != SEQUENCE_SIZE:
         raise DoraemonWorld2StageError("World 2 stage needs 229 tokens")
-    if any(not isinstance(item, int) or isinstance(item, bool)
-           or not 0 <= item < SEQUENCE_SIZE for item in starts):
+    if any(not isinstance(item, int) or isinstance(item, bool) or not 0 <= item < SEQUENCE_SIZE for item in starts):
         raise DoraemonWorld2StageError("World 2 chapter starts are invalid")
-    if any(not isinstance(item, int) or isinstance(item, bool)
-           or not 0 <= item <= 0xFF for item in tokens):
+    if any(not isinstance(item, int) or isinstance(item, bool) or not 0 <= item <= 0xFF for item in tokens):
         raise DoraemonWorld2StageError("World 2 stage tokens are invalid")
     return bytes(tokens), bytes(starts)

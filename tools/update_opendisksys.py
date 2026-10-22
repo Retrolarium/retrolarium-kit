@@ -28,8 +28,7 @@ IMAGE_SIZE = 0x2000
 
 
 def git(checkout: Path, *arguments: str) -> str:
-    return subprocess.run(["git", *arguments], cwd=checkout, capture_output=True, text=True,
-                          check=True).stdout.strip()
+    return subprocess.run(["git", *arguments], cwd=checkout, capture_output=True, text=True, check=True).stdout.strip()
 
 
 def main() -> int:
@@ -43,8 +42,9 @@ def main() -> int:
     commit = git(checkout, "rev-parse", "HEAD")
     with tempfile.TemporaryDirectory(prefix="opendisksys-") as temp:
         image_path = Path(temp) / "opendisksys.bin"
-        result = subprocess.run([arguments.asm6f, "freedisksys.asm", str(image_path)], cwd=checkout,
-                                capture_output=True, text=True)
+        result = subprocess.run(
+            [arguments.asm6f, "freedisksys.asm", str(image_path)], cwd=checkout, capture_output=True, text=True
+        )
         if result.returncode != 0 or not image_path.is_file():
             sys.exit("asm6f failed:\n" + result.stdout + result.stderr)
         image = image_path.read_bytes()
@@ -67,8 +67,7 @@ def main() -> int:
         "size": len(image),
         "sha256": hashlib.sha256(image).hexdigest(),
     }
-    (FIRMWARE / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8",
-                                            newline="\n")
+    (FIRMWARE / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8", newline="\n")
     print(f"OpenDiskSysROM {commit[:12]} -> {FIRMWARE}")
     return 0
 

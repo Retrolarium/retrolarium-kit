@@ -45,8 +45,7 @@ class ProfileTablesTests(unittest.TestCase):
         self.assertIn(f"japan-v10 {name}", problems[0])
 
     def test_a_revision_not_built_is_named(self) -> None:
-        spec = {"revisions": {"x": {"engine": "e", "dbg": "build/none.dbg", "offsets": "image"}},
-                "engines": {"e": []}}
+        spec = {"revisions": {"x": {"engine": "e", "dbg": "build/none.dbg", "offsets": "image"}}, "engines": {"e": []}}
         with self.assertRaisesRegex(profile_tables.ProfileTablesError, "build the revision first"):
             profile_tables.resolve_all(self.game, spec)
 

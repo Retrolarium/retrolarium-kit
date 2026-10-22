@@ -49,17 +49,14 @@ class TextField:
 
 
 def _integer(value: object, name: str, *, minimum: int = 0, maximum: int = 0xFF) -> int:
-    if (not isinstance(value, int) or isinstance(value, bool)
-            or value < minimum or value > maximum):
+    if not isinstance(value, int) or isinstance(value, bool) or value < minimum or value > maximum:
         raise NesTextError(f"{name} must be an integer in {minimum}..{maximum}")
     return value
 
 
 def parse_encoding(parameters: Mapping[str, object]) -> TextEncoding:
     value = parameters.get("encoding")
-    if not isinstance(value, Mapping) or set(value) != {
-        "characters", "codes", "case_fold", "padding"
-    }:
+    if not isinstance(value, Mapping) or set(value) != {"characters", "codes", "case_fold", "padding"}:
         raise NesTextError("text encoding must define characters, codes, case_fold and padding")
     characters = value.get("characters")
     codes = value.get("codes")
@@ -70,10 +67,7 @@ def parse_encoding(parameters: Mapping[str, object]) -> TextEncoding:
         raise NesTextError("text encoding characters must be unique")
     if not isinstance(codes, list) or len(codes) != len(characters):
         raise NesTextError("text encoding codes must match the character count")
-    normalized_codes = tuple(
-        _integer(item, f"text encoding codes[{index}]")
-        for index, item in enumerate(codes)
-    )
+    normalized_codes = tuple(_integer(item, f"text encoding codes[{index}]") for index, item in enumerate(codes))
     if len(set(normalized_codes)) != len(normalized_codes):
         raise NesTextError("text encoding codes must be unique")
     if case_fold not in ("none", "upper", "lower"):
@@ -92,9 +86,7 @@ def parse_fields(parameters: Mapping[str, object]) -> tuple[TextField, ...]:
     keys: set[str] = set()
     occupied: set[int] = set()
     for index, item in enumerate(value):
-        if not isinstance(item, Mapping) or set(item) != {
-            "key", "label", "file_offset", "width"
-        }:
+        if not isinstance(item, Mapping) or set(item) != {"key", "label", "file_offset", "width"}:
             raise NesTextError(f"text fields[{index}] has the wrong shape")
         key = item.get("key")
         label = item.get("label")
@@ -105,12 +97,15 @@ def parse_fields(parameters: Mapping[str, object]) -> tuple[TextField, ...]:
         if not isinstance(label, str) or not label:
             raise NesTextError(f"text fields[{index}].label must be non-empty")
         offset = _integer(
-            item.get("file_offset"), f"text fields[{index}].file_offset",
+            item.get("file_offset"),
+            f"text fields[{index}].file_offset",
             maximum=0x7FFFFFFF,
         )
         width = _integer(
-            item.get("width"), f"text fields[{index}].width",
-            minimum=1, maximum=0x10000,
+            item.get("width"),
+            f"text fields[{index}].width",
+            minimum=1,
+            maximum=0x10000,
         )
         positions = set(range(offset, offset + width))
         if occupied.intersection(positions):
@@ -148,28 +143,26 @@ def decode_text(payload: bytes, encoding: TextEncoding, name: str) -> str:
     try:
         rendered = "".join(encoding.decode_map[value] for value in payload)
     except KeyError as exc:
-        raise NesTextError(
-            f"{name} contains unmapped glyph ${exc.args[0]:02X}"
-        ) from exc
+        raise NesTextError(f"{name} contains unmapped glyph ${exc.args[0]:02X}") from exc
     padding_character = encoding.decode_map[encoding.padding]
     return rendered.rstrip(padding_character)
 
 
-def decode_text_fields(
-    source: bytes, parameters: Mapping[str, object]
-) -> dict[str, object]:
+def decode_text_fields(source: bytes, parameters: Mapping[str, object]) -> dict[str, object]:
     encoding = parse_encoding(parameters)
     messages = []
     for field in parse_fields(parameters):
         payload = source[field.file_offset : field.file_offset + field.width]
         if len(payload) != field.width:
             raise NesTextError(f"text field {field.key} exceeds the source image")
-        messages.append({
-            "key": field.key,
-            "label": field.label,
-            "width": field.width,
-            "text": decode_text(payload, encoding, field.key),
-        })
+        messages.append(
+            {
+                "key": field.key,
+                "label": field.label,
+                "width": field.width,
+                "text": decode_text(payload, encoding, field.key),
+            }
+        )
     return {"encoding": encoding.as_dict(), "messages": messages}
 
 
@@ -187,16 +180,14 @@ def encode_text_fields(
         raise NesTextError("text message count differs from the profile")
     result = []
     for field, message in zip(fields, messages):
-        if not isinstance(message, Mapping) or set(message) != {
-            "key", "label", "width", "text"
-        }:
+        if not isinstance(message, Mapping) or set(message) != {"key", "label", "width", "text"}:
             raise NesTextError(f"text message {field.key} has the wrong shape")
-        if (message.get("key"), message.get("label"), message.get("width")) != (
-            field.key, field.label, field.width
-        ):
+        if (message.get("key"), message.get("label"), message.get("width")) != (field.key, field.label, field.width):
             raise NesTextError(f"text message {field.key} metadata differs from the profile")
-        result.append((
-            field.file_offset,
-            encode_text(message.get("text"), field.width, encoding, field.key),
-        ))
+        result.append(
+            (
+                field.file_offset,
+                encode_text(message.get("text"), field.width, encoding, field.key),
+            )
+        )
     return tuple(result)

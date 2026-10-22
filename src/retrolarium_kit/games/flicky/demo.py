@@ -18,8 +18,16 @@ DEMO_SOURCE = "game/screens/attract_mode.s"
 DEMO_COUNT = 4
 # The table of the round each demo plays, 1-based.
 ROUND_TABLE_LABEL = "Demo_RoundIndexTable:"
-BUTTONS = (("A", 0x40), ("B", 0x10), ("C", 0x20), ("START", 0x80),
-           ("UP", 0x01), ("DOWN", 0x02), ("LEFT", 0x04), ("RIGHT", 0x08))
+BUTTONS = (
+    ("A", 0x40),
+    ("B", 0x10),
+    ("C", 0x20),
+    ("START", 0x80),
+    ("UP", 0x01),
+    ("DOWN", 0x02),
+    ("LEFT", 0x04),
+    ("RIGHT", 0x08),
+)
 FIRST_LABEL = "Demo_InputStream0:"
 LAST_LABEL = "Demo_InputStream3_End:"
 LABEL_RE = re.compile(r"(?m)^([A-Za-z_][A-Za-z0-9_]*):")
@@ -72,9 +80,10 @@ def _streams(source: str, source_root: Path) -> list[bytes]:
     start, end = _region(source)
     region = source[start:end]
     labels = list(LABEL_RE.finditer(region))
-    spans = {match.group(1): (match.start(), labels[index + 1].start()
-                              if index + 1 < len(labels) else len(region))
-             for index, match in enumerate(labels)}
+    spans = {
+        match.group(1): (match.start(), labels[index + 1].start() if index + 1 < len(labels) else len(region))
+        for index, match in enumerate(labels)
+    }
     streams = []
     for index in range(DEMO_COUNT):
         label = f"Demo_InputStream{index}"
@@ -86,8 +95,9 @@ def _streams(source: str, source_root: Path) -> list[bytes]:
             raise ValueError(f"Flicky demo stream is not (buttons, hold) pairs: {label}")
         streams.append(stream)
     for label, (first, last) in spans.items():
-        if not label.startswith("Demo_InputStream") \
-                or (label.endswith("_End") and region[first:last].split(":", 1)[1].strip()):
+        if not label.startswith("Demo_InputStream") or (
+            label.endswith("_End") and region[first:last].split(":", 1)[1].strip()
+        ):
             raise ValueError(f"unexpected data in the Flicky demo block: {label}")
     return streams
 
@@ -98,8 +108,7 @@ def button_names(mask: int) -> list[str]:
 
 def button_mask(names: list[str]) -> int:
     bits = dict(BUTTONS)
-    if not isinstance(names, list) or any(name not in bits for name in names) \
-            or len(set(names)) != len(names):
+    if not isinstance(names, list) or any(name not in bits for name in names) or len(set(names)) != len(names):
         raise ValueError("Flicky demo buttons are A, B, C, START, UP, DOWN, LEFT and RIGHT")
     mask = 0
     for name in names:
@@ -108,8 +117,10 @@ def button_mask(names: list[str]) -> int:
 
 
 def decode_steps(stream: bytes) -> list[dict[str, object]]:
-    return [{"frames": stream[index + 1] or 256, "buttons": button_names(stream[index])}
-            for index in range(0, len(stream), 2)]
+    return [
+        {"frames": stream[index + 1] or 256, "buttons": button_names(stream[index])}
+        for index in range(0, len(stream), 2)
+    ]
 
 
 def encode_steps(steps: list[dict[str, object]]) -> bytes:
@@ -126,7 +137,7 @@ def demo_rounds(source: str) -> tuple[int, ...]:
     """The round each demo plays, from the source's round table."""
     for line in source.splitlines():
         if line.startswith(ROUND_TABLE_LABEL):
-            data = DATA_RE.match(line[len(ROUND_TABLE_LABEL):])
+            data = DATA_RE.match(line[len(ROUND_TABLE_LABEL) :])
             if data and data.group(1).lower() == "b":
                 rounds = tuple(_number(token) for token in data.group(2).split(","))
                 if len(rounds) == DEMO_COUNT:
@@ -138,9 +149,16 @@ def demo_rounds(source: str) -> tuple[int, ...]:
 def export_attract_demos(source_root: Path) -> list[dict[str, object]]:
     source = (source_root / "src" / DEMO_SOURCE).read_text(encoding="utf-8")
     rounds = demo_rounds(source)
-    return [{"id": f"demo{index}", "source": DEMO_SOURCE, "round": rounds[index],
-             "baseline_bytes": list(stream), "steps": decode_steps(stream)}
-            for index, stream in enumerate(_streams(source, source_root))]
+    return [
+        {
+            "id": f"demo{index}",
+            "source": DEMO_SOURCE,
+            "round": rounds[index],
+            "baseline_bytes": list(stream),
+            "steps": decode_steps(stream),
+        }
+        for index, stream in enumerate(_streams(source, source_root))
+    ]
 
 
 def capacity_bytes(records: list[dict[str, object]]) -> int:
@@ -158,8 +176,7 @@ def validate_attract_demos(document: dict, source_root: Path) -> None:
     used = 0
     for record, expected in zip(records, baseline):
         if not isinstance(record, dict) or any(
-            record.get(key) != expected[key]
-            for key in ("id", "source", "round", "baseline_bytes")
+            record.get(key) != expected[key] for key in ("id", "source", "round", "baseline_bytes")
         ):
             raise ValueError("Flicky attract demo identity or baseline changed")
         steps = record.get("steps")
@@ -174,7 +191,7 @@ def validate_attract_demos(document: dict, source_root: Path) -> None:
 def _data_lines(label: str, payload: bytes) -> list[str]:
     lines = []
     for index in range(0, len(payload), 16):
-        values = ", ".join(f"${value:02X}" for value in payload[index:index + 16])
+        values = ", ".join(f"${value:02X}" for value in payload[index : index + 16])
         prefix = f"{label}:  dc.b    " if index == 0 and label else "                dc.b    "
         lines.append(prefix + values)
     return lines
@@ -199,8 +216,7 @@ def stage_attract_demos(document: dict, source_root: Path, staged_source: Path) 
         return
     records = document["attract_demos"]
     streams = [encode_steps(record["steps"]) for record in records]
-    if all(stream == bytes(record["baseline_bytes"])
-           for stream, record in zip(streams, records)):
+    if all(stream == bytes(record["baseline_bytes"]) for stream, record in zip(streams, records)):
         return
     path = staged_source / DEMO_SOURCE
     source = path.read_text(encoding="utf-8")

@@ -10,7 +10,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from helpers import game_repository
 from retrolarium_kit.games.flicky.title_layout import (
-    SOURCE, export_title_layout, stage_title_layout, validate_title_layout,
+    SOURCE,
+    export_title_layout,
+    stage_title_layout,
+    validate_title_layout,
 )
 
 

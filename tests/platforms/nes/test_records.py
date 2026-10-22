@@ -29,7 +29,7 @@ PARAMETERS = {
 def runs_image(runs: list[tuple[int, bytes]]) -> bytes:
     image = bytearray(IMAGE)
     for offset, data in runs:
-        image[offset:offset + len(data)] = data
+        image[offset : offset + len(data)] = data
     return bytes(image)
 
 
@@ -64,11 +64,28 @@ class RecordTableTests(unittest.TestCase):
             encode_records(document, shared, "things")
 
     def test_ranges_choices_none_and_unique(self) -> None:
-        parameters = {"records": 3, "record_labels": ["a", "b", "c"], "tables": [{"file_offset": 0, "fields": [
-            {"name": "route", "label": "Route", "maximum": 8, "none": 255},
-            {"name": "plays", "label": "Plays", "unique": True,
-             "choices": [{"value": 1, "label": "one"}, {"value": 4, "label": "four"}, {"value": 7, "label": "seven"}]},
-        ]}]}
+        parameters = {
+            "records": 3,
+            "record_labels": ["a", "b", "c"],
+            "tables": [
+                {
+                    "file_offset": 0,
+                    "fields": [
+                        {"name": "route", "label": "Route", "maximum": 8, "none": 255},
+                        {
+                            "name": "plays",
+                            "label": "Plays",
+                            "unique": True,
+                            "choices": [
+                                {"value": 1, "label": "one"},
+                                {"value": 4, "label": "four"},
+                                {"value": 7, "label": "seven"},
+                            ],
+                        },
+                    ],
+                }
+            ],
+        }
         image = bytes((255, 1, 2, 4, 8, 7))
         document = decode_records(image, parameters, "routes")
         self.assertEqual([None, 2, 8], [row["route"] for row in document["records"]])

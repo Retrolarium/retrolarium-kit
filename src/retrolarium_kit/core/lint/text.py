@@ -21,9 +21,7 @@ import subprocess
 
 from retrolarium_kit.core.lint.issues import Issue, write_text
 
-TEXT_SUFFIXES = frozenset(
-    {".asm", ".cfg", ".inc", ".java", ".json", ".lua", ".md", ".mk", ".py", ".s", ".txt"}
-)
+TEXT_SUFFIXES = frozenset({".asm", ".cfg", ".inc", ".java", ".json", ".lua", ".md", ".mk", ".py", ".s", ".txt"})
 TEXT_NAMES = frozenset({".editorconfig", ".gitattributes", ".gitignore", "Makefile"})
 ALWAYS_SKIPPED = (".git", ".retrolarium", "build", "hack")
 
@@ -39,7 +37,10 @@ def _candidates(root: Path) -> list[Path]:
     if (root / ".git").exists():
         listed = subprocess.run(
             ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-            cwd=root, capture_output=True, check=False)
+            cwd=root,
+            capture_output=True,
+            check=False,
+        )
         if listed.returncode == 0:
             return [root / os.fsdecode(raw) for raw in listed.stdout.split(b"\0") if raw]
     return list(root.rglob("*"))

@@ -42,14 +42,13 @@ class MirrorSchedule:
     loop_phase: bytes
 
     def as_dict(self) -> dict[str, object]:
-        return {"initial_phase": list(self.initial_phase),
-                "loop_phase": list(self.loop_phase)}
+        return {"initial_phase": list(self.initial_phase), "loop_phase": list(self.loop_phase)}
 
 
 def decode_mirror_schedule(prg: bytes, start: int, limit: int) -> tuple[MirrorSchedule, int]:
     if limit - start != 8:
         raise SolomonSpecialError("mirror schedule must occupy eight bytes")
-    return MirrorSchedule(prg[start:start + 4], prg[start + 4:limit]), limit
+    return MirrorSchedule(prg[start : start + 4], prg[start + 4 : limit]), limit
 
 
 def parse_mirror_schedule(value: object, name: str) -> MirrorSchedule:
@@ -75,13 +74,10 @@ class MirrorEnemySet:
     loop_offset: int
 
     def as_dict(self) -> dict[str, object]:
-        return {"enemy_types": list(self.enemy_types),
-                "loop_offset": self.loop_offset}
+        return {"enemy_types": list(self.enemy_types), "loop_offset": self.loop_offset}
 
 
-def decode_mirror_enemy_set(
-    prg: bytes, start: int, limit: int
-) -> tuple[MirrorEnemySet, int]:
+def decode_mirror_enemy_set(prg: bytes, start: int, limit: int) -> tuple[MirrorEnemySet, int]:
     if not 0 <= start < limit <= len(prg):
         raise SolomonSpecialError("mirror enemy-set pointer escapes its arena")
     cursor = start
@@ -124,11 +120,7 @@ def encode_mirror_enemy_set(value: MirrorEnemySet) -> bytes:
 def _plane_positions(data: bytes) -> tuple[Position, ...]:
     if len(data) != 24:
         raise SolomonSpecialError("special-room bitplane needs 24 bytes")
-    return tuple(
-        Position(x, y)
-        for y in range(12) for x in range(16)
-        if data[y * 2 + x // 8] & (0x80 >> (x % 8))
-    )
+    return tuple(Position(x, y) for y in range(12) for x in range(16) if data[y * 2 + x // 8] & (0x80 >> (x % 8)))
 
 
 def _encode_plane(positions: tuple[Position, ...], name: str) -> bytes:
@@ -164,23 +156,14 @@ class SpecialRooms:
                 {"room": room, "position": position.as_dict()}
                 for room, position in zip(SEAL_ROOMS, self.seal_positions)
             ],
-            "princess_room_hidden_cells": [
-                value.as_dict() for value in self.princess_positions
-            ],
-            "room_20_bat_symbols": [
-                value.as_dict() for value in self.room20_bat_symbols
-            ],
-            "room_30_blue_opals": [
-                value.as_dict() for value in self.room30_blue_opals
-            ],
+            "princess_room_hidden_cells": [value.as_dict() for value in self.princess_positions],
+            "room_20_bat_symbols": [value.as_dict() for value in self.room20_bat_symbols],
+            "room_30_blue_opals": [value.as_dict() for value in self.room30_blue_opals],
         }
 
 
 def decode_special_rooms(prg: bytes, offsets: Mapping[str, int]) -> SpecialRooms:
-    chunks = {
-        name: prg[offsets[name]:offsets[name] + size]
-        for name, size in SPECIAL_SIZES.items()
-    }
+    chunks = {name: prg[offsets[name] : offsets[name] + size] for name, size in SPECIAL_SIZES.items()}
     if any(len(chunks[name]) != size for name, size in SPECIAL_SIZES.items()):
         raise SolomonSpecialError("special-room table escapes PRG")
     return SpecialRooms(
@@ -194,18 +177,23 @@ def decode_special_rooms(prg: bytes, offsets: Mapping[str, int]) -> SpecialRooms
 
 
 def parse_special_rooms(value: object) -> SpecialRooms:
-    item = _fields(value, {
-        "random_bonus_room", "solomon_seals", "princess_room_hidden_cells",
-        "room_20_bat_symbols", "room_30_blue_opals",
-    }, "special_rooms")
-    bonus = _fields(item["random_bonus_room"], {"positions", "item_types"},
-                    "random_bonus_room")
+    item = _fields(
+        value,
+        {
+            "random_bonus_room",
+            "solomon_seals",
+            "princess_room_hidden_cells",
+            "room_20_bat_symbols",
+            "room_30_blue_opals",
+        },
+        "special_rooms",
+    )
+    bonus = _fields(item["random_bonus_room"], {"positions", "item_types"}, "random_bonus_room")
     if not isinstance(bonus["positions"], list) or len(bonus["positions"]) != 32:
         raise SolomonSpecialError("random bonus room needs 32 positions")
     if not isinstance(bonus["item_types"], list) or len(bonus["item_types"]) != 16:
         raise SolomonSpecialError("random bonus room needs 16 item types")
-    types = bytes(_byte(raw, "random bonus item type")
-                  for raw in bonus["item_types"])
+    types = bytes(_byte(raw, "random bonus item type") for raw in bonus["item_types"])
     if any(not 1 <= raw < 0xC0 for raw in types):
         raise SolomonSpecialError("random bonus item type is invalid")
     raw_seals = item["solomon_seals"]
@@ -240,15 +228,10 @@ def parse_special_rooms(value: object) -> SpecialRooms:
 def encode_special_rooms(value: SpecialRooms) -> dict[str, bytes]:
     checked = parse_special_rooms(value.as_dict())
     return {
-        "bonus_positions_prg": bytes(position.encode()
-                                     for position in checked.bonus_positions),
+        "bonus_positions_prg": bytes(position.encode() for position in checked.bonus_positions),
         "bonus_types_prg": checked.bonus_item_types,
-        "seal_positions_prg": bytes(position.encode()
-                                    for position in checked.seal_positions),
-        "princess_positions_prg": bytes(position.encode()
-                                        for position in checked.princess_positions),
-        "room20_plane_prg": _encode_plane(checked.room20_bat_symbols,
-                                          "room_20_bat_symbols"),
-        "room30_plane_prg": _encode_plane(checked.room30_blue_opals,
-                                          "room_30_blue_opals"),
+        "seal_positions_prg": bytes(position.encode() for position in checked.seal_positions),
+        "princess_positions_prg": bytes(position.encode() for position in checked.princess_positions),
+        "room20_plane_prg": _encode_plane(checked.room20_bat_symbols, "room_20_bat_symbols"),
+        "room30_plane_prg": _encode_plane(checked.room30_blue_opals, "room_30_blue_opals"),
     }

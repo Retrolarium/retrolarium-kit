@@ -47,11 +47,7 @@ class SmbPlayerFrameError(AuthoringError):
 
 
 def _byte(value: object, name: str) -> int:
-    if (
-        not isinstance(value, int)
-        or isinstance(value, bool)
-        or not 0 <= value <= 0xFF
-    ):
+    if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value <= 0xFF:
         raise SmbPlayerFrameError(f"{name} must be a byte")
     return value
 
@@ -68,20 +64,15 @@ def _byte_array(value: object, count: int, name: str) -> list[int]:
     return [_byte(item, f"{name}[{index}]") for index, item in enumerate(value)]
 
 
-def decode_player_frames(
-    payload: bytes, parameters: Mapping[str, object]
-) -> dict[str, object]:
+def decode_player_frames(payload: bytes, parameters: Mapping[str, object]) -> dict[str, object]:
     """Decode the fixed SMB action offsets, 2x4 frames, and swim replacements."""
     if len(payload) != ENCODED_SIZE:
-        raise SmbPlayerFrameError(
-            f"player-frame table has {len(payload)} bytes, expected {ENCODED_SIZE}"
-        )
+        raise SmbPlayerFrameError(f"player-frame table has {len(payload)} bytes, expected {ENCODED_SIZE}")
     tile_base, blank_tile = _metadata(parameters)
     frame_offsets = list(payload[:FRAME_OFFSET_COUNT])
     frame_bytes = payload[FRAME_OFFSET_COUNT:-2]
     frames = [
-        list(frame_bytes[start : start + TILES_PER_FRAME])
-        for start in range(0, len(frame_bytes), TILES_PER_FRAME)
+        list(frame_bytes[start : start + TILES_PER_FRAME]) for start in range(0, len(frame_bytes), TILES_PER_FRAME)
     ]
     result = {
         "frame_offsets": frame_offsets,
@@ -95,9 +86,7 @@ def decode_player_frames(
     return result
 
 
-def encode_player_frames(
-    value: object, parameters: Mapping[str, object]
-) -> bytes:
+def encode_player_frames(value: object, parameters: Mapping[str, object]) -> bytes:
     """Validate and encode one fixed-size SMB player-frame table."""
     if not isinstance(value, Mapping):
         raise SmbPlayerFrameError("player-frame resource must be an object")
@@ -110,32 +99,23 @@ def encode_player_frames(
         "swim_kick_tiles",
     }
     if set(value) != expected:
-        raise SmbPlayerFrameError(
-            "player-frame resource fields differ from codec v1"
-        )
+        raise SmbPlayerFrameError("player-frame resource fields differ from codec v1")
     tile_base, blank_tile = _metadata(parameters)
     if value.get("tile_base") != tile_base or value.get("blank_tile") != blank_tile:
         raise SmbPlayerFrameError("player-frame metadata differs from the profile")
     if value.get("frame_names") != list(FRAME_NAMES):
         raise SmbPlayerFrameError("player-frame names differ from codec v1")
 
-    offsets = _byte_array(
-        value.get("frame_offsets"), FRAME_OFFSET_COUNT, "frame_offsets"
-    )
+    offsets = _byte_array(value.get("frame_offsets"), FRAME_OFFSET_COUNT, "frame_offsets")
     maximum_offset = (FRAME_COUNT - 1) * TILES_PER_FRAME
     for index, offset in enumerate(offsets):
         if offset % TILES_PER_FRAME or offset > maximum_offset:
-            raise SmbPlayerFrameError(
-                f"frame_offsets[{index}] must select one of {FRAME_COUNT} frames"
-            )
+            raise SmbPlayerFrameError(f"frame_offsets[{index}] must select one of {FRAME_COUNT} frames")
 
     raw_frames = value.get("frames")
     if not isinstance(raw_frames, list) or len(raw_frames) != FRAME_COUNT:
         raise SmbPlayerFrameError(f"frames must contain {FRAME_COUNT} records")
-    frames = [
-        _byte_array(frame, TILES_PER_FRAME, f"frames[{index}]")
-        for index, frame in enumerate(raw_frames)
-    ]
+    frames = [_byte_array(frame, TILES_PER_FRAME, f"frames[{index}]") for index, frame in enumerate(raw_frames)]
     swim = _byte_array(value.get("swim_kick_tiles"), 2, "swim_kick_tiles")
     payload = bytes(offsets + [tile for frame in frames for tile in frame] + swim)
     if len(payload) != ENCODED_SIZE:

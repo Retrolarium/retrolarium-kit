@@ -34,9 +34,7 @@ TEXT_RE = re.compile(
     r'"(?P<value>[^"\r\n]*)"(?P<suffix>[^\r\n]*)$',
     re.MULTILINE,
 )
-PALETTE_LABEL_RE = re.compile(
-    r"^(?:Level_Palette\d+|Level_AccentPalette\d+|Title_LogoPalette)$"
-)
+PALETTE_LABEL_RE = re.compile(r"^(?:Level_Palette\d+|Level_AccentPalette\d+|Title_LogoPalette)$")
 PALETTE_RE = re.compile(
     r"^(?P<label>[A-Za-z_][A-Za-z0-9_]*):(?P<spacing>\s+)dc\.w\s+(?P<values>[^;\r\n]+)$",
     re.MULTILINE,
@@ -59,12 +57,14 @@ def export_document(root: Path) -> dict[str, Any]:
         source = (source_root / relative).read_text(encoding="utf-8")
         for match in TEXT_RE.finditer(source):
             value = match.group("value")
-            texts.append({
-                "id": match.group("label"),
-                "source": relative,
-                "value": value,
-                "capacity": len(value),
-            })
+            texts.append(
+                {
+                    "id": match.group("label"),
+                    "source": relative,
+                    "value": value,
+                    "capacity": len(value),
+                }
+            )
 
     palettes: list[dict[str, Any]] = []
     for relative in PALETTE_SOURCES:
@@ -73,11 +73,13 @@ def export_document(root: Path) -> dict[str, Any]:
             label = match.group("label")
             if not PALETTE_LABEL_RE.fullmatch(label):
                 continue
-            palettes.append({
-                "id": label,
-                "source": relative,
-                "colours": [parse_number(item) for item in match.group("values").split(",")],
-            })
+            palettes.append(
+                {
+                    "id": label,
+                    "source": relative,
+                    "colours": [parse_number(item) for item in match.group("values").split(",")],
+                }
+            )
     return {
         "schema_version": 1,
         "profile": "canonical",
@@ -116,7 +118,7 @@ def validate_document(document: dict[str, Any], root: Path) -> None:
         if (
             not isinstance(value, str)
             or len(value) > record["capacity"]
-            or any(not 0x20 <= ord(character) <= 0x7E or character in {'"', '\\'} for character in value)
+            or any(not 0x20 <= ord(character) <= 0x7E or character in {'"', "\\"} for character in value)
         ):
             raise ValueError(f"{identifier}: text must be printable ASCII within its capacity")
 
@@ -186,7 +188,7 @@ def apply_document(document: dict[str, Any], root: Path, staged_source: Path) ->
                 if record["colours"] == original["colours"]:
                     continue
                 pattern = re.compile(
-                    rf'^(?P<head>{re.escape(identifier)}:\s+dc\.w\s+)[^;\r\n]+$',
+                    rf"^(?P<head>{re.escape(identifier)}:\s+dc\.w\s+)[^;\r\n]+$",
                     re.MULTILINE,
                 )
                 values = ", ".join(format_colour(colour) for colour in record["colours"])

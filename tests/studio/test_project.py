@@ -34,12 +34,8 @@ def write_project(root: Path, tabs: str, *, startup: str = "levels") -> Path:
     (root / "disassembly").mkdir()
     (root / "documents").mkdir()
     (root / "disassembly/manifest.json").write_text("{}", encoding="utf-8")
-    (root / "documents/levels.toml").write_text(
-        'schema = "test.levels"\nschema_version = 1\n', encoding="utf-8"
-    )
-    (root / "documents/graphics.toml").write_text(
-        'schema = "test.graphics"\nschema_version = 1\n', encoding="utf-8"
-    )
+    (root / "documents/levels.toml").write_text('schema = "test.levels"\nschema_version = 1\n', encoding="utf-8")
+    (root / "documents/graphics.toml").write_text('schema = "test.graphics"\nschema_version = 1\n', encoding="utf-8")
     project = root / "fixture.rlj"
     project.write_text(
         f'''schema = "retrolarium.project"
@@ -70,23 +66,23 @@ validate = "project.validate"
     return project
 
 
-LEVELS_TAB = '''[[workspace.tabs]]
+LEVELS_TAB = """[[workspace.tabs]]
 id = "levels"
 title = "Levels"
 kind = "level.tile-grid"
 group = "content"
 document = "documents/levels.toml"
 codec = "pacman.maze-rle@1"
-capabilities = ["paint", "undo"]'''
+capabilities = ["paint", "undo"]"""
 
-GRAPHICS_TAB = '''[[workspace.tabs]]
+GRAPHICS_TAB = """[[workspace.tabs]]
 id = "graphics"
 title = "Graphics"
 kind = "graphics.tile-set"
 group = "assets"
 document = "documents/graphics.toml"
 codec = "nes.chr-2bpp.v1"
-capabilities = ["pixel-paint"]'''
+capabilities = ["pixel-paint"]"""
 
 
 class StudioProjectTests(unittest.TestCase):
@@ -103,12 +99,17 @@ class StudioProjectTests(unittest.TestCase):
             source = root / "flicky-source"
             record = source / "retrolarium-flicky-snapshot.json"
             record.parent.mkdir(parents=True)
-            record.write_text(json.dumps({
-                "schema": "retrolarium.flicky-source-snapshot",
-                "schema_version": 1,
-                "canonical_sha256": "4df1a91e08376ae773a6eb8e5abe310f94ca39d8f81583b91a9477fedcb68c11",
-                "files": {},
-            }), encoding="utf-8")
+            record.write_text(
+                json.dumps(
+                    {
+                        "schema": "retrolarium.flicky-source-snapshot",
+                        "schema_version": 1,
+                        "canonical_sha256": "4df1a91e08376ae773a6eb8e5abe310f94ca39d8f81583b91a9477fedcb68c11",
+                        "files": {},
+                    }
+                ),
+                encoding="utf-8",
+            )
             for relative in FLICKY_WORKSPACE_FILES.values():
                 document = source / relative
                 document.parent.mkdir(parents=True, exist_ok=True)
@@ -125,9 +126,7 @@ class StudioProjectTests(unittest.TestCase):
 
     def test_project_owns_visible_tab_order(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            project = write_project(
-                Path(temporary), f"{GRAPHICS_TAB}\n\n{LEVELS_TAB}"
-            )
+            project = write_project(Path(temporary), f"{GRAPHICS_TAB}\n\n{LEVELS_TAB}")
             # The startup tab can name either enabled tab; file order remains canonical.
             document = self.load(project)
             tabs = document["workspace"]["tabs"]  # type: ignore[index]
@@ -142,9 +141,7 @@ class StudioProjectTests(unittest.TestCase):
             tabs = document["workspace"]["tabs"]  # type: ignore[index]
             self.assertEqual([True, False], [tab["enabled"] for tab in tabs])
             project.write_text(
-                project.read_text(encoding="utf-8").replace(
-                    'startup_tab = "levels"', 'startup_tab = "graphics"'
-                ),
+                project.read_text(encoding="utf-8").replace('startup_tab = "levels"', 'startup_tab = "graphics"'),
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(StudioProjectError, "must name an enabled tab"):
@@ -155,9 +152,7 @@ class StudioProjectTests(unittest.TestCase):
             root = Path(temporary)
             project = write_project(root, LEVELS_TAB)
             project.write_text(
-                project.read_text(encoding="utf-8").replace(
-                    'kind = "level.tile-grid"', 'kind = "game.magic-editor"'
-                ),
+                project.read_text(encoding="utf-8").replace('kind = "level.tile-grid"', 'kind = "game.magic-editor"'),
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(StudioProjectError, "unsupported value"):
@@ -211,9 +206,7 @@ class StudioProjectTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             project = Path(temporary) / "broken.rlj"
             project.write_text('schema = "unterminated', encoding="utf-8")
-            with self.assertRaisesRegex(
-                StudioProjectError, r"broken\.rlj:\d+:\d+:"
-            ):
+            with self.assertRaisesRegex(StudioProjectError, r"broken\.rlj:\d+:\d+:"):
                 load_studio_project(project)
 
     def test_rejects_retired_retrolarium_extension(self) -> None:
@@ -227,22 +220,25 @@ class StudioProjectTests(unittest.TestCase):
     def test_migration_preserves_comments_and_line_endings(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             project = write_project(Path(temporary), LEVELS_TAB)
-            legacy = project.read_text(encoding="utf-8").replace(
-                'schema = "retrolarium.project"\n',
-                '# project identity\nschema = "retrolarium.project" # keep schema\n',
-            ).replace(
-                "schema_version = 1",
-                "schema_version = 0 # legacy version",
-            ).replace("\n", "\r\n")
+            legacy = (
+                project.read_text(encoding="utf-8")
+                .replace(
+                    'schema = "retrolarium.project"\n',
+                    '# project identity\nschema = "retrolarium.project" # keep schema\n',
+                )
+                .replace(
+                    "schema_version = 1",
+                    "schema_version = 0 # legacy version",
+                )
+                .replace("\n", "\r\n")
+            )
             project.write_bytes(legacy.encode("utf-8"))
             with patch(
                 "retrolarium_kit.studio.project.load_disassembly_manifest",
                 return_value=manifest(),
             ):
                 result = migrate_studio_project(project)
-            expected = legacy.replace(
-                "schema_version = 0", "schema_version = 1", 1
-            )
+            expected = legacy.replace("schema_version = 0", "schema_version = 1", 1)
             self.assertEqual(expected.encode("utf-8"), project.read_bytes())
             self.assertEqual("migrated", result["status"])
             self.assertEqual(0, result["from_version"])
@@ -261,9 +257,7 @@ class StudioProjectTests(unittest.TestCase):
             ):
                 migrate_studio_project(project)
             migrated = project.read_text(encoding="utf-8")
-            self.assertIn(
-                'schema = "retrolarium.project"\nschema_version = 1\n', migrated
-            )
+            self.assertIn('schema = "retrolarium.project"\nschema_version = 1\n', migrated)
             self.assertIn("# version was implicit in v0", migrated)
 
     def test_validate_returns_only_enabled_tabs(self) -> None:
@@ -343,8 +337,17 @@ class StudioProjectTests(unittest.TestCase):
                 [tab["id"] for tab in tabs],
             )
             self.assertEqual(
-                [[], ["graphics"], ["graphics", "palettes"], [], ["palettes"],
-                 ["graphics", "palettes"], [], ["graphics"], []],
+                [
+                    [],
+                    ["graphics"],
+                    ["graphics", "palettes"],
+                    [],
+                    ["palettes"],
+                    ["graphics", "palettes"],
+                    [],
+                    ["graphics"],
+                    [],
+                ],
                 [tab["depends_on"] for tab in tabs],
             )
             self.assertEqual("world", result["workspace"]["startup_tab"])
@@ -357,20 +360,27 @@ class StudioProjectTests(unittest.TestCase):
             source.write_text(json.dumps(manifest()), encoding="utf-8")
             resources = root / "documents/castle-excellent-levels.json"
             resources.parent.mkdir()
-            resources.write_text(json.dumps({
-                "schema": "retrolarium.castle-excellent-levels",
-                "schema_version": 1,
-                "game": "castle-excellent",
-                "revision": "castlequest-usa",
-                "source_sha256": SHA256,
-                "width": 20,
-                "height": 20,
-                "rooms": [{
-                    "number": 1,
-                    "cells": [[0] * 20 for _ in range(20)],
-                    "objects": [],
-                }],
-            }), encoding="utf-8")
+            resources.write_text(
+                json.dumps(
+                    {
+                        "schema": "retrolarium.castle-excellent-levels",
+                        "schema_version": 1,
+                        "game": "castle-excellent",
+                        "revision": "castlequest-usa",
+                        "source_sha256": SHA256,
+                        "width": 20,
+                        "height": 20,
+                        "rooms": [
+                            {
+                                "number": 1,
+                                "cells": [[0] * 20 for _ in range(20)],
+                                "objects": [],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
             output = root / "castle-excellent.rlj"
             with patched_manifest(manifest()):
                 result = create_studio_project(
@@ -402,52 +412,71 @@ class StudioProjectTests(unittest.TestCase):
             source.write_text(json.dumps(manifest()), encoding="utf-8")
             rooms = root / "documents/levels.json"
             rooms.parent.mkdir()
-            rooms.write_text(json.dumps({
-                "schema": "retrolarium.solomon-rooms",
-                "schema_version": 3,
-                "game": "solomons-key",
-                "revision": "europe",
-                "source_sha256": SHA256,
-                "width": 16,
-                "height": 12,
-                "rooms": [{} for _ in range(53)],
-            }), encoding="utf-8")
+            rooms.write_text(
+                json.dumps(
+                    {
+                        "schema": "retrolarium.solomon-rooms",
+                        "schema_version": 3,
+                        "game": "solomons-key",
+                        "revision": "europe",
+                        "source_sha256": SHA256,
+                        "width": 16,
+                        "height": 12,
+                        "rooms": [{} for _ in range(53)],
+                    }
+                ),
+                encoding="utf-8",
+            )
             graphics = root / "documents/graphics.json"
-            graphics.write_text(json.dumps({
-                "schema": "retrolarium.nes-resource-bundle",
-                "schema_version": 1,
-                "game": "solomons-key",
-                "revision": "europe",
-                "source_sha256": SHA256,
-                "resources": [
-                    {"id": "chr-bank-0", "kind": "graphics",
-                     "codec": "nes.chr-2bpp.v1"},
-                    {"id": "room-palettes", "kind": "palette",
-                     "codec": "nes.palette-table.v1"},
-                ],
-            }), encoding="utf-8")
+            graphics.write_text(
+                json.dumps(
+                    {
+                        "schema": "retrolarium.nes-resource-bundle",
+                        "schema_version": 1,
+                        "game": "solomons-key",
+                        "revision": "europe",
+                        "source_sha256": SHA256,
+                        "resources": [
+                            {"id": "chr-bank-0", "kind": "graphics", "codec": "nes.chr-2bpp.v1"},
+                            {"id": "room-palettes", "kind": "palette", "codec": "nes.palette-table.v1"},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
             art = root / "documents/room-art.json"
-            art.write_text(json.dumps({
-                "schema": "retrolarium.solomon-room-art",
-                "schema_version": 1,
-                "game": "solomons-key",
-                "revision": "europe",
-                "source_sha256": SHA256,
-                "room_group_colors": [0] * 14,
-                "room_map_patterns": [{} for _ in range(58)],
-            }), encoding="utf-8")
+            art.write_text(
+                json.dumps(
+                    {
+                        "schema": "retrolarium.solomon-room-art",
+                        "schema_version": 1,
+                        "game": "solomons-key",
+                        "revision": "europe",
+                        "source_sha256": SHA256,
+                        "room_group_colors": [0] * 14,
+                        "room_map_patterns": [{} for _ in range(58)],
+                    }
+                ),
+                encoding="utf-8",
+            )
             sprites = root / "documents/sprite-frames.json"
-            sprites.write_text(json.dumps({
-                "schema": "retrolarium.solomon-sprite-frames",
-                "schema_version": 1,
-                "game": "solomons-key",
-                "revision": "europe",
-                "source_sha256": SHA256,
-                "frames": [{} for _ in range(28)],
-            }), encoding="utf-8")
+            sprites.write_text(
+                json.dumps(
+                    {
+                        "schema": "retrolarium.solomon-sprite-frames",
+                        "schema_version": 1,
+                        "game": "solomons-key",
+                        "revision": "europe",
+                        "source_sha256": SHA256,
+                        "frames": [{} for _ in range(28)],
+                    }
+                ),
+                encoding="utf-8",
+            )
             with patched_manifest(manifest()):
                 result = create_studio_project(
-                    source, root / "solomon.rlj",
+                    source,
+                    root / "solomon.rlj",
                     project_id="solomons-key-europe",
                     name="Solomon's Key (Europe)",
                     profile="solomons-key.v1",
@@ -456,8 +485,7 @@ class StudioProjectTests(unittest.TestCase):
                 )
             tabs = result["workspace"]["tabs"]
             self.assertEqual(
-                ["rooms", "mirrors", "special", "room-art", "sprite-frames",
-                 "graphics", "palettes", "code"],
+                ["rooms", "mirrors", "special", "room-art", "sprite-frames", "graphics", "palettes", "code"],
                 [tab["id"] for tab in tabs],
             )
             self.assertEqual("solomon.rooms", tabs[0]["kind"])
@@ -475,44 +503,45 @@ class StudioProjectTests(unittest.TestCase):
             )
             self.assertEqual("solomon.room-art", tabs[3]["kind"])
             self.assertEqual("documents/room-art.json", tabs[3]["document"])
-            self.assertEqual(
-                ["graphics", "palettes"], tabs[3]["depends_on"]
-            )
+            self.assertEqual(["graphics", "palettes"], tabs[3]["depends_on"])
             self.assertEqual("solomon.sprite-frames", tabs[4]["kind"])
             self.assertEqual("documents/sprite-frames.json", tabs[4]["document"])
-            self.assertEqual(
-                ["graphics", "palettes"], tabs[4]["depends_on"]
-            )
+            self.assertEqual(["graphics", "palettes"], tabs[4]["depends_on"])
             self.assertEqual("documents/graphics.json", tabs[5]["document"])
             self.assertEqual("documents/graphics.json", tabs[6]["document"])
 
             animations = root / "documents/animations.json"
-            animations.write_text(json.dumps({
-                "schema": "retrolarium.solomon-animations",
-                "schema_version": 1,
-                "game": "solomons-key",
-                "revision": "europe",
-                "source_sha256": SHA256,
-                "enemy_configuration": [8] * 27,
-                "group_pointers": [0] * 33,
-                "descriptors": [{} for _ in range(340)],
-                "selectors": [{} for _ in range(4)],
-                "frames": [{} for _ in range(275)],
-            }), encoding="utf-8")
+            animations.write_text(
+                json.dumps(
+                    {
+                        "schema": "retrolarium.solomon-animations",
+                        "schema_version": 1,
+                        "game": "solomons-key",
+                        "revision": "europe",
+                        "source_sha256": SHA256,
+                        "enemy_configuration": [8] * 27,
+                        "group_pointers": [0] * 33,
+                        "descriptors": [{} for _ in range(340)],
+                        "selectors": [{} for _ in range(4)],
+                        "frames": [{} for _ in range(275)],
+                    }
+                ),
+                encoding="utf-8",
+            )
             with patched_manifest(manifest()):
                 modern = create_studio_project(
-                    source, root / "solomon-modern.rlj",
+                    source,
+                    root / "solomon-modern.rlj",
                     project_id="solomons-key-europe",
                     name="Solomon's Key (Europe)",
                     profile="solomons-key.v1",
                     source_mode="binary-profile",
                     resource_documents=(rooms, art, animations, graphics),
                 )
-                with self.assertRaisesRegex(
-                    StudioProjectError, "cannot own the same ROM bytes"
-                ):
+                with self.assertRaisesRegex(StudioProjectError, "cannot own the same ROM bytes"):
                     create_studio_project(
-                        source, root / "solomon-conflict.rlj",
+                        source,
+                        root / "solomon-conflict.rlj",
                         project_id="solomons-key-europe",
                         name="Solomon's Key (Europe)",
                         profile="solomons-key.v1",
@@ -521,17 +550,14 @@ class StudioProjectTests(unittest.TestCase):
                     )
             modern_tabs = modern["workspace"]["tabs"]
             self.assertEqual(
-                ["rooms", "mirrors", "special", "room-art", "animations",
-                 "graphics", "palettes", "code"],
+                ["rooms", "mirrors", "special", "room-art", "animations", "graphics", "palettes", "code"],
                 [tab["id"] for tab in modern_tabs],
             )
             self.assertEqual(
                 ["room-art", "animations", "graphics", "palettes"],
                 modern_tabs[0]["depends_on"],
             )
-            self.assertEqual(
-                "solomon.animations", modern_tabs[4]["kind"]
-            )
+            self.assertEqual("solomon.animations", modern_tabs[4]["kind"])
 
     def test_create_composes_castle_excellent_rooms_and_graphics_documents(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -542,28 +568,50 @@ class StudioProjectTests(unittest.TestCase):
             documents = root / "documents"
             documents.mkdir()
             levels = documents / "levels.json"
-            levels.write_text(json.dumps({
-                "schema": "retrolarium.castle-excellent-levels",
-                "schema_version": 1,
-                "source_sha256": SHA256,
-                "rooms": [{"cells": [[0]], "objects": []}],
-            }), encoding="utf-8")
+            levels.write_text(
+                json.dumps(
+                    {
+                        "schema": "retrolarium.castle-excellent-levels",
+                        "schema_version": 1,
+                        "source_sha256": SHA256,
+                        "rooms": [{"cells": [[0]], "objects": []}],
+                    }
+                ),
+                encoding="utf-8",
+            )
             graphics = documents / "graphics.json"
-            graphics.write_text(json.dumps({
-                "schema": "retrolarium.nes-resource-bundle",
-                "schema_version": 1,
-                "source_sha256": SHA256,
-                "resources": [
-                    {"id": "chr-0", "kind": "graphics", "codec": "nes.chr-2bpp.v1"},
-                    {"id": "chr-1", "kind": "graphics", "codec": "nes.chr-2bpp.v1"},
-                    {"id": "room-palettes", "kind": "palette", "codec": "nes.palette-table.v1"},
-                    {"id": "room-cell-visuals", "kind": "metatile", "codec": "castle-excellent.room-cell-visuals.v1"},
-                    {"id": "metasprite-descriptors", "kind": "animation", "codec": "castle-excellent.metasprite-descriptors.v1"},
-                    {"id": "sub-command-text", "kind": "text", "codec": "castle-excellent.sub-command-text.v1"},
-                    {"id": "sfx-parameters", "kind": "audio-parameter", "codec": "castle-excellent.sfx-parameters.v1"},
-                    {"id": "music", "kind": "audio", "codec": "castle-excellent.mml-music.v1"},
-                ],
-            }), encoding="utf-8")
+            graphics.write_text(
+                json.dumps(
+                    {
+                        "schema": "retrolarium.nes-resource-bundle",
+                        "schema_version": 1,
+                        "source_sha256": SHA256,
+                        "resources": [
+                            {"id": "chr-0", "kind": "graphics", "codec": "nes.chr-2bpp.v1"},
+                            {"id": "chr-1", "kind": "graphics", "codec": "nes.chr-2bpp.v1"},
+                            {"id": "room-palettes", "kind": "palette", "codec": "nes.palette-table.v1"},
+                            {
+                                "id": "room-cell-visuals",
+                                "kind": "metatile",
+                                "codec": "castle-excellent.room-cell-visuals.v1",
+                            },
+                            {
+                                "id": "metasprite-descriptors",
+                                "kind": "animation",
+                                "codec": "castle-excellent.metasprite-descriptors.v1",
+                            },
+                            {"id": "sub-command-text", "kind": "text", "codec": "castle-excellent.sub-command-text.v1"},
+                            {
+                                "id": "sfx-parameters",
+                                "kind": "audio-parameter",
+                                "codec": "castle-excellent.sfx-parameters.v1",
+                            },
+                            {"id": "music", "kind": "audio", "codec": "castle-excellent.mml-music.v1"},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
             with patched_manifest(manifest()):
                 result = create_studio_project(
                     source,
@@ -575,12 +623,20 @@ class StudioProjectTests(unittest.TestCase):
                 )
             tabs = result["workspace"]["tabs"]
             self.assertEqual(
-                ["rooms", "music-sounds", "sfx-parameters", "screens-text", "graphics",
-                 "room-cells", "palettes", "animations", "code"],
+                [
+                    "rooms",
+                    "music-sounds",
+                    "sfx-parameters",
+                    "screens-text",
+                    "graphics",
+                    "room-cells",
+                    "palettes",
+                    "animations",
+                    "code",
+                ],
                 [tab["id"] for tab in tabs],
             )
-            self.assertEqual(
-                ["room-cells", "graphics", "palettes"], tabs[0]["depends_on"])
+            self.assertEqual(["room-cells", "graphics", "palettes"], tabs[0]["depends_on"])
             self.assertEqual("castle-excellent.mml-music", tabs[1]["kind"])
             self.assertEqual("castle-excellent.mml-music.v1", tabs[1]["codec"])
             self.assertEqual("data.fixed-byte-records", tabs[2]["kind"])
@@ -642,33 +698,44 @@ class StudioProjectTests(unittest.TestCase):
             source = root / "manifest.json"
             source.write_text(json.dumps(manifest()), encoding="utf-8")
             resources = root / "resources.json"
-            resources.write_text(json.dumps({
-                "schema": "retrolarium.nes-resource-bundle",
-                "schema_version": 1,
-                "game": "smb1",
-                "revision": "ju",
-                "source_sha256": SHA256,
-                "resources": [
-                    {"id": "levels", "kind": "level", "codec": "smb.levels.v1"},
-                    {"id": "levels-extended", "kind": "level", "codec": "smb.levels.v1"},
-                    {"id": "metatiles", "kind": "metatile", "codec": "nes.metatile-2x2.v1"},
-                    {"id": "palettes", "kind": "palette", "codec": "nes.ppu-palette-packets.v1"},
-                    {"id": "player-palettes", "kind": "palette", "codec": "nes.palette-table.v1"},
-                    {"id": "ui-text", "kind": "text", "codec": "nes.fixed-text-fields.v1"},
-                    {"id": "title-screen", "kind": "screen",
-                     "codec": "nes.ppu-screen-packets.v1",
-                     "text_fields": [{"key": "title"}]},
-                    {"id": "chr", "kind": "graphics", "codec": "nes.chr-2bpp.v1"},
-                    {"id": "player-frames", "kind": "animation", "codec": "smb.player-frames.v1"},
-                    {"id": "music", "kind": "audio", "codec": "smb.apu-music.v1"},
-                    {"id": "swim-stomp-envelope", "kind": "audio",
-                     "codec": "smb.apu-envelope.v1"},
-                ],
-            }), encoding="utf-8")
+            resources.write_text(
+                json.dumps(
+                    {
+                        "schema": "retrolarium.nes-resource-bundle",
+                        "schema_version": 1,
+                        "game": "smb1",
+                        "revision": "ju",
+                        "source_sha256": SHA256,
+                        "resources": [
+                            {"id": "levels", "kind": "level", "codec": "smb.levels.v1"},
+                            {"id": "levels-extended", "kind": "level", "codec": "smb.levels.v1"},
+                            {"id": "metatiles", "kind": "metatile", "codec": "nes.metatile-2x2.v1"},
+                            {"id": "palettes", "kind": "palette", "codec": "nes.ppu-palette-packets.v1"},
+                            {"id": "player-palettes", "kind": "palette", "codec": "nes.palette-table.v1"},
+                            {"id": "ui-text", "kind": "text", "codec": "nes.fixed-text-fields.v1"},
+                            {
+                                "id": "title-screen",
+                                "kind": "screen",
+                                "codec": "nes.ppu-screen-packets.v1",
+                                "text_fields": [{"key": "title"}],
+                            },
+                            {"id": "chr", "kind": "graphics", "codec": "nes.chr-2bpp.v1"},
+                            {"id": "player-frames", "kind": "animation", "codec": "smb.player-frames.v1"},
+                            {"id": "music", "kind": "audio", "codec": "smb.apu-music.v1"},
+                            {"id": "swim-stomp-envelope", "kind": "audio", "codec": "smb.apu-envelope.v1"},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
             with patched_manifest(manifest()):
                 result = create_studio_project(
-                    source, root / "smb.rlj", project_id="smb",
-                    name="SMB", profile="smb1.v1", resource_document=resources,
+                    source,
+                    root / "smb.rlj",
+                    project_id="smb",
+                    name="SMB",
+                    profile="smb1.v1",
+                    resource_document=resources,
                 )
             levels = result["workspace"]["tabs"][0]
             self.assertEqual("levels", levels["id"])
@@ -680,39 +747,23 @@ class StudioProjectTests(unittest.TestCase):
             )
             self.assertIn("playtest", levels["capabilities"])
             self.assertEqual(["graphics", "palettes"], levels["depends_on"])
-            metatiles = next(
-                tab for tab in result["workspace"]["tabs"] if tab["id"] == "metatiles"
-            )
+            metatiles = next(tab for tab in result["workspace"]["tabs"] if tab["id"] == "metatiles")
             self.assertEqual("metatile.composer", metatiles["kind"])
             self.assertEqual(["graphics", "palettes"], metatiles["depends_on"])
-            player_frames = next(
-                tab for tab in result["workspace"]["tabs"]
-                if tab["id"] == "player-frames"
-            )
+            player_frames = next(tab for tab in result["workspace"]["tabs"] if tab["id"] == "player-frames")
             self.assertEqual("animation.mapping", player_frames["kind"])
             self.assertEqual("smb.player-frames.v1", player_frames["codec"])
-            self.assertEqual(
-                ["graphics", "palettes"], player_frames["depends_on"]
-            )
-            palettes = next(
-                tab for tab in result["workspace"]["tabs"] if tab["id"] == "palettes"
-            )
+            self.assertEqual(["graphics", "palettes"], player_frames["depends_on"])
+            palettes = next(tab for tab in result["workspace"]["tabs"] if tab["id"] == "palettes")
             self.assertEqual("nes.palette-table.v1", palettes["codec"])
-            text = next(
-                tab for tab in result["workspace"]["tabs"] if tab["id"] == "text"
-            )
+            text = next(tab for tab in result["workspace"]["tabs"] if tab["id"] == "text")
             self.assertEqual("text.fixed", text["kind"])
             self.assertEqual("nes.fixed-text-fields.v1", text["codec"])
-            screens = next(
-                tab for tab in result["workspace"]["tabs"] if tab["id"] == "screens"
-            )
+            screens = next(tab for tab in result["workspace"]["tabs"] if tab["id"] == "screens")
             self.assertEqual("screen.tilemap", screens["kind"])
             self.assertEqual("nes.ppu-screen-packets.v1", screens["codec"])
             self.assertEqual(["graphics", "palettes"], screens["depends_on"])
-            music = next(
-                tab for tab in result["workspace"]["tabs"]
-                if tab["id"] == "music-sounds"
-            )
+            music = next(tab for tab in result["workspace"]["tabs"] if tab["id"] == "music-sounds")
             self.assertEqual("audio.sequencer", music["kind"])
             self.assertEqual("smb.apu-music.v1", music["codec"])
             self.assertEqual("Sound", music["title"])
@@ -726,8 +777,12 @@ class StudioProjectTests(unittest.TestCase):
             resources.write_text(json.dumps(resource_value), encoding="utf-8")
             with patched_manifest(manifest()):
                 pal_result = create_studio_project(
-                    source, root / "smb-pal.rlj", project_id="smb-pal",
-                    name="SMB PAL", profile="smb1.v1", resource_document=resources,
+                    source,
+                    root / "smb-pal.rlj",
+                    project_id="smb-pal",
+                    name="SMB PAL",
+                    profile="smb1.v1",
+                    resource_document=resources,
                 )
             pal_levels = pal_result["workspace"]["tabs"][0]
             self.assertNotIn("playtest", pal_levels["capabilities"])
@@ -738,38 +793,45 @@ class StudioProjectTests(unittest.TestCase):
             source = root / "manifest.json"
             source.write_text(json.dumps(manifest()), encoding="utf-8")
             resources = root / "resources.json"
-            resources.write_text(json.dumps({
-                "schema": "retrolarium.nes-resource-bundle",
-                "schema_version": 1,
-                "game": "smb1",
-                "revision": "ann_fds",
-                "source_sha256": SHA256,
-                "resources": [
+            resources.write_text(
+                json.dumps(
                     {
-                        "id": "swim-stomp-envelope",
-                        "kind": "audio",
-                        "codec": "smb.apu-envelope.v1",
-                    },
-                    {
-                        "id": "fds-music",
-                        "kind": "audio",
-                        "codec": "fds.music.v1",
-                    },
-                ],
-            }), encoding="utf-8")
+                        "schema": "retrolarium.nes-resource-bundle",
+                        "schema_version": 1,
+                        "game": "smb1",
+                        "revision": "ann_fds",
+                        "source_sha256": SHA256,
+                        "resources": [
+                            {
+                                "id": "swim-stomp-envelope",
+                                "kind": "audio",
+                                "codec": "smb.apu-envelope.v1",
+                            },
+                            {
+                                "id": "fds-music",
+                                "kind": "audio",
+                                "codec": "fds.music.v1",
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
             with patched_manifest(manifest()):
                 result = create_studio_project(
-                    source, root / "ann.rlj", project_id="ann",
-                    name="ANN", profile="smb1.v1", resource_document=resources,
+                    source,
+                    root / "ann.rlj",
+                    project_id="ann",
+                    name="ANN",
+                    profile="smb1.v1",
+                    resource_document=resources,
                 )
             synthesis = result["workspace"]["tabs"][0]
             self.assertEqual("synthesis", synthesis["id"])
             self.assertEqual("FDS Synthesis", synthesis["title"])
             self.assertEqual("audio.synthesis", synthesis["kind"])
             self.assertEqual("fds.music.v1", synthesis["codec"])
-            self.assertEqual(
-                ["edit", "restore", "undo"], synthesis["capabilities"]
-            )
+            self.assertEqual(["edit", "restore", "undo"], synthesis["capabilities"])
 
     def test_create_maps_combined_smb_audio_to_two_editors(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -777,25 +839,30 @@ class StudioProjectTests(unittest.TestCase):
             source = root / "manifest.json"
             source.write_text(json.dumps(manifest()), encoding="utf-8")
             resources = root / "resources.json"
-            resources.write_text(json.dumps({
-                "schema": "retrolarium.nes-resource-bundle",
-                "schema_version": 1,
-                "game": "smb1",
-                "revision": "ann_fds",
-                "source_sha256": SHA256,
-                "resources": [
-                    {"id": "music", "kind": "audio",
-                     "codec": "smb.apu-music.v1"},
-                    {"id": "swim-stomp-envelope", "kind": "audio",
-                     "codec": "smb.apu-envelope.v1"},
-                    {"id": "fds-synthesis", "kind": "audio",
-                     "codec": "fds.synthesis.v1"},
-                ],
-            }), encoding="utf-8")
+            resources.write_text(
+                json.dumps(
+                    {
+                        "schema": "retrolarium.nes-resource-bundle",
+                        "schema_version": 1,
+                        "game": "smb1",
+                        "revision": "ann_fds",
+                        "source_sha256": SHA256,
+                        "resources": [
+                            {"id": "music", "kind": "audio", "codec": "smb.apu-music.v1"},
+                            {"id": "swim-stomp-envelope", "kind": "audio", "codec": "smb.apu-envelope.v1"},
+                            {"id": "fds-synthesis", "kind": "audio", "codec": "fds.synthesis.v1"},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
             with patched_manifest(manifest()):
                 result = create_studio_project(
-                    source, root / "ann.rlj", project_id="ann",
-                    name="ANN", profile="smb1.v1",
+                    source,
+                    root / "ann.rlj",
+                    project_id="ann",
+                    name="ANN",
+                    profile="smb1.v1",
                     resource_document=resources,
                 )
             by_id = {tab["id"]: tab for tab in result["workspace"]["tabs"]}
@@ -811,8 +878,13 @@ class StudioProjectTests(unittest.TestCase):
     def test_smb_revision_matrix_creates_only_supported_editor_tabs(self) -> None:
         profile = game_profile("smb1")
         expected_common = {
-            "world", "levels", "graphics", "metatiles", "palettes",
-            "player-frames", "code",
+            "world",
+            "levels",
+            "graphics",
+            "metatiles",
+            "palettes",
+            "player-frames",
+            "code",
         }
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -827,46 +899,45 @@ class StudioProjectTests(unittest.TestCase):
                         "kind": resource.kind,
                         "codec": resource.codec,
                     }
-                    if (
-                        resource.kind == "screen"
-                        and resource.parameters.get("text_fields")
-                    ):
+                    if resource.kind == "screen" and resource.parameters.get("text_fields"):
                         item["text_fields"] = [{"key": "profile-text"}]
                     resources.append(item)
                 resource_path = root / f"{revision_id}.json"
-                resource_path.write_text(json.dumps({
-                    "schema": "retrolarium.nes-resource-bundle",
-                    "schema_version": 1,
-                    "game": "smb1",
-                    "revision": revision_id,
-                    "source_sha256": SHA256,
-                    "resources": resources,
-                }), encoding="utf-8")
+                resource_path.write_text(
+                    json.dumps(
+                        {
+                            "schema": "retrolarium.nes-resource-bundle",
+                            "schema_version": 1,
+                            "game": "smb1",
+                            "revision": revision_id,
+                            "source_sha256": SHA256,
+                            "resources": resources,
+                        }
+                    ),
+                    encoding="utf-8",
+                )
                 with self.subTest(revision=revision_id), patched_manifest(manifest()):
                     result = create_studio_project(
-                        source, root / f"{revision_id}.rlj",
-                        project_id=revision_id, name=revision.name,
-                        profile="smb1.v1", resource_document=resource_path,
+                        source,
+                        root / f"{revision_id}.rlj",
+                        project_id=revision_id,
+                        name=revision.name,
+                        profile="smb1.v1",
+                        resource_document=resource_path,
                     )
                     tabs = result["workspace"]["tabs"]
                     by_id = {tab["id"]: tab for tab in tabs}
                     self.assertTrue(expected_common.issubset(by_id), set(by_id))
                     if revision_id in {"ann_fds", "smb2_jp_fds"}:
-                        self.assertEqual("fds.music.v1",
-                            by_id["synthesis"]["codec"])
-                        self.assertEqual("audio.synthesis",
-                            by_id["synthesis"]["kind"])
-                        self.assertEqual("smb.apu-music.v1",
-                            by_id["music-sounds"]["codec"])
-                        self.assertEqual("audio.sequencer",
-                            by_id["music-sounds"]["kind"])
+                        self.assertEqual("fds.music.v1", by_id["synthesis"]["codec"])
+                        self.assertEqual("audio.synthesis", by_id["synthesis"]["kind"])
+                        self.assertEqual("smb.apu-music.v1", by_id["music-sounds"]["codec"])
+                        self.assertEqual("audio.sequencer", by_id["music-sounds"]["kind"])
                         self.assertIn("screens", by_id)
                         self.assertIn("text", by_id)
                     else:
-                        self.assertEqual("smb.apu-music.v1",
-                            by_id["music-sounds"]["codec"])
-                        self.assertEqual("audio.sequencer",
-                            by_id["music-sounds"]["kind"])
+                        self.assertEqual("smb.apu-music.v1", by_id["music-sounds"]["codec"])
+                        self.assertEqual("audio.sequencer", by_id["music-sounds"]["kind"])
                         self.assertNotIn("synthesis", by_id)
 
     def test_create_maps_packet_screen_text_to_text_editor(self) -> None:
@@ -875,28 +946,37 @@ class StudioProjectTests(unittest.TestCase):
             source = root / "manifest.json"
             source.write_text(json.dumps(manifest()), encoding="utf-8")
             resources = root / "resources.json"
-            resources.write_text(json.dumps({
-                "schema": "retrolarium.nes-resource-bundle",
-                "schema_version": 1,
-                "game": "screen-text-probe",
-                "revision": "probe-v1",
-                "source_sha256": SHA256,
-                "resources": [{
-                    "id": "title-screen", "kind": "screen",
-                    "codec": "nes.ppu-screen-packets.v1",
-                    "text_fields": [{"key": "title"}],
-                }],
-            }), encoding="utf-8")
+            resources.write_text(
+                json.dumps(
+                    {
+                        "schema": "retrolarium.nes-resource-bundle",
+                        "schema_version": 1,
+                        "game": "screen-text-probe",
+                        "revision": "probe-v1",
+                        "source_sha256": SHA256,
+                        "resources": [
+                            {
+                                "id": "title-screen",
+                                "kind": "screen",
+                                "codec": "nes.ppu-screen-packets.v1",
+                                "text_fields": [{"key": "title"}],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
             with patched_manifest(manifest()):
                 result = create_studio_project(
-                    source, root / "screen-text.rlj",
-                    project_id="screen-text", name="Screen text",
-                    profile="screen-text.v1", resource_document=resources,
+                    source,
+                    root / "screen-text.rlj",
+                    project_id="screen-text",
+                    name="Screen text",
+                    profile="screen-text.v1",
+                    resource_document=resources,
                 )
 
-            text = next(
-                tab for tab in result["workspace"]["tabs"] if tab["id"] == "text"
-            )
+            text = next(tab for tab in result["workspace"]["tabs"] if tab["id"] == "text")
             self.assertEqual("text.fixed", text["kind"])
             self.assertEqual("nes.ppu-screen-packets.v1", text["codec"])
 

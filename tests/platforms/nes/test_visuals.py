@@ -47,22 +47,28 @@ def fixture() -> tuple[bytes, GameProfile, RevisionSpec]:
     header = b"NES\x1a" + bytes((1, 1, 0, 0)) + bytes(8)
     body = bytearray(0x6000)
     body[0:8] = bytes((1, 2, 3, 4, 5, 6, 7, 8))
-    body[8:24] = bytes((0x3F, 0x00, 0x04, 0x0F, 0x16, 0x27, 0x18, 0x00,
-                        0x3F, 0x00, 0x04, 0x0F, 0x01, 0x11, 0x21, 0x00))
+    body[8:24] = bytes((0x3F, 0x00, 0x04, 0x0F, 0x16, 0x27, 0x18, 0x00, 0x3F, 0x00, 0x04, 0x0F, 0x01, 0x11, 0x21, 0x00))
     image = header + bytes(body)
     revision = RevisionSpec(
-        "probe", "NES visual probe", len(image), hashlib.sha1(image).hexdigest(),
-        hashlib.sha256(image).hexdigest(), "ines", 0,
+        "probe",
+        "NES visual probe",
+        len(image),
+        hashlib.sha1(image).hexdigest(),
+        hashlib.sha256(image).hexdigest(),
+        "ines",
+        0,
     )
     profile = GameProfile(
-        "nes-visual-probe", 1, "NES visual probe", "nes", ("graphics",),
+        "nes-visual-probe",
+        1,
+        "NES visual probe",
+        "nes",
+        ("graphics",),
         (revision,),
         (
             ResourceSpec("bundle", "resource-bundle", "nes.resource-bundle.v1", "fixed"),
-            ResourceSpec("metatiles", "metatile", "nes.metatile-2x2.v1", "fixed",
-                         METATILE_PARAMETERS),
-            ResourceSpec("palettes", "palette", "nes.ppu-palette-packets.v1", "fixed",
-                         PALETTE_PARAMETERS),
+            ResourceSpec("metatiles", "metatile", "nes.metatile-2x2.v1", "fixed", METATILE_PARAMETERS),
+            ResourceSpec("palettes", "palette", "nes.ppu-palette-packets.v1", "fixed", PALETTE_PARAMETERS),
         ),
     )
     return image, profile, revision
@@ -79,15 +85,23 @@ class NesVisualTests(unittest.TestCase):
         self.assertEqual(encode_metatiles(value, METATILE_PARAMETERS), payload)
 
     def test_palette_packet_codec_preserves_ppu_headers_and_names(self) -> None:
-        payload = bytes((0x3F, 0x00, 0x04, 0x0F, 0x16, 0x27, 0x18, 0x00,
-                         0x3F, 0x00, 0x04, 0x0F, 0x01, 0x11, 0x21, 0x00))
+        payload = bytes(
+            (0x3F, 0x00, 0x04, 0x0F, 0x16, 0x27, 0x18, 0x00, 0x3F, 0x00, 0x04, 0x0F, 0x01, 0x11, 0x21, 0x00)
+        )
         value = decode_palette_packets(payload, PALETTE_PARAMETERS)
         self.assertEqual(value["day_background"], 0x22)
         self.assertEqual(value["night_background"], 0x0F)
-        self.assertEqual(value["packets"][0], {
-            "name": "ground", "address": 0x3F00, "vertical": False,
-            "repeat": False, "length": 4, "values": [0x0F, 0x16, 0x27, 0x18],
-        })
+        self.assertEqual(
+            value["packets"][0],
+            {
+                "name": "ground",
+                "address": 0x3F00,
+                "vertical": False,
+                "repeat": False,
+                "length": 4,
+                "values": [0x0F, 0x16, 0x27, 0x18],
+            },
+        )
         self.assertEqual(encode_palette_packets(value, PALETTE_PARAMETERS), payload)
 
     def test_bundle_round_trips_and_edits_both_visual_ranges(self) -> None:

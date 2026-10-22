@@ -48,15 +48,11 @@ PACMAN_PALETTE_CODEC = "pacman.palette-table.v1"
 
 
 def _decode_maze(image: bytes, resource: ResourceSpec) -> dict[str, object]:
-    width = _integer(
-        resource.parameters.get("width"), f"{resource.resource_id}.width", minimum=1
+    width = _integer(resource.parameters.get("width"), f"{resource.resource_id}.width", minimum=1)
+    height = _integer(resource.parameters.get("height"), f"{resource.resource_id}.height", minimum=1)
+    offset, size = _span(
+        resource, _integer(resource.parameters.get("tokens"), f"{resource.resource_id}.tokens", minimum=1)
     )
-    height = _integer(
-        resource.parameters.get("height"), f"{resource.resource_id}.height", minimum=1
-    )
-    offset, size = _span(resource, _integer(
-        resource.parameters.get("tokens"), f"{resource.resource_id}.tokens", minimum=1
-    ))
     payload = image[offset : offset + size]
     if len(payload) != size:
         raise NesResourceError(f"{resource.resource_id} exceeds the source image")
@@ -67,18 +63,14 @@ def _decode_maze(image: bytes, resource: ResourceSpec) -> dict[str, object]:
         "width": width,
         "height": height,
         "tokens": list(payload),
-        "tiles": [list(row) for row in decode_maze_rle(
-            payload, rows=height, columns=width
-        )],
+        "tiles": [list(row) for row in decode_maze_rle(payload, rows=height, columns=width)],
     }
 
 
 def _parse_maze(raw: dict[str, Any], spec: ResourceSpec) -> Encoded:
     payload: bytes | None = None
     encoded_spans: tuple[_EncodedSpan, ...] | None = None
-    expected_fields = {
-        "id", "kind", "codec", "width", "height", "tokens", "tiles"
-    }
+    expected_fields = {"id", "kind", "codec", "width", "height", "tokens", "tiles"}
     width = _integer(spec.parameters.get("width"), f"{spec.resource_id}.width", minimum=1)
     height = _integer(spec.parameters.get("height"), f"{spec.resource_id}.height", minimum=1)
     tokens = _integer(spec.parameters.get("tokens"), f"{spec.resource_id}.tokens", minimum=1)
@@ -86,24 +78,17 @@ def _parse_maze(raw: dict[str, Any], spec: ResourceSpec) -> Encoded:
         raise NesResourceError(f"resource {spec.resource_id} geometry differs from profile")
     raw_tokens = raw.get("tokens")
     if not isinstance(raw_tokens, list) or len(raw_tokens) != tokens:
-        raise NesResourceError(
-            f"{spec.resource_id}.tokens must contain {tokens} bytes"
-        )
-    preserved = bytes(
-        _byte(item, f"{spec.resource_id}.tokens[{index}]")
-        for index, item in enumerate(raw_tokens)
-    )
+        raise NesResourceError(f"{spec.resource_id}.tokens must contain {tokens} bytes")
+    preserved = bytes(_byte(item, f"{spec.resource_id}.tokens[{index}]") for index, item in enumerate(raw_tokens))
     try:
-        preserved_grid = decode_maze_rle(
-            preserved, rows=height, columns=width
-        )
+        preserved_grid = decode_maze_rle(preserved, rows=height, columns=width)
     except AuthoringError as exc:
         raise NesResourceError(str(exc)) from exc
-    normalized_grid = _matrix(
-        raw.get("tiles"), height, width, f"{spec.resource_id}.tiles", maximum=0x3F
-    )
-    payload = preserved if preserved_grid == normalized_grid else encode_maze_grid(
-        raw.get("tiles"), rows=height, columns=width, token_count=tokens
+    normalized_grid = _matrix(raw.get("tiles"), height, width, f"{spec.resource_id}.tiles", maximum=0x3F)
+    payload = (
+        preserved
+        if preserved_grid == normalized_grid
+        else encode_maze_grid(raw.get("tiles"), rows=height, columns=width, token_count=tokens)
     )
     # The round counter's start and the two "pellets eaten" sums are
     # immediate operands; the build writes the maze's own count there.
@@ -144,13 +129,16 @@ def _parse_actor(raw: dict[str, Any], spec: ResourceSpec) -> Encoded:
     payload: bytes | None = None
     encoded_spans: tuple[_EncodedSpan, ...] | None = None
     expected_fields = {
-        "id", "kind", "codec", "standard_tile_quads",
-        "alternate_tile_quads", "standard_attribute_quads",
-        "alternate_attribute_quads", "oam_offsets_yx",
+        "id",
+        "kind",
+        "codec",
+        "standard_tile_quads",
+        "alternate_tile_quads",
+        "standard_attribute_quads",
+        "alternate_attribute_quads",
+        "oam_offsets_yx",
     }
-    payload = encode_actor_mapping({
-        key: raw.get(key) for key in expected_fields - {"id", "kind", "codec"}
-    })
+    payload = encode_actor_mapping({key: raw.get(key) for key in expected_fields - {"id", "kind", "codec"}})
     return expected_fields, payload, encoded_spans
 
 
@@ -168,8 +156,7 @@ def _parse_sound(raw: dict[str, Any], spec: ResourceSpec) -> Encoded:
     encoded_spans: tuple[_EncodedSpan, ...] | None = None
     expected_fields = {"id", "kind", "codec", "capacity", "slots"}
     encoded_spans = tuple(
-        _EncodedSpan(offset, replacement)
-        for offset, replacement in encode_sound_bundle(raw, spec.parameters)
+        _EncodedSpan(offset, replacement) for offset, replacement in encode_sound_bundle(raw, spec.parameters)
     )
     return expected_fields, payload, encoded_spans
 
@@ -187,18 +174,23 @@ def _parse_screen(raw: dict[str, Any], spec: ResourceSpec) -> Encoded:
     payload: bytes | None = None
     encoded_spans: tuple[_EncodedSpan, ...] | None = None
     expected_fields = {
-        "id", "kind", "codec", "title_logo", "title_packets",
-        "title_attributes", "fixed_blocks", "attract_packets",
-        "intermission_visual", "read_only_code_tables", "encoding",
+        "id",
+        "kind",
+        "codec",
+        "title_logo",
+        "title_packets",
+        "title_attributes",
+        "fixed_blocks",
+        "attract_packets",
+        "intermission_visual",
+        "read_only_code_tables",
+        "encoding",
         "text_fields",
     }
     encoded_spans = tuple(
         _EncodedSpan(offset, replacement)
         for offset, replacement in encode_screen_collection(
-            {
-                key: raw.get(key)
-                for key in expected_fields - {"id", "kind", "codec"}
-            },
+            {key: raw.get(key) for key in expected_fields - {"id", "kind", "codec"}},
             spec.parameters,
         )
     )
@@ -216,23 +208,29 @@ def _counters(resources: Sequence[Mapping[str, Any]]) -> dict[str, int]:
         "mazes": len(of(PACMAN_MAZE_CODEC)),
         "actor_frames": sum(
             len(item.get("standard_tile_quads", [])) + len(item.get("alternate_tile_quads", []))
-            for item in of(PACMAN_ACTOR_CODEC)),
+            for item in of(PACMAN_ACTOR_CODEC)
+        ),
         "text_messages": sum(len(item.get("text_fields", [])) for item in of(PACMAN_SCREEN_CODEC)),
         "sound_slots": sum(len(item.get("slots", [])) for item in sound),
         "sound_notes": sum(
             command.get("kind") == "note"
-            for item in sound for slot in item.get("slots", [])
-            for command in slot.get("stream", {}).get("commands", [])),
+            for item in sound
+            for slot in item.get("slots", [])
+            for command in slot.get("stream", {}).get("commands", [])
+        ),
         "sound_used_bytes": sum(
-            len(encode_sound_stream(slot["stream"])) for item in sound for slot in item.get("slots", [])),
+            len(encode_sound_stream(slot["stream"])) for item in sound for slot in item.get("slots", [])
+        ),
     }
 
 
-register(NesCodec(
-    PACMAN_PALETTE_CODEC,
-    decode=functools.partial(decode_palette, mirror_pairs=True),
-    parse=functools.partial(parse_palette, mirror_pairs=True),
-))
+register(
+    NesCodec(
+        PACMAN_PALETTE_CODEC,
+        decode=functools.partial(decode_palette, mirror_pairs=True),
+        parse=functools.partial(parse_palette, mirror_pairs=True),
+    )
+)
 register(NesCodec(PACMAN_MAZE_CODEC, decode=_decode_maze, parse=_parse_maze))
 register(NesCodec(PACMAN_ACTOR_CODEC, decode=_decode_actor, parse=_parse_actor))
 register(NesCodec(PACMAN_SOUND_CODEC, decode=_decode_sound, parse=_parse_sound))

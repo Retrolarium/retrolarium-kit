@@ -85,29 +85,19 @@ def command_build_tools_status(args: argparse.Namespace) -> None:
 def command_build_tools_materialize(args: argparse.Namespace) -> None:
     from retrolarium_kit.core.build_toolchains import materialize_build_toolchain
 
-    print_json(
-        materialize_build_toolchain(
-            args.suite, cache_root=args.cache, host=args.host
-        ).as_dict()
-    )
+    print_json(materialize_build_toolchain(args.suite, cache_root=args.cache, host=args.host).as_dict())
 
 
 def command_build_tools_path(args: argparse.Namespace) -> None:
     from retrolarium_kit.core.build_toolchains import materialize_build_toolchain
 
-    suite = materialize_build_toolchain(
-        args.suite, cache_root=args.cache, host=args.host
-    )
+    suite = materialize_build_toolchain(args.suite, cache_root=args.cache, host=args.host)
     print(suite.command(args.tool))
 
 
 def add_parsers(commands: argparse._SubParsersAction) -> None:
-    project = commands.add_parser(
-        "project", help="validate and operate on generated Retrolarium projects"
-    )
-    project_commands = project.add_subparsers(
-        dest="project_command", required=True
-    )
+    project = commands.add_parser("project", help="validate and operate on generated Retrolarium projects")
+    project_commands = project.add_subparsers(dest="project_command", required=True)
     project_validate = project_commands.add_parser("validate")
     project_validate.add_argument("manifest", type=Path)
     project_validate.set_defaults(handler=command_project_validate)
@@ -134,12 +124,8 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     project_launch.add_argument("--output", type=Path)
     project_launch.set_defaults(handler=command_project_launch)
 
-    build_tools = commands.add_parser(
-        "build-tools", help="use compiler suites shipped inside the Python wheel"
-    )
-    build_tool_commands = build_tools.add_subparsers(
-        dest="build_tools_command", required=True
-    )
+    build_tools = commands.add_parser("build-tools", help="use compiler suites shipped inside the Python wheel")
+    build_tool_commands = build_tools.add_subparsers(dest="build_tools_command", required=True)
     build_tool_status = build_tool_commands.add_parser(
         "status", help="verify bundled payloads and show host availability"
     )
@@ -152,9 +138,7 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     build_tool_materialize.add_argument("--host")
     build_tool_materialize.add_argument("--cache", type=Path)
     build_tool_materialize.set_defaults(handler=command_build_tools_materialize)
-    build_tool_path = build_tool_commands.add_parser(
-        "path", help="print one verified compiler command path"
-    )
+    build_tool_path = build_tool_commands.add_parser("path", help="print one verified compiler command path")
     build_tool_path.add_argument("suite", choices=("nes", "megadrive"))
     build_tool_path.add_argument("tool")
     build_tool_path.add_argument("--host")

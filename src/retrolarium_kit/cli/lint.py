@@ -13,8 +13,7 @@ def command_lint(args: argparse.Namespace) -> None:
 
     root = args.project.resolve()
     config = load_config(root, args.config)
-    paths = tuple(str(path.resolve().relative_to(root) if path.is_absolute() else path)
-                  for path in args.paths)
+    paths = tuple(str(path.resolve().relative_to(root) if path.is_absolute() else path) for path in args.paths)
     issues = run(root, config, fix=args.fix, only=tuple(args.only or ()), paths=paths)
     if issues:
         limit = args.limit
@@ -49,25 +48,23 @@ def command_hooks(args: argparse.Namespace) -> None:
 
 
 def add_parsers(commands: argparse._SubParsersAction) -> None:
-    lint = commands.add_parser(
-        "lint", help="check a game repository's house style (config/lint.json)"
+    lint = commands.add_parser("lint", help="check a game repository's house style (config/lint.json)")
+    lint.add_argument(
+        "--project", type=Path, default=Path("."), help="repository root (default: the current directory)"
     )
-    lint.add_argument("--project", type=Path, default=Path("."),
-                      help="repository root (default: the current directory)")
     lint.add_argument("--config", type=Path, help="lint config (default: config/lint.json)")
     lint.add_argument("--fix", action="store_true", help="normalize the files before checking them")
-    lint.add_argument("--only", action="append", choices=("assembly", "text", "code"),
-                      help="run one section (repeatable)")
+    lint.add_argument(
+        "--only", action="append", choices=("assembly", "text", "code"), help="run one section (repeatable)"
+    )
     lint.add_argument("--limit", type=int, default=200, help="issues to print (0: all)")
-    lint.add_argument("paths", nargs="*", type=Path,
-                      help="assembly files or folders to check instead of the config's")
+    lint.add_argument("paths", nargs="*", type=Path, help="assembly files or folders to check instead of the config's")
     lint.set_defaults(handler=command_lint)
 
-    hooks = commands.add_parser(
-        "hooks", help="install the core's Git hooks (stop words, make lint) into a repository"
-    )
+    hooks = commands.add_parser("hooks", help="install the core's Git hooks (stop words, make lint) into a repository")
     hooks.add_argument("action", choices=("install", "uninstall"))
-    hooks.add_argument("--project", type=Path, default=Path("."),
-                       help="repository root (default: the current directory)")
+    hooks.add_argument(
+        "--project", type=Path, default=Path("."), help="repository root (default: the current directory)"
+    )
     hooks.add_argument("--force", action="store_true", help="replace hooks that are not the core's")
     hooks.set_defaults(handler=command_hooks)

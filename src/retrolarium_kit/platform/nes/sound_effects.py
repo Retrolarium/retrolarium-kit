@@ -38,16 +38,16 @@ class SoundEffectError(AuthoringError):
 CPU_CLOCK = 1_789_773.0
 FRAME_CYCLES = CPU_CLOCK / 60.0988
 SAMPLE_RATE = 44_100
-MAX_FRAMES = 300            # five seconds: some effects repeat until replaced
-SILENT_TAIL = 45            # frames of silence that end an effect
-STEP_LIMIT = 200_000        # instructions per routine call
+MAX_FRAMES = 300  # five seconds: some effects repeat until replaced
+SILENT_TAIL = 45  # frames of silence that end an effect
+STEP_LIMIT = 200_000  # instructions per routine call
 CHANNEL_NAMES = ("Pulse 1", "Pulse 2", "Triangle", "Noise")
 
 
 # --- 6502 -------------------------------------------------------------------
 
 C, Z, I, D, B, U, V, N = 1, 2, 4, 8, 16, 32, 64, 128
-_RETURN = 0x0001            # where a call's sentinel RTS lands
+_RETURN = 0x0001  # where a call's sentinel RTS lands
 
 _ALU = {0x00: "ORA", 0x20: "AND", 0x40: "EOR", 0x60: "ADC", 0x80: "STA", 0xA0: "LDA", 0xC0: "CMP", 0xE0: "SBC"}
 _ALU_MODES = {0x09: "imm", 0x05: "zp", 0x15: "zpx", 0x0D: "abs", 0x1D: "absx", 0x19: "absy", 0x01: "indx", 0x11: "indy"}
@@ -68,31 +68,84 @@ def _opcodes() -> dict[int, tuple[str, str]]:
     for base, name in ((0xC0, "DEC"), (0xE0, "INC")):
         for offset, mode in ((0x06, "zp"), (0x16, "zpx"), (0x0E, "abs"), (0x1E, "absx")):
             table[base + offset] = (name, mode)
-    table.update({
-        0x10: ("BPL", "rel"), 0x30: ("BMI", "rel"), 0x50: ("BVC", "rel"), 0x70: ("BVS", "rel"),
-        0x90: ("BCC", "rel"), 0xB0: ("BCS", "rel"), 0xD0: ("BNE", "rel"), 0xF0: ("BEQ", "rel"),
-        0x24: ("BIT", "zp"), 0x2C: ("BIT", "abs"),
-        0x00: ("BRK", "imp"), 0x18: ("CLC", "imp"), 0xD8: ("CLD", "imp"), 0x58: ("CLI", "imp"),
-        0xB8: ("CLV", "imp"), 0x38: ("SEC", "imp"), 0xF8: ("SED", "imp"), 0x78: ("SEI", "imp"),
-        0xE0: ("CPX", "imm"), 0xE4: ("CPX", "zp"), 0xEC: ("CPX", "abs"),
-        0xC0: ("CPY", "imm"), 0xC4: ("CPY", "zp"), 0xCC: ("CPY", "abs"),
-        0xCA: ("DEX", "imp"), 0x88: ("DEY", "imp"), 0xE8: ("INX", "imp"), 0xC8: ("INY", "imp"),
-        0x4C: ("JMP", "abs"), 0x6C: ("JMP", "ind"), 0x20: ("JSR", "abs"),
-        0xA2: ("LDX", "imm"), 0xA6: ("LDX", "zp"), 0xB6: ("LDX", "zpy"), 0xAE: ("LDX", "abs"), 0xBE: ("LDX", "absy"),
-        0xA0: ("LDY", "imm"), 0xA4: ("LDY", "zp"), 0xB4: ("LDY", "zpx"), 0xAC: ("LDY", "abs"), 0xBC: ("LDY", "absx"),
-        0xEA: ("NOP", "imp"), 0x48: ("PHA", "imp"), 0x08: ("PHP", "imp"), 0x68: ("PLA", "imp"), 0x28: ("PLP", "imp"),
-        0x40: ("RTI", "imp"), 0x60: ("RTS", "imp"),
-        0x86: ("STX", "zp"), 0x96: ("STX", "zpy"), 0x8E: ("STX", "abs"),
-        0x84: ("STY", "zp"), 0x94: ("STY", "zpx"), 0x8C: ("STY", "abs"),
-        0xAA: ("TAX", "imp"), 0xA8: ("TAY", "imp"), 0xBA: ("TSX", "imp"), 0x8A: ("TXA", "imp"),
-        0x9A: ("TXS", "imp"), 0x98: ("TYA", "imp"),
-    })
+    table.update(
+        {
+            0x10: ("BPL", "rel"),
+            0x30: ("BMI", "rel"),
+            0x50: ("BVC", "rel"),
+            0x70: ("BVS", "rel"),
+            0x90: ("BCC", "rel"),
+            0xB0: ("BCS", "rel"),
+            0xD0: ("BNE", "rel"),
+            0xF0: ("BEQ", "rel"),
+            0x24: ("BIT", "zp"),
+            0x2C: ("BIT", "abs"),
+            0x00: ("BRK", "imp"),
+            0x18: ("CLC", "imp"),
+            0xD8: ("CLD", "imp"),
+            0x58: ("CLI", "imp"),
+            0xB8: ("CLV", "imp"),
+            0x38: ("SEC", "imp"),
+            0xF8: ("SED", "imp"),
+            0x78: ("SEI", "imp"),
+            0xE0: ("CPX", "imm"),
+            0xE4: ("CPX", "zp"),
+            0xEC: ("CPX", "abs"),
+            0xC0: ("CPY", "imm"),
+            0xC4: ("CPY", "zp"),
+            0xCC: ("CPY", "abs"),
+            0xCA: ("DEX", "imp"),
+            0x88: ("DEY", "imp"),
+            0xE8: ("INX", "imp"),
+            0xC8: ("INY", "imp"),
+            0x4C: ("JMP", "abs"),
+            0x6C: ("JMP", "ind"),
+            0x20: ("JSR", "abs"),
+            0xA2: ("LDX", "imm"),
+            0xA6: ("LDX", "zp"),
+            0xB6: ("LDX", "zpy"),
+            0xAE: ("LDX", "abs"),
+            0xBE: ("LDX", "absy"),
+            0xA0: ("LDY", "imm"),
+            0xA4: ("LDY", "zp"),
+            0xB4: ("LDY", "zpx"),
+            0xAC: ("LDY", "abs"),
+            0xBC: ("LDY", "absx"),
+            0xEA: ("NOP", "imp"),
+            0x48: ("PHA", "imp"),
+            0x08: ("PHP", "imp"),
+            0x68: ("PLA", "imp"),
+            0x28: ("PLP", "imp"),
+            0x40: ("RTI", "imp"),
+            0x60: ("RTS", "imp"),
+            0x86: ("STX", "zp"),
+            0x96: ("STX", "zpy"),
+            0x8E: ("STX", "abs"),
+            0x84: ("STY", "zp"),
+            0x94: ("STY", "zpx"),
+            0x8C: ("STY", "abs"),
+            0xAA: ("TAX", "imp"),
+            0xA8: ("TAY", "imp"),
+            0xBA: ("TSX", "imp"),
+            0x8A: ("TXA", "imp"),
+            0x9A: ("TXS", "imp"),
+            0x98: ("TYA", "imp"),
+        }
+    )
     return table
 
 
 OPCODES = _opcodes()
-_BRANCHES = {"BPL": (N, False), "BMI": (N, True), "BVC": (V, False), "BVS": (V, True),
-             "BCC": (C, False), "BCS": (C, True), "BNE": (Z, False), "BEQ": (Z, True)}
+_BRANCHES = {
+    "BPL": (N, False),
+    "BMI": (N, True),
+    "BVC": (V, False),
+    "BVS": (V, True),
+    "BCC": (C, False),
+    "BCS": (C, True),
+    "BNE": (Z, False),
+    "BEQ": (Z, True),
+}
 
 
 class Cpu6502:
@@ -340,16 +393,17 @@ class Bus:
 
 # --- the games' effects ------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class Action:
-    kind: str               # "poke" or "call"
+    kind: str  # "poke" or "call"
     address: int
-    value: int = 0          # poke value / call A
+    value: int = 0  # poke value / call A
 
 
 @dataclass(frozen=True)
 class EffectPlan:
-    bank: int               # 32 KiB PRG window
+    bank: int  # 32 KiB PRG window
     start: tuple[Action, ...]
     service: tuple[int, ...]
     service_on_start: bool
@@ -388,8 +442,9 @@ def effect_plan(key: str, prg: bytes, engine: int | None = None) -> EffectPlan:
             raise SoundEffectError(f"unknown sound effect {key!r}")
         if engine is None:
             raise SoundEffectError("the profile names no SoundEngine for this Super Mario Bros. image")
-        return EffectPlan(0, (Action("poke", SMB_OPER_MODE, 1), Action("poke", SMB_QUEUES[channel], bit)),
-                          (engine,), True)
+        return EffectPlan(
+            0, (Action("poke", SMB_OPER_MODE, 1), Action("poke", SMB_QUEUES[channel], bit)), (engine,), True
+        )
     if game == "castle-excellent":
         (index,) = _key_parts(key, "castle-excellent", 2)
         number = _number(index, key)
@@ -412,19 +467,27 @@ def effect_plan(key: str, prg: bytes, engine: int | None = None) -> EffectPlan:
 class Table:
     """A data table an effect reads: note tables hold offsets into the
     game's period table, noise tables $400E values."""
+
     id: str
-    address: int            # CPU address
+    address: int  # CPU address
     size: int
-    kind: str               # "note" or "noise"
+    kind: str  # "note" or "noise"
 
 
-def capture(key: str, prg: bytes, *, frames: int = MAX_FRAMES, tables: tuple[Table, ...] = (),
-            reads: list[list[tuple[str, int]]] | None = None, engine: int | None = None) -> list[list[tuple[int, int]]]:
+def capture(
+    key: str,
+    prg: bytes,
+    *,
+    frames: int = MAX_FRAMES,
+    tables: tuple[Table, ...] = (),
+    reads: list[list[tuple[str, int]]] | None = None,
+    engine: int | None = None,
+) -> list[list[tuple[int, int]]]:
     """The APU writes of each frame while the effect plays; `reads` gets
     the table bytes each frame read."""
     plan = effect_plan(key, prg, engine)
     start = plan.bank * 0x8000
-    window = prg[start:start + 0x8000] if len(prg) > 0x4000 else prg
+    window = prg[start : start + 0x8000] if len(prg) > 0x4000 else prg
     bus = Bus(window)
     bus.watch = tuple((t.id, t.address, t.size) for t in tables)
     cpu = Cpu6502(bus.read, bus.write)
@@ -472,8 +535,40 @@ def table_choices(table: Table, prg: bytes, periods: int | None = None) -> list[
 
 # --- APU ---------------------------------------------------------------------
 
-LENGTHS = (10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14,
-           12, 16, 24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30)
+LENGTHS = (
+    10,
+    254,
+    20,
+    2,
+    40,
+    4,
+    80,
+    6,
+    160,
+    8,
+    60,
+    10,
+    14,
+    12,
+    26,
+    14,
+    12,
+    16,
+    24,
+    18,
+    48,
+    20,
+    96,
+    22,
+    192,
+    24,
+    72,
+    26,
+    16,
+    28,
+    32,
+    30,
+)
 NOISE_PERIODS = (4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068)
 DUTIES = (0.125, 0.25, 0.5, 0.75)
 TRIANGLE = tuple(range(15, -1, -1)) + tuple(range(16))
@@ -806,6 +901,7 @@ class Apu:
 
 # --- trace and render --------------------------------------------------------
 
+
 def _pitch(channel: int, frequency: float) -> int:
     if channel == 3:
         # Noise: a higher period index sounds lower.
@@ -813,15 +909,22 @@ def _pitch(channel: int, frequency: float) -> int:
     return int(round(69 + 12 * math.log2(max(frequency, 1.0) / 440.0)))
 
 
-def _sources(writes: list[list[tuple[int, int]]], reads: list[list[tuple[str, int]]],
-             tables: tuple[Table, ...], prg_values: dict[str, list[int]]) -> list[dict[int, dict[str, object]]]:
+def _sources(
+    writes: list[list[tuple[int, int]]],
+    reads: list[list[tuple[str, int]]],
+    tables: tuple[Table, ...],
+    prg_values: dict[str, list[int]],
+) -> list[dict[int, dict[str, object]]]:
     """Per frame and channel: the table byte that set the channel's period."""
     kinds = {t.id: t.kind for t in tables}
     result: list[dict[int, dict[str, object]]] = []
     for frame_writes, frame_reads in zip(writes, reads):
         sources: dict[int, dict[str, object]] = {}
-        periods = [channel for channel, register in enumerate((0x4002, 0x4006, 0x400A))
-                   if any(address == register for address, _v in frame_writes)]
+        periods = [
+            channel
+            for channel, register in enumerate((0x4002, 0x4006, 0x400A))
+            if any(address == register for address, _v in frame_writes)
+        ]
         for name, index in frame_reads:
             channel = 3 if kinds[name] == "noise" else (periods[0] if periods else None)
             if channel is not None:
@@ -830,15 +933,22 @@ def _sources(writes: list[list[tuple[int, int]]], reads: list[list[tuple[str, in
     return result
 
 
-def play(key: str, prg: bytes, *, muted: set[int] | None = None, tables: tuple[Table, ...] = (),
-         engine: int | None = None, periods: int | None = None) -> dict[str, object]:
+def play(
+    key: str,
+    prg: bytes,
+    *,
+    muted: set[int] | None = None,
+    tables: tuple[Table, ...] = (),
+    engine: int | None = None,
+    periods: int | None = None,
+) -> dict[str, object]:
     """Runs the effect and returns its per-channel notes and PCM samples;
     notes set from a table byte name it as their source."""
     reads: list[list[tuple[str, int]]] = []
     writes = capture(key, prg, tables=tables, reads=reads, engine=engine)
     plan = effect_plan(key, prg, engine)
-    window = prg[plan.bank * 0x8000:plan.bank * 0x8000 + 0x8000] if len(prg) > 0x4000 else prg * 2
-    values = {t.id: list(window[t.address - 0x8000:t.address - 0x8000 + t.size]) for t in tables}
+    window = prg[plan.bank * 0x8000 : plan.bank * 0x8000 + 0x8000] if len(prg) > 0x4000 else prg * 2
+    values = {t.id: list(window[t.address - 0x8000 : t.address - 0x8000 + t.size]) for t in tables}
     sources = _sources(writes, reads, tables, values)
     apu = Apu()
     apu.muted = set(muted or ())
@@ -874,8 +984,11 @@ def play(key: str, prg: bytes, *, muted: set[int] | None = None, tables: tuple[T
             pitch = _pitch(index, frequency)
             source = sources[frame].get(index)
             last = notes[-1] if notes else None
-            same = source is None or (last is not None and last.get("source", {}).get("table") == source["table"]
-                                      and last.get("source", {}).get("index") == source["index"])
+            same = source is None or (
+                last is not None
+                and last.get("source", {}).get("table") == source["table"]
+                and last.get("source", {}).get("index") == source["index"]
+            )
             if last and last["pitch"] == pitch and last["start"] + last["length"] == frame and same:
                 last["length"] += 1
                 last["volume"] = max(last["volume"], volume)
@@ -886,8 +999,11 @@ def play(key: str, prg: bytes, *, muted: set[int] | None = None, tables: tuple[T
                 notes.append(note)  # type: ignore[arg-type]
         channels.append({"name": name, "notes": notes})
     used = {n["source"]["table"] for c in channels for n in c["notes"] if "source" in n}  # type: ignore[index]
-    described = [{"id": t.id, "kind": t.kind, "values": values[t.id], "choices": table_choices(t, window, periods)}
-                 for t in tables if t.id in used]
+    described = [
+        {"id": t.id, "kind": t.kind, "values": values[t.id], "choices": table_choices(t, window, periods)}
+        for t in tables
+        if t.id in used
+    ]
     return {"key": key, "frames": frames, "channels": channels, "tables": described, "samples": samples[:keep]}
 
 
@@ -904,9 +1020,17 @@ def wav_bytes(samples: list[float]) -> bytes:
     return buffer.getvalue()
 
 
-def render_effect(key: str, prg: bytes, *, wav: Path | None, trace: Path | None,
-                  muted: set[int] | None = None, tables: tuple[Table, ...] = (),
-                  engine: int | None = None, periods: int | None = None) -> dict[str, object]:
+def render_effect(
+    key: str,
+    prg: bytes,
+    *,
+    wav: Path | None,
+    trace: Path | None,
+    muted: set[int] | None = None,
+    tables: tuple[Table, ...] = (),
+    engine: int | None = None,
+    periods: int | None = None,
+) -> dict[str, object]:
     result = play(key, prg, muted=muted, tables=tables, engine=engine, periods=periods)
     report: dict[str, object] = {"schema": "retrolarium.sound-effect", "key": key, "frames": result["frames"]}
     if wav is not None:
@@ -915,7 +1039,12 @@ def render_effect(key: str, prg: bytes, *, wav: Path | None, trace: Path | None,
         report["wav"] = str(wav)
     if trace is not None:
         trace.parent.mkdir(parents=True, exist_ok=True)
-        trace.write_text(json.dumps({"key": key, "frames": result["frames"], "channels": result["channels"],
-                                     "tables": result["tables"]}, separators=(",", ":")), encoding="utf-8")
+        trace.write_text(
+            json.dumps(
+                {"key": key, "frames": result["frames"], "channels": result["channels"], "tables": result["tables"]},
+                separators=(",", ":"),
+            ),
+            encoding="utf-8",
+        )
         report["trace"] = str(trace)
     return report

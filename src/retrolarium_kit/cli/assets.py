@@ -54,8 +54,7 @@ def command_images(args: argparse.Namespace) -> None:
     manifest = _manifest(args)
     # Plain newlines: shell loops read these ids, and a Windows console's
     # carriage return would end up in each one.
-    lines = "".join(f"{image.id}\n" for image in manifest.images
-                    if not args.present or assets.present(manifest, image))
+    lines = "".join(f"{image.id}\n" for image in manifest.images if not args.present or assets.present(manifest, image))
     sys.stdout.buffer.write(lines.encode("utf-8"))
     sys.stdout.flush()
 
@@ -76,8 +75,12 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     actions = group.add_subparsers(dest="assets_command", required=True)
 
     def common(action: argparse.ArgumentParser) -> None:
-        action.add_argument("--manifest", type=Path, default=Path("assets/manifest.json"),
-                            help="the assets manifest (default: assets/manifest.json)")
+        action.add_argument(
+            "--manifest",
+            type=Path,
+            default=Path("assets/manifest.json"),
+            help="the assets manifest (default: assets/manifest.json)",
+        )
         action.add_argument("--root", help="the repository root (default: the current folder)")
 
     split = actions.add_parser("split", help="cut the assets out of the images that are here")
@@ -89,8 +92,9 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     check = actions.add_parser("check", help="say whether the assets are in place")
     common(check)
     check.add_argument("--image", action="append", help="only this image's assets (repeatable)")
-    check.add_argument("--exact", action="store_true",
-                       help="also compare each asset with its image (edited assets fail)")
+    check.add_argument(
+        "--exact", action="store_true", help="also compare each asset with its image (edited assets fail)"
+    )
     check.set_defaults(handler=command_check)
 
     images = actions.add_parser("images", help="list the manifest's images, one id per line")

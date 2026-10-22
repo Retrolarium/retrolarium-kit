@@ -16,26 +16,26 @@
     "resources"
   ],
   "properties": {
-    "schema": {"const": "retrolarium.game-profile"},
-    "schema_version": {"const": 1},
-    "profile_version": {"type": "integer", "minimum": 1},
-    "id": {"$ref": "#/$defs/identifier"},
-    "name": {"type": "string", "minLength": 1},
-    "platform": {"$ref": "#/$defs/identifier"},
+    "schema": { "const": "retrolarium.game-profile" },
+    "schema_version": { "const": 1 },
+    "profile_version": { "type": "integer", "minimum": 1 },
+    "id": { "$ref": "#/$defs/identifier" },
+    "name": { "type": "string", "minLength": 1 },
+    "platform": { "$ref": "#/$defs/identifier" },
     "capabilities": {
       "type": "array",
       "uniqueItems": true,
-      "items": {"$ref": "#/$defs/identifier"}
+      "items": { "$ref": "#/$defs/identifier" }
     },
     "revisions": {
       "type": "array",
       "minItems": 1,
-      "items": {"$ref": "#/$defs/revision"}
+      "items": { "$ref": "#/$defs/revision" }
     },
     "resources": {
       "type": "array",
       "minItems": 1,
-      "items": {"$ref": "#/$defs/resource"}
+      "items": { "$ref": "#/$defs/resource" }
     }
   },
   "$defs": {
@@ -48,32 +48,32 @@
       "additionalProperties": false,
       "required": ["id", "name", "size", "sha1", "sha256", "container"],
       "properties": {
-        "id": {"$ref": "#/$defs/identifier"},
-        "name": {"type": "string", "minLength": 1},
-        "size": {"type": "integer", "minimum": 1},
-        "sha1": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
-        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-        "container": {"$ref": "#/$defs/identifier"},
-        "mapper": {"type": "integer", "minimum": 0},
+        "id": { "$ref": "#/$defs/identifier" },
+        "name": { "type": "string", "minLength": 1 },
+        "size": { "type": "integer", "minimum": 1 },
+        "sha1": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "container": { "$ref": "#/$defs/identifier" },
+        "mapper": { "type": "integer", "minimum": 0 },
         "capabilities": {
           "type": "array",
           "uniqueItems": true,
-          "items": {"$ref": "#/$defs/identifier"}
+          "items": { "$ref": "#/$defs/identifier" }
         },
         "resources": {
           "type": "array",
           "minItems": 1,
-          "items": {"$ref": "#/$defs/resource"}
+          "items": { "$ref": "#/$defs/resource" }
         },
         "resource_overrides": {
           "type": "array",
           "uniqueItems": true,
-          "items": {"$ref": "#/$defs/resourceOverride"}
+          "items": { "$ref": "#/$defs/resourceOverride" }
         },
         "payloads": {
           "type": "array",
           "uniqueItems": true,
-          "items": {"$ref": "#/$defs/payload"}
+          "items": { "$ref": "#/$defs/payload" }
         }
       }
     },
@@ -82,18 +82,18 @@
       "additionalProperties": false,
       "required": ["id", "storage", "size", "sha1"],
       "properties": {
-        "id": {"$ref": "#/$defs/identifier"},
-        "storage": {"enum": ["range", "fds-records"]},
-        "size": {"type": "integer", "minimum": 1},
-        "sha1": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
-        "file_offset": {"type": "integer", "minimum": 0},
+        "id": { "$ref": "#/$defs/identifier" },
+        "storage": { "enum": ["range", "fds-records"] },
+        "size": { "type": "integer", "minimum": 1 },
+        "sha1": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "file_offset": { "type": "integer", "minimum": 0 },
         "record_ids": {
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "items": {"type": "integer", "minimum": 0, "maximum": 255}
+          "items": { "type": "integer", "minimum": 0, "maximum": 255 }
         },
-        "load_address": {"type": "integer", "minimum": 0, "maximum": 65535}
+        "load_address": { "type": "integer", "minimum": 0, "maximum": 65535 }
       }
     },
     "resource": {
@@ -101,12 +101,12 @@
       "additionalProperties": false,
       "required": ["id", "kind", "codec", "capacity_policy", "parameters"],
       "properties": {
-        "id": {"$ref": "#/$defs/identifier"},
-        "kind": {"$ref": "#/$defs/identifier"},
-        "codec": {"$ref": "#/$defs/identifier"},
-        "capacity_policy": {"$ref": "#/$defs/identifier"},
-        "parameters": {"type": "object"},
-        "payload": {"$ref": "#/$defs/identifier"}
+        "id": { "$ref": "#/$defs/identifier" },
+        "kind": { "$ref": "#/$defs/identifier" },
+        "codec": { "$ref": "#/$defs/identifier" },
+        "capacity_policy": { "$ref": "#/$defs/identifier" },
+        "parameters": { "type": "object" },
+        "payload": { "$ref": "#/$defs/identifier" }
       }
     },
     "resourceOverride": {
@@ -114,9 +114,9 @@
       "additionalProperties": false,
       "required": ["id"],
       "properties": {
-        "id": {"$ref": "#/$defs/identifier"},
-        "parameters": {"type": "object"},
-        "payload": {"$ref": "#/$defs/identifier"}
+        "id": { "$ref": "#/$defs/identifier" },
+        "parameters": { "type": "object" },
+        "payload": { "$ref": "#/$defs/identifier" }
       }
     }
   }

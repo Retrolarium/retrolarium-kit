@@ -31,7 +31,7 @@ def current_object_name(identifier: str, prefixes: list[list[str]] | None = None
     """Upgrade graphics names from earlier source inventories in memory."""
     for old, new in prefixes or ():
         if identifier.startswith(old):
-            return new + identifier[len(old):]
+            return new + identifier[len(old) :]
     return identifier
 
 
@@ -42,9 +42,7 @@ SPRITE_ANIM_HEADER_RE = re.compile(
     r"^(?P<label>[A-Za-z_][A-Za-z0-9_]*Anim[A-Za-z0-9_]*):\s+dc\.b\s+"
     r"(?P<count>\$[0-9A-Fa-f]+|[0-9]+),\s*(?P<delay>\$[0-9A-Fa-f]+|[0-9]+)\s*$"
 )
-SPRITE_FRAME_RE = re.compile(
-    r"^\s+dc\.w\s+(?P<label>[A-Za-z_][A-Za-z0-9_]*)-Sys_GameEntryPoint\s*$"
-)
+SPRITE_FRAME_RE = re.compile(r"^\s+dc\.w\s+(?P<label>[A-Za-z_][A-Za-z0-9_]*)-Sys_GameEntryPoint\s*$")
 TILE_ANIM_HEADER_RE = re.compile(
     r"^(?P<label>[A-Za-z_][A-Za-z0-9_]*Anim[A-Za-z0-9_]*):\s+dc\.b\s+"
     r"(?P<count>\$[0-9A-Fa-f]+|[0-9]+)\s*$"
@@ -106,33 +104,33 @@ def _decode_mapping(label: str, data: bytes, source_text: str) -> dict[str, Any]
     for index in range(count):
         offset = 2 + index * 6
         size = data[offset + 1]
-        attributes = int.from_bytes(data[offset + 2:offset + 4], "big")
-        pieces.append({
-            "y": signed_byte(data[offset]),
-            "width": ((size >> 2) & 3) + 1,
-            "height": (size & 3) + 1,
-            "tile": attributes & 0x7FF,
-            "palette": (attributes >> 13) & 3,
-            "priority": bool(attributes & 0x8000),
-            "hflip": bool(attributes & 0x0800),
-            "vflip": bool(attributes & 0x1000),
-            "x": signed_byte(data[offset + 4]),
-            "flipped_x": signed_byte(data[offset + 5]),
-        })
+        attributes = int.from_bytes(data[offset + 2 : offset + 4], "big")
+        pieces.append(
+            {
+                "y": signed_byte(data[offset]),
+                "width": ((size >> 2) & 3) + 1,
+                "height": (size & 3) + 1,
+                "tile": attributes & 0x7FF,
+                "palette": (attributes >> 13) & 3,
+                "priority": bool(attributes & 0x8000),
+                "hflip": bool(attributes & 0x0800),
+                "vflip": bool(attributes & 0x1000),
+                "x": signed_byte(data[offset + 4]),
+                "flipped_x": signed_byte(data[offset + 5]),
+            }
+        )
     return {"id": label, "source": MAPPING_SOURCE, "render_flags": data[1], "pieces": pieces}
 
 
 def parse_mappings(root: Path) -> list[dict[str, Any]]:
     path = root / "src" / MAPPING_SOURCE
     source = path.read_text(encoding="utf-8")
-    all_source = "\n".join(
-        item.read_text(encoding="utf-8") for item in (root / "src").rglob("*.s")
-    )
+    all_source = "\n".join(item.read_text(encoding="utf-8") for item in (root / "src").rglob("*.s"))
     labels = list(LABEL_RE.finditer(source))
     mappings = []
     for index, match in enumerate(labels):
         end = labels[index + 1].start() if index + 1 < len(labels) else len(source)
-        data = _block_bytes(source[match.start():end])
+        data = _block_bytes(source[match.start() : end])
         if data is None:
             continue
         mapping = _decode_mapping(match.group("label"), data, all_source)
@@ -152,20 +150,22 @@ def parse_animations(root: Path) -> list[dict[str, Any]]:
                 count = parse_number(sprite.group("count"))
                 frames = []
                 if count:
-                    for line in lines[index + 1:index + 1 + count]:
+                    for line in lines[index + 1 : index + 1 + count]:
                         frame = SPRITE_FRAME_RE.fullmatch(line)
                         if not frame:
                             frames = []
                             break
                         frames.append(frame.group("label"))
                 if count and len(frames) == count:
-                    animations.append({
-                        "id": sprite.group("label"),
-                        "source": relative,
-                        "kind": "sprite",
-                        "delay": parse_number(sprite.group("delay")),
-                        "frames": frames,
-                    })
+                    animations.append(
+                        {
+                            "id": sprite.group("label"),
+                            "source": relative,
+                            "kind": "sprite",
+                            "delay": parse_number(sprite.group("delay")),
+                            "frames": frames,
+                        }
+                    )
                     index += count + 1
                     continue
             tile = TILE_ANIM_HEADER_RE.fullmatch(lines[index])
@@ -174,20 +174,22 @@ def parse_animations(root: Path) -> list[dict[str, Any]]:
                 delay = DELAY_RE.fullmatch(lines[index + 1])
                 frames = []
                 if delay:
-                    for line in lines[index + 2:index + 2 + count]:
+                    for line in lines[index + 2 : index + 2 + count]:
                         frame = TILE_FRAME_RE.fullmatch(line)
                         if not frame:
                             frames = []
                             break
                         frames.append(frame.group("label"))
                 if delay and len(frames) == count:
-                    animations.append({
-                        "id": tile.group("label"),
-                        "source": relative,
-                        "kind": "tilemap",
-                        "delay": parse_number(delay.group("delay")),
-                        "frames": frames,
-                    })
+                    animations.append(
+                        {
+                            "id": tile.group("label"),
+                            "source": relative,
+                            "kind": "tilemap",
+                            "delay": parse_number(delay.group("delay")),
+                            "frames": frames,
+                        }
+                    )
                     index += count + 2
                     continue
             index += 1
@@ -227,7 +229,11 @@ def validate_document(document: dict[str, Any], root: Path) -> None:
         raise ValueError("mapping identity differs from the source inventory")
     for identifier, mapping in mappings.items():
         expected = expected_mappings[identifier]
-        if mapping.get("source") != MAPPING_SOURCE or not isinstance(mapping.get("render_flags"), int) or not 0 <= mapping["render_flags"] <= 0xFF:
+        if (
+            mapping.get("source") != MAPPING_SOURCE
+            or not isinstance(mapping.get("render_flags"), int)
+            or not 0 <= mapping["render_flags"] <= 0xFF
+        ):
             raise ValueError(f"{identifier}: invalid mapping header")
         pieces = mapping.get("pieces")
         if not isinstance(pieces, list) or len(pieces) != len(expected["pieces"]):
@@ -235,7 +241,10 @@ def validate_document(document: dict[str, Any], root: Path) -> None:
         for piece in pieces:
             if (
                 not isinstance(piece, dict)
-                or any(not isinstance(piece.get(key), int) for key in ("x", "flipped_x", "y", "width", "height", "tile", "palette"))
+                or any(
+                    not isinstance(piece.get(key), int)
+                    for key in ("x", "flipped_x", "y", "width", "height", "tile", "palette")
+                )
                 or not -128 <= piece["x"] <= 127
                 or not -128 <= piece["flipped_x"] <= 127
                 or not -128 <= piece["y"] <= 127
@@ -323,7 +332,7 @@ def _render_mapping(mapping: dict[str, Any]) -> str:
     data = _mapping_bytes(mapping)
     lines = [f"{mapping['id']}:\tdc.b\t${data[0]:02X}, ${data[1]:02X}"]
     for offset in range(2, len(data), 6):
-        attributes = int.from_bytes(data[offset + 2:offset + 4], "big")
+        attributes = int.from_bytes(data[offset + 2 : offset + 4], "big")
         lines.append(
             f"\tdc.b\t${data[offset]:02X}, ${data[offset + 1]:02X}\n"
             f"\tdc.w\t${attributes:04X}\n"
@@ -368,10 +377,7 @@ def apply_document(document: dict[str, Any], root: Path, staged_source: Path) ->
         lines = path.read_text(encoding="utf-8").splitlines()
         for animation in animations:
             baseline_animation = baseline_animations[animation["id"]]
-            header = next(
-                index for index, line in enumerate(lines)
-                if line.startswith(animation["id"] + ":")
-            )
+            header = next(index for index, line in enumerate(lines) if line.startswith(animation["id"] + ":"))
             count = len(animation["frames"])
             if animation["kind"] == "sprite":
                 lines[header] = f"{animation['id']}:\tdc.b\t{format_number(count)}, {format_number(animation['delay'])}"
