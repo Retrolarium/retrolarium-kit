@@ -608,17 +608,25 @@ def _repository_files(root: Path) -> list[str]:
 
 def check_repository(descriptor: GameDescriptor, revision_ids: list[str] | None = None, *,
                      flicky_level_writer: Path | None = None,
-                     release: Path | None = None) -> dict[str, object]:
+                     release: Path | None = None, present: bool = False) -> dict[str, object]:
     """Prove that the kit opens every revision of a repository and gives its
     ROM back unchanged: in a throwaway copy of the repository, each revision
     is prepared from its ROM, validated, built with no edits and compared
-    byte for byte with that ROM. The user's hack/ and .retrolarium/ are
-    neither read nor written."""
+    byte for byte with that ROM. With `present`, a revision whose ROM is not
+    here is skipped (and said so) instead of failing; a check that skips them
+    all fails. The user's hack/ and .retrolarium/ are neither read nor
+    written."""
     from retrolarium_kit.studio.project import build_studio_project, validate_studio_project
 
     chosen = [descriptor.revision(revision_id) for revision_id in revision_ids] \
         if revision_ids else list(descriptor.revisions)
     results = []
+    if present:
+        here = [revision for revision in chosen
+                if revision.build or (descriptor.root / revision.rom).is_file()]
+        results += [{"revision": revision.id, "label": revision.label, "status": "skipped",
+                     "reason": f"{revision.rom} is not here"} for revision in chosen if revision not in here]
+        chosen = here
     with tempfile.TemporaryDirectory(prefix="rltool-check-") as directory:
         copy = Path(directory) / descriptor.root.name
         for name in _repository_files(descriptor.root):
@@ -654,7 +662,9 @@ def check_repository(descriptor: GameDescriptor, revision_ids: list[str] | None 
                 entry.update(status="failed", reason="a build with no edits differs from the ROM")
                 continue
             entry.update(status="ok", documents=len(_documents(shadow, revision)), size=len(built))
-    failed = [entry["revision"] for entry in results if entry["status"] != "ok"]
+    failed = [entry["revision"] for entry in results if entry["status"] not in ("ok", "skipped")]
+    if not chosen:
+        failed.append("none")
     report = {"schema": "retrolarium.game-check", "game": {"id": descriptor.id, "name": descriptor.name},
               "profile": descriptor.profile, "status": "failed" if failed else "ok", "revisions": results}
     if release is not None:
