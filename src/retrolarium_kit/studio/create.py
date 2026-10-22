@@ -893,7 +893,7 @@ def create_studio_project(
             elif kind == "level" and kinds[kind] == {"doraemon.hierarchy.v1"}:
                 if (profile != "doraemon.v1"
                         or resource_root.get("game") != "doraemon"
-                        or resource_root.get("revision") not in {"original", "rev_a"}
+                        or resource_root.get("revision") != "original"
                         or {item.get("world") for item in resources
                             if isinstance(item, dict) and item.get("kind") == "level"}
                         != {"world1", "world3"}):
