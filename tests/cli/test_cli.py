@@ -121,5 +121,25 @@ class CliTests(unittest.TestCase):
             self.assertIn("named twice", errors)
 
 
+    def test_assets_path_names_the_file_an_image_is_read_from(self) -> None:
+        import tempfile
+
+        kit = Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "assets").mkdir()
+            (root / "assets" / "manifest.json").write_text(json.dumps({
+                "schema": "retrolarium.assets", "schema_version": 1, "output": "assets/generated",
+                "images": [{"id": "base", "file": "My Game (U).nes", "size": 1, "sha1": "0" * 40}],
+                "assets": []}), encoding="utf-8")
+            command = [sys.executable, str(kit / "rltool.py"), "assets", "path"]
+            found = subprocess.run(command + ["--image", "base"], cwd=root, capture_output=True, text=True)
+            missing = subprocess.run(command + ["--image", "other"], cwd=root, capture_output=True, text=True)
+        self.assertEqual(0, found.returncode, found.stderr)
+        self.assertEqual(f"{root.resolve().as_posix()}/My Game (U).nes", found.stdout.strip())
+        self.assertEqual(1, missing.returncode)
+        self.assertIn("no image 'other'", missing.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
