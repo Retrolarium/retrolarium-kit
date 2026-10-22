@@ -3,7 +3,7 @@
 Commands are grouped by what they work on: project and build-tools
 (cli/project.py), game (cli/game.py), studio (cli/studio.py), audio
 (cli/audio.py), lint and hooks (cli/lint.py), movie (cli/movie.py), assets
-(cli/assets.py) and profile (cli/profile.py). Each
+(cli/assets.py), profile (cli/profile.py) and fds (cli/fds.py). Each
 command imports the modules it runs, so `rltool --help` and the Studio's
 frequent short calls do not pay for loading every game's codecs.
 """
@@ -15,7 +15,7 @@ from pathlib import Path
 import sys
 
 from retrolarium_kit import __version__
-from retrolarium_kit.cli import assets, audio, game, lint, movie, profile, project, studio
+from retrolarium_kit.cli import assets, audio, fds, game, lint, movie, profile, project, studio
 
 
 # The errors a command reports as a one-line message, by the module that
@@ -45,7 +45,7 @@ def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(prog="rltool", description=__doc__.split("\n", 1)[0])
     root.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     commands = root.add_subparsers(dest="command", required=True)
-    for group in (project, game, studio, audio, lint, movie, assets, profile):
+    for group in (project, game, studio, audio, lint, movie, assets, profile, fds):
         group.add_parsers(commands)
     return root
 

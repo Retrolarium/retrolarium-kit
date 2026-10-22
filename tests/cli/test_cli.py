@@ -91,6 +91,35 @@ class CliTests(unittest.TestCase):
         self.assertIsNone(result)
         self.assertEqual("error: broken project\n", errors)
 
+    def test_fds_write_fills_disk_files_with_built_programs(self) -> None:
+        import tempfile
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from helpers import fds_side
+
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            (folder / "side.fds").write_bytes(fds_side())
+            (folder / "program.bin").write_bytes(b"xyzuv")
+            status, _, _ = run(["fds", "write", "--disk", str(folder / "side.fds"),
+                                "--file", f"3,4={folder / 'program.bin'}", "--output", str(folder / "out.fds")])
+            written = (folder / "out.fds").read_bytes()
+            self.assertEqual(0, status)
+            self.assertIn(b"xy", written)
+            self.assertIn(b"zuv", written)
+            self.assertNotIn(b"CDE", written)
+            # The files must be filled exactly, and named once.
+            status, _, errors = run(["fds", "write", "--disk", str(folder / "side.fds"),
+                                     "--file", f"3={folder / 'program.bin'}", "--output", str(folder / "bad.fds")])
+            self.assertEqual((1, False), (status, (folder / "bad.fds").exists()))
+            self.assertIn("expected 2", errors)
+            (folder / "two.bin").write_bytes(b"ab")
+            status, _, errors = run(["fds", "write", "--disk", str(folder / "side.fds"),
+                                     "--file", f"3={folder / 'two.bin'}", "--file", f"3={folder / 'two.bin'}",
+                                     "--output", str(folder / "bad.fds")])
+            self.assertEqual(1, status)
+            self.assertIn("named twice", errors)
+
 
 if __name__ == "__main__":
     unittest.main()
