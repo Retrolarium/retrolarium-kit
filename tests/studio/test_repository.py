@@ -298,6 +298,13 @@ class DescriptorTests(unittest.TestCase):
         self.assertIn("needs its ROM", report["revisions"][1]["reason"])
         only = check_repository(self.descriptor, ["japan-v10"])
         self.assertEqual(("ok", 1), (only["status"], len(only["revisions"])))
+        # Only the ROMs that are here: the missing one is skipped, not failed.
+        here = check_repository(self.descriptor, present=True)
+        self.assertEqual("ok", here["status"])
+        self.assertEqual({("japan-v10", "ok"), ("japan-v11", "skipped")},
+                         {(entry["revision"], entry["status"]) for entry in here["revisions"]})
+        (self.root / "pacman10.nes").unlink()
+        self.assertEqual("failed", check_repository(self.descriptor, present=True)["status"])
 
     def test_views_come_from_the_kit_not_the_descriptor(self) -> None:
         self.assertEqual("maze", self.descriptor.workspace["startup_tab"])

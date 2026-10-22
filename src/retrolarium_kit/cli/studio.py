@@ -151,7 +151,7 @@ def command_studio_check(args: argparse.Namespace) -> None:
 
     report = check_repository(load_descriptor(args.descriptor), args.revision or None,
                               flicky_level_writer=args.flicky_level_writer,
-                              release=args.release)
+                              release=args.release, present=args.present)
     print_json(report)
     if report["status"] != "ok":
         raise SystemExit(1)
@@ -495,6 +495,8 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     studio_check.add_argument("descriptor", type=Path, help="the .rlj at the repository root")
     studio_check.add_argument("--revision", action="append",
                               help="check only this revision (repeatable); default: all of them")
+    studio_check.add_argument("--present", action="store_true",
+                              help="check only the revisions whose ROM is here; skip the others")
     studio_check.add_argument("--flicky-level-writer", type=Path,
                               help="the studio's retrolarium-flicky-level-writer, for Flicky")
     studio_check.add_argument("--release", type=Path,
