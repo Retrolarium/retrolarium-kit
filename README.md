@@ -112,7 +112,7 @@ game shares them instead of keeping a copy.
 rltool studio revisions path\to\game.rlj
 rltool studio prepare path\to\game.rlj --revision <id> [--rom path\to\rom]
 rltool studio reset path\to\game.rlj --revision <id>
-rltool studio check path\to\game.rlj [--revision <id>] [--release manifest.json]
+rltool studio check path\to\game.rlj [--revision <id>] [--present] [--release manifest.json]
 ```
 
 `prepare` keeps edits in `hack/<revision>/` and writes the generated project and
@@ -120,7 +120,9 @@ builds into `.retrolarium/<revision>/`; the repository ignores both. `check` is
 what a repository's `make studio-check` runs: in a throwaway copy of the
 repository it prepares every revision from its ROM, validates it, builds it with
 no edits and compares the result with that ROM byte for byte. It needs every
-revision's ROM at the root and never touches the user's folders.
+revision's ROM at the root and never touches the user's folders; with
+`--present` it checks the revisions whose ROM is there and reports the others
+as skipped (a check that finds none fails).
 
 With `--release`, `check` also checks the `retrolarium` section of the
 repository's 3.0 or 3.x release manifest: the descriptor, profile and revisions
@@ -148,6 +150,18 @@ studio project made from it, and checks that it is the profile the descriptor
 names. Open ROM recognizes a dump before any repository is there from
 `core/profiles/repositories.json`, which lists each game's repository and the
 SHA-256 of its revisions.
+
+The places of the tables an `nes.byte-tables.v1` resource reads come from the
+game's builds: its `config/profile_tables.json` names them by label, and
+`rltool profile tables` reads the builds' ld65 debug files and prints each
+revision's offsets. `rltool profile tables --check` compares them with the
+profile instead and fails where they differ; a game's `make test` runs it after
+building its revisions.
+
+A Disk System game's build writes its programs into the side its ROM gives:
+`rltool fds write --disk <side> --file <ids>=<built file> ... --output <side>`
+lays each built file over the data of the disk files it names, in order, and
+refuses one that does not fill them exactly.
 
 ## Record tables
 
