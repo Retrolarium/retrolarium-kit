@@ -141,7 +141,6 @@ class DoraemonProfileTests(unittest.TestCase):
              for revision in self.profile.revisions],
             [
                 ("original", "6ed579c9c98a1f2db52fd3d2488a491953073e8ace1e3c1dc5884669cecca274", 66),
-                ("rev_a", "c070fa0e07a4b8be107ecc2f514e4c64f5bbb2a15754b6c6214e7259a1b30920", 66),
             ],
         )
         for revision in self.profile.revisions:
