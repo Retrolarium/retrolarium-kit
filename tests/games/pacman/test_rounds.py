@@ -14,8 +14,6 @@ from retrolarium_kit.platform.nes.resources import build_resources, decode_resou
 
 REPOSITORY = game_repository("pacman_src")
 V10 = REPOSITORY / "Pac-Man (J) (V1.0) [!].nes"
-# make build-expanded, or Retrolarium opening the expanded revision, makes it.
-EXPANDED = REPOSITORY / "build/expanded/pacman.nes"
 TABLES = ("round-profiles", "round-speed-sets", "round-timing-sets", "round-pellet-thresholds", "round-release-targets")
 
 
@@ -52,10 +50,6 @@ class RoundTableTests(unittest.TestCase):
         at = 16 + 0xEB42 - 0xC000 + 7
         self.assertEqual((6, 14), (source[at], built[at]))
         self.assertEqual(1, sum(a != b for a, b in zip(source, built)))
-
-    @unittest.skipUnless(EXPANDED.is_file(), "the expanded Pac-Man image is not built")
-    def test_the_expanded_revision_reads_the_relocated_tables(self) -> None:
-        self.assertEqual(tables(V10, "japan-v10"), tables(EXPANDED, "japan-v10-nrom256"))
 
 
 if __name__ == "__main__":

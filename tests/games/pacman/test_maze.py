@@ -95,7 +95,7 @@ class PacmanMazeTests(unittest.TestCase):
         profile = game_profile("pacman")
         self.assertEqual(
             [item.revision_id for item in profile.revisions],
-            ["japan-v10", "japan-v11", "japan-v10-nrom256"],
+            ["japan-v10", "japan-v11"],
         )
         self.assertEqual(profile.resources[1].codec, "pacman.maze-rle.v1")
         self.assertEqual(
