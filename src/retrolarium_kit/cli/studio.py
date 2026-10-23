@@ -315,6 +315,20 @@ def command_studio_flicky_sound_preview(args: argparse.Namespace) -> None:
     )
 
 
+def command_studio_alien_soldier_sound_preview(args: argparse.Namespace) -> None:
+    from retrolarium_kit.studio.playtest import studio_alien_soldier_sound_preview
+
+    print_json(
+        studio_alien_soldier_sound_preview(
+            args.project,
+            label=args.label,
+            seconds=args.seconds,
+            enabled_channels=tuple(args.channel) if args.channel else None,
+            document_override=args.document_override,
+        )
+    )
+
+
 def command_studio_doraemon_world2_view(args: argparse.Namespace) -> None:
     from retrolarium_kit.games.doraemon.world2.routes import route_view
 
@@ -659,6 +673,16 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     alien_soldier_steps.add_argument("steps", type=Path, help="the demo's current steps (JSON)")
     alien_soldier_steps.add_argument("--recording", type=Path, required=True)
     alien_soldier_steps.set_defaults(handler=command_studio_alien_soldier_demo_steps)
+    alien_soldier_sound = studio_commands.add_parser(
+        "alien-soldier-sound-preview",
+        help="render an Alien Soldier song or sound effect to VGM and WAV without an emulator",
+    )
+    alien_soldier_sound.add_argument("project", type=Path)
+    alien_soldier_sound.add_argument("--label", required=True, help="the payload, e.g. Sound_BGM_81")
+    alien_soldier_sound.add_argument("--seconds", type=int, default=30)
+    alien_soldier_sound.add_argument("--channel", type=int, action="append")
+    alien_soldier_sound.add_argument("--document-override", type=Path)
+    alien_soldier_sound.set_defaults(handler=command_studio_alien_soldier_sound_preview)
     flicky_demo = studio_commands.add_parser(
         "flicky-demo-plan",
         help="emit the MAME process that loops a Flicky attract demo or records a new one",

@@ -397,6 +397,87 @@ def studio_flicky_sound_preview(
     }
 
 
+def studio_alien_soldier_sound_preview(
+    path: Path,
+    *,
+    label: str,
+    seconds: int = 30,
+    enabled_channels: tuple[int, ...] | None = None,
+    document_override: Path | None = None,
+) -> dict[str, Any]:
+    """Render one Alien Soldier song or sound effect, saved or with the
+    studio's unsaved sound document, to a VGM and a WAV."""
+    from retrolarium_kit.games.alien_soldier import preview
+    from retrolarium_kit.games.alien_soldier.sequencer import SequencerError
+
+    inspection = load_studio_project(path)
+    project = inspection["project"]
+    if project["profile"] != "alien-soldier.v1" or project["source_mode"] != "source":
+        raise StudioProjectError("this is not an Alien Soldier project")
+    seconds = _bounded_integer(seconds, "seconds", 1, 30)
+    root = Path(inspection["project_root"]).resolve()
+    output_dir = root / "build/sound-preview"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    document, origin = None, "saved"
+    if document_override is not None:
+        candidate = document_override.resolve()
+        if (
+            candidate.parent != output_dir.resolve()
+            or not candidate.name.startswith(".alien-soldier-unsaved-")
+            or candidate.suffix != ".json"
+            or not candidate.is_file()
+        ):
+            raise StudioProjectError(
+                "the unsaved sound document must be a JSON file in this project's build/sound-preview directory"
+            )
+        try:
+            document = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise StudioProjectError(f"cannot read the unsaved sound document: {exc}") from exc
+        origin = "unsaved"
+    if enabled_channels is not None:
+        if len(set(enabled_channels)) != len(enabled_channels) or any(index < 0 for index in enabled_channels):
+            raise StudioProjectError("enabled channels must be unique indexes")
+        enabled_channels = tuple(sorted(enabled_channels))
+    renderer = ymfm_renderer()
+    channel_key = "all" if enabled_channels is None else "-".join(str(index) for index in enabled_channels)
+    digest = sha256_file(document_override) if document_override is not None else "saved"
+    stem = f"{label}-{digest[:12]}-s{seconds}-c{channel_key}"
+    vgm = output_dir / f"{stem}.vgm"
+    wav = output_dir / f"{stem}.wav"
+    with tempfile.TemporaryDirectory(prefix=".alien-soldier-sound-", dir=output_dir) as name:
+        temporary = Path(name)
+        try:
+            report = preview.render(
+                root,
+                label,
+                temporary / "preview.vgm",
+                temporary / "preview.wav",
+                seconds=seconds,
+                enabled=None if enabled_channels is None else set(enabled_channels),
+                sound_document=document,
+                renderer=renderer,
+            )
+            os.replace(temporary / "preview.vgm", vgm)
+            os.replace(temporary / "preview.wav", wav)
+        except (OSError, ValueError, KeyError, SequencerError, subprocess.CalledProcessError) as exc:
+            raise StudioProjectError(f"Alien Soldier sound preview failed: {exc}") from exc
+    return {
+        "schema": "retrolarium.alien-soldier-sound-preview",
+        "schema_version": 1,
+        "status": "rendered",
+        "project_file": inspection["project_file"],
+        "document_origin": origin,
+        "label": label,
+        "seconds": seconds,
+        "frame_rate": report["frame_rate"],
+        "enabled_channels": None if enabled_channels is None else list(enabled_channels),
+        "renderer_sha256": sha256_file(renderer),
+        "vgm": {"path": str(vgm), "size": vgm.stat().st_size, "sha256": sha256_file(vgm)},
+        "wav": {"path": str(wav), "size": wav.stat().st_size, "sha256": sha256_file(wav)},
+    }
+
+
 def ymfm_renderer() -> Path:
     """The studio's YM2612 renderer (retrolarium-ymfm-renderer): from
     RETROLARIUM_YMFM_RENDERER, which the studio sets, or the PATH."""
