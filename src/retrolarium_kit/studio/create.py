@@ -15,7 +15,6 @@ from typing import Any, Sequence
 from retrolarium_core.contracts import ContractError, load_disassembly_manifest
 from retrolarium_kit.games.flicky.content import (
     CANONICAL_SHA256 as FLICKY_SHA256,
-    ROM_NAME as FLICKY_ROM_NAME,
     SOURCE_DIRECTORY as FLICKY_SOURCE_DIRECTORY,
     WORKSPACE_FILES as FLICKY_WORKSPACE_FILES,
     validate_flicky_source_snapshot,
@@ -31,6 +30,7 @@ from retrolarium_kit.games.flicky.title_layout import (
 )
 from retrolarium_kit.games.flicky.demo import export_attract_demos, validate_attract_demos
 from retrolarium_kit.core.project import build_project, sha256_file
+from retrolarium_kit.studio.source_games import source_game
 from retrolarium_kit.studio.project import (
     PROJECT_SUFFIX,
     SCHEMA,
@@ -150,8 +150,9 @@ def _project_source(inspection: Mapping[str, Any]) -> Path:
 
     if inspection["project"]["source_mode"] == "rom":
         return Path(inspection["source"]["rom_path"])
-    if inspection["project"]["source_mode"] == "flicky-content":
-        return Path(inspection["project_root"]) / FLICKY_SOURCE_DIRECTORY / FLICKY_ROM_NAME
+    game = source_game(inspection["project"].get("profile", ""))
+    if game is not None and game.original is not None and inspection["project"]["source_mode"] == game.mode:
+        return game.original(Path(inspection["project_root"]))
 
     manifest_path = Path(inspection["source"]["disassembly_path"])
     record = manifest_path.parent / "build-result.json"

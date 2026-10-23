@@ -97,6 +97,33 @@ class AssetsTests(unittest.TestCase):
             with self.assertRaisesRegex(AssetsError, "inside the repository"):
                 assets.load(path)
 
+    def test_a_file_two_images_hold_comes_from_either(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = write_repository(root)
+            data = json.loads(path.read_text(encoding="utf-8"))
+            # The other image holds a.chr's 32 bytes at its start.
+            other = IMAGE[16:48] + bytes(16)
+            (root / "other.bin").write_bytes(other)
+            data["images"][1].update(size=len(other), sha1=sha1(other))
+            data["assets"][2] = {
+                "path": "chr/a.chr",
+                "image": "other",
+                "offset": 0,
+                "size": 32,
+                "sha1": sha1(other[:32]),
+            }
+            path.write_text(json.dumps(data), encoding="utf-8")
+            manifest = assets.load(path)
+            (root / "game.bin").unlink()
+            self.assertEqual(["[OK] other: 1 asset(s) written, 0 unchanged"], assets.split(manifest, ["other"]))
+            self.assertEqual([], assets.check(manifest, ["other"]))
+            self.assertEqual(["assets/generated/prg/b.prg is missing"], assets.check(manifest))
+            data["assets"][2]["sha1"] = sha1(bytes(32))
+            path.write_text(json.dumps(data), encoding="utf-8")
+            with self.assertRaisesRegex(AssetsError, "with different bytes"):
+                assets.load(path)
+
 
 if __name__ == "__main__":
     unittest.main()

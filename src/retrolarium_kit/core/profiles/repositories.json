@@ -124,6 +124,23 @@
           "sha256": "4df1a91e08376ae773a6eb8e5abe310f94ca39d8f81583b91a9477fedcb68c11"
         }
       ]
+    },
+    "alien-soldier": {
+      "repository": "alien_soldier_src",
+      "descriptor": "alien_soldier.rlj",
+      "ref": "tags/source-reconstruction-3.1",
+      "revisions": [
+        {
+          "id": "jp",
+          "name": "Alien Soldier (Japan)",
+          "sha256": "5613637d267cf8d0bf3ff1e396d7929526cd5221cb8af06349528c8bedced1a0"
+        },
+        {
+          "id": "eu",
+          "name": "Alien Soldier (Europe)",
+          "sha256": "afd4642f78ee1ae3004d630b1228e54a6e51e5dc7a991e1c192d91a41f366f71"
+        }
+      ]
     }
   }
 }
