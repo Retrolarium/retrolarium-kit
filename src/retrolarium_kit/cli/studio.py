@@ -269,6 +269,25 @@ def command_studio_flicky_round_playtest_plan(args: argparse.Namespace) -> None:
     )
 
 
+def command_studio_alien_soldier_playtest_plan(args: argparse.Namespace) -> None:
+    from retrolarium_kit.studio.playtest import studio_alien_soldier_playtest_plan
+
+    print_json(studio_alien_soldier_playtest_plan(args.project, mame=args.mame, stage=args.stage))
+
+
+def command_studio_alien_soldier_demo_plan(args: argparse.Namespace) -> None:
+    from retrolarium_kit.studio.playtest import studio_alien_soldier_demo_plan
+
+    print_json(studio_alien_soldier_demo_plan(args.project, mame=args.mame, demo=args.demo, record=args.record))
+
+
+def command_studio_alien_soldier_demo_steps(args: argparse.Namespace) -> None:
+    from retrolarium_kit.games.alien_soldier.demos import recorded_steps
+
+    steps = json.loads(args.steps.read_text(encoding="utf-8"))
+    print_json({"steps": recorded_steps(steps, args.recording.read_text(encoding="utf-8"))})
+
+
 def command_studio_flicky_demo_plan(args: argparse.Namespace) -> None:
     from retrolarium_kit.studio.demo import studio_flicky_demo_plan
 
@@ -614,6 +633,32 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     flicky_round_playtest.add_argument("--mame", type=Path, required=True)
     flicky_round_playtest.add_argument("--round", type=int, required=True)
     flicky_round_playtest.set_defaults(handler=command_studio_flicky_round_playtest_plan)
+    alien_soldier_playtest = studio_commands.add_parser(
+        "alien-soldier-playtest-plan",
+        help="emit the MAME process that starts an Alien Soldier build at a stage through its password screen",
+    )
+    alien_soldier_playtest.add_argument("project", type=Path)
+    alien_soldier_playtest.add_argument("--mame", type=Path, required=True)
+    alien_soldier_playtest.add_argument("--stage", type=int, required=True, help="the stage slot, 0-based")
+    alien_soldier_playtest.set_defaults(handler=command_studio_alien_soldier_playtest_plan)
+    alien_soldier_demo = studio_commands.add_parser(
+        "alien-soldier-demo-plan",
+        help="emit the MAME process that loops an Alien Soldier attract demo or records a new one",
+    )
+    alien_soldier_demo.add_argument("project", type=Path)
+    alien_soldier_demo.add_argument("--mame", type=Path, required=True)
+    alien_soldier_demo.add_argument("--demo", type=int, required=True, help="the attract demo, 0-3")
+    alien_soldier_demo.add_argument(
+        "--record", type=Path, help="play the demo with the controller and write its steps here"
+    )
+    alien_soldier_demo.set_defaults(handler=command_studio_alien_soldier_demo_plan)
+    alien_soldier_steps = studio_commands.add_parser(
+        "alien-soldier-demo-steps",
+        help="the steps an Alien Soldier demo has after a recording: its own prefix, then the recorded steps",
+    )
+    alien_soldier_steps.add_argument("steps", type=Path, help="the demo's current steps (JSON)")
+    alien_soldier_steps.add_argument("--recording", type=Path, required=True)
+    alien_soldier_steps.set_defaults(handler=command_studio_alien_soldier_demo_steps)
     flicky_demo = studio_commands.add_parser(
         "flicky-demo-plan",
         help="emit the MAME process that loops a Flicky attract demo or records a new one",

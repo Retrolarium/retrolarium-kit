@@ -65,7 +65,7 @@ VS_PALETTES: dict[str, tuple[str, str]] = {
 MAME_VS_START = Path(__file__).with_name("mame_vs_start.lua")
 
 MAME_NES_MACHINES = {"nes", "nespal", "famicom", "fds", *VS_MACHINES}
-MAME_MEGADRIVE_MACHINES = {"genesis", "megadriv"}
+MAME_MEGADRIVE_MACHINES = {"genesis", "megadriv", "megadrij"}
 MAME_SNES_MACHINES = {"snes", "snespal"}
 MAME_MACHINES = {
     "nes": MAME_NES_MACHINES,

@@ -22,6 +22,7 @@ from retrolarium_kit.games.flicky.content import (
 )
 from retrolarium_core.fds import FdsError, parse_fds_side
 from retrolarium_kit.core.project import launch_image_plan, launch_image_smoke, sha256_file, vs_machine
+from retrolarium_kit.studio.source_games import source_game
 from retrolarium_kit.studio.project import (
     SOLOMON_REVISIONS,
     StudioProjectError,
@@ -94,6 +95,9 @@ def _source_revision(inspection: Mapping[str, Any]):
 
 
 def _revision_machine(inspection: Mapping[str, Any]) -> str | None:
+    game = source_game(inspection["project"]["profile"])
+    if game is not None:
+        return game.machine(Path(inspection["project_root"]))
     profile, revision = _source_revision(inspection)
     if profile is None:
         return None
@@ -179,6 +183,93 @@ def studio_flicky_round_playtest_plan(
             "project_file": inspection["project_file"],
             "script": {"path": str(lua.resolve()), "sha256": sha256_file(lua)},
             "point": {"round": round},
+        }
+    )
+    return plan
+
+
+def studio_alien_soldier_playtest_plan(path: Path, *, mame: Path, stage: int) -> dict[str, Any]:
+    """Start the built Alien Soldier project at a stage slot (0-based)
+    through the game's password screen."""
+    from retrolarium_kit.games.alien_soldier.content import SOURCE_DIRECTORY
+    from retrolarium_kit.games.alien_soldier.playtest import PlaytestError, environment
+    from retrolarium_kit.core.source_snapshot import load_record
+
+    inspection = load_studio_project(path)
+    _require_declared_operation(inspection, "launch")
+    if inspection["project"]["profile"] != "alien-soldier.v1":
+        raise StudioProjectError("this is not an Alien Soldier project")
+    verification = verify_studio_project(path)
+    if verification["status"] != "current":
+        raise StudioProjectError("Studio artifact is stale; build it again before playtest")
+    root = Path(inspection["project_root"])
+    snapshot = root / SOURCE_DIRECTORY
+    try:
+        settings = environment(snapshot, load_record(snapshot)["revision"], stage)
+    except PlaytestError as exc:
+        raise StudioProjectError(str(exc)) from exc
+    lua = Path(__file__).with_name("runtime") / "alien_soldier" / "playtest.lua"
+    plan = launch_image_plan(
+        Path(verification["artifact"]["absolute_path"]),
+        platform="megadrive",
+        mame=mame,
+        machine=_revision_machine(inspection),
+    )
+    plan.update(
+        {
+            "operation": "retrolarium.studio.alien-soldier-playtest",
+            "backend": "mame-lua",
+            "arguments": [*plan["arguments"], "-autoboot_delay", "0", "-autoboot_script", str(lua.resolve())],
+            "environment": settings,
+            "project_file": inspection["project_file"],
+            "script": {"path": str(lua.resolve()), "sha256": sha256_file(lua)},
+            "point": {"stage": stage},
+        }
+    )
+    return plan
+
+
+def studio_alien_soldier_demo_plan(
+    path: Path, *, mame: Path, demo: int, record: Path | None = None, ready: Path | None = None
+) -> dict[str, Any]:
+    """Loop one Alien Soldier attract demo (0..3) of the current build, or play
+    it with the controller and write the steps to `record`."""
+    from retrolarium_kit.core.source_snapshot import load_record
+    from retrolarium_kit.games.alien_soldier.content import SOURCE_DIRECTORY
+    from retrolarium_kit.games.alien_soldier.playtest import PlaytestError, demo_environment
+
+    inspection = load_studio_project(path)
+    _require_declared_operation(inspection, "launch")
+    if inspection["project"]["profile"] != "alien-soldier.v1":
+        raise StudioProjectError("this is not an Alien Soldier project")
+    verification = verify_studio_project(path)
+    if verification["status"] != "current":
+        raise StudioProjectError("Studio artifact is stale; build it again before the demo")
+    snapshot = Path(inspection["project_root"]) / SOURCE_DIRECTORY
+    try:
+        settings = demo_environment(snapshot, load_record(snapshot)["revision"], demo)
+    except PlaytestError as exc:
+        raise StudioProjectError(str(exc)) from exc
+    if record is not None:
+        settings["ALIEN_DEMO_RECORD"] = str(record.resolve())
+    if ready is not None:
+        settings["ALIEN_DEMO_READY"] = str(ready.resolve())
+    lua = Path(__file__).with_name("runtime") / "alien_soldier" / "demo.lua"
+    plan = launch_image_plan(
+        Path(verification["artifact"]["absolute_path"]),
+        platform="megadrive",
+        mame=mame,
+        machine=_revision_machine(inspection),
+    )
+    plan.update(
+        {
+            "operation": "retrolarium.studio.alien-soldier-demo",
+            "backend": "mame-lua",
+            "arguments": [*plan["arguments"], "-autoboot_delay", "0", "-autoboot_script", str(lua.resolve())],
+            "environment": settings,
+            "project_file": inspection["project_file"],
+            "script": {"path": str(lua.resolve()), "sha256": sha256_file(lua)},
+            "point": {"demo": demo},
         }
     )
     return plan

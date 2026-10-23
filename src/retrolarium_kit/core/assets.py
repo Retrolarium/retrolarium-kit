@@ -159,10 +159,16 @@ def load(path: Path, root: Path | None = None) -> Manifest:
         if asset.size == 0 or asset.offset + asset.size > image.size:
             raise AssetsError(f"{asset.path} lies outside {image.id} ({image.size} bytes)")
         assets.append(asset)
-    paths = [asset.path for asset in assets]
-    duplicates = sorted({path for path in paths if paths.count(path) > 1})
+    # A file two images hold the same bytes of (at their own offsets) is
+    # listed once per image, so either image makes it; different bytes for
+    # one file would make the build depend on which image was split last.
+    hashes: dict[str, str] = {}
+    duplicates = set()
+    for asset in assets:
+        if hashes.setdefault(asset.path, asset.sha1) != asset.sha1:
+            duplicates.add(asset.path)
     if duplicates:
-        raise AssetsError(f"more than one asset writes {', '.join(duplicates)}")
+        raise AssetsError(f"more than one asset writes {', '.join(sorted(duplicates))} with different bytes")
     output = _relative(raw.get("output", "assets/generated"), "output")
     return Manifest((root or path.resolve().parent.parent), output, tuple(images), tuple(assets))
 
@@ -230,10 +236,11 @@ def check(manifest: Manifest, image_ids: Iterable[str] = (), exact: bool = False
     wanted = list(image_ids)
     for image_id in wanted:
         manifest.image(image_id)
-    problems = []
+    problems, seen = [], set()
     for asset in manifest.assets:
-        if wanted and asset.image not in wanted:
+        if wanted and asset.image not in wanted or asset.path in seen:
             continue
+        seen.add(asset.path)
         target = manifest.output_path(asset)
         if not target.is_file():
             problems.append(f"{manifest.output}/{asset.path} is missing")

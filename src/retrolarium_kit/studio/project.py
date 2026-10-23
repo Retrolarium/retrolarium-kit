@@ -24,19 +24,13 @@ from retrolarium_kit.games.catalog import (
     build_game_documents,
     validate_game_document_for_revision,
 )
-from retrolarium_kit.games.flicky.content import (
-    CANONICAL_SHA256 as FLICKY_SHA256,
-    WORKSPACE_FILES as FLICKY_WORKSPACE_FILES,
-    build_flicky_source_snapshot,
-    validate_flicky_source_snapshot,
-    FlickyContentError,
-)
 from retrolarium_core.fds import FdsError, parse_fds_side
 from retrolarium_core.ines import InesError, load_ines, parse_ines_prefix
 from retrolarium_core.megadrive import load_megadrive
 from retrolarium_kit.core.project import build_project, sha256_file, verify_project, write_document
 from retrolarium_kit.core.game_profiles import repository_profile
 from retrolarium_core.snes import load_snes
+from retrolarium_kit.studio.source_games import MODES as SOURCE_GAME_MODES, SourceGame, source_game
 
 
 class StudioProjectError(ValueError):
@@ -50,7 +44,9 @@ PROJECT_SUFFIX = ".rlj"
 
 # "rom": a project generated from a game repository's descriptor for one
 # revision; its base is the verified copy of that revision's ROM.
-SOURCE_MODES = frozenset({"binary-profile", "source-project", "flicky-content", "rom"})
+# "flicky-content" and "source": a game rebuilt from its source snapshot
+# (source_games.py).
+SOURCE_MODES = frozenset({"binary-profile", "source-project", "rom"}) | SOURCE_GAME_MODES
 LAYOUTS = frozenset({"auto", "single-row", "two-row"})
 GROUPS = frozenset({"content", "assets", "tools"})
 PLATFORMS = frozenset({"nes", "snes", "megadrive"})
@@ -74,6 +70,15 @@ EDITOR_KINDS = frozenset(
         "flicky.semantics",
         "flicky.animations",
         "flicky.sound",
+        "alien-soldier.levels",
+        "alien-soldier.tiles",
+        "alien-soldier.metatiles",
+        "alien-soldier.palettes",
+        "alien-soldier.animations",
+        "alien-soldier.screens",
+        "alien-soldier.text",
+        "alien-soldier.sound",
+        "alien-soldier.demo",
         "code.analysis",
         "graphics.tile-set",
         "level.procedural",
@@ -119,6 +124,15 @@ CODECS = frozenset(
         "flicky.semantics.v1",
         "flicky.animations.v1",
         "flicky.sound.v1",
+        "alien-soldier.levels.v1",
+        "alien-soldier.compressed-tiles.v1",
+        "alien-soldier.maps.v1",
+        "alien-soldier.palettes.v1",
+        "alien-soldier.animations.v1",
+        "alien-soldier.screens.v1",
+        "alien-soldier.text.v1",
+        "alien-soldier.sound.v1",
+        "alien-soldier.demo.v1",
         "nes.chr-2bpp.v1",
         "castle-excellent.room-cell-visuals.v1",
         "castle-excellent.metasprite-descriptors.v1",
@@ -501,7 +515,7 @@ def load_studio_project(path: Path) -> dict[str, Any]:
     }
 
     source_table = _mapping(source["source"], "source")
-    flicky_content = normalized_metadata["source_mode"] == "flicky-content"
+    built_from_source = normalized_metadata["source_mode"] in SOURCE_GAME_MODES
     rom_mode = normalized_metadata["source_mode"] == "rom"
     boundary: Path | None = None
     if rom_mode:
@@ -514,7 +528,7 @@ def load_studio_project(path: Path) -> dict[str, Any]:
         # The game's profile, which the commands on this project use.
         repository_profile(boundary)
     else:
-        source_key = "manifest" if flicky_content else "disassembly"
+        source_key = "manifest" if built_from_source else "disassembly"
         _check_keys(source_table, "source", {source_key, "sha256"}, {source_key, "sha256"})
     source_relative, source_path = _project_path(
         root, source_table[source_key], f"source.{source_key}", boundary=boundary
@@ -526,25 +540,29 @@ def load_studio_project(path: Path) -> dict[str, Any]:
         if sha256_file(source_path) != source_sha256:
             raise _error("source.rom", "the ROM differs from this revision")
         manifest_schema = "retrolarium.rom"
-    elif flicky_content:
-        if normalized_metadata["platform"] != "megadrive" or normalized_metadata["profile"] != "flicky-ue.v1":
-            raise _error("project", "Flicky content requires megadrive/flicky-ue.v1")
-        if source_relative != "flicky-source/retrolarium-flicky-snapshot.json":
-            raise _error("source.manifest", "must name the Flicky source snapshot record")
-        if source_sha256 != FLICKY_SHA256:
-            raise _error("source.sha256", "does not match canonical Flicky (UE)")
+    elif built_from_source:
+        game = source_game(normalized_metadata["profile"])
+        if game is None or game.mode != normalized_metadata["source_mode"]:
+            raise _error(
+                "project", f"{normalized_metadata['profile']} is not a {normalized_metadata['source_mode']} game"
+            )
+        if source_relative != game.manifest:
+            raise _error("source.manifest", f"must name the snapshot record {game.manifest}")
         try:
             manifest = json.loads(source_path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as exc:
             raise _error("source.manifest", f"cannot read the snapshot record: {exc}") from exc
+        recorded = (
+            manifest.get("canonical_sha256", manifest.get("rom_sha256")) if isinstance(manifest, Mapping) else None
+        )
         if (
             not isinstance(manifest, Mapping)
-            or manifest.get("schema") != "retrolarium.flicky-source-snapshot"
+            or manifest.get("schema") != game.record_schema
             or manifest.get("schema_version") != 1
-            or manifest.get("canonical_sha256") != FLICKY_SHA256
+            or recorded != source_sha256
         ):
-            raise _error("source.manifest", "is not a canonical Flicky source snapshot record")
-        manifest_schema = "retrolarium.flicky-source-snapshot"
+            raise _error("source.manifest", "is not this revision's source snapshot record")
+        manifest_schema = game.record_schema
     else:
         try:
             manifest = load_disassembly_manifest(source_path)
@@ -634,7 +652,7 @@ def load_studio_project(path: Path) -> dict[str, Any]:
         )
 
     _validate_dependency_graph(tabs)
-    if flicky_content:
+    if normalized_metadata["source_mode"] == "flicky-content":
         expected_tabs = {
             "flicky.levels": "level_layouts",
             "flicky.graphics": "graphics_assets",
@@ -652,7 +670,7 @@ def load_studio_project(path: Path) -> dict[str, Any]:
         ):
             raise _error("workspace.tabs", "Flicky Text view must use the text tab id")
         for tab in tabs:
-            expected_document = "flicky-source/" + FLICKY_WORKSPACE_FILES[expected_tabs[tab["kind"]]]
+            expected_document = f"{game.directory}/" + _flicky_documents()[expected_tabs[tab["kind"]]]
             if tab["document"] != expected_document or tab["codec"] != tab["kind"] + ".v1" or not tab["enabled"]:
                 raise _error("workspace.tabs", "Flicky tab must use its enabled source workspace document and codec")
     enabled_ids = [tab["id"] for tab in tabs if tab["enabled"]]
@@ -721,17 +739,14 @@ def _require_declared_operation(inspection: Mapping[str, Any], name: str) -> Non
 
 
 def _validate_editor_documents(inspection: Mapping[str, Any]) -> list[dict[str, object]]:
-    if inspection["project"]["source_mode"] == "flicky-content":
-        try:
-            hashes = validate_flicky_source_snapshot(Path(inspection["project_root"]))
-        except FlickyContentError as exc:
-            raise StudioProjectError(str(exc)) from exc
+    game = _source_game(inspection)
+    if game is not None:
         root = Path(inspection["project_root"])
-        by_path = {
-            "flicky-source/" + relative: digest
-            for key, relative in FLICKY_WORKSPACE_FILES.items()
-            for digest in [hashes[key]]
-        }
+        try:
+            hashes = game.validate(root)
+        except game.errors as exc:
+            raise StudioProjectError(str(exc)) from exc
+        by_path = {f"{game.directory}/{relative}": digest for relative, digest in hashes.items()}
         return [
             {"status": "valid", "document": str(document), "sha256": by_path[_portable(document, root)]}
             for document in _unique_editor_documents(inspection)
@@ -826,8 +841,9 @@ def build_studio_project(
     inspection = load_studio_project(path)
     _require_declared_operation(inspection, "build")
     _validate_editor_documents(inspection)
-    if inspection["project"]["source_mode"] == "flicky-content":
-        return _build_flicky_studio_project(inspection, flicky_level_writer)
+    game = _source_game(inspection)
+    if game is not None:
+        return _build_source_project(inspection, game, flicky_level_writer)
     if flicky_level_writer is not None:
         raise StudioProjectError("--flicky-level-writer requires a Flicky project")
     if inspection["project"]["source_mode"] == "rom":
@@ -953,17 +969,35 @@ def _expand_solomon_build(
     return None
 
 
-def _build_flicky_studio_project(
+def _flicky_documents() -> dict[str, str]:
+    from retrolarium_kit.games.flicky.content import WORKSPACE_FILES
+
+    return WORKSPACE_FILES
+
+
+def _source_game(inspection: Mapping[str, Any]) -> SourceGame | None:
+    """The source-built game a project inspection is, or None."""
+    if inspection["project"]["source_mode"] not in SOURCE_GAME_MODES:
+        return None
+    game = source_game(inspection["project"]["profile"])
+    if game is None:
+        raise StudioProjectError(f"{inspection['project']['profile']} is not a game rebuilt from source")
+    return game
+
+
+def _build_source_project(
     inspection: Mapping[str, Any],
+    game: SourceGame,
     native_writer: Path | None = None,
 ) -> dict[str, Any]:
     root = Path(inspection["project_root"])
     try:
-        built = build_flicky_source_snapshot(root, native_writer=native_writer)
-    except FlickyContentError as exc:
+        built = game.build(root, native_writer=native_writer)
+    except game.errors as exc:
         raise StudioProjectError(str(exc)) from exc
     output = Path(built["artifact"])
     editor_documents = _unique_editor_documents(inspection)
+    source_sha256 = inspection["source"]["sha256"]
     report = {
         "schema": "retrolarium.studio-build-result",
         "schema_version": 1,
@@ -972,8 +1006,8 @@ def _build_flicky_studio_project(
             "path": Path(inspection["project_file"]).name,
             "sha256": sha256_file(Path(inspection["project_file"])),
         },
-        "source_sha256": FLICKY_SHA256,
-        "base": {"mode": "flicky-content", "sha256": FLICKY_SHA256},
+        "source_sha256": source_sha256,
+        "base": {"mode": game.mode, "sha256": source_sha256},
         "documents": [
             {"path": _portable(document, root), "sha256": sha256_file(document)} for document in editor_documents
         ],
@@ -982,7 +1016,7 @@ def _build_flicky_studio_project(
             "size": output.stat().st_size,
             "sha256": sha256_file(output),
         },
-        "authoring": {"mode": "flicky-content", "documents": built["documents"]},
+        "authoring": {"mode": game.mode, "documents": built["documents"]},
     }
     write_document(root / "build" / "studio-build-result.json", report)
     return report
@@ -1033,14 +1067,17 @@ def verify_studio_project(path: Path) -> dict[str, Any]:
     artifact_relative, artifact = _project_path(root, artifact_record.get("path"), "build result artifact.path")
     if artifact_record.get("size") != artifact.stat().st_size or artifact_record.get("sha256") != sha256_file(artifact):
         differences.append("artifact")
-    if inspection["project"]["source_mode"] == "flicky-content":
-        if artifact.stat().st_size != 131072:
+    game = _source_game(inspection)
+    if game is not None:
+        if artifact.stat().st_size != game.image_size:
             differences.append("artifact-size")
-        elif load_megadrive(artifact).checksum_status != "valid":
+        elif game.mode == "flicky-content" and load_megadrive(artifact).checksum_status != "valid":
+            # Flicky's boot sums the whole image; other games' builds stamp
+            # the sum their own boot code takes.
             differences.append("artifact-checksum")
         try:
-            validate_flicky_source_snapshot(root)
-        except FlickyContentError:
+            game.validate(root)
+        except game.errors:
             differences.append("source-snapshot")
     else:
         if inspection["project"]["source_mode"] == "rom":

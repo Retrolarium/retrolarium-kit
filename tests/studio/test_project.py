@@ -9,8 +9,8 @@ from unittest.mock import patch
 
 from helpers import patched_manifest
 from helpers import game_profile
+from retrolarium_kit.games.flicky.content import WORKSPACE_FILES as FLICKY_WORKSPACE_FILES
 from retrolarium_kit.studio.project import (
-    FLICKY_WORKSPACE_FILES,
     StudioProjectError,
     load_studio_project,
     migrate_studio_project,

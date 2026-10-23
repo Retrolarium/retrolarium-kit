@@ -1,0 +1,96 @@
+# Retrolarium Studio views for the alien-soldier.v1 profile (Alien Soldier).
+# The kit writes these into every project it prepares from a game
+# repository's descriptor; documents are relative to the revision's source
+# snapshot. Every document of the snapshot is edited and checked; a view
+# names the one it opens on and reads the others it shows.
+
+[workspace]
+layout = "two-row"
+startup_tab = "levels"
+
+[[workspace.tabs]]
+id = "levels"
+title = "Levels"
+kind = "alien-soldier.levels"
+group = "content"
+codec = "alien-soldier.levels.v1"
+document = "content/levels/levels.json"
+capabilities = ["edit", "preview", "playtest", "navigate", "undo", "restore"]
+depends_on = ["metatiles", "tiles", "palettes", "animations"]
+
+[[workspace.tabs]]
+id = "tiles"
+title = "Tiles"
+kind = "alien-soldier.tiles"
+group = "assets"
+codec = "alien-soldier.compressed-tiles.v1"
+document = "content/graphics/compressed_tiles.json"
+capabilities = ["paint", "navigate", "undo", "restore"]
+depends_on = ["palettes"]
+
+[[workspace.tabs]]
+id = "metatiles"
+title = "Metatiles"
+kind = "alien-soldier.metatiles"
+group = "assets"
+codec = "alien-soldier.maps.v1"
+document = "content/levels/maps.json"
+capabilities = ["paint", "navigate", "undo", "restore"]
+depends_on = ["tiles", "palettes"]
+
+[[workspace.tabs]]
+id = "palettes"
+title = "Palettes"
+kind = "alien-soldier.palettes"
+group = "assets"
+codec = "alien-soldier.palettes.v1"
+document = "content/graphics/palettes.json"
+capabilities = ["edit", "navigate", "undo", "restore"]
+
+[[workspace.tabs]]
+id = "animations"
+title = "Animations"
+kind = "alien-soldier.animations"
+group = "assets"
+codec = "alien-soldier.animations.v1"
+document = "content/graphics/animations.json"
+capabilities = ["edit", "preview", "navigate", "undo", "restore"]
+depends_on = ["tiles", "palettes"]
+
+[[workspace.tabs]]
+id = "screens"
+title = "Screens"
+kind = "alien-soldier.screens"
+group = "content"
+codec = "alien-soldier.screens.v1"
+document = "content/screens/screens.json"
+capabilities = ["paint", "navigate", "undo", "restore"]
+depends_on = ["tiles", "palettes"]
+
+[[workspace.tabs]]
+id = "text"
+title = "Text"
+kind = "alien-soldier.text"
+group = "content"
+codec = "alien-soldier.text.v1"
+document = "content/text/text.json"
+capabilities = ["edit", "navigate", "undo", "restore"]
+depends_on = ["tiles"]
+
+[[workspace.tabs]]
+id = "sound"
+title = "Sound"
+kind = "alien-soldier.sound"
+group = "content"
+codec = "alien-soldier.sound.v1"
+document = "content/sound/sound.json"
+capabilities = ["edit", "preview", "navigate", "undo", "restore"]
+
+[[workspace.tabs]]
+id = "demo"
+title = "Demo"
+kind = "alien-soldier.demo"
+group = "content"
+codec = "alien-soldier.demo.v1"
+document = "content/levels/demos.json"
+capabilities = ["edit", "preview", "undo", "restore"]
