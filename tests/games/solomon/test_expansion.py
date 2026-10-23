@@ -30,6 +30,10 @@ def cnrom_image() -> bytes:
     put(layout.item_call, b"\x20" + layout.item_decoder.to_bytes(2, "little"))
     put(layout.enemy_call, b"\x20" + layout.enemy_decoder.to_bytes(2, "little"))
     put(0xFFFC, layout.reset.to_bytes(2, "little"))
+    put(layout.item_decoder, b"\xae\x28\x04")  # LDX CurrentRoomIndex
+    # The first room's items start the old item arena.
+    put(layout.item_pointers, bytes((layout.header_region[0] & 0xFF,)))
+    put(layout.item_pointers + 53, bytes((layout.header_region[0] >> 8,)))
     chr_rom = bytes(range(256)) * 128
     return bytes(header) + bytes(prg) + chr_rom
 
@@ -45,7 +49,8 @@ def at(prg: bytes, address: int, count: int) -> bytes:
 class SolomonExpansionTests(unittest.TestCase):
     def test_expanded_image_maps_the_streams_into_bank_zero(self) -> None:
         layout = LAYOUTS["usa"]
-        items = [bytes((room, 0xE0)) * 3 for room in range(53)]
+        # A ten-byte header, then the terminator.
+        items = [bytes((room,)) * 10 + b"\xe0" for room in range(53)]
         enemies = [bytes((0x01, 0x70 + (room & 3), room, 0x00)) for room in range(53)]
         output, report = expand_image(cnrom_image(), "usa", items, enemies)
 
@@ -61,7 +66,16 @@ class SolomonExpansionTests(unittest.TestCase):
         self.assertEqual(at(data, layout.wrapper, len(code)), code)
         self.assertEqual(at(game, layout.wrapper, len(code)), code)
         self.assertEqual(at(game, layout.chr_consume, 2), b"\x09\x80")
-        self.assertEqual(at(game, layout.item_call, 3), b"\x20" + labels["wrap_items"].to_bytes(2, "little"))
+        # The item decoder runs through bank 1's header loader, which calls
+        # the wrapper and then points RoomItemPointer at the room's header
+        # copy: gameplay reads the door, the key and the player's start there.
+        loader = layout.header_region[0]
+        self.assertEqual(at(game, layout.item_call, 3), b"\x20" + loader.to_bytes(2, "little"))
+        self.assertEqual(at(game, loader, 3), b"\x20" + labels["wrap_items"].to_bytes(2, "little"))
+        for room in range(53):
+            address = at(game, loader + 17 + room, 1)[0] | (at(game, loader + 17 + 53 + room, 1)[0] << 8)
+            self.assertEqual(at(game, address, 10), items[room][:10])
+            self.assertTrue(layout.header_region[0] <= address <= layout.header_region[1] - 9)
         self.assertEqual(at(game, layout.enemy_call, 3), b"\x20" + labels["wrap_enemies"].to_bytes(2, "little"))
         # Bank-select tables: writes from bank 1 carry $00-$03, from bank 0 $10-$13.
         self.assertEqual(at(game, labels["to_data"], 4), bytes((0, 1, 2, 3)))
@@ -76,10 +90,12 @@ class SolomonExpansionTests(unittest.TestCase):
                 address = at(data, table + room, 1)[0] | (at(data, table + 53 + room, 1)[0] << 8)
                 self.assertEqual(at(data, address, len(streams[room])), streams[room])
                 self.assertTrue(any(start <= address <= end for start, end in layout.data_regions))
-        self.assertEqual(report["free_bytes"], data_capacity("usa") - 6 * 53 - 4 * 53)
+        self.assertEqual(report["free_bytes"], data_capacity("usa") - 11 * 53 - 4 * 53)
 
     def test_limits_are_refused(self) -> None:
-        empty = [b"\x00"] * 53
+        with self.assertRaisesRegex(AuthoringError, "no complete header"):
+            expand_image(cnrom_image(), "usa", [b"\x00"] * 53, [b"\x00"] * 53)
+        empty = [bytes(11)] * 53
         with self.assertRaisesRegex(AuthoringError, "reads at most 256"):
             expand_image(cnrom_image(), "usa", [bytes(257)] + empty[1:], empty)
         with self.assertRaisesRegex(AuthoringError, "no room left"):
@@ -87,6 +103,10 @@ class SolomonExpansionTests(unittest.TestCase):
         with self.assertRaisesRegex(AuthoringError, "guarded"):
             broken = bytearray(cnrom_image())
             broken[16 + LAYOUTS["usa"].chr_consume - 0x8000] = 0xEA
+            expand_image(bytes(broken), "usa", empty, empty)
+        with self.assertRaisesRegex(AuthoringError, "guarded item arena"):
+            broken = bytearray(cnrom_image())
+            broken[16 + LAYOUTS["usa"].item_pointers - 0x8000] = 0x00
             expand_image(bytes(broken), "usa", empty, empty)
 
     def test_mirror_sets_move_into_the_freed_bank_one_arena(self) -> None:

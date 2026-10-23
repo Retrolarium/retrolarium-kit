@@ -14,6 +14,11 @@ bank in bits 4-5 and the CHR bank in bits 0-1:
   they call, are identical there), runs the decoder, maps bank 1 back and
   restores PPUCTRL. The decoders never wait for a frame, so nothing else runs
   meanwhile; NMI and the audio engine never see bank 0.
+* gameplay reads the room's header (the door, the key and the player's start)
+  through ``RoomItemPointer`` with bank 1 mapped: collecting the key, its
+  flight to the door, the door, the room's end. So the room-load thread calls
+  the item wrapper through a loader in bank 1's old item arena, which then
+  points ``RoomItemPointer`` at a copy of the room's ten header bytes there.
 * ``UpdateNmiChrBank`` keeps the consumed CHR bank in ``ChrBankRequest``
   (``ORA #$80`` instead of ``LDA #$80``) so a wrapper can keep the CHR bank.
 * bank 0's reset vector maps bank 1 before the normal reset runs.
@@ -40,6 +45,10 @@ STREAM_LIMIT = 256  # the decoders index a stream with Y
 PPU_CTRL_SHADOW = 0x0300
 PPU_CTRL = 0x2000
 CHR_BANK_REQUEST = 0x7D
+ROOM_ITEM_POINTER = 0x30
+CURRENT_ROOM_INDEX = 0x0428
+HEADER_BYTES = 10  # mirror tables, status and timer rate, five positions
+HEADER_LOADER_BYTES = 17
 
 
 @dataclass(frozen=True)
@@ -56,6 +65,7 @@ class ExpansionLayout:
     enemy_pointers: int
     mirror_set_pointers: int  # low table; the high table follows 17 bytes later
     mirror_set_region: tuple[int, int]  # bank 1, inclusive
+    header_region: tuple[int, int]  # bank 1's old item arena, inclusive
     data_regions: tuple[tuple[int, int], ...]  # bank 0, inclusive
 
 
@@ -74,6 +84,7 @@ LAYOUTS = {
         enemy_pointers=0xDCEC,
         mirror_set_pointers=0xDC20,
         mirror_set_region=(0xDD56, 0xE02B),
+        header_region=(0xEA86, 0xEFC3),
         data_regions=((0xDD56, 0xEA1B), (0xEA86, 0xFFF9)),
     ),
     "europe": ExpansionLayout(
@@ -89,6 +100,7 @@ LAYOUTS = {
         enemy_pointers=0xDC6C,
         mirror_set_pointers=0xDBA0,
         mirror_set_region=(0xDCD6, 0xDFAB),
+        header_region=(0xEA06, 0xEF43),
         data_regions=((0xDCD6, 0xE99B), (0xEA06, 0xFFF9)),
     ),
 }
@@ -177,6 +189,41 @@ def wrapper_code(layout: ExpansionLayout) -> tuple[bytes, dict[str, int]]:
     return code, labels
 
 
+def header_loader(layout: ExpansionLayout, wrap_items: int, item_streams: Sequence[bytes]) -> bytes:
+    """Bank 1's item loader at the start of its old item arena, its low and
+    high pointer tables, then every room's ten header bytes."""
+    start, end = layout.header_region
+    low = start + HEADER_LOADER_BYTES
+    high = low + len(item_streams)
+    headers = high + len(item_streams)
+    code = b"".join(
+        (
+            b"\x20" + _word(wrap_items),  # JSR the item wrapper (bank 0's decoder)
+            b"\xae" + _word(CURRENT_ROOM_INDEX),  # LDX CurrentRoomIndex
+            b"\xbd" + _word(low),  # LDA HeaderLow,X
+            bytes((0x85, ROOM_ITEM_POINTER)),  # STA RoomItemPointer
+            b"\xbd" + _word(high),  # LDA HeaderHigh,X
+            bytes((0x85, ROOM_ITEM_POINTER + 1)),  # STA RoomItemPointer + 1
+            b"\x60",  # RTS
+        )
+    )
+    if len(code) != HEADER_LOADER_BYTES:
+        raise SolomonExpansionError("expansion header loader drifted")
+    addresses = [headers + room * HEADER_BYTES for room in range(len(item_streams))]
+    for room, stream in enumerate(item_streams):
+        if len(stream) <= HEADER_BYTES:
+            raise SolomonExpansionError(f"room {room + 1}'s item stream has no complete header")
+    payload = (
+        code
+        + bytes(address & 0xFF for address in addresses)
+        + bytes(address >> 8 for address in addresses)
+        + b"".join(stream[:HEADER_BYTES] for stream in item_streams)
+    )
+    if start + len(payload) - 1 > end:
+        raise SolomonExpansionError("the room headers do not fit bank 1's old item arena")
+    return payload
+
+
 def _place(prg: bytearray, address: int, payload: bytes) -> None:
     offset = address - PRG_BANK
     prg[offset : offset + len(payload)] = payload
@@ -251,12 +298,17 @@ def expand_image(
     _check(prg, layout.item_call, b"\x20" + _word(layout.item_decoder), "item decoder call")
     _check(prg, layout.enemy_call, b"\x20" + _word(layout.enemy_decoder), "enemy decoder call")
     _check(prg, 0xFFFC, _word(layout.reset), "reset vector")
+    _check(prg, layout.item_decoder, b"\xae" + _word(CURRENT_ROOM_INDEX), "item decoder's room index")
+    first_stream = layout.item_pointers
+    _check(prg, first_stream, bytes((layout.header_region[0] & 0xFF,)), "item arena")
+    _check(prg, first_stream + 53, bytes((layout.header_region[0] >> 8,)), "item arena")
 
     code, labels = wrapper_code(layout)
     _place(prg, layout.chr_consume, b"\x09\x80")  # ORA #$80
-    _place(prg, layout.item_call, b"\x20" + _word(labels["wrap_items"]))
+    _place(prg, layout.item_call, b"\x20" + _word(layout.header_region[0]))
     _place(prg, layout.enemy_call, b"\x20" + _word(labels["wrap_enemies"]))
     _place(prg, layout.wrapper, code)
+    _place(prg, layout.header_region[0], header_loader(layout, labels["wrap_items"], item_streams))
     bank1 = bytes(prg)
 
     bank0 = bytearray(bank1)
