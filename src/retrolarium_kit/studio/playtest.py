@@ -351,6 +351,39 @@ def _smb_object_pages(area: Mapping[str, Any]) -> set[int]:
     return pages
 
 
+def apply_invincible(image: bytearray, revision: Any) -> None:
+    """Write the revision's invincibility patches into a build's bytes. A
+    patch whose bytes are not there refuses."""
+    for patch in getattr(revision, "invincible", ()):
+        end = patch.offset + len(patch.expect)
+        if image[patch.offset : end] != patch.expect:
+            raise StudioProjectError(
+                f"the build does not match the invincibility patch at file offset {patch.offset:#x}; "
+                "the game's code moved since the profile was made"
+            )
+        image[patch.offset : end] = patch.write
+
+
+def invincible_image(artifact: Path, revision: Any) -> Path:
+    """The playtest's copy of a build with the revision's invincibility
+    patches (its profile's "invincible"), beside the build; the build itself
+    when the revision has none. A patch whose bytes are not there refuses."""
+    if not getattr(revision, "invincible", ()):
+        return artifact
+    image = bytearray(artifact.read_bytes())
+    apply_invincible(image, revision)
+    target = artifact.with_name(f"{artifact.stem}-playtest{artifact.suffix}")
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".playtest-", suffix=artifact.suffix, dir=artifact.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(image)
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return target
+
+
 def _bounded_integer(value: object, name: str, minimum: int, maximum: int) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or not minimum <= value <= maximum:
         raise StudioProjectError(f"{name} must be in range {minimum}..{maximum}")
@@ -619,6 +652,9 @@ def studio_castle_excellent_point_playtest_plan(
         raise StudioProjectError("Castle Excellent build does not match the guarded initial-room layout")
     preview = bytearray(source)
     preview[0x22C2] = room
+    # The player cannot die.
+    profile = game_profiles().get("castle-excellent")
+    apply_invincible(preview, next(item for item in profile.revisions if item.revision_id == document["revision"]))
     project_root = Path(inspection["project_root"]).resolve()
     preview_directory = project_root / "build" / "point-playtest"
     preview_directory.mkdir(parents=True, exist_ok=True)
@@ -732,8 +768,9 @@ def studio_solomon_point_playtest_plan(
     lua = Path(__file__).with_name("runtime") / "solomon" / "playtest.lua"
     if not lua.is_file():
         raise StudioProjectError(f"packaged Solomon point-playtest script is missing: {lua}")
+    # The player cannot die (the profile's patches fit the original layout).
     plan = launch_image_plan(
-        artifact,
+        artifact if expanded else invincible_image(artifact, revision),
         platform="nes",
         mame=executable,
         machine="nespal" if revision_id == "europe" else "nes",
@@ -995,7 +1032,9 @@ def studio_doraemon_playtest_plan(
     lua = Path(__file__).with_name("runtime") / "doraemon" / "playtest.lua"
     if not lua.is_file():
         raise StudioProjectError(f"packaged Doraemon playtest script is missing: {lua}")
-    plan = launch_image_plan(artifact, platform="nes", mame=executable, machine="nes")
+    # The player cannot be hurt.
+    _, revision = _source_revision(inspection)
+    plan = launch_image_plan(invincible_image(artifact, revision), platform="nes", mame=executable, machine="nes")
     plan.update(
         {
             "operation": "retrolarium.studio.doraemon-playtest",

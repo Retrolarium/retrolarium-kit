@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from helpers import game_repository
-from retrolarium_kit.core.game_profiles import repository_profile
+from retrolarium_kit.core.game_profiles import game_profiles, repository_profile
 from retrolarium_kit.studio.project import (
     StudioProjectError,
     build_studio_project,
@@ -484,7 +484,13 @@ class StudioOperationTests(unittest.TestCase):
             with self.assertRaisesRegex(StudioProjectError, "no program file \\$40"):
                 _fds_file_blob(image, 0x40)
 
+    @unittest.skipUnless(
+        (game_repository("castle_excellent_src") / "config" / "game_profile.json").is_file(),
+        "the Castle Excellent repository is not available",
+    )
     def test_castle_excellent_point_playtest_prepares_isolated_room_preview(self) -> None:
+        # The invincibility patches come from the repository's profile.
+        repository_profile(game_repository("castle_excellent_src"))
         for revision in ("castle-excellent-japan-hsp-05", "castlequest-usa"):
             with self.subTest(revision=revision), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
@@ -508,6 +514,11 @@ class StudioOperationTests(unittest.TestCase):
                 source = bytearray(65552)
                 source[:16] = b"NES\x1a" + bytes([2, 4, 0x30]) + bytes(9)
                 source[0x22C1:0x22C5] = b"\xa9\x47\x85\x37"
+                spec = next(
+                    item for item in game_profiles().get("castle-excellent").revisions if item.revision_id == revision
+                )
+                for code in spec.invincible:
+                    source[code.offset : code.offset + len(code.expect)] = code.expect
                 artifact = root / "disassembly/generated/base.nes"
                 artifact.write_bytes(source)
                 mame = root / "mame.exe"
@@ -536,6 +547,9 @@ class StudioOperationTests(unittest.TestCase):
                     preview = Path(plan["arguments"][2])
                     expected = bytearray(source)
                     expected[0x22C2] = 42
+                    # The player cannot die in the preview.
+                    for code in spec.invincible:
+                        expected[code.offset : code.offset + len(code.write)] = code.write
                     self.assertEqual(bytes(expected), preview.read_bytes())
                     self.assertEqual(bytes(source), artifact.read_bytes())
                     self.assertEqual("42", plan["environment"]["CASTLE_EXCELLENT_PLAYTEST_ROOM"])
@@ -717,6 +731,12 @@ class StudioOperationTests(unittest.TestCase):
                 source = bytearray(65552)
                 source[:16] = b"NES\x1a" + bytes([2, 4, 0x30]) + bytes(9)
                 source[16 + hook - 0x8000 : 22 + hook - 0x8000] = b"\xa9\xfd\x25\x7c\x85\x7c"
+                # The code the invincibility patches replace.
+                spec = next(
+                    item for item in game_profiles().get("solomons-key").revisions if item.revision_id == revision
+                )
+                for code in spec.invincible:
+                    source[code.offset : code.offset + len(code.expect)] = code.expect
                 artifact = root / "disassembly/generated/base.nes"
                 artifact.write_bytes(source)
                 mame = root / "mame.exe"
@@ -741,7 +761,9 @@ class StudioOperationTests(unittest.TestCase):
                         room=29,
                     )
                     self.assertEqual(machine, plan["arguments"][0])
-                    self.assertEqual(str(artifact.resolve()), plan["arguments"][2])
+                    # The playtest runs a copy that keeps the player alive.
+                    played = artifact.with_name("base-playtest.nes") if spec.invincible else artifact
+                    self.assertEqual(str(played.resolve()), plan["arguments"][2])
                     self.assertEqual("29", plan["environment"]["SOLOMON_PLAYTEST_ROOM"])
                     self.assertEqual(str(hook), plan["environment"]["SOLOMON_PLAYTEST_ROOM_LOAD"])
                     self.assertEqual(bytes(source), artifact.read_bytes())

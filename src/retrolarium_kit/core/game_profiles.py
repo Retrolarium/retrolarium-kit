@@ -17,6 +17,7 @@ from typing import Any, Iterable
 
 from retrolarium_kit.core.authoring import (
     AuthoringError,
+    CodePatch,
     GameProfile,
     PayloadSpec,
     Registry,
@@ -93,6 +94,22 @@ def _payloads(value: object, name: str) -> tuple[PayloadSpec, ...]:
     return tuple(payloads)
 
 
+def _code_patches(value: object, name: str) -> tuple[CodePatch, ...]:
+    if not isinstance(value, list):
+        raise AuthoringError(f"{name} must be an array")
+    patches = []
+    for index, raw in enumerate(value):
+        item_name = f"{name}[{index}]"
+        item = _mapping(raw, item_name)
+        try:
+            expect = bytes.fromhex(_string(item.get("expect"), f"{item_name}.expect"))
+            write = bytes.fromhex(_string(item.get("write"), f"{item_name}.write"))
+        except ValueError as exc:
+            raise AuthoringError(f"{item_name} bytes must be hexadecimal") from exc
+        patches.append(CodePatch(offset=item.get("offset"), expect=expect, write=write))
+    return tuple(patches)
+
+
 def _resource_overrides(value: object, name: str) -> tuple[ResourceOverrideSpec, ...]:
     if not isinstance(value, list):
         raise AuthoringError(f"{name} must be an array")
@@ -154,6 +171,7 @@ def parse_game_profile(document: object) -> GameProfile:
                 resource_overrides=revision_resource_overrides,
                 payloads=revision_payloads,
                 playtest=(_mapping(item["playtest"], f"revisions[{index}].playtest") if "playtest" in item else None),
+                invincible=_code_patches(item.get("invincible", []), f"revisions[{index}].invincible"),
             )
         )
 

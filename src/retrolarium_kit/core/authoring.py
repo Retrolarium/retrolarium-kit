@@ -193,6 +193,23 @@ class ResourceOverrideSpec:
 
 
 @dataclass(frozen=True)
+class CodePatch:
+    """Bytes a playtest copy of a build writes over the game's code, at a
+    file offset of the image; `expect` must be there first, so a patch fits
+    only the code it was made for."""
+
+    offset: int
+    expect: bytes
+    write: bytes
+
+    def __post_init__(self) -> None:
+        if type(self.offset) is not int or self.offset < 0:
+            raise AuthoringError("code patch offset must be a non-negative integer")
+        if not self.expect or len(self.expect) != len(self.write):
+            raise AuthoringError("code patch expect and write must be the same, non-empty length")
+
+
+@dataclass(frozen=True)
 class RevisionSpec:
     revision_id: str
     name: str
@@ -206,6 +223,8 @@ class RevisionSpec:
     resource_overrides: tuple[ResourceOverrideSpec, ...] = ()
     payloads: tuple[PayloadSpec, ...] = ()
     playtest: Mapping[str, int] | None = None
+    # What keeps the player alive in a playtest (as SMB's playtest does).
+    invincible: tuple[CodePatch, ...] = ()
 
     def __post_init__(self) -> None:
         stable_identifier(self.revision_id, "revision id")
