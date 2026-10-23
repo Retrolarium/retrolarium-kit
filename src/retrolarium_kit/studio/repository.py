@@ -847,13 +847,16 @@ def check_release(descriptor: GameDescriptor, manifest: Path) -> dict[str, objec
 
 
 def _prepare_flicky(descriptor: GameDescriptor, revision: Revision, rom: Path, original: Path) -> list[str]:
-    """Import the repository into the revision's snapshot once, keeping a
-    pristine copy of its workspace documents."""
-    from retrolarium_kit.games.flicky.content import import_flicky_source
+    """Import the repository into the revision's snapshot, keeping a pristine
+    copy of its workspace documents; a snapshot of an older source moves to
+    the current one with its edits (the pristine copies tell which they are)."""
+    from retrolarium_kit.games.flicky.content import import_flicky_source, refresh_flicky_source
 
     workspace = descriptor.root / WORKSPACE_DIRECTORY / revision.id
     snapshot = _edits(descriptor, revision)
     created = []
+    if snapshot.is_dir() and all((original / document).is_file() for document, _ in _documents(descriptor, revision)):
+        refresh_flicky_source(descriptor.root, workspace, original)
     if not snapshot.is_dir():
         import_flicky_source(descriptor.root, rom, workspace)
         created = [
