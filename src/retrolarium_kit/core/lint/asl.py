@@ -27,9 +27,10 @@ STATEMENT_RE = re.compile(r"^(\s*)(\S+)(.*)$")
 INLINE_COMMENT_RE = re.compile(r"^(.*?\S)(\s+)(;.*)$")
 BLOCK_OPEN_RE = re.compile(r"^\s*\S+\s+macro\b", re.IGNORECASE)
 BLOCK_CLOSE_RE = re.compile(r"^\s*endm\b", re.IGNORECASE)
-# "NAME equ value" and "NAME macro args" define NAME in the label field, so the
-# name stays at column zero even though what follows reads like a mnemonic.
-LABEL_FIELD_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)(\s+(?:equ|set|macro)\b.*)$", re.IGNORECASE)
+# "NAME equ value", "NAME := value" and "NAME macro args" define NAME in the
+# label field (a local ".name" too), so the name stays at column zero even
+# though what follows reads like a mnemonic.
+LABEL_FIELD_RE = re.compile(r"^(\.?[A-Za-z_][A-Za-z0-9_]*)(\s+(?:(?:equ|set|macro)\b|:=).*)$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)

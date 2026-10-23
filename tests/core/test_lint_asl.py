@@ -82,6 +82,11 @@ class NormalizeLine(unittest.TestCase):
             "IO_CT1_CTRL".ljust(16) + "equ     $A10008",
         )
 
+    def test_a_local_assignment_keeps_its_name_in_the_label_field(self):
+        # Indented, ".words := $80" would no longer assign: AS reads the
+        # label field for the name.
+        self.assertEqual(normalize_line(".words := $80", 1, 16), ".words".ljust(16) + ":=      $80")
+
     def test_macro_definition_keeps_its_name_in_the_label_field(self):
         self.assertEqual(
             normalize_line("cnop macro offset,alignment", 0, 16),
