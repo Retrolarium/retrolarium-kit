@@ -578,6 +578,16 @@ class StudioOperationTests(unittest.TestCase):
             state = self.prepare(root)
             state["project"]["profile"] = "doraemon.v1"
             bundle = root / "documents/resources.json"
+            old_table = {
+                "codec": "nes.record-table.v1",
+                "fields": [{"name": "speed", "label": "Speed"}],
+                "record_labels": ["Round 1"],
+            }
+            new_table = {
+                "codec": "nes.record-table.v1",
+                "fields": [{"name": "speed", "label": "Speed level", "names": "speeds"}],
+                "record_labels": ["Stage 1"],
+            }
             bundle.write_text(
                 json.dumps(
                     {
@@ -585,6 +595,10 @@ class StudioOperationTests(unittest.TestCase):
                         "resources": [
                             {"id": "a", "values": [9]},
                             {"id": "c", "values": [3]},
+                            # Record tables under an older wording: the
+                            # same fields, the user's values.
+                            {**old_table, "id": "t", "records": [{"speed": 7}]},
+                            {**old_table, "id": "u", "records": [{"speed": 7}]},
                         ],
                     }
                 ),
@@ -600,6 +614,14 @@ class StudioOperationTests(unittest.TestCase):
                                 {"id": "a", "values": [1]},
                                 {"id": "b", "values": [2]},
                                 {"id": "c", "values": [3]},
+                                {**new_table, "id": "t", "records": [{"speed": 1}]},
+                                # Other fields: the user's table stays as it is.
+                                {
+                                    **new_table,
+                                    "id": "u",
+                                    "fields": [{"name": "rate", "label": "Rate"}],
+                                    "records": [{"rate": 1}],
+                                },
                             ],
                         }
                     ),
@@ -614,10 +636,16 @@ class StudioOperationTests(unittest.TestCase):
                 added = studio_create._add_bundle_resources(
                     root / "fixture.rlj", profile="doraemon.v1", codec="nes.chr-2bpp.v1"
                 )
-                self.assertEqual(["b"], added)
+                self.assertEqual(["b", "t"], added)
                 merged = json.loads(bundle.read_text(encoding="utf-8"))
                 self.assertEqual(
-                    [{"id": "a", "values": [9]}, {"id": "b", "values": [2]}, {"id": "c", "values": [3]}],
+                    [
+                        {"id": "a", "values": [9]},
+                        {"id": "b", "values": [2]},
+                        {"id": "c", "values": [3]},
+                        {**new_table, "id": "t", "records": [{"speed": 7}]},
+                        {**old_table, "id": "u", "records": [{"speed": 7}]},
+                    ],
                     merged["resources"],
                 )
                 self.assertEqual(

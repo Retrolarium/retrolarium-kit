@@ -96,10 +96,20 @@ class RecordTableTests(unittest.TestCase):
             with self.assertRaisesRegex(RecordTableError, message):
                 encode_records(edited, parameters, "routes")
 
-    def test_the_document_cannot_redescribe_the_fields(self) -> None:
+    def test_the_profile_describes_the_fields(self) -> None:
+        # A document keeps the wording of the kit that made it; the values
+        # are still written as the profile describes the fields.
         document = decode_records(IMAGE, PARAMETERS, "things")
+        document["fields"][0]["label"] = "Old X"
+        document["record_labels"] = ["Old 1", "Old 2", "Old 3"]
+        self.assertEqual(IMAGE, runs_image(encode_records(document, PARAMETERS, "things")))
         document["fields"][0]["maximum"] = 300
-        with self.assertRaisesRegex(RecordTableError, "differ from the profile"):
+        document["records"][0]["x"] = 300
+        with self.assertRaisesRegex(RecordTableError, "0-255"):
+            encode_records(document, PARAMETERS, "things")
+        document = decode_records(IMAGE, PARAMETERS, "things")
+        document["fields"].pop()
+        with self.assertRaisesRegex(RecordTableError, "fields differ from the profile"):
             encode_records(document, PARAMETERS, "things")
         document = decode_records(IMAGE, PARAMETERS, "things")
         document["records"][1].pop("x")

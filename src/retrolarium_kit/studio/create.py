@@ -169,10 +169,22 @@ def _project_source(inspection: Mapping[str, Any]) -> Path:
     return source
 
 
+def _record_shape(resource: dict[str, Any]) -> tuple[object, int]:
+    """What a record table's values depend on: its field names and how many
+    records it holds."""
+    fields = resource.get("fields")
+    names = (
+        tuple(field.get("name") for field in fields if isinstance(field, dict)) if isinstance(fields, list) else None
+    )
+    records = resource.get("records")
+    return names, len(records) if isinstance(records, list) else -1
+
+
 def _add_bundle_resources(path: Path, *, profile: str, codec: str) -> list[str]:
     """Give a project's resource bundle the resources newer kits add to its
-    profile, decoded from the project's own source, and the newer kit's
-    tables read from the game; edited resources stay."""
+    profile, decoded from the project's own source, the newer kit's tables
+    read from the game and its descriptions of record tables' fields; edited
+    values stay."""
 
     from retrolarium_kit.games.catalog import extract_game
 
@@ -204,7 +216,21 @@ def _add_bundle_resources(path: Path, *, profile: str, codec: str) -> list[str]:
         for item in fresh["resources"]
         if item["id"] in present and item.get("codec") == "nes.byte-tables.v1" and by_id[item["id"]] != item
     ]
-    added = [item["id"] for item in fresh["resources"] if item["id"] not in present] + refreshed
+    # Record tables (nes.record-table.v1) keep the user's values; their field
+    # descriptions and record labels are the profile's and follow a newer one
+    # while the fields themselves stay the same.
+    described = []
+    for item in fresh["resources"]:
+        mine = by_id.get(item["id"])
+        if (
+            mine is not None
+            and item.get("codec") == "nes.record-table.v1"
+            and _record_shape(mine) == _record_shape(item)
+            and (mine.get("fields"), mine.get("record_labels")) != (item.get("fields"), item.get("record_labels"))
+        ):
+            by_id[item["id"]] = {**mine, "fields": item["fields"], "record_labels": item["record_labels"]}
+            described.append(item["id"])
+    added = [item["id"] for item in fresh["resources"] if item["id"] not in present] + refreshed + described
     if not added:
         return []
     for item in fresh["resources"]:
