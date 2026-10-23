@@ -17,6 +17,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 import shutil
 import subprocess
 import tempfile
+import time
 
 from retrolarium_core.megadrive import stamp_cartridge_checksum
 from retrolarium_kit.core.build_toolchains import BuildToolchainError, materialize_build_toolchain
@@ -244,6 +245,93 @@ def import_flicky_source(source_root: Path, canonical_rom: Path, project_root: P
         "tracked_files": len(files),
         "documents": WORKSPACE_FILES.copy(),
     }
+
+
+def _same_document(a: Path, b: Path) -> bool:
+    """Whether two workspace documents hold the same: JSON by its values (the
+    studio saves it in its own layout), anything else byte for byte."""
+    if not a.is_file() or not b.is_file():
+        return False
+    if a.suffix == ".json":
+        try:
+            return json.loads(a.read_text(encoding="utf-8")) == json.loads(b.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+    return a.read_bytes() == b.read_bytes()
+
+
+def _rename(source: Path, target: Path) -> None:
+    """Rename a folder; Windows refuses while a scanner still reads files
+    just written in it, so a refusal is tried again for a few seconds."""
+    for attempt in range(40):
+        try:
+            source.rename(target)
+            return
+        except PermissionError:
+            if attempt == 39:
+                raise
+            time.sleep(0.25)
+
+
+def refresh_flicky_source(source_root: Path, project_root: Path, original: Path) -> list[str] | None:
+    """Move a snapshot imported from an older source to the repository's
+    current one, carrying the workspace documents edited in it; None when the
+    snapshot already holds the repository's files.
+
+    `original` holds the documents as the snapshot first had them. An edited
+    document moves over when the newer source gives the same document
+    unedited; one the newer source changes too stops the refresh, and the
+    snapshot stays as it is. The replaced snapshot is kept beside the new one
+    (flicky-source.before-refresh), and `original` gets the newer documents."""
+
+    source_root, project_root = source_root.resolve(), project_root.resolve()
+    snapshot = project_root / SOURCE_DIRECTORY
+    record = json.loads((snapshot / SNAPSHOT_RECORD).read_text(encoding="utf-8"))
+    manifest = json.loads((snapshot / "assets/manifest.json").read_text(encoding="utf-8"))
+    assets = {Path("data", *PurePosixPath(item["path"]).parts).as_posix() for item in manifest.get("assets", [])}
+    imported = {name: digest for name, digest in record.get("files", {}).items() if name not in assets}
+    if imported == _snapshot_files(source_root, _tracked_files(source_root)):
+        return None
+    staging = Path(tempfile.mkdtemp(prefix=".flicky-refresh-", dir=project_root))
+    try:
+        import_flicky_source(source_root, snapshot / ROM_NAME, staging)
+        fresh = staging / SOURCE_DIRECTORY
+        baselines = {relative: (fresh / relative).read_bytes() for relative in WORKSPACE_FILES.values()}
+        carried, conflicts = [], []
+        for relative in WORKSPACE_FILES.values():
+            mine = snapshot / relative
+            if not mine.is_file() or _same_document(mine, original / relative):
+                continue
+            if _same_document(original / relative, fresh / relative):
+                shutil.copyfile(mine, fresh / relative)
+                carried.append(relative)
+            else:
+                conflicts.append(relative)
+        if conflicts:
+            raise FlickyContentError(
+                "the game's source changed under edited documents ("
+                + ", ".join(conflicts)
+                + "); the project keeps its older source, which this kit cannot build"
+            )
+        try:
+            validate_workspace(fresh)
+        except FlickyWorkspaceError as exc:
+            raise FlickyContentError(f"the edits do not fit the game's current source: {exc}") from exc
+        backup = project_root / f"{SOURCE_DIRECTORY}.before-refresh"
+        if backup.exists():
+            shutil.rmtree(backup)
+        _rename(snapshot, backup)
+        try:
+            _rename(fresh, snapshot)
+        except OSError:
+            _rename(backup, snapshot)
+            raise
+        for relative, data in baselines.items():
+            (original / relative).parent.mkdir(parents=True, exist_ok=True)
+            (original / relative).write_bytes(data)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+    return carried
 
 
 def validate_flicky_source_snapshot(project_root: Path) -> dict[str, str]:
