@@ -29,6 +29,18 @@ def command_profile_tables(args: argparse.Namespace) -> None:
     print_json(profile_tables.resolve_all(root, spec, revisions))
 
 
+def command_profile_build(args: argparse.Namespace) -> None:
+    from retrolarium_kit.platform.megadrive.build import MegaDriveBuildError, build_revision
+
+    root = Path(args.root) if args.root else Path.cwd()
+    try:
+        image = build_revision(root, args.revision, Path(args.output) if args.output else None, args.entry)
+    except MegaDriveBuildError as error:
+        print(f"error: {error}", file=sys.stderr)
+        raise SystemExit(1) from None
+    print(f"[OK] built {image}")
+
+
 def add_parsers(commands: argparse._SubParsersAction) -> None:
     group = commands.add_parser("profile", help="what a game's profile records about its built source")
     actions = group.add_subparsers(dest="profile_command", required=True)
@@ -47,3 +59,11 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
         help="print the immediates a revision assembles after a label, to write the spec",
     )
     tables.set_defaults(handler=command_profile_tables)
+    build = actions.add_parser(
+        "build", help="assemble a revision with the kit's tools as config/game_profile.json describes (Mega Drive)"
+    )
+    build.add_argument("--root", help="the game repository (default: the current folder)")
+    build.add_argument("--revision", required=True)
+    build.add_argument("--output", help="copy the image here too")
+    build.add_argument("--entry", help="assemble this copy of the 68000 source instead (into --output only)")
+    build.set_defaults(handler=command_profile_build)
