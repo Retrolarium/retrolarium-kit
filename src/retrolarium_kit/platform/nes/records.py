@@ -203,10 +203,17 @@ def encode_records(raw: Mapping[str, Any], parameters: Mapping[str, Any], contex
     """The bytes an edited document writes, as (file offset, bytes) runs.
     Locked records are skipped; a shared byte must get one value."""
     shape = layout(parameters, context)
-    if raw.get("fields") != shape["fields"] or raw.get("record_labels") != shape["record_labels"]:
-        raise RecordTableError(f"{context} field descriptions or record labels differ from the profile")
-    rows = raw.get("records")
     names = [field["name"] for field in shape["fields"]]
+    # The values are written with the profile's description of each field; a
+    # document made under an older wording of it (labels, names of choices)
+    # still holds the same fields.
+    fields = raw.get("fields")
+    if (
+        not isinstance(fields, list)
+        or [field.get("name") if isinstance(field, Mapping) else None for field in fields] != names
+    ):
+        raise RecordTableError(f"{context} fields differ from the profile")
+    rows = raw.get("records")
     if not isinstance(rows, list) or len(rows) != shape["records"]:
         raise RecordTableError(f"{context} holds {shape['records']} records")
     for r, row in enumerate(rows):
