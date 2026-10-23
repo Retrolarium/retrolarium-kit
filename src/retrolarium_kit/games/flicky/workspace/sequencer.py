@@ -13,11 +13,14 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from retrolarium_kit.games.flicky.workspace import sound as sound_studio_model
+from retrolarium_kit.platform.megadrive.sound import (
+    DEFAULT_SAMPLE_RATE,
+    LEVEL_REGISTERS,
+    YM2612_CLOCK,
+    ChipWrite,
+)
 
 
-YM2612_CLOCK = 7_670_454
-SN76489_CLOCK = 3_579_545
-DEFAULT_SAMPLE_RATE = 44_100
 FM_FREQUENCY_TABLE_ADDRESS = 0x0900
 FM_SEMITONE_TABLE_ADDRESS = FM_FREQUENCY_TABLE_ADDRESS + 69 * 2
 MODULATION_POINTERS = (0x02FE, 0x02FF, 0x0300, 0x0301, 0x80C0, 0x40C0, 0xC080)
@@ -48,7 +51,6 @@ VOICE_REGISTERS = (
     0x84,
     0x8C,
 )
-LEVEL_REGISTERS = (0x40, 0x48, 0x44, 0x4C)
 
 
 def signed_byte(value: int) -> int:
@@ -63,16 +65,6 @@ def timer_a_period_samples(value: int, sample_rate: int) -> float:
 def timer_b_period_samples(value: int, sample_rate: int) -> float:
     """YM2612 timer-B overflow period, in output samples."""
     return sample_rate * 2304.0 * (256 - (value & 0xFF)) / YM2612_CLOCK
-
-
-@dataclass(frozen=True)
-class ChipWrite:
-    sample: int
-    chip: str
-    value: int
-    port: int = 0
-    address: int = 0
-    channel: int | None = None
 
 
 @dataclass
