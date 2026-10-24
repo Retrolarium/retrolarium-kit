@@ -71,6 +71,43 @@ def import_source(source_root: Path, rom: Path, project_root: Path, revision: st
     return documents()
 
 
+def _follow_payloads(mine: dict, exported: dict, original: Path) -> dict | None:
+    """`mine` with the payload labels of `exported`, or None when they are
+    the same already. The original copy of the document follows too, so an
+    unedited payload still reads as unedited."""
+    labels = [item.get("label") for item in exported["payloads"]]
+    if [item.get("label") for item in mine.get("payloads", [])] == labels:
+        return None
+    before = json.loads(original.read_text(encoding="utf-8")) if original.is_file() else {"payloads": []}
+    old = {item.get("label"): item for item in before.get("payloads", [])}
+    ours = {item.get("label"): item for item in mine.get("payloads", [])}
+    for label, item in ours.items():
+        if label not in labels and old.get(label) != item:
+            raise AlienSoldierContentError(
+                f"{label} is edited, but this kit no longer reads it as part of {exported['schema']}"
+            )
+    fresh = {item["label"]: item for item in exported["payloads"]}
+    if original.is_file():
+        before["payloads"] = [old.get(label, fresh[label]) for label in labels]
+        original.write_text(json.dumps(before, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+    return {**mine, "payloads": [ours.get(label, fresh[label]) for label in labels]}
+
+
+def _follow_derived(mine: dict, exported: dict, keys: tuple[str, ...], original: Path) -> dict | None:
+    """`mine` with the keys the source derives as `exported` has them, or None
+    when they are the same already; the original copy follows too."""
+    derived = {key: exported[key] for key in keys}
+    if original.is_file():
+        before = json.loads(original.read_text(encoding="utf-8"))
+        if any(before.get(key) != value for key, value in derived.items()):
+            original.write_text(
+                json.dumps({**before, **derived}, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n"
+            )
+    if all(mine.get(key) == value for key, value in derived.items()):
+        return None
+    return {**mine, **derived}
+
+
 def refresh_source(source_root: Path, project_root: Path, original: Path) -> list[str] | None:
     """Move a snapshot of an older source to the repository's current one
     with its edits; None when it is current."""
@@ -89,14 +126,31 @@ def refresh_source(source_root: Path, project_root: Path, original: Path) -> lis
             for relative, document in exported.items()
             if relative in derived or f"{CONTENT}/{relative}" in missing
         }
-        # So are the derived parts of edited documents.
+        # An edited document whose payloads this kit reads differently (a
+        # staging buffer that is not a map, art a loader sends to VRAM)
+        # follows the source: payloads it no longer has go when unedited,
+        # new ones come as the source gives them.
+        for module in workspace.DOCUMENTS:
+            relative = module.DOCUMENT
+            path = snapshot / CONTENT / relative
+            if relative in refreshed or not path.is_file() or "payloads" not in exported[relative]:
+                continue
+            mine = json.loads(path.read_text(encoding="utf-8"))
+            kept = _follow_payloads(mine, exported[relative], original / CONTENT / relative)
+            if kept is not None:
+                refreshed[relative] = kept
+        # So are the derived parts of edited documents, in the original copy
+        # too: a document whose only change is what the source derives still
+        # reads as unedited.
         for module in workspace.DOCUMENTS:
             keys = getattr(module, "DERIVED_KEYS", ())
             path = snapshot / CONTENT / module.DOCUMENT
-            if keys and module.DOCUMENT not in refreshed and path.is_file():
-                document = json.loads(path.read_text(encoding="utf-8"))
-                if any(document.get(key) != exported[module.DOCUMENT][key] for key in keys):
-                    refreshed[module.DOCUMENT] = {**document, **{key: exported[module.DOCUMENT][key] for key in keys}}
+            if not keys or not (module.DOCUMENT in refreshed or path.is_file()):
+                continue
+            document = refreshed.get(module.DOCUMENT) or json.loads(path.read_text(encoding="utf-8"))
+            kept = _follow_derived(document, exported[module.DOCUMENT], keys, original / CONTENT / module.DOCUMENT)
+            if kept is not None:
+                refreshed[module.DOCUMENT] = kept
         workspace.write(refreshed, snapshot / CONTENT)
         if source_snapshot.current(snapshot, source_root, FOLDERS):
             return None

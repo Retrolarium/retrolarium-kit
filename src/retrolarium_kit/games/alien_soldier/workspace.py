@@ -22,12 +22,14 @@ from typing import Any, Mapping
 
 from retrolarium_kit.games.alien_soldier import (
     animations,
+    art,
     compressed_tiles,
     demos,
     envelopes,
     levels,
     mappings,
     maps,
+    objects,
     palettes,
     pcm,
     screens,
@@ -59,7 +61,7 @@ DOCUMENTS = (
     envelopes,
     pcm,
 )
-DERIVED = (stages,)
+DERIVED = (stages, objects, art)
 
 
 class WorkspaceError(ValueError):
@@ -89,7 +91,7 @@ def tree(root: Path, section: Mapping[str, Any], revision: str) -> SourceTree:
 
 
 def _call(module, function: str, source: SourceTree, section: Mapping[str, Any], revision: str, *document):
-    if module is screens:
+    if module is screens or module is art:
         return getattr(module, function)(source, *document, section.get("screens", []), revision)
     return getattr(module, function)(source, *document)
 

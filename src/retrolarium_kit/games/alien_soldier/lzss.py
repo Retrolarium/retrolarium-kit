@@ -24,6 +24,7 @@ therefore keep an unedited stream as it was and only compress what changed.
 
 from __future__ import annotations
 
+from functools import lru_cache
 import struct
 
 
@@ -51,7 +52,14 @@ def stream_end(payload: bytes) -> int:
 
 def decompress(payload: bytes, *, blocks: bool = False) -> bytes:
     """What the decompressor writes. With `blocks`, as the VRAM loader runs
-    it: a match may not reach before the start of its $400 block."""
+    it: a match may not reach before the start of its $400 block. Readers
+    ask for the same payloads many times while a project opens, so the
+    output is kept by the input's bytes."""
+    return _decompress(bytes(payload), blocks)
+
+
+@lru_cache(maxsize=4096)
+def _decompress(payload: bytes, blocks: bool) -> bytes:
     end = stream_end(payload)
     out = bytearray()
     at = 2

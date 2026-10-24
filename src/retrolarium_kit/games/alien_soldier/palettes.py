@@ -50,12 +50,13 @@ def read_commands(data: bytes, label: str) -> list[dict[str, Any]]:
     return commands
 
 
-def _blocks(tree: SourceTree) -> dict[str, list[dict[str, Any]]]:
-    blocks = {}
+def blocks(tree: SourceTree) -> dict[str, list[dict[str, Any]]]:
+    """Each palette command bank by label, its commands decoded."""
+    found = {}
     for label in tree.labels_in(SOURCE):
         if tree.block(label).kind in {"dc.b", "binclude"}:
-            blocks[label] = read_commands(tree.data(label), label)
-    return blocks
+            found[label] = read_commands(tree.data(label), label)
+    return found
 
 
 def _lists(tree: SourceTree) -> list[dict[str, Any]]:
@@ -82,7 +83,7 @@ def export(tree: SourceTree) -> dict[str, Any]:
         "schema": SCHEMA,
         "schema_version": 1,
         "prelude": PRELUDE,
-        "blocks": [{"label": label, "commands": commands} for label, commands in _blocks(tree).items()],
+        "blocks": [{"label": label, "commands": commands} for label, commands in blocks(tree).items()],
         "lists": _lists(tree),
     }
 
@@ -102,13 +103,13 @@ def apply(tree: SourceTree, document: dict[str, Any]) -> None:
     the lists must be the source's."""
     if document.get("schema") != SCHEMA or document.get("schema_version") != 1:
         raise PaletteError("not an Alien Soldier palette document")
-    source = _blocks(tree)
-    blocks = document.get("blocks")
-    if not isinstance(blocks, list) or [block.get("label") for block in blocks] != list(source):
+    source = blocks(tree)
+    items = document.get("blocks")
+    if not isinstance(items, list) or [block.get("label") for block in items] != list(source):
         raise PaletteError("the palette blocks differ from the source")
     if document.get("lists") != _lists(tree):
         raise PaletteError("the palette lists differ from the source")
-    for block in blocks:
+    for block in items:
         label, commands = block["label"], block.get("commands")
         original = source[label]
         if not isinstance(commands, list) or len(commands) != len(original):
