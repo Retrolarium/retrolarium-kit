@@ -1,6 +1,7 @@
-"""Alien Soldier's compressed tile art: every payload an asset list sends to
-VRAM through LZSS (command seven, directly or through the shared stage tile
-table) or through the tile codec (commands two and three).
+"""Alien Soldier's compressed tile art: every payload an asset list or a
+stage's visual loader sends to VRAM through LZSS (command seven, directly or
+through the shared stage tile table) or through the tile codec (commands two
+and three).
 
 Each payload keeps its slot: an edited one is compressed again and must fit
 the original payload's size, padded after its stream so nothing behind it
@@ -20,6 +21,7 @@ from retrolarium_kit.games.alien_soldier.assets import (
     asset_lists,
     pointer_table,
 )
+from retrolarium_kit.games.alien_soldier.stages import visual_tile_commands
 from retrolarium_kit.platform.megadrive.asl import SourceTree
 from retrolarium_kit.platform.megadrive.vdp import TILE_BYTES, tile_bytes, tiles_hex
 
@@ -38,6 +40,7 @@ def payloads(tree: SourceTree) -> dict[str, str]:
     lists = asset_lists(tree).values()
     lzss_sources = {command.source for commands in lists for command in commands if command.command == LZSS_TO_VRAM}
     lzss_sources |= set(pointer_table(tree, SHARED_TILE_SOURCES))
+    lzss_sources |= {command.source for command in visual_tile_commands(tree) if command.command == LZSS_TO_VRAM}
     codec_sources = {
         command.source for commands in lists for command in commands if command.command in TILE_CODEC_COMMANDS
     }
@@ -50,7 +53,8 @@ def payloads(tree: SourceTree) -> dict[str, str]:
     return found
 
 
-def _decode(codec: str, payload: bytes) -> bytes:
+def decode(codec: str, payload: bytes) -> bytes:
+    """A payload's tile bytes."""
     return tile_codec.decompress(payload) if codec == "tile-codec" else lzss.decompress(payload, blocks=True)
 
 
@@ -59,7 +63,7 @@ def export(tree: SourceTree) -> dict[str, Any]:
     for label, codec in payloads(tree).items():
         payload = tree.data(label)
         items.append(
-            {"label": label, "codec": codec, "capacity": len(payload), "tiles": tiles_hex(_decode(codec, payload))}
+            {"label": label, "codec": codec, "capacity": len(payload), "tiles": tiles_hex(decode(codec, payload))}
         )
     return {"schema": SCHEMA, "schema_version": 1, "payloads": items}
 
@@ -76,7 +80,7 @@ def apply(tree: SourceTree, document: dict[str, Any]) -> None:
     for item in items:
         label, codec, original = item["label"], item["codec"], tree.data(item["label"])
         tiles = item.get("tiles")
-        if not isinstance(tiles, list) or len(tiles) * TILE_BYTES != len(_decode(codec, original)):
+        if not isinstance(tiles, list) or len(tiles) * TILE_BYTES != len(decode(codec, original)):
             raise CompressedTileError(f"{label}: the tile count differs from the source")
         try:
             data = b"".join(tile_bytes(tile) for tile in tiles)

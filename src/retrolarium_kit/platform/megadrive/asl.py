@@ -209,6 +209,8 @@ class SourceTree:
         self.equates: dict[str, int] = {}
         self._expressions: dict[str, str] = {}
         self._payloads: dict[str, bytes] = {}
+        # Included files read once (a write puts its bytes in _payloads).
+        self._included: dict[str, bytes] = {}
         self._read(entry)
         self._resolve_equates()
 
@@ -336,7 +338,12 @@ class SourceTree:
         """What a label assembles to (a write not yet saved included)."""
         if label in self._payloads:
             return self._payloads[label]
-        return self.block(label).data(self.root)
+        block = self.block(label)
+        if block.kind != "binclude":
+            return block.data(self.root)
+        if label not in self._included:
+            self._included[label] = block.data(self.root)
+        return self._included[label]
 
     def body(self, label: str) -> list[str]:
         """A label's source lines, comments removed, up to the next label of

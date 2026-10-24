@@ -25,6 +25,7 @@ one colour) or is written as plain runs, whichever is shorter.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 
 TILE_PIXELS = 64
@@ -121,6 +122,12 @@ def _unpack(tile: bytes) -> list[int]:
 
 
 def decompress(payload: bytes) -> bytes:
+    """The tiles a payload decodes to, kept by the payload's bytes."""
+    return _decompress(bytes(payload))
+
+
+@lru_cache(maxsize=1024)
+def _decompress(payload: bytes) -> bytes:
     if len(payload) < 2:
         raise TileCodecError("a payload needs a count and a stream")
     bits = _Bits(payload, 1)

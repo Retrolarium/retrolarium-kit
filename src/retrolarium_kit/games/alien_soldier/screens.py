@@ -1,4 +1,6 @@
-"""Alien Soldier's static screens: the title, options and story backgrounds.
+"""Alien Soldier's static screens: the title, options and story
+backgrounds and the others the game repository's profile names, and the
+credits' picture scenes.
 
 Like a stage, a screen is the RAM and VRAM its asset list leaves behind,
 read through plane descriptors. Which screens are static, the list each
@@ -15,6 +17,12 @@ words:
 - `update-indices` (Gfx_UpdateTilemapIndices): a non-zero tile index moves
   down $100 tiles, the flip bits stay, and $6000 is added.
 
+The credits' scenes come from the source alone: `Credits_SceneDataPointers`
+pairs each scene's sixteen colours (copied into colour line 1 or 3 in turn)
+with the asset list that loads its art and its map, which goes straight to
+a plane's name table in VRAM, 64 cells wide. The map is a compressed payload
+the tile document holds; the scene names it (`name_table`).
+
 The editable part is each map payload's values, as in maps.py.
 """
 
@@ -23,7 +31,7 @@ from __future__ import annotations
 from typing import Any
 
 from retrolarium_kit.games.alien_soldier import lzss
-from retrolarium_kit.games.alien_soldier.assets import LZSS_TO_RAM, asset_lists
+from retrolarium_kit.games.alien_soldier.assets import LZSS_TO_RAM, LZSS_TO_VRAM, asset_lists, pointer_table
 from retrolarium_kit.games.alien_soldier.maps import WIDTHS
 from retrolarium_kit.games.alien_soldier.maps import payloads as map_payloads
 from retrolarium_kit.games.alien_soldier.stages import RAM_BASE, descriptors, regions
@@ -33,6 +41,10 @@ from retrolarium_kit.platform.megadrive.asl import SourceTree
 SCHEMA = "alien-soldier.screens"
 DOCUMENT = "screens/screens.json"
 TRANSFORMS = ("adjust-rows", "update-indices")
+CREDITS = "Credits_SceneDataPointers"
+# Gfx_GameVDPRegisterValues: plane A's name table at $C000, plane B's at $E000.
+NAME_TABLES = (0xC000, 0xE000)
+NAME_TABLE_CELLS = 64
 
 
 # Keys the kit reads again from the source each time a project opens.
@@ -104,9 +116,52 @@ def _scene(tree: SourceTree, lists: dict[str, Any], screen: dict[str, Any], prof
     }
 
 
+def credit_scenes(tree: SourceTree, lists: dict[str, Any]) -> list[dict[str, Any]]:
+    """The credits' picture scenes, in the order the credits show them."""
+    if CREDITS not in tree.blocks:
+        return []
+    labels = [label for label in pointer_table(tree, CREDITS) if label in tree.blocks]
+    found = []
+    for number, (palette, assets) in enumerate(zip(labels[::2], labels[1::2]), 1):
+        commands = lists.get(assets)
+        if commands is None:
+            raise ScreenError(f"{assets} is not an asset list")
+        tables = [
+            command
+            for command in commands
+            if command.command == LZSS_TO_VRAM and command.destination & 0xFFFF in NAME_TABLES
+        ]
+        if len(tables) != 1:
+            raise ScreenError(f"{assets} loads no single plane map")
+        table = tables[0]
+        size = len(lzss.decompress(tree.data(table.source), blocks=True))
+        rows = size // (2 * NAME_TABLE_CELLS)
+        found.append(
+            {
+                "id": f"credits-{number:02d}",
+                "kind": "credits",
+                "asset_list": assets,
+                "map_writes": [],
+                "vram": [
+                    {"command": command.command, "source": command.source, "vram": command.destination}
+                    for command in commands
+                    if command.command in (1, 2, 3, 5, 7)
+                ],
+                "planes": [None, None],
+                "camera_x": [0, 0],
+                "lookup_y": [0, 0],
+                "palette": {"colours": tree.block(palette).values()},
+                "transforms": [],
+                "size": [8 * NAME_TABLE_CELLS, 8 * rows],
+                "name_table": {"source": table.source, "vram": table.destination & 0xFFFF, "rows": rows},
+            }
+        )
+    return found
+
+
 def scenes(tree: SourceTree, definitions: list[dict[str, Any]], profile: str) -> list[dict[str, Any]]:
     lists = asset_lists(tree)
-    return [_scene(tree, lists, screen, profile) for screen in definitions]
+    return [_scene(tree, lists, screen, profile) for screen in definitions] + credit_scenes(tree, lists)
 
 
 def payloads(tree: SourceTree, scene_list: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:

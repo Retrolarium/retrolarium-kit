@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
-from retrolarium_kit.games.alien_soldier import demos, lzss, palettes, pcm
+from retrolarium_kit.games.alien_soldier import content, demos, lzss, palettes, pcm
 
 
 def noise(length: int, seed: int = 1) -> bytes:
@@ -117,6 +119,52 @@ class DemoTests(unittest.TestCase):
         )
         with self.assertRaises(demos.DemoError):
             demos.recorded_steps(steps, "step 1 0 0\n")
+
+
+class PayloadUpgradeTests(unittest.TestCase):
+    """An older project's document follows the payloads this kit reads."""
+
+    def setUp(self) -> None:
+        self.folder = Path(tempfile.mkdtemp())
+        self.original = self.folder / "maps.json"
+        self.exported = {"schema": "s", "payloads": [{"label": "A", "v": 1}, {"label": "C", "v": 3}]}
+
+    def tearDown(self) -> None:
+        for path in self.folder.iterdir():
+            path.unlink()
+        self.folder.rmdir()
+
+    def write_original(self, payloads: list[dict]) -> None:
+        self.original.write_text(json.dumps({"schema": "s", "payloads": payloads}), encoding="utf-8")
+
+    def test_an_unedited_payload_goes_and_a_new_one_comes(self) -> None:
+        self.write_original([{"label": "A", "v": 1}, {"label": "B", "v": 2}])
+        mine = {"schema": "s", "payloads": [{"label": "A", "v": 9}, {"label": "B", "v": 2}]}
+        kept = content._follow_payloads(mine, self.exported, self.original)
+        self.assertEqual(kept["payloads"], [{"label": "A", "v": 9}, {"label": "C", "v": 3}])
+        original = json.loads(self.original.read_text(encoding="utf-8"))
+        self.assertEqual(original["payloads"], [{"label": "A", "v": 1}, {"label": "C", "v": 3}])
+
+    def test_an_edited_payload_that_went_is_refused(self) -> None:
+        self.write_original([{"label": "A", "v": 1}, {"label": "B", "v": 2}])
+        mine = {"schema": "s", "payloads": [{"label": "A", "v": 1}, {"label": "B", "v": 5}]}
+        with self.assertRaises(content.AlienSoldierContentError):
+            content._follow_payloads(mine, self.exported, self.original)
+
+    def test_derived_keys_follow_in_the_original_copy_too(self) -> None:
+        self.original.write_text(json.dumps({"screens": ["old"], "payloads": [1]}), encoding="utf-8")
+        mine = {"screens": ["old"], "payloads": [2]}
+        kept = content._follow_derived(mine, {"screens": ["new"], "payloads": []}, ("screens",), self.original)
+        self.assertEqual(kept, {"screens": ["new"], "payloads": [2]})
+        original = json.loads(self.original.read_text(encoding="utf-8"))
+        # The original reads the same as the document but for the edit, so
+        # the edit is still the only difference.
+        self.assertEqual(original, {"screens": ["new"], "payloads": [1]})
+        self.assertIsNone(content._follow_derived(kept, {"screens": ["new"]}, ("screens",), self.original))
+
+    def test_a_current_document_is_left(self) -> None:
+        mine = {"schema": "s", "payloads": [{"label": "A", "v": 1}, {"label": "C", "v": 7}]}
+        self.assertIsNone(content._follow_payloads(mine, self.exported, self.original))
 
 
 if __name__ == "__main__":
