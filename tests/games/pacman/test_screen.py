@@ -119,10 +119,12 @@ class PacmanScreenTests(unittest.TestCase):
             set_text_field(document, "title", "ABC")
         with self.assertRaisesRegex(PacmanScreenError, "unsupported"):
             set_text_field(document, "title", "A!")
-        invalid = copy.deepcopy(document)
-        invalid["fixed_blocks"]["pause"][0] = 0
+        # A tile the font lacks reads as no text, but the screen still builds.
+        painted = copy.deepcopy(document)
+        painted["fixed_blocks"]["pause"][0] = 0
         with self.assertRaisesRegex(PacmanScreenError, "unmapped"):
-            encode_screen_collection(invalid, parameters())
+            text_field_value(painted, "pause")
+        encode_screen_collection(painted, parameters())
 
     def test_nes_bundle_composes_screen_and_embedded_text_transactionally(self) -> None:
         source = bytearray(fixture())

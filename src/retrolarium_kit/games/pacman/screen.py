@@ -476,8 +476,11 @@ def validate_screen_collection(document: Mapping[str, object], parameters: Mappi
             raise PacmanScreenError("read-only screen table metadata changed")
         maximum = 0xFFFF if configured["kind"] == "words" else 0xFF
         _bytes(item.get("values"), f"{configured['key']}.values", configured["count"], maximum)
+    # A text field may hold tiles the font has no letter for: the screen
+    # editor paints any tile there, and the text view writes them as {HH}.
     for field in layout["text_fields"]:
-        text_field_value(document, field["key"])
+        if int(field["start"]) + int(field["width"]) > len(_field_bytes(document, field["path"])):
+            raise PacmanScreenError(f"screen text field {field['key']} exceeds its source")
 
 
 def encode_screen_collection(
