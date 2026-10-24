@@ -135,6 +135,36 @@ if ym_trace_path ~= nil and ym_trace_path ~= "" then
         end
     )
 end
+-- The player cannot die (FLICKY_PLAYTEST_INVINCIBLE, on unless "0"): the
+-- one hit Player_CheckProjectileHit lands stores state 4 (death) in the
+-- player object ($FFC47C) and sets Ram_PlayerHitFlag ($FFD26D); both stores
+-- keep the value they replace. A global holds the taps: a collected tap
+-- is removed.
+retrolarium_flicky_invincible_taps = {}
+if os.getenv("FLICKY_PLAYTEST_INVINCIBLE") ~= "0" then
+    retrolarium_flicky_invincible_taps[1] = memory:install_write_tap(
+        0xffc47c,
+        0xffc47d,
+        "flicky_player_death",
+        function(_, data, mask)
+            if mask == 0xffff and data == 4 then
+                return read_word(0xffc47c)
+            end
+            return data
+        end
+    )
+    retrolarium_flicky_invincible_taps[2] = memory:install_write_tap(
+        0xffd26c,
+        0xffd26d,
+        "flicky_player_hit",
+        function(_, data, mask)
+            if mask & 0x00ff ~= 0 and data & 0x00ff ~= 0 then
+                return (data & 0xff00) | read_byte(0xffd26d)
+            end
+            return data
+        end
+    )
+end
 local selected = false
 local reported = false
 local ready_frame = nil
