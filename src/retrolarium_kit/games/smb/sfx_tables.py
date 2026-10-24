@@ -85,10 +85,11 @@ def encode(value: Any, parameters: Mapping[str, Any]) -> list[tuple[int, bytes]]
     return spans
 
 
-def _source_resources(source: bytes):
+def _source_resources(source: bytes, *, payloads: bool = False):
     """(parameters, base) of each sfx-tables resource an opened profile
     declares for this image; base turns a file offset into a CPU address in
-    the 32 KiB window."""
+    the 32 KiB window. With payloads, (parameters, base, payload): the
+    payload is None for an iNES image's PRG."""
     import hashlib
 
     from retrolarium_kit.core.game_profiles import game_profiles
@@ -109,9 +110,31 @@ def _source_resources(source: bytes):
                 # An iNES image's PRG follows its 16-byte header.
                 base = 0x8000 - 16 if payload is None else payload.load_address
                 if base is not None:
-                    result.append((spec.parameters, base))
+                    result.append((spec.parameters, base, payload) if payloads else (spec.parameters, base))
             return result
     return []
+
+
+def program_window(source: bytes, image: bytes | None = None) -> bytes:
+    """The 32 KiB CPU window ($8000-$FFFF) SoundEngine runs in, from `image`
+    (`source` rebuilt; `source` itself when None): an iNES image's PRG, or
+    the payload a disk or Vs. image loads, at its load address."""
+    from retrolarium_core.fds import fds_payload
+    from retrolarium_core.ines import parse_ines_prefix
+
+    image = source if image is None else image
+    for _parameters, base, payload in _source_resources(source, payloads=True):
+        if payload is None:
+            break
+        if payload.storage == "fds-records":
+            data = fds_payload(image, payload.record_ids)
+        else:
+            assert payload.file_offset is not None
+            data = image[payload.file_offset : payload.file_offset + payload.size]
+        memory = bytearray(0x10000)
+        memory[base : base + len(data)] = data[: 0x10000 - base]
+        return bytes(memory[0x8000:])
+    return parse_ines_prefix(image)[0].prg
 
 
 def source_tables(source: bytes) -> tuple["Table", ...]:
