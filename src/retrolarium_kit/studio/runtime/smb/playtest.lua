@@ -140,8 +140,17 @@ local function load_disk_file()
     end
 end
 
+-- Once the level is won (the flagpole: GameEngineSubroutine 4 or 5; the
+-- axe: victory mode, OperMode 2) the game counts the time left into the
+-- score: from then on the timer runs, or that count never ends.
+local level_won = false
 local function keep_time()
-    if not infinite_time then
+    if not infinite_time or level_won then
+        return
+    end
+    local engine = read(ram.engine)
+    if engine == 4 or engine == 5 or read(ram.operating_mode) == 2 then
+        level_won = true
         return
     end
     write(timer_digits, 9)
