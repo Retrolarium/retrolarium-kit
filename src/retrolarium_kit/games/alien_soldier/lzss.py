@@ -15,7 +15,10 @@ A payload is a big-endian word counting the stream's bytes, then the stream.
 The VRAM loader calls the decompressor once per `$400` bytes of output and
 resets its output pointer each time, so a match must never reach back across a
 `$400` boundary: the encoder parses each block on its own. Every original
-payload obeys the same rule, whichever loader reads it.
+payload obeys the same rule, whichever loader reads it. The RAM loaders
+(`LoadCompressedToRAM`, `Data_DecompressLZSSDirect`) go on writing where the
+last call stopped, so a payload only they read, a stage or screen map, may
+match across those boundaries: such a stream is parsed whole.
 
 The encoder's parse is optimal within a block, so it is smaller than the
 original encoder's and cannot reproduce the cartridge's bytes; documents
@@ -193,15 +196,17 @@ def _emit(data: bytes, tokens: list[tuple[str, int, object]]) -> bytes:
     return bytes(out)
 
 
-def compress(data: bytes) -> bytes:
-    """A payload the game decompresses back to `data`, in either loader. An
-    odd payload gets a pad byte past its count: whatever follows it in the
-    ROM may be DMA art, which needs an even address."""
+def compress(data: bytes, *, blocks: bool = True) -> bytes:
+    """A payload the game decompresses back to `data`: in either loader, or
+    without `blocks` in the RAM loaders only. An odd payload gets a pad byte
+    past its count: whatever follows it in the ROM may be DMA art, which
+    needs an even address."""
     if not data:
         raise LzssError("there is nothing to compress")
+    step = BLOCK if blocks else len(data)
     body = b"".join(
-        _emit(data[start : start + BLOCK], _parse_block(data[start : start + BLOCK]))
-        for start in range(0, len(data), BLOCK)
+        _emit(data[start : start + step], _parse_block(data[start : start + step]))
+        for start in range(0, len(data), step)
     )
     if len(body) > 0xFFFF:
         raise LzssError("the stream is longer than its header can count")
@@ -209,13 +214,14 @@ def compress(data: bytes) -> bytes:
     return payload + bytes(len(payload) % 2)
 
 
-def fit(data: bytes, original: bytes) -> bytes:
+def fit(data: bytes, original: bytes, *, blocks: bool = True) -> bytes:
     """`data` compressed into the original payload's slot: the original
     payload itself while its contents are unchanged, else a new stream padded
-    with zeros to the slot's size, so nothing after it moves."""
-    if decompress(original, blocks=True) == data:
+    with zeros to the slot's size, so nothing after it moves. Without
+    `blocks` the stream is for the RAM loaders only (see the module text)."""
+    if decompress(original, blocks=blocks) == data:
         return original
-    payload = compress(data)
+    payload = compress(data, blocks=blocks)
     if len(payload) > len(original):
         raise LzssError(f"compressed to {len(payload)} bytes, the slot holds {len(original)}")
     return payload + bytes(len(original) - len(payload))

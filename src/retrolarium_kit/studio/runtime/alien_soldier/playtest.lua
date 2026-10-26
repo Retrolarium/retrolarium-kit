@@ -18,6 +18,11 @@
 -- wanted) and ALIEN_PLAYTEST_PASSWORD (the code, hexadecimal). Until it is
 -- ready the emulator runs unthrottled and muted. ALIEN_PLAYTEST_RESULT names a
 -- file to write the outcome to; ALIEN_PLAYTEST_EXIT=1 stops MAME afterwards.
+--
+-- ALIEN_PLAYTEST_INVINCIBLE=1 keeps the player alive once the stage runs:
+-- the health stays at its maximum, and a player falling past $150 (the
+-- game kills one falling past $171, Player_Update_CheckFallBoundary) is put
+-- back at the top of the screen.
 
 local function setting(name, base)
     local value = tonumber(os.getenv(name) or "", base or 10)
@@ -45,6 +50,9 @@ for _, name in ipairs({
     "SetupTransitionIndex",
     "WeaponSetupVScrollTarget",
     "SecondaryCameraYPos",
+    "PlayerHealth",
+    "PlayerMaxHealth",
+    "PlayerYPosition",
 }) do
     ram[name] = setting("ALIEN_RAM_" .. name, 16) & 0xFFFFFF
 end
@@ -52,6 +60,9 @@ local wanted = setting("ALIEN_PLAYTEST_STAGE_INDEX")
 local password = setting("ALIEN_PLAYTEST_PASSWORD", 16)
 local result_path = os.getenv("ALIEN_PLAYTEST_RESULT")
 local exit_when_ready = os.getenv("ALIEN_PLAYTEST_EXIT") == "1"
+local invincible = os.getenv("ALIEN_PLAYTEST_INVINCIBLE") == "1"
+-- Player Y (screen + $80): where a fall is caught, and where it resumes.
+local FALL_CATCH, FALL_RESUME = 0x150, 0xA0
 
 local machine = manager.machine
 local memory = machine.devices[":maincpu"].spaces["program"]
@@ -111,8 +122,19 @@ machine.sound.ui_mute = true
 local phase, frame, story_skipped, setup_started, released = "title", 0, false, false, false
 local done = false
 
+local function keep_alive()
+    memory:write_u16(ram.PlayerHealth, word("PlayerMaxHealth"))
+    local y = word("PlayerYPosition")
+    if y >= FALL_CATCH and y < 0x8000 then
+        memory:write_u16(ram.PlayerYPosition, FALL_RESUME)
+    end
+end
+
 retrolarium_alien_soldier_playtest = emu.register_frame_done(function()
     if done then
+        if invincible and word("GameModeIndex") == 0x10 then
+            keep_alive()
+        end
         return
     end
     frame = frame + 1

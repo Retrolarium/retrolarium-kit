@@ -91,7 +91,7 @@ def tree(root: Path, section: Mapping[str, Any], revision: str) -> SourceTree:
 
 
 def _call(module, function: str, source: SourceTree, section: Mapping[str, Any], revision: str, *document):
-    if module is screens or module is art:
+    if module is screens or module is art or module is objects:
         return getattr(module, function)(source, *document, section.get("screens", []), revision)
     return getattr(module, function)(source, *document)
 

@@ -34,13 +34,21 @@ class CompressedTileError(ValueError):
     """A compressed tile document that does not fit the source."""
 
 
+def vram_sources(tree: SourceTree) -> set[str]:
+    """Every LZSS payload the VRAM loader reads: its matches stay within
+    $400 blocks (see lzss.py)."""
+    lists = asset_lists(tree).values()
+    found = {command.source for commands in lists for command in commands if command.command == LZSS_TO_VRAM}
+    found |= set(pointer_table(tree, SHARED_TILE_SOURCES))
+    found |= {command.source for command in visual_tile_commands(tree) if command.command == LZSS_TO_VRAM}
+    return found
+
+
 def payloads(tree: SourceTree) -> dict[str, str]:
     """Label -> codec ("lzss" or "tile-codec") of every tile payload, in
     source order."""
     lists = asset_lists(tree).values()
-    lzss_sources = {command.source for commands in lists for command in commands if command.command == LZSS_TO_VRAM}
-    lzss_sources |= set(pointer_table(tree, SHARED_TILE_SOURCES))
-    lzss_sources |= {command.source for command in visual_tile_commands(tree) if command.command == LZSS_TO_VRAM}
+    lzss_sources = vram_sources(tree)
     codec_sources = {
         command.source for commands in lists for command in commands if command.command in TILE_CODEC_COMMANDS
     }

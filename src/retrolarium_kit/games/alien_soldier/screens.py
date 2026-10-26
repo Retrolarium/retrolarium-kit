@@ -23,7 +23,8 @@ with the asset list that loads its art and its map, which goes straight to
 a plane's name table in VRAM, 64 cells wide. The map is a compressed payload
 the tile document holds; the scene names it (`name_table`).
 
-The editable part is each map payload's values, as in maps.py.
+The editable part is each map payload's values, as in maps.py; a map no
+asset list sends to VRAM as well is compressed whole, as there.
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ from typing import Any
 
 from retrolarium_kit.games.alien_soldier import lzss
 from retrolarium_kit.games.alien_soldier.assets import LZSS_TO_RAM, LZSS_TO_VRAM, asset_lists, pointer_table
+from retrolarium_kit.games.alien_soldier.compressed_tiles import vram_sources
 from retrolarium_kit.games.alien_soldier.maps import WIDTHS
 from retrolarium_kit.games.alien_soldier.maps import payloads as map_payloads
 from retrolarium_kit.games.alien_soldier.stages import RAM_BASE, descriptors, regions
@@ -227,6 +229,7 @@ def apply(tree: SourceTree, document: dict[str, Any], definitions: list[dict[str
         (label, item["role"]) for label, item in source.items()
     ]:
         raise ScreenError("the screen maps differ from the source")
+    to_vram = vram_sources(tree)
     for item in items:
         label, role, original = item["label"], item["role"], tree.data(item["label"])
         plain = lzss.decompress(original)
@@ -240,6 +243,6 @@ def apply(tree: SourceTree, document: dict[str, Any], definitions: list[dict[str
             raise ScreenError(f"{label}: a value does not fit its map")
         data = b"".join(value.to_bytes(width, "big") for value in values) + plain[len(values) * width :]
         try:
-            tree.set_data(label, lzss.fit(data, original))
+            tree.set_data(label, lzss.fit(data, original, blocks=label in to_vram))
         except lzss.LzssError as error:
             raise ScreenError(f"{label}: {error}") from None

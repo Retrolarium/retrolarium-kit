@@ -10,6 +10,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from helpers import game_repository
+from retrolarium_kit.core import game_names
 from retrolarium_kit.games.alien_soldier import objects, workspace
 from retrolarium_kit.games.alien_soldier.sequencer import Sequencer
 
@@ -32,8 +33,10 @@ class AlienSoldierSourceTests(unittest.TestCase):
             shutil.copytree(ALIEN_SOLDIER / folder, cls.root / folder)
         (cls.root / workspace.PROFILE).parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ALIEN_SOLDIER / workspace.PROFILE, cls.root / workspace.PROFILE)
-        if (ALIEN_SOLDIER / objects.ART).is_file():
-            shutil.copyfile(ALIEN_SOLDIER / objects.ART, cls.root / objects.ART)
+        for path in (objects.ART, game_names.PATH):
+            if (ALIEN_SOLDIER / path).is_file():
+                (cls.root / path).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(ALIEN_SOLDIER / path, cls.root / path)
         cls.documents = workspace.export(cls.root, "jp")
 
     @classmethod
@@ -42,6 +45,18 @@ class AlienSoldierSourceTests(unittest.TestCase):
 
     def test_unedited_documents_change_no_source_file(self) -> None:
         documents = {module.DOCUMENT: self.documents[module.DOCUMENT] for module in workspace.DOCUMENTS}
+        self.assertEqual(workspace.apply(self.root, "jp", documents), [])
+
+    def test_a_project_saved_with_maps_as_mappings_still_applies(self) -> None:
+        # Kits before this one read the maps an asset list loads as sprite
+        # mappings; a project saved then keeps those blocks.
+        document = dict(self.documents["graphics/mappings.json"])
+        document["blocks"] = [
+            {"label": "Stage1BaseMappingData4000", "kind": "static", "mappings": []},
+            *document["blocks"],
+        ]
+        documents = {module.DOCUMENT: self.documents[module.DOCUMENT] for module in workspace.DOCUMENTS}
+        documents["graphics/mappings.json"] = document
         self.assertEqual(workspace.apply(self.root, "jp", documents), [])
 
     def test_every_payload_plays(self) -> None:
@@ -67,14 +82,113 @@ class AlienSoldierSourceTests(unittest.TestCase):
         records = {item["label"]: item for item in self.documents["levels/levels.json"]["records"]}
         for index in (0, 1, 2, 3):
             area = scenes[index]["area"]
-            # Each stage starts at its camera and ends a screen past the next.
+            # Each stage starts at its camera and ends a screen past where it
+            # pins the camera for its boss.
             self.assertEqual(area["x"], records[scenes[index]["record"]]["camera_x"])
             self.assertEqual(area["height"], 224)
-        self.assertEqual(scenes[0]["area"]["x"] + scenes[0]["area"]["width"], scenes[1]["area"]["x"] + 320)
+        self.assertEqual(scenes[0]["area"]["x"] + scenes[0]["area"]["width"], 0x6E8 + 320)
+        # Xi-Tiger's handlers move the camera but never draw the map: the
+        # picture stays where the entry drew it, at the record's X.
+        self.assertEqual((scenes[8]["area"]["x"], scenes[8]["area"]["width"]), (0x800, 0xA0 + 320))
+        # Sunset Sting's stage climbs before its boss.
+        self.assertGreater(scenes[14]["area"]["height"], 224)
+        self.assertEqual(len(scenes[14]["area"]["parts"]), 2)
+        # After Viblack the fight moves to Back Stringer's web, apart.
+        (web,) = scenes[15]["arenas"]
+        # The 256 lines streamed down from row 0, coloured by the boss
+        # Viblack brings in.
+        self.assertEqual(
+            {key: web[key] for key in ("x", "y", "width", "height")},
+            {"x": 0x1060, "y": 0, "width": 320, "height": 256},
+        )
+        # The Destroyer Prototype fights in the empty space the asteroid field
+        # climbs to (camera Y $F600); the moons and surface streamed from row
+        # $B00 once it is gone are Shield Viper's (stage 22 restarts there).
+        (space,) = scenes[20]["arenas"]
+        self.assertEqual((space["x"], space["y"], space["height"]), (0, 0xA00, 224))
+        (backdrop,) = scenes[21]["arenas"]
+        self.assertEqual((backdrop["x"], backdrop["y"], backdrop["height"]), (0, 0xB00, 256))
+        self.assertEqual(len(scenes[7]["arenas"]), 1)
+        self.assertEqual(
+            (web["list"], web["palettes"]),
+            ("Boss_BackStringerGraphicsLoadList", [["Boss_BackStringerPaletteCommand", 0]]),
+        )
+        # Epsilon 1's parallax works the camera Y out as $28 - $18: the rows
+        # sit 16 pixels lower, the floor under the player.
+        self.assertEqual(scenes[16]["area"]["y"], -0x10)
+        # Its floor is a raster split: rows of blocks the initializer writes
+        # into plane B's other name table, shown from line 200 down.
+        self.assertEqual(
+            scenes[16]["floor"],
+            {"ram": 0xFFFF4000, "blocks": list(range(0x29, 0x33)), "per_row": 10, "line": 200},
+        )
+        self.assertNotIn("floor", scenes[15])
+        # Z-Leo moves his fight to (0, $100) and rises to $240, with his own
+        # maps; that screen is shown above the stage.
+        (fight,) = scenes[24]["arenas"]
+        self.assertEqual((fight["x"], fight["y"], fight["height"], fight["inline"]), (0, -0x240, 0x240 + 224, True))
+        # It is as wide as his core room (the camera follows him across it)
+        # and shown over the room the corridor ends in, where the stage's
+        # plane B reads the same rows.
+        self.assertEqual((fight["width"], fight["shown"]), (384, {"x": 0x400, "y": -0x40}))
+        self.assertIn({"x": 0x400, "y": -0x40, "width": 384, "height": fight["height"]}, scenes[24]["area"]["parts"])
+        # His rise streams plane B with plane A's patterns ($4000).
+        self.assertEqual((fight["planes"][0], fight["planes"][1]["patterns"]), (None, 0xFFFF4000))
+        # ... the patterns his battle entry loads at $4020, in his colours.
+        self.assertEqual(fight["lists"], ["Boss_ZLeoBattleEntryEffectDescriptor"])
+        self.assertEqual(fight["palettes"], [["Boss_ZLeoPaletteCommands", 0]])
+        # The first level's stages scroll plane B at a quarter speed; the
+        # train's rows run on their own.
+        self.assertEqual([scenes[index].get("plane_b_quarter") for index in (0, 3, 7)], [True, True, False])
+        # The train streams plane B (the train) with plane A's camera X and
+        # leaves plane A as the entry drew it at $C00.
+        self.assertTrue(scenes[7]["plane_b_follows"])
+        self.assertEqual(scenes[7]["planes"][0]["fixed_x"], 0xC00)
+        # Flying-Neo widens the pinned camera by $A0 and swings it from Y $60
+        # to $80, over plane B streamed $910 rows lower.
+        (neo,) = scenes[7]["arenas"]
+        self.assertEqual((neo["x"], neo["y"], neo["width"], neo["height"]), (0xE60, -0x80, 0xA0 + 320, 0x20 + 224))
+        self.assertEqual(neo["planes"][1]["y_offset"], 0x910)
+        # Xi-Tiger's screen is apart: the art its handlers load turns the
+        # train into clouds, and plane B is blanked.
+        self.assertTrue(scenes[8]["area"]["apart"])
+        self.assertIsNone(scenes[8]["planes"][1])
+        self.assertEqual(
+            [load["list"] for load in scenes[8]["later"]],
+            ["Stage9_CaterpillarTileAssetLoadList", "Stage9_XiTigerEntranceTileAssetLoadList"],
+        )
+        # Stage 7's first state loads the counter alien's art at once.
+        self.assertIn("Stage7_InitialTileAssetLoadList", scenes[6]["lists"])
         # Stage 16 pins its camera between two X bounds: a column.
         column = scenes[15]["area"]
         self.assertEqual((column["x"], column["width"]), (0x620, 0x6A0 + 320 - 0x620))
         self.assertGreater(column["height"], 224)
+
+    def test_stage_initializers_rewrite_their_maps(self) -> None:
+        scenes = self.documents["levels/stages.json"]["scenes"]
+        snow = {"routine": "update-indices", "ram": "0xFFFF2000", "groups": 0x80, "add": 0, "tiles": 0x150}
+        # Stage 19 reaches the call through a branch into stage 18's code.
+        self.assertEqual(scenes[17]["transforms"], [snow])
+        self.assertEqual(scenes[18]["transforms"], [snow])
+        self.assertEqual(
+            scenes[19]["transforms"],
+            [{"routine": "update-indices", "ram": "0xFFFF4000", "groups": 0xC0, "add": 0x8000, "tiles": 0x180}],
+        )
+        self.assertEqual(scenes[0]["transforms"], [])
+
+    def test_a_stage_loads_more_maps_as_its_camera_moves(self) -> None:
+        scenes = self.documents["levels/stages.json"]["scenes"]
+        # Stage 19 starts on stage 18's snow and swaps in the factory at $D80.
+        (factory,) = scenes[18]["later"]
+        self.assertEqual((factory["camera_x"], factory["list"]), (0xD80, "Stage19_InitialTileAssetLoadList"))
+        self.assertIn("Stage19InitialMappingData6000", [write["source"] for write in factory["map_writes"]])
+        self.assertEqual(scenes[17]["later"], [])
+
+    def test_a_loader_plays_the_shared_tail_it_falls_into(self) -> None:
+        scenes = self.documents["levels/stages.json"]["scenes"]
+        for index in (20, 21, 22):
+            self.assertIn("Stage3Phase12SharedAssetLoadList", scenes[index]["lists"])
+            self.assertIsNotNone(scenes[index]["planes"][0])
 
     def test_a_staging_buffer_is_no_map(self) -> None:
         coarse = [item for item in self.documents["levels/maps.json"]["payloads"] if item["role"] == "coarse"]
@@ -90,6 +204,39 @@ class AlienSoldierSourceTests(unittest.TestCase):
         self.assertEqual(sorted(grouped), sorted(blocks))
         self.assertLessEqual(set(exported["contexts"]), set(blocks))
 
+    def test_bosses_draw_with_their_asset_sets(self) -> None:
+        exported = self.documents["graphics/objects.json"]
+        contexts = exported["contexts"]
+        # Joker was never recorded: his art, at $6000 (tile $300), in the
+        # colours of his stage and his palette command.
+        joker = contexts["Boss_JokerRotationMappingA0"]
+        self.assertTrue(joker["derived"])
+        self.assertEqual(joker["attribute"] & 0x7FF, 0x300)
+        self.assertIn({"source": "Boss_JokerTileArt", "command": 7, "vram": 0x6000}, joker["loads"])
+        self.assertEqual(joker["palettes"][-1], ["Boss_JokerPaletteCommand", 0])
+        self.assertIn("Back Stringer", [group["title"] for group in exported["groups"]])
+        # Blocks drawn from a boss's art take its colours, whatever play
+        # matched (the Seven Force).
+        self.assertEqual(
+            contexts["SevenForcesRotationSpriteFrame29"]["palettes"][-1], ["SevenForcesValkiriePaletteCommand", 0]
+        )
+        # A borrowed block a stage spawns draws with that stage's art: stage
+        # 7's counter alien from the art its first state loads.
+        alien = [load["source"] for load in contexts["IndexedObjectSpriteMapping09"]["loads"]]
+        self.assertIn("Stage7InitialTileArt", alien)
+        # A screen's code draws the ending planet's burst in that screen's art.
+        burst = contexts["EndingPlanetBurstSpriteMappingB"]
+        self.assertIn("EndingSequenceTileArt2000", [load["source"] for load in burst["loads"]])
+        # Maps an asset list loads are no sprite mappings.
+        blocks = {block["label"] for block in self.documents["graphics/mappings.json"]["blocks"]}
+        self.assertNotIn("Stage1BaseMappingData4000", blocks)
+        # A boss's art shows in its palette command's line.
+        art = {item["label"]: item for item in self.documents["graphics/art.json"]["payloads"]}
+        self.assertEqual(
+            (art["Boss_JetsripperTileArt"]["colours"], art["Boss_JetsripperTileArt"]["line"]),
+            ({"commands": [["Boss_JetsripperPaletteCommand", 0]]}, 3),
+        )
+
     def test_the_recorded_object_art_fits_the_source(self) -> None:
         if not (self.root / objects.ART).is_file():
             self.skipTest("the repository records no object art")
@@ -100,6 +247,11 @@ class AlienSoldierSourceTests(unittest.TestCase):
         frame = contexts["SharedCombatSpriteFrame00"]
         self.assertEqual(frame["attribute"] & 0x7FF, 0x480)
         self.assertIn({"source": "SharedSceneAndStageTileArt9000", "command": 7, "vram": 0x9000}, frame["loads"])
+        # Most placements of the stages' spawn lists record what they draw.
+        spawns = self.documents["graphics/objects.json"]["spawns"]
+        self.assertGreater(len(spawns), 250)
+        first = next(item for item in spawns if item["list"] == "Stage1_ObjectSpawnList" and item["index"] == 0)
+        self.assertEqual((first["type"], first["parameter"]), (0x1C, 0x10))
 
     def test_object_art_naming_what_the_source_lacks_is_refused(self) -> None:
         path = self.root / objects.ART

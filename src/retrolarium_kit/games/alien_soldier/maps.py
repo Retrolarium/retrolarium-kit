@@ -5,7 +5,9 @@ A payload belongs to the map whose region of a stage plane's descriptor it
 lands in (see stages.py): patterns are 4x4 name-table words, 16-bit values;
 chunks are 8x8 pattern indices and the coarse map 32x32 chunk indices, both
 bytes. Every value may change within its width; the payload is compressed
-again into its slot, so nothing after it moves.
+again into its slot, so nothing after it moves. Only the RAM loaders read a
+map (but one also sent to VRAM), so its stream is compressed whole, matches
+crossing $400 boundaries.
 """
 
 from __future__ import annotations
@@ -13,7 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 from retrolarium_kit.games.alien_soldier import lzss
-from retrolarium_kit.games.alien_soldier.compressed_tiles import payloads as tile_payloads
+from retrolarium_kit.games.alien_soldier.compressed_tiles import payloads as tile_payloads, vram_sources
 from retrolarium_kit.games.alien_soldier.stages import RAM_BASE, regions, scenes
 from retrolarium_kit.platform.megadrive.asl import SourceTree
 
@@ -88,6 +90,7 @@ def apply(tree: SourceTree, document: dict[str, Any]) -> None:
     if document.get("schema") != SCHEMA or document.get("schema_version") != 1:
         raise MapError("not an Alien Soldier map document")
     source = payloads(tree)
+    to_vram = vram_sources(tree)
     items = document.get("payloads")
     if not isinstance(items, list) or [(item.get("label"), item.get("role")) for item in items] != [
         (label, item["role"]) for label, item in source.items()
@@ -107,6 +110,6 @@ def apply(tree: SourceTree, document: dict[str, Any]) -> None:
             raise MapError(f"{label}: a value does not fit its map")
         data = b"".join(value.to_bytes(width, "big") for value in values) + plain[len(values) * width :]
         try:
-            tree.set_data(label, lzss.fit(data, original))
+            tree.set_data(label, lzss.fit(data, original, blocks=label in to_vram))
         except lzss.LzssError as error:
             raise MapError(f"{label}: {error}") from None
