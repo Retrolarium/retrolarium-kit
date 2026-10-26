@@ -33,6 +33,9 @@ RAM = (
     "SetupTransitionIndex",
     "WeaponSetupVScrollTarget",
     "SecondaryCameraYPos",
+    "PlayerHealth",
+    "PlayerMaxHealth",
+    "PlayerYPosition",
 )
 
 
@@ -89,6 +92,8 @@ def environment(snapshot: Path, revision: str, stage: int) -> dict[str, str]:
     return {
         "ALIEN_PLAYTEST_STAGE_INDEX": str(2 * stage),
         "ALIEN_PLAYTEST_PASSWORD": f"{codes[stage]:08X}",
+        # The player cannot die while the stage is tried out.
+        "ALIEN_PLAYTEST_INVINCIBLE": "1",
         **ram_environment(tree, RAM),
     }
 

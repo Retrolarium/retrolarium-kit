@@ -15,8 +15,9 @@ object's. The size byte is `(width - 1) << 2 | (height - 1)` in tiles; its
 high nibble is ignored by the hardware and kept as the source has it.
 
 Blocks are found by name (labels with SpriteMapping, SpriteFrame or Mapping,
-but not metasprite descriptor tables) and kept when they read as whole
-mappings. The document lets positions, attributes, sizes and links change;
+but not metasprite descriptor tables or what an asset list loads, the maps)
+and kept when they read as whole mappings; a document from a project saved
+when maps were read as mappings applies with those blocks left alone. The document lets positions, attributes, sizes and links change;
 end marks, piece counts and a dynamic piece's art, tile and size stay.
 """
 
@@ -114,9 +115,16 @@ def _read(tree: SourceTree, label: str) -> tuple[str, list[dict[str, Any]]] | No
 
 
 def blocks(tree: SourceTree) -> dict[str, tuple[str, list[dict[str, Any]]]]:
+    from retrolarium_kit.games.alien_soldier.assets import asset_lists
+
+    # What an asset list loads is art or a map ("...MappingData4000"), even
+    # where its bytes happen to read as pieces.
+    loaded = {command.source for commands in asset_lists(tree).values() for command in commands}
     found = {}
     for label in tree.order:
         if not any(marker in label for marker in NAME_MARKERS) or ("Metasprite" in label and "Mapping" not in label):
+            continue
+        if label in loaded:
             continue
         read = _read(tree, label)
         if read is not None:
@@ -143,8 +151,15 @@ def _number(value: Any, low: int, high: int, where: str) -> int:
 def apply(tree: SourceTree, document: dict[str, Any]) -> None:
     if document.get("schema") != SCHEMA or document.get("schema_version") != 1:
         raise MappingError("not an Alien Soldier mapping document")
+    from retrolarium_kit.games.alien_soldier.assets import asset_lists
+
     source = blocks(tree)
     items = document.get("blocks")
+    if isinstance(items, list):
+        # Projects saved by kits that read maps as mappings keep those blocks:
+        # they are left as the source has them.
+        loaded = {command.source for commands in asset_lists(tree).values() for command in commands}
+        items = [item for item in items if not (isinstance(item, dict) and item.get("label") in loaded)]
     if not isinstance(items, list) or [(item.get("label"), item.get("kind")) for item in items] != [
         (label, kind) for label, (kind, _) in source.items()
     ]:

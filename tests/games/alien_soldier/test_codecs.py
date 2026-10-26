@@ -42,6 +42,18 @@ class LzssTests(unittest.TestCase):
         data = noise(0x400) * 3
         self.assertEqual(lzss.decompress(lzss.compress(data), blocks=True), data)
 
+    def test_a_ram_stream_matches_across_blocks(self) -> None:
+        # The RAM loaders go on writing where the last block stopped.
+        data = noise(0x400) * 3
+        whole = lzss.compress(data, blocks=False)
+        self.assertEqual(lzss.decompress(whole), data)
+        self.assertLess(len(whole), len(lzss.compress(data)) // 2)
+        original = whole + bytes(0x20)
+        edited = data[:-1] + b"\x00"
+        self.assertEqual(lzss.decompress(lzss.fit(edited, original, blocks=False)), edited)
+        with self.assertRaises(lzss.LzssError):
+            lzss.fit(edited, original)
+
     def test_fit_keeps_an_unchanged_payload_and_pads_a_new_one(self) -> None:
         original = lzss.compress(noise(0x300)) + bytes(0x40)
         self.assertEqual(lzss.fit(noise(0x300), original), original)

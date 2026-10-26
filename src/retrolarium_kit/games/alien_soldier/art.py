@@ -6,9 +6,11 @@ screens' art, the screen maps some loaders send to VRAM as plane name
 tables, then by the names the source gives them the weapons', the bosses',
 the screens' and fonts', and the credits' art, and the rest.
 
-Each payload names the colours to show it in: a recorded object's palette
+Each payload names the colours to show it in: a boss's asset set's palette
+command and the line it writes (a boss's art), a recorded object's palette
 commands and the line its pieces use, or a stage's or screen's palette list
-and the line its tiles are drawn with most there. A payload goes to the
+and the line its tiles are drawn with most there; the weapons' art takes the
+player's colours. A payload goes to the
 first of those groups it is in.
 
 Nothing here edits anything: the document is read from the source when a
@@ -17,12 +19,13 @@ project opens.
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from typing import Any
 
-from retrolarium_kit.games.alien_soldier import compressed_tiles, mappings, objects, screens, stages, tiles
+from retrolarium_kit.games.alien_soldier import compressed_tiles, mappings, objects, palettes, screens, stages, tiles
 from retrolarium_kit.games.alien_soldier.assets import asset_lists
-from retrolarium_kit.platform.megadrive.asl import SourceTree
+from retrolarium_kit.platform.megadrive.asl import SourceTree, parse_number
 from retrolarium_kit.platform.megadrive.vdp import TILE_BYTES
 
 
@@ -31,6 +34,8 @@ DOCUMENT = "graphics/art.json"
 # Gfx_GameVDPRegisterValues puts plane A's name table at $C000 and plane B's
 # at $E000; a payload a loader sends only there is a screen map, not tiles.
 NAME_TABLES = {0xC000, 0xE000}
+# A list a boss's code points a0 at.
+LIST_REFERENCE = re.compile(r"(?:lea|movea\.l)\s+#?\(?([A-Za-z_][A-Za-z0-9_]*)\)?(?:\.l|\(pc\))?,a0")
 GROUPS = ("hero", "weapons", "objects", "bosses", "level", "screen", "credits", "map", "other")
 # The rest by name: (part of the label, group), first match.
 BY_NAME = (
@@ -103,6 +108,40 @@ def export(tree: SourceTree, definitions: list[dict[str, Any]], profile: str) ->
         if label in sizes and label not in found:
             found[label] = entry
 
+    # A boss's art: the palette command its asset set names, on the line that
+    # command writes (destination bytes / 32).
+    from retrolarium_kit.games.alien_soldier.levels import handlers
+
+    lists = asset_lists(tree)
+    commands = palettes.blocks(tree)
+    types = handlers(tree)
+    for label in tree.order:
+        if not label.endswith("AssetSet") or tree.block(label).kind != "mixed":
+            continue
+        # Type, graphics list (0 when the boss loads its art itself), palette.
+        fields = [operand.text for directive in tree.block(label).directives for operand in directive.operands]
+        if len(fields) < 3 or parse_number(fields[0]) is None:
+            continue
+        boss = {"type": parse_number(fields[0]), "list": fields[1], "palette": fields[2]}
+        if boss["palette"] not in commands or not commands[boss["palette"]]:
+            continue
+        line = commands[boss["palette"]][0]["destination"] // 32
+        # The set's list, then the lists the boss's own code plays (Sniper
+        # Honeyviper loads its art itself).
+        names = [boss["list"]] if boss["list"] in lists else []
+        handler = types.get(f"${boss['type']:X}")
+        if handler in tree.blocks:
+            for path in stages._boss_files(tree, handler):
+                for item in tree.labels_in(path):
+                    names += [name for name in LIST_REFERENCE.findall("\n".join(tree.body(item))) if name in lists]
+        for name in names:
+            for command in lists[name]:
+                if command.command == 7:
+                    claim(
+                        command.source,
+                        {"group": "bosses", "colours": {"commands": [[boss["palette"], 0]]}, "line": line},
+                    )
+    hero: dict[str, Any] = {"colours": {}, "line": 0}
     for block in blocks:
         if block["kind"] != "dynamic":
             continue
@@ -110,6 +149,8 @@ def export(tree: SourceTree, definitions: list[dict[str, Any]], profile: str) ->
         attribute = record["attribute"] if record else 0
         line = _piece_lines(block, attribute).most_common(1)[0][0]
         colours = {"commands": record["palettes"]} if record else {}
+        if colours and not hero["colours"]:
+            hero = {"colours": colours, "line": line}
         for item in block["mappings"]:
             for piece in item["pieces"]:
                 claim(piece["art"], {"group": "hero", "colours": colours, "line": line})
@@ -155,7 +196,7 @@ def export(tree: SourceTree, definitions: list[dict[str, Any]], profile: str) ->
             claim(label, {"group": "map", "colours": {}, "line": 0})
     for label in sizes:
         group = next((group for part, group in BY_NAME if part in label), "other")
-        claim(label, {"group": group, "colours": {}, "line": 0})
+        claim(label, {"group": group, **(hero if group == "weapons" else {"colours": {}, "line": 0})})
     return {
         "schema": SCHEMA,
         "schema_version": 1,
