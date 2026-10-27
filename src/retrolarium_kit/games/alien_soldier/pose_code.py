@@ -17,7 +17,10 @@ instruction's index. The
 subset is what those routines use: moves, arithmetic and logic (divs and
 divu too), shifts and rotations, swap, ext, neg, not, exg, tests and
 compares, bit tests and changes, conditional branches, dbf, calls of other routines of the source
-(compiled after the routine, `bsr` to their index) and rts. Compiled
+(compiled after the routine, `bsr` to their index), a state table's
+dispatch (`lea States(pc,d0.w),a0` / `adda.w (a0),a0` / `jmp (a0)` over
+`dc.w State-*` offsets: `["switch", "", register, [index, ...]]`, a jump to
+the state the register's word picks, by twos, -1 for one left out) and rts. Compiled
 `lenient`ly, code that also does what the subset leaves out (spawns sparks,
 queues tiles) keeps what it can: a routine ends where the disassembly says
 it does, a call the subset cannot follow does nothing, a jump out of the
@@ -81,9 +84,19 @@ def _code(line: str) -> str:
 
 
 def routine_lines(lines: list[str]) -> list[str]:
-    """`lines` up to the disassembly's end of the routine they start."""
-    end = next((at for at, line in enumerate(lines) if "; End of function" in line), len(lines))
-    return lines[:end]
+    """`lines` up to the disassembly's end of the routine they start: the
+    first end mark after a return or jump (a routine that runs on into the
+    next one goes on with it: Caterpillar's segment setup)."""
+    last = ""
+    for at, line in enumerate(lines):
+        if "; End of function" in line:
+            word = last.split()[0].split(".")[0].lower() if last.split() else ""
+            if word in ("rts", "rte", "bra", "jmp"):
+                return lines[:at]
+        code = re.sub(r"^\s*[A-Za-z_]\w*:", "", _code(line)).strip()
+        if code:
+            last = code
+    return lines
 
 
 def _split(text: str) -> list[str]:
@@ -163,10 +176,14 @@ def compile_lines(
     first rts that no branch jumps past; it may call only its own labels,
     or with `tree` the source's routines too, those `follow` names when it
     is given (see the module text for `lenient`)."""
-    program, labels = _compile(routine_lines(lines) if lenient else lines, equates, lenient)
+    program, labels = _compile(
+        routine_lines(lines) if lenient else lines, equates, lenient, tree.defines if tree is not None else None
+    )
     if tree is not None:
         return _link(program, labels, tree, equates, lenient, follow)
     for step in program:
+        if step[0] == "switch":
+            raise PoseCodeError(f"a state table the routine alone cannot name: {step[3]}")
         if step[0] == "bsr" and isinstance(step[3], str):
             if labels.get(step[3], len(program)) >= len(program):
                 raise PoseCodeError(f"a call out of the routine: {step[3]}")
@@ -175,12 +192,36 @@ def compile_lines(
 
 
 def _compile(
-    lines: list[str], equates: dict[str, int], lenient: bool = False
+    lines: list[str], equates: dict[str, int], lenient: bool = False, defines: dict[str, int] | None = None
 ) -> tuple[list[list[Any]], dict[str, int]]:
     labels: dict[str, int] = {}
     pending: list[tuple[str, str, list[str]]] = []
+    # The assembler's conditionals (`if BuildProfileJP`) keep the lines the
+    # source assembles: an unknown condition counts as true.
+    active: list[bool] = []
     for raw in lines:
         code = _code(raw)
+        directive = code.split(None, 1)
+        if directive and directive[0].lower() in ("if", "ifdef", "ifndef", "else", "endif", "elseif"):
+            word = directive[0].lower()
+            if word in ("if", "ifdef", "ifndef"):
+                condition = directive[1].strip() if len(directive) > 1 else ""
+                known = {**equates, **(defines or {})} if defines else equates
+                if word == "if":
+                    try:
+                        value = evaluate(condition, known) != 0
+                    except PoseCodeError:
+                        value = True
+                else:
+                    value = (condition in known) == (word == "ifdef")
+                active.append(value)
+            elif word == "else" and active:
+                active[-1] = not active[-1]
+            elif word == "endif" and active:
+                active.pop()
+            continue
+        if not all(active):
+            continue
         while match := LABEL.match(code.strip()):
             labels[match[1]] = len(pending)
             code = code.strip()[match.end() :]
@@ -192,7 +233,36 @@ def _compile(
         pending.append((name, size, _split(rest)))
     program: list[list[Any]] = []
     furthest = 0
+    # Lenient: branches out of the routine (to its caller's return) end it.
+    exits: list[list[Any]] = []
+
+    def finished() -> tuple[list[list[Any]], dict[str, int]]:
+        if exits:
+            for step in exits:
+                step[3] = len(program)
+            program.append(["rts", "", None, None])
+        return program, labels
+
+    dispatched: set[int] = set()
     for index, (name, size, operands) in enumerate(pending):
+        dispatch = (
+            re.fullmatch(r"(\w+)\(pc,([ad][0-7])\.w\)", operands[0].strip()) if name == "lea" and operands else None
+        )
+        if (
+            dispatch
+            and len(operands) == 2
+            and operands[1].strip() == "a0"
+            and pending[index + 1 : index + 3] == [("adda", "w", ["(a0)", "a0"]), ("jmp", "", ["(a0)"])]
+        ):
+            # A state table's dispatch: its states are linked as routines.
+            register = dispatch[2]
+            program.append(["switch", "", [register[0], int(register[1])], dispatch[1]])
+            dispatched.update((index + 1, index + 2))
+            continue
+        if index in dispatched:
+            # The dispatch's own steps, kept so indices stay the labels'.
+            program.append(["nop", "", None, None])
+            continue
         if name in ("bsr", "jsr"):
             target = operands[0].strip()
             target = re.sub(r"^\((\w+)\)(?:\.[wl])?$|^(\w+)\(pc\)$", lambda m: m[1] or m[2], target)
@@ -215,6 +285,10 @@ def _compile(
             continue
         if name in ("b" + condition for condition in CONDITIONS) or name in ("bra", "dbf", "dbra"):
             target = operands[-1]
+            if target not in labels and lenient and name not in ("dbf", "dbra"):
+                program.append([name, "", None, None])
+                exits.append(program[-1])
+                continue
             if target not in labels:
                 raise PoseCodeError(f"a branch out of the routine: {target}")
             furthest = max(furthest, labels[target])
@@ -224,7 +298,7 @@ def _compile(
         if name == "rts":
             program.append(["rts", "", None, None])
             if index >= furthest:
-                return program, labels
+                return finished()
             continue
         if name == "nop":
             # Kept, so instruction indices stay the labels'.
@@ -249,7 +323,7 @@ def _compile(
     if lenient:
         # A routine that runs on into the next one ends where it does.
         program.append(["rts", "", None, None])
-    return program, labels
+    return finished()
 
 
 def compile_routine(tree: SourceTree, label: str, equates: dict[str, int] | None = None) -> list[list[Any]]:
@@ -257,7 +331,7 @@ def compile_routine(tree: SourceTree, label: str, equates: dict[str, int] | None
     last, its calls pointing at their first instruction."""
     equates = tree.equates if equates is None else equates
     block = tree.block(label)
-    program, labels = _compile(block.file.lines[block.line :], equates)
+    program, labels = _compile(block.file.lines[block.line :], equates, defines=tree.defines)
     return _link(program, labels, tree, equates)
 
 
@@ -273,10 +347,41 @@ def _link(
     labels are the ones up to its rts: `labels` runs on to the file's end."""
     own = len(program)
     placed: dict[str, int] = {}
+
+    def place(name: str) -> int:
+        """`name` compiled after the program, once: its first index."""
+        if name not in placed:
+            callee = tree.block(name)
+            lines = callee.file.lines[callee.line :]
+            routine, _ = _compile(routine_lines(lines) if lenient else lines, equates, lenient, tree.defines)
+            start = len(program)
+            for part in routine:
+                if part[0] in ("bra", "dbf") or (part[0].startswith("b") and part[0][1:] in CONDITIONS):
+                    part[3] += start
+            program.extend(routine)
+            placed[name] = start
+        return placed[name]
+
+    # States count apart from calls (a state table names seven or eight).
+    states = 0
     at = 0
     while at < len(program):
         step = program[at]
         at += 1
+        if step[0] == "switch" and isinstance(step[3], str):
+            targets = []
+            for state in state_table(tree, step[3]):
+                try:
+                    if follow and not follow(state):
+                        raise PoseCodeError(f"a state the subset cannot follow: {state}")
+                    targets.append(labels[state] if state in labels and labels[state] < own else place(state))
+                except (PoseCodeError, KeyError):
+                    if not lenient:
+                        raise
+                    targets.append(-1)
+            step[3] = targets
+            states += len(targets)
+            continue
         if step[0] != "bsr" or not isinstance(step[3], str):
             continue
         name = step[3]
@@ -285,24 +390,36 @@ def _link(
             continue
         if name not in placed:
             try:
-                if name not in tree.blocks or len(placed) >= 8 or (follow and not follow(name)):
+                if name not in tree.blocks or len(placed) - states >= 8 or (follow and not follow(name)):
                     raise PoseCodeError(f"a call the subset cannot follow: {name}")
-                callee = tree.block(name)
-                lines = callee.file.lines[callee.line :]
-                routine, _ = _compile(routine_lines(lines) if lenient else lines, equates, lenient)
+                place(name)
             except PoseCodeError:
                 if not lenient:
                     raise
                 program[at - 1] = ["nop", "", None, None]
                 continue
-            start = len(program)
-            for part in routine:
-                if part[0] in ("bra", "dbf") or (part[0].startswith("b") and part[0][1:] in CONDITIONS):
-                    part[3] += start
-            program += routine
-            placed[name] = start
         step[3] = placed[name]
     return program
+
+
+def state_table(tree: SourceTree, label: str) -> list[str]:
+    """The states a `dc.w State-*` table at `label` names, in order."""
+    block = tree.block(label)
+    states = []
+    for at, raw in enumerate(block.file.lines[block.line :]):
+        code = _code(raw)
+        code = code.split(":", 1)[1] if at == 0 and ":" in code else code
+        if not code.strip():
+            if states:
+                break
+            continue
+        match = re.fullmatch(r"dc\.w\s+(\w+)\s*-\s*\*", code.strip(), re.IGNORECASE)
+        if match is None:
+            break
+        states.append(match[1])
+    if not states:
+        raise PoseCodeError(f"not a state table: {label}")
+    return states
 
 
 class Machine:
@@ -432,6 +549,15 @@ def run(program: list[list[Any]], machine: Machine) -> Machine:
         if name == "bsr":
             returns.append(at)
             at = target
+            continue
+        if name == "switch":
+            # The state's rts returns to the dispatch's caller.
+            state = _sign(machine.get(source, 2) & 0xFFFF, 2) // 2
+            at = target[state] if 0 <= state < len(target) and target[state] >= 0 else -1
+            if at < 0:
+                if not returns:
+                    break
+                at = returns.pop()
             continue
         if name == "bra":
             at = target

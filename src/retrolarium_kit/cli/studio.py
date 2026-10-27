@@ -275,6 +275,30 @@ def command_studio_alien_soldier_playtest_plan(args: argparse.Namespace) -> None
     print_json(studio_alien_soldier_playtest_plan(args.project, mame=args.mame, stage=args.stage))
 
 
+def command_studio_alien_soldier_capture(args: argparse.Namespace) -> None:
+    from retrolarium_kit.games.alien_soldier.capture import capture
+    from retrolarium_kit.studio.project import load_studio_project
+
+    root = Path(load_studio_project(args.project)["project_root"])
+    print_json(capture(root, args.mame, args.stage, frames=args.frames, fights=args.fights))
+
+
+def command_studio_alien_soldier_capture_tas(args: argparse.Namespace) -> None:
+    import os
+
+    from retrolarium_kit.core import user_settings
+    from retrolarium_kit.games.alien_soldier.tas_capture import capture_tas
+    from retrolarium_kit.studio.project import load_studio_project
+
+    gens = args.gens or os.environ.get("RETROLARIUM_GENS") or user_settings.get("gens")
+    if not gens:
+        raise ValueError("name the Gens-automation build with --gens (it is remembered)")
+    if args.gens:
+        user_settings.put("gens", str(Path(args.gens).resolve()))
+    root = Path(load_studio_project(args.project)["project_root"])
+    print_json(capture_tas(root, Path(gens), args.movie, args.scenes, stage=args.stage))
+
+
 def command_studio_alien_soldier_demo_plan(args: argparse.Namespace) -> None:
     from retrolarium_kit.studio.playtest import studio_alien_soldier_demo_plan
 
@@ -655,6 +679,26 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     alien_soldier_playtest.add_argument("--mame", type=Path, required=True)
     alien_soldier_playtest.add_argument("--stage", type=int, required=True, help="the stage slot, 0-based")
     alien_soldier_playtest.set_defaults(handler=command_studio_alien_soldier_playtest_plan)
+    alien_soldier_capture = studio_commands.add_parser(
+        "alien-soldier-capture",
+        help="record a stage's boss fights from MAME as the game draws them, beside the project",
+    )
+    alien_soldier_capture.add_argument("project", type=Path)
+    alien_soldier_capture.add_argument("--mame", type=Path, required=True)
+    alien_soldier_capture.add_argument("--stage", type=int, required=True, help="the stage slot, 0-based")
+    alien_soldier_capture.add_argument("--frames", type=int, default=600, help="frames recorded a fight")
+    alien_soldier_capture.add_argument("--fights", type=int, default=8, help="the most fights recorded")
+    alien_soldier_capture.set_defaults(handler=command_studio_alien_soldier_capture)
+    alien_soldier_tas = studio_commands.add_parser(
+        "alien-soldier-capture-tas",
+        help="record the boss fights of a Gens movie (its scene list names them) beside the project",
+    )
+    alien_soldier_tas.add_argument("project", type=Path)
+    alien_soldier_tas.add_argument("--gens", type=Path, help="the Gens-automation build (remembered)")
+    alien_soldier_tas.add_argument("--movie", type=Path, required=True, help="the .gmv")
+    alien_soldier_tas.add_argument("--scenes", type=Path, required=True, help="its scene list: <first>-<last>, <scene>")
+    alien_soldier_tas.add_argument("--stage", type=int, help="only this stage slot, 0-based")
+    alien_soldier_tas.set_defaults(handler=command_studio_alien_soldier_capture_tas)
     alien_soldier_demo = studio_commands.add_parser(
         "alien-soldier-demo-plan",
         help="emit the MAME process that loops an Alien Soldier attract demo or records a new one",

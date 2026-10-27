@@ -425,6 +425,51 @@ class AlienSoldierSourceTests(unittest.TestCase):
         faces = {boss["title"]: boss.get("faces") for boss in self.documents["graphics/bosses.json"]["bosses"]}
         self.assertEqual((faces["Wolf Garopa"], faces["Shellshogun"], faces["Antroid"]), (0, 0x100, None))
 
+    def test_chain_bosses_bring_the_code_that_places_their_records(self) -> None:
+        from retrolarium_kit.games.alien_soldier import bosses, pose_code
+
+        found = {boss["title"]: boss for boss in self.documents["graphics/bosses.json"]["bosses"]}
+        for title in ("Jetsripper", "Gusthead", "Caterpillar", "Sunset Sting"):
+            self.assertIn("position_field", found[title], title)
+            self.assertTrue(found[title]["checked"], title)
+        # Bosses whose records other code places (plane bodies) wait.
+        self.assertNotIn("Jampan", found)
+        # Jetsripper's chain hangs on its body ($40/$44); Sunset Sting's
+        # record draws nothing, so its ring is shown around its middle.
+        self.assertEqual((found["Jetsripper"]["position_field"], found["Jetsripper"]["centre"]), (0x40, [0, 0]))
+        self.assertTrue(all(abs(value) <= 32 for value in found["Sunset Sting"]["centre"]))
+        # Sunset Sting's segments dispatch on a state table; settled, they
+        # orbit at their full radius ($80) around the core, each on the
+        # mapping its angle picks.
+        tree = workspace.tree(self.root, workspace.source_profile(self.root), "jp")
+        self.assertEqual(len(pose_code.state_table(tree, "Boss_SunsetStingSegmentStates")), 7)
+        sting = found["Sunset Sting"]
+        self.assertTrue(any(step[0] == "switch" for step in sting["record_code"]["1F0"]))
+        machine = pose_code.Machine({}, {"a5": bosses.SLOT})
+        for at, data in sting["tables"].items():
+            for offset, value in enumerate(bytes.fromhex(data)):
+                machine.memory[int(at, 16) + offset] = value
+        segment = bosses.SLOT + 2 * bosses.PART_SIZE
+        self.assertEqual((machine.read(segment, 2), machine.read(segment + 0x44, 2)), (0x1F0, 0x80))
+        machine.a[5] = segment
+        pose_code.run(sting["record_code"]["1F0"], machine)
+        named = {address: name for name, address in sting["symbols"].items()}
+        self.assertTrue(named.get(machine.read(segment + 8, 4), "").startswith("Boss_SunsetStingSegmentMapping"))
+        core = machine.read(bosses.SLOT + 0x10, 2), machine.read(bosses.SLOT + 0x14, 2)
+        reach = machine.read(segment + 0x10, 2) - core[0], machine.read(segment + 0x14, 2) - core[1]
+        self.assertGreater(abs(reach[0]) + abs(reach[1]), 16)
+
+    def test_a_capture_knows_the_object_records_and_the_bosses(self) -> None:
+        from retrolarium_kit.games.alien_soldier import capture
+
+        tree = workspace.tree(self.root, workspace.source_profile(self.root), "jp")
+        # Sixty $60-byte records from $FFC620, the end the walker compares
+        # with; the bosses are the types their asset sets install.
+        self.assertEqual(capture._pool(tree), (0xFFC620, 0xFFDCA0))
+        types = capture.boss_types(tree)
+        self.assertIn(0x30, types)
+        self.assertIn(0x430, types)
+
     def test_pose_code_runs_as_the_game_runs_it(self) -> None:
         from retrolarium_kit.games.alien_soldier import bosses
 

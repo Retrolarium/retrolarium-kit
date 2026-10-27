@@ -53,7 +53,13 @@ of its own (its set loads no art, only a palette). Sharpsteel writes its animati
 Strider has no pose system at all: its code turns the parts from a few
 fields of its own (and a history of one of them), so the document carries
 that code run on the values its setup gives them, with no channels, poses
-or animations (`poses` is null). A pose is one byte per channel at some offset of the
+or animations (`poses` is null). Bosses with no skeleton but a chain of
+records their code places each frame (Jetsripper's chain, Gusthead's arms,
+Caterpillar's pods, Sunset Sting's ring, see _chain) bring the routine that
+places them (`chain`, as `pose_code`), each record type's own routine
+(`record_code`), the field pair the positions sit in (`position_field`), and
+the RAM as their code leaves it after SETTLE_FRAMES frames, positions shown
+about `centre`. A pose is one byte per channel at some offset of the
 boss's pose table (`...PoseTargets`, or the table a field of the boss
 points at); its neutral pose is where a channel's range is centred. An
 animation is a run of commands:
@@ -108,6 +114,10 @@ DOCUMENT = "graphics/bosses.json"
 # reads them, keeping its poses and animations.
 DERIVED_KEYS = ("cosine", "bosses")
 PART_SIZE = 0x60
+# The object records from SLOT ($FFC620 to $FFDCA0).
+POOL_RECORDS = 60
+# The frames a chain boss's code runs before it is shown.
+SETTLE_FRAMES = 64
 ANGLE_FIELD = 0x56
 # The record the first boss object takes (Entity_ObjectPool): where the
 # studio runs a boss's pose code.
@@ -150,6 +160,12 @@ CHECKED = {
     "Boss_ZLeoIntroInit",
     "Boss_MadamBarbarSetupState",
     "Boss_WolfGaropaInitialize",
+    # Chains: their records' positions and mappings as Gens's states of the
+    # fights have them, the frame after.
+    "Boss_JetsripperInitBody",
+    "Boss_GustheadInitializeRootAndParts",
+    "Boss_CaterpillarInitSegments",
+    "Boss_SunsetStingInit",
 }
 
 ENTITY_TYPE = re.compile(r"^\s*move\.w\s+#([^,]+),\(a5\)\s*$")
@@ -484,7 +500,11 @@ def _pose_system(tree: SourceTree, files: list[str]) -> dict[str, Any] | None:
         ]
         # The branch targets moved by one more: the prelude is two steps.
         found["program"] = [
-            step if not isinstance(step[3], int) else [step[0], step[1], step[2], step[3] + 1]
+            [step[0], step[1], step[2], step[3] + 1]
+            if isinstance(step[3], int)
+            else [step[0], step[1], step[2], [index + 1 if index >= 0 else index for index in step[3]]]
+            if step[0] == "switch"
+            else step
             for step in found["program"]
         ]
     # An animation is what a1 points at when the pose routine is called (the
@@ -1095,11 +1115,33 @@ def _reaches(tree: SourceTree, files: list[str], label: str, parts: list[dict[st
             parts[index] = {**part, "from_reach": True}
 
 
+def _block_bytes(tree: SourceTree, item: str, symbols: pose_code.Symbols) -> bytes | None:
+    """A data label's bytes: numbers as they assemble, labels as their
+    stand-ins, a file's bytes as they are; None for what is no data."""
+    directives = tree.block(item).directives
+    if [directive.kind for directive in directives] == ["binclude"]:
+        return tree.data(item)
+    if not directives or any(directive.kind not in ("dc.b", "dc.w", "dc.l") for directive in directives):
+        return None
+    data = bytearray()
+    for directive in directives:
+        width = {"dc.b": 1, "dc.w": 2, "dc.l": 4}[directive.kind]
+        for operand in directive.operands:
+            try:
+                value = pose_code.evaluate(operand.text, symbols)
+            except (pose_code.PoseCodeError, KeyError):
+                value = 0
+            data += (value & ((1 << (8 * width)) - 1)).to_bytes(width, "big")
+    return bytes(data)
+
+
 def _tables(tree: SourceTree, symbols: pose_code.Symbols, programs: list[Any]) -> dict[str, str]:
     """The bytes of the source's tables the boss's code indexes
     (`Table(pc,d0.w)`), at their labels' stand-in addresses (hex address:
     hex bytes): numbers as they assemble, labels as their stand-ins, the
-    data labels right after taken in too (up to the stand-ins' spacing)."""
+    data labels right after taken in too (up to the stand-ins' spacing),
+    and those right before when the code reads before the label (Jetsripper
+    reads the cosine as `-$80(a3,d3.w)` from the sine table)."""
     out: dict[str, str] = {}
     names = {address: name for name, address in symbols.given.items()}
     bases = {
@@ -1121,6 +1163,7 @@ def _tables(tree: SourceTree, symbols: pose_code.Symbols, programs: list[Any]) -
         and step[2][0] in ("abs", "#")
         and step[2][1] in names
     }
+    before = 0
     for program in programs:
         for step in program or []:
             for operand in step[2:]:
@@ -1128,31 +1171,32 @@ def _tables(tree: SourceTree, symbols: pose_code.Symbols, programs: list[Any]) -
                     bases |= {
                         (base + operand[1]) & 0xFFFFFF for base in pointed if (base + operand[1]) & 0xFFFFFF in names
                     } | pointed
+                    if operand[1] >= 0x800000:
+                        before = max(before, 0x1000000 - operand[1])
     for base in sorted(bases):
         name = names.get(base)
         if name is None:
             continue
         data = bytearray()
         for item in _following(tree, name):
-            directives = tree.block(item).directives
-            if [directive.kind for directive in directives] == ["binclude"]:
-                # Bytes from a file (the sine table after its quarter).
-                data += tree.data(item)
-                continue
-            if not directives or any(directive.kind not in ("dc.b", "dc.w", "dc.l") for directive in directives):
+            block = _block_bytes(tree, item, symbols)
+            if block is None:
                 break
-            for directive in directives:
-                width = {"dc.b": 1, "dc.w": 2, "dc.l": 4}[directive.kind]
-                for operand in directive.operands:
-                    try:
-                        value = pose_code.evaluate(operand.text, symbols)
-                    except (pose_code.PoseCodeError, KeyError):
-                        value = 0
-                    data += (value & ((1 << (8 * width)) - 1)).to_bytes(width, "big")
+            data += block
             if len(data) >= pose_code.Symbols.SPACING:
                 break
-        if data:
-            out[f"{symbols.given[name]:06X}"] = bytes(data[: pose_code.Symbols.SPACING]).hex()
+        data = data[: pose_code.Symbols.SPACING]
+        lead = bytearray()
+        if before and base in pointed:
+            labels = tree.labels_in(tree.block(name).file.path)
+            for item in reversed(labels[: labels.index(name)]):
+                block = _block_bytes(tree, item, symbols)
+                if block is None or len(lead) >= before:
+                    break
+                lead[:0] = block
+            lead = lead[-before:] if len(lead) >= before else lead
+        if data or lead:
+            out[f"{symbols.given[name] - len(lead):06X}"] = bytes(lead + data).hex()
     return out
 
 
@@ -1465,13 +1509,74 @@ def _title(stem: str, names: list[str], whole: bool = False) -> str:
     return objects.title(stem, names)
 
 
+def _draws_with(
+    tree: SourceTree,
+    sets: dict[str, Any],
+    recorded: dict[str, Any],
+    label: str,
+    path: str,
+    kinds: list[int],
+    frames: dict[str, Any],
+    parts: list[dict[str, Any]],
+) -> tuple[str | None, dict[str, Any]]:
+    """The asset set a boss draws with and what it loads and colours."""
+    prefix = PurePosixPath(path).stem.split("_")[0]
+    # The set of the entity type the builder gives the boss, else one its
+    # files' name points at (forms that share it have sets of their own).
+    asset_set = next((name for name, item in sets.items() if item.get("type") in kinds), None) or next(
+        (name for name, item in sets.items() if item.get("prefix") == prefix), None
+    )
+    if asset_set is None:
+        # A set with no palette of its own (Flying-Neo's) is named after
+        # the builder: its loads still fill the RAM its body is built from.
+        words = re.findall(r"[A-Z][a-z0-9]*", label.split("_", 1)[-1])
+        asset_set = next(
+            (
+                f"Boss_{''.join(words[:count])}AssetSet"
+                for count in range(len(words), 0, -1)
+                if f"Boss_{''.join(words[:count])}AssetSet" in tree.blocks
+            ),
+            None,
+        )
+    context = sets.get(asset_set, {})
+    if not context.get("loads"):
+        own = context.get("palettes")
+        # A Seven Force form keeps the art of the form before it: the set
+        # fought on the same stage list that loads art (Valkirie's), in
+        # the form's own colours.
+        kept = next(
+            (
+                item
+                for item in sets.values()
+                if item.get("loads") and own and len(own) > 2 and item["palettes"][:-1] == own[:-1]
+            ),
+            None,
+        )
+        if kept is None:
+            # A boss whose code loads its art (Flying-Neo) draws with what
+            # Objects records for its mappings, as the art first loaded
+            # where later loads (the next stage's) write again.
+            if not recorded:
+                recorded.update(objects.export(tree)["contexts"])
+            labels = [*frames, *(part.get("source") for part in parts)]
+            kept = next((recorded[name] for name in labels if name in recorded), context)
+            places = [load.get("vram") for load in kept.get("loads", [])]
+            kept = {
+                **kept,
+                "loads": [load for at, load in enumerate(kept.get("loads", [])) if load.get("vram") not in places[:at]],
+            }
+        context = {**kept, "palettes": own} if own else kept
+    return asset_set, context
+
+
 def _read(tree: SourceTree) -> list[dict[str, Any]]:
     from retrolarium_kit.core.game_names import GameNames
 
     game_names = GameNames.load(tree.root)
     names = [part.strip() for value in game_names.names.get("stages", {}).values() for part in value.split("/")]
     sets = objects.boss_contexts(tree, artless=True)
-    recorded = None
+    # What Objects records, read once when a boss needs it.
+    recorded: dict[str, Any] = {}
     found = []
     # (The debug folder holds a viewer that builds a boss the game cut: the
     # entity type $3EC set's.)
@@ -1553,55 +1658,8 @@ def _read(tree: SourceTree) -> list[dict[str, Any]]:
             _reaches(tree, files, label, parts)
         except (BossError, AslSourceError, pose_code.PoseCodeError, KeyError, TypeError, IndexError, StopIteration):
             continue
-        prefix = PurePosixPath(path).stem.split("_")[0]
-        # The set of the entity type the builder gives the boss, else one its
-        # files' name points at (forms that share it have sets of their own).
         kinds = [parse_number(match[1]) for line in tree.body(label) if (match := ENTITY_TYPE.match(line))]
-        asset_set = next((name for name, item in sets.items() if item.get("type") in kinds), None) or next(
-            (name for name, item in sets.items() if item.get("prefix") == prefix), None
-        )
-        if asset_set is None:
-            # A set with no palette of its own (Flying-Neo's) is named after
-            # the builder: its loads still fill the RAM its body is built from.
-            words = re.findall(r"[A-Z][a-z0-9]*", label.split("_", 1)[-1])
-            asset_set = next(
-                (
-                    f"Boss_{''.join(words[:count])}AssetSet"
-                    for count in range(len(words), 0, -1)
-                    if f"Boss_{''.join(words[:count])}AssetSet" in tree.blocks
-                ),
-                None,
-            )
-        context = sets.get(asset_set, {})
-        if not context.get("loads"):
-            own = context.get("palettes")
-            # A Seven Force form keeps the art of the form before it: the set
-            # fought on the same stage list that loads art (Valkirie's), in
-            # the form's own colours.
-            kept = next(
-                (
-                    item
-                    for item in sets.values()
-                    if item.get("loads") and own and len(own) > 2 and item["palettes"][:-1] == own[:-1]
-                ),
-                None,
-            )
-            if kept is None:
-                # A boss whose code loads its art (Flying-Neo) draws with what
-                # Objects records for its mappings, as the art first loaded
-                # where later loads (the next stage's) write again.
-                if recorded is None:
-                    recorded = objects.export(tree)["contexts"]
-                labels = [*frames, *(part.get("source") for part in parts)]
-                kept = next((recorded[name] for name in labels if name in recorded), context)
-                places = [load.get("vram") for load in kept.get("loads", [])]
-                kept = {
-                    **kept,
-                    "loads": [
-                        load for at, load in enumerate(kept.get("loads", [])) if load.get("vram") not in places[:at]
-                    ],
-                }
-            context = {**kept, "palettes": own} if own else kept
+        asset_set, context = _draws_with(tree, sets, recorded, label, path, kinds, frames, parts)
         boss.update(
             # A cut boss no text names takes the game repository's name for
             # its entity type, else its files'.
@@ -1642,6 +1700,324 @@ def _read(tree: SourceTree) -> list[dict[str, Any]]:
             except (BossError, AslSourceError, mappings.MappingError, IndexError):
                 continue
         found.append(boss)
+    built = {PurePosixPath(tree.block(label).file.path).stem.split("_")[0] for label in builders}
+    found += _read_chains(tree, sets, recorded, game_names, names, built)
+    return found
+
+
+def _run_lenient(
+    tree: SourceTree, label: str, files: list[str], symbols: pose_code.Symbols, machine: pose_code.Machine
+) -> list[list[Any]] | None:
+    """The routine at `label` compiled leniently (calling the boss's files'
+    routines and the game's sprite helpers) and run on `machine`; None when
+    it does not compile or run."""
+    block = tree.block(label)
+    try:
+        program = pose_code.compile_lines(
+            block.file.lines[block.line :],
+            symbols,
+            tree,
+            lenient=True,
+            follow=lambda name: tree.block(name).file.path in files or name.startswith(("Sprite_", "Math_")),
+        )
+        _preload(tree, symbols, [program], machine)
+        machine.a[5] = SLOT
+        pose_code.run(program, machine)
+    except (pose_code.PoseCodeError, AslSourceError, KeyError, IndexError, ValueError):
+        return None
+    return program
+
+
+def _preload(tree: SourceTree, symbols: pose_code.Symbols, programs: list[Any], machine: pose_code.Machine) -> None:
+    """The data the programs read by label, at the labels' stand-ins (tables
+    of labels as their stand-ins), where the machine holds nothing yet."""
+    for address, value in _label_data(tree, symbols).items():
+        machine.memory.setdefault(address, value)
+    for at, data in _tables(tree, symbols, programs).items():
+        for offset, value in enumerate(bytes.fromhex(data)):
+            machine.memory[int(at, 16) + offset] = value
+
+
+def _jump_target(line: str) -> str | None:
+    """The label a call, jump or branch goes to."""
+    if call := CALL.match(line):
+        return call["target"]
+    match = re.match(r"^\s*b[a-z]{2}(?:\.[sw])?\s+(\w+)\s*$", line)
+    return match[1] if match else None
+
+
+def _records(machine: pose_code.Machine, field: int, size: int) -> list[int]:
+    return [machine.read(SLOT + index * PART_SIZE + field, size) for index in range(POOL_RECORDS)]
+
+
+def _compile_lenient(
+    tree: SourceTree, label: str, files: list[str], symbols: pose_code.Symbols
+) -> list[list[Any]] | None:
+    block = tree.block(label)
+    try:
+        return pose_code.compile_lines(
+            block.file.lines[block.line :],
+            symbols,
+            tree,
+            lenient=True,
+            follow=lambda name: tree.block(name).file.path in files or name.startswith(("Sprite_", "Math_")),
+        )
+    except (pose_code.PoseCodeError, AslSourceError, KeyError, IndexError, ValueError):
+        return None
+
+
+def _chain(tree: SourceTree, files: list[str]) -> dict[str, Any] | None:
+    """A boss built of records its code places each frame, not a skeleton:
+    the routine that fills four or more records with a type (its setup, the
+    first such in its files); the routine that, run after it, places the
+    most of them (Jetsripper's chain, Gusthead's arms), if any; and the
+    routines each record's type runs (Caterpillar's segments place
+    themselves on its wave and pick their mappings). Run in that order they
+    must place four records or more."""
+    from retrolarium_kit.games.alien_soldier.levels import handlers
+
+    own = [path for path in files if path.startswith("src/bosses/")]
+    labels = [label for path in own for label in tree.labels_in(path)]
+    by_type = handlers(tree)
+    for setup in labels:
+        symbols = pose_code.Symbols(tree.equates, tree.blocks)
+        machine = pose_code.Machine({}, {"a5": SLOT})
+        setup_code = _run_lenient(tree, setup, files, symbols, machine)
+        # A state dispatcher runs its first state: the setup is that state.
+        if setup_code is None or any(step[0] == "switch" for step in setup_code):
+            continue
+        kinds = _records(machine, 0, 2)
+        if sum(1 for kind in kinds[1:] if kind) < 4:
+            continue
+        # Places relative to the boss's ($40 and $44: Jetsripper's), or
+        # where they are ($10 and $14, longs: Gusthead's arms).
+        before = {
+            field: list(zip(_records(machine, field, 4), _records(machine, field + 4, 4))) for field in (0x40, 0x10)
+        }
+
+        def placed(trial: pose_code.Machine, field: int) -> int:
+            after = list(zip(_records(trial, field, 4), _records(trial, field + 4, 4)))
+            return sum(1 for index in range(1, POOL_RECORDS) if after[index] != before[field][index])
+
+        # Of the routines that place as many, the one the others reach (its
+        # states call or jump to the shared placing code).
+        reached: Counter[str] = Counter(
+            target
+            for path in own
+            for name in tree.labels_in(path)
+            for line in tree.body(name)
+            if (target := _jump_target(line))
+        )
+        best = None
+        for label in labels:
+            trial = pose_code.Machine(dict(machine.memory), {"a5": SLOT})
+            program = _run_lenient(tree, label, files, symbols, trial)
+            if program is None:
+                continue
+            for field in (0x40, 0x10):
+                count = placed(trial, field)
+                if count >= 4 and (best is None or (count, reached[label]) > (best[0], best[4])):
+                    best = (count, label, program, field, reached[label])
+        # The records' own routines, by type (not the boss's own).
+        record_code = {}
+        for kind in sorted(set(kinds[1:]) - {0, kinds[0]}):
+            handler = by_type.get(f"${kind:X}")
+            if handler in tree.blocks and tree.block(handler).file.path in files:
+                program = _compile_lenient(tree, handler, files, symbols)
+                if program is not None:
+                    record_code[f"{kind:X}"] = program
+
+        def frame(state: pose_code.Machine) -> pose_code.Machine:
+            """`state` a frame on: the placing routine, then each record's."""
+            state = pose_code.Machine(dict(state.memory), {"a5": SLOT})
+            if best is not None:
+                pose_code.run(best[2], state)
+            for index in range(1, POOL_RECORDS):
+                program = record_code.get(f"{state.read(SLOT + index * PART_SIZE, 2):X}")
+                if program is not None:
+                    state.a[5] = SLOT + index * PART_SIZE
+                    pose_code.run(program, state)
+            return state
+
+        _preload(tree, symbols, [best[2] if best else [], *record_code.values()], machine)
+        try:
+            shown = frame(machine)
+        except pose_code.PoseCodeError:
+            continue
+        field = best[3] if best is not None else max((0x10, 0x40), key=lambda item: placed(shown, item))
+        if placed(shown, field) < 4:
+            continue
+        # The boss as it settles (Sunset Sting's ring opens over its first
+        # frames), as far as its code runs.
+        settled = machine
+        for _ in range(SETTLE_FRAMES):
+            try:
+                settled = frame(settled)
+            except pose_code.PoseCodeError:
+                break
+        try:
+            shown = frame(settled)
+        except pose_code.PoseCodeError:
+            shown = settled
+        return {
+            "setup": setup,
+            "machine": machine,
+            "settled": settled,
+            "shown": shown,
+            "symbols": symbols,
+            "places": best[1] if best is not None else None,
+            "program": best[2] if best is not None else [],
+            "record_code": record_code,
+            "field": field,
+        }
+    return None
+
+
+def _centre(machine: pose_code.Machine, parts: list[dict[str, Any]], field: int) -> list[int]:
+    """The median position of the parts drawn, from the boss's (none when
+    the boss draws itself)."""
+    drawn = [index for index, part in enumerate(parts) if part["kind"] == "mapping"]
+    if not drawn or drawn[0] == 0:
+        return [0, 0]
+    centre = []
+    for offset in (0, 4):
+        base = machine.read(SLOT + field + offset, 2)
+        values = sorted(
+            (machine.read(SLOT + index * PART_SIZE + field + offset, 2) - base + 0x8000) % 0x10000 - 0x8000
+            for index in drawn
+        )
+        centre.append(values[len(values) // 2])
+    return centre
+
+
+def _read_chains(
+    tree: SourceTree,
+    sets: dict[str, Any],
+    recorded: dict[str, Any],
+    game_names: Any,
+    names: list[str],
+    built: set[str],
+) -> list[dict[str, Any]]:
+    """The bosses built of records their own code places (see _chain), one
+    per boss's files that no skeleton builder reads: their parts as the
+    setup leaves them, drawing the mappings it gives, placed by that code
+    (the studio runs it as a code-driven boss's pose code, on the setup's
+    RAM)."""
+    from retrolarium_kit.games.alien_soldier.levels import handlers
+
+    found = []
+    seen = set(built)
+    for kind, handler in handlers(tree).items():
+        if handler not in tree.blocks or not tree.block(handler).file.path.startswith("src/bosses/"):
+            continue
+        path = tree.block(handler).file.path
+        prefix = PurePosixPath(path).stem.split("_")[0]
+        if prefix in seen:
+            continue
+        seen.add(prefix)
+        files = _boss_files(tree, path)
+        try:
+            chain = _chain(tree, files)
+        except (BossError, AslSourceError, pose_code.PoseCodeError, KeyError, TypeError, IndexError):
+            continue
+        if chain is None or chain["setup"] not in CHECKED:
+            # Records other code places too (plane bodies' Jampan, Bugmax)
+            # wait for a reader of their own.
+            continue
+        machine, settled, shown, symbols = chain["machine"], chain["settled"], chain["shown"], chain["symbols"]
+        stand_ins = {address: name for name, address in symbols.given.items()}
+        parts, frames = [], {}
+        last = max(index for index, kind in enumerate(_records(machine, 0, 2)) if kind or not index)
+        for index in range(last + 1):
+            # As the code that places them leaves them (Caterpillar's
+            # segments pick their mappings).
+            record = SLOT + index * PART_SIZE
+            part: dict[str, Any] = {
+                "parent": None,
+                "radius": 0,
+                "depth": shown.read(record + 0x20, 1) >> 2,
+                "kind": "none",
+                "attribute": machine.read(record + 0xE, 2),
+                "hand_built": True,
+            }
+            name = stand_ins.get(shown.read(record + 8, 4))
+            try:
+                pieces = _frame(tree, name) if name else None
+            except (BossError, AslSourceError, mappings.MappingError, IndexError):
+                pieces = None
+            if pieces is not None:
+                frames[name] = pieces
+                part.update(kind="mapping", source=name)
+            parts.append(part)
+        # Fewer than four parts drawn is not a boss this reader takes in
+        # (Missiray's segments are its plane-B body's columns).
+        if sum(1 for part in parts if part["kind"] != "none") < 4:
+            continue
+        kinds = [int(kind[1:], 16), machine.read(SLOT, 2)]
+        asset_set, context = _draws_with(tree, sets, recorded, chain["setup"], path, kinds, frames, parts)
+        program = chain["program"]
+        tables = _tables(tree, symbols, [program, *chain["record_code"].values()])
+        # The RAM the setup leaves (the records' fields, a history the code
+        # reads), in runs.
+        written = sorted(address for address in settled.memory if 0xFF0000 <= address)
+        runs: list[list[int]] = []
+        for address in written:
+            if runs and address - runs[-1][-1] <= 16:
+                runs[-1].append(address)
+            else:
+                runs.append([address])
+        for run in runs:
+            tables[f"{run[0]:06X}"] = bytes(settled.read(address, 1) for address in range(run[0], run[-1] + 1)).hex()
+        for name in symbols.given:
+            try:
+                frames.setdefault(name, _frame(tree, name))
+            except (BossError, AslSourceError, mappings.MappingError, IndexError):
+                continue
+        found.append(
+            {
+                "id": chain["setup"],
+                "parts": parts,
+                "channels": 0,
+                "channel_base": 0,
+                "neutral_pose": [],
+                "pose_code": program,
+                "side_field": None,
+                "title": next(
+                    (game_names.name("bosses", kind) for kind in kinds if game_names.name("bosses", kind)), ""
+                )
+                or _title(PurePosixPath(path).stem, names),
+                "asset_set": asset_set,
+                "loads": context.get("loads", []),
+                "palettes": context.get("palettes", []),
+                "base_tile": 0,
+                "frames": frames,
+                "facing": {},
+                "neutral": None,
+                "anchor_code": None,
+                "post_code": None,
+                "traversed": [1, 0],
+                "body": None,
+                "joints": [None] * len(parts),
+                "timing": "set",
+                "poses": None,
+                "sequences": [],
+                "slot": SLOT,
+                "checked": chain["setup"] in CHECKED,
+                # The setup's field $54 (Jetsripper's chain length) stays.
+                "faces": machine.read(SLOT + 0x54, 2),
+                "chain": chain["places"],
+                "position_field": chain["field"],
+                # Positions are relative to the boss's, less this: nothing when
+                # the boss draws, else the middle of the parts drawn (Sunset
+                # Sting's ring, Caterpillar's segments far along the train).
+                "centre": _centre(shown, parts, chain["field"]),
+                "record_code": chain["record_code"],
+                "tables": tables,
+                "symbols": dict(symbols.given),
+                "_sequences": [],
+                "_table": b"",
+            }
+        )
     return found
 
 
