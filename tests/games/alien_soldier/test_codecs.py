@@ -174,6 +174,34 @@ class PayloadUpgradeTests(unittest.TestCase):
         self.assertEqual(original, {"screens": ["new"], "payloads": [1]})
         self.assertIsNone(content._follow_derived(kept, {"screens": ["new"]}, ("screens",), self.original))
 
+    def test_a_boss_read_anew_brings_its_poses_and_animations(self) -> None:
+        from retrolarium_kit.games.alien_soldier import bosses
+
+        exported = {
+            "bosses": [{"poses": "Old", "sequences": ["OldRun"]}, {"poses": "New", "sequences": ["NewRun"]}],
+            "poses": {"Old": [{"offset": 0, "values": [1]}], "New": [{"offset": 0, "values": [2]}]},
+            "sequences": [
+                {"label": "OldRun", "commands": [{"pose": 0, "frames": 1, "steps": 1}], "end": "loop"},
+                {"label": "NewRun", "commands": [{"pose": 0, "frames": 3, "steps": 3}], "end": "hold"},
+            ],
+        }
+        self.original.write_text(
+            json.dumps(
+                {"bosses": [], "poses": {"Old": exported["poses"]["Old"]}, "sequences": exported["sequences"][:1]}
+            ),
+            encoding="utf-8",
+        )
+        edited = [{"offset": 0, "values": [9]}]
+        mine = {"bosses": [], "poses": {"Old": edited}, "sequences": exported["sequences"][:1]}
+        kept = content._follow_derived(mine, exported, ("bosses",), self.original, bosses.follow_source)
+        # The edit stays; the new boss's table and animation come in, in the
+        # original copy too.
+        self.assertEqual(kept["poses"], {"Old": edited, "New": exported["poses"]["New"]})
+        self.assertEqual(kept["sequences"], exported["sequences"])
+        original = json.loads(self.original.read_text(encoding="utf-8"))
+        self.assertEqual(original["poses"], exported["poses"])
+        self.assertIsNone(content._follow_derived(kept, exported, ("bosses",), self.original, bosses.follow_source))
+
     def test_a_current_document_is_left(self) -> None:
         mine = {"schema": "s", "payloads": [{"label": "A", "v": 1}, {"label": "C", "v": 7}]}
         self.assertIsNone(content._follow_payloads(mine, self.exported, self.original))

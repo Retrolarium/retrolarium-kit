@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 from retrolarium_kit.core import assets, source_snapshot
@@ -93,19 +94,28 @@ def _follow_payloads(mine: dict, exported: dict, original: Path) -> dict | None:
     return {**mine, "payloads": [ours.get(label, fresh[label]) for label in labels]}
 
 
-def _follow_derived(mine: dict, exported: dict, keys: tuple[str, ...], original: Path) -> dict | None:
-    """`mine` with the keys the source derives as `exported` has them, or None
-    when they are the same already; the original copy follows too."""
-    derived = {key: exported[key] for key in keys}
+def _follow_derived(
+    mine: dict,
+    exported: dict,
+    keys: tuple[str, ...],
+    original: Path,
+    follow: Callable[[dict, dict], dict] | None = None,
+) -> dict | None:
+    """`mine` with the keys the source derives as `exported` has them, and
+    what the document's own `follow` takes from it (the bosses' poses of a
+    boss this kit reads anew), or None when it is the same already; the
+    original copy follows too."""
+
+    def followed(document: dict) -> dict:
+        document = {**document, **{key: exported[key] for key in keys}}
+        return follow(document, exported) if follow else document
+
     if original.is_file():
         before = json.loads(original.read_text(encoding="utf-8"))
-        if any(before.get(key) != value for key, value in derived.items()):
-            original.write_text(
-                json.dumps({**before, **derived}, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n"
-            )
-    if all(mine.get(key) == value for key, value in derived.items()):
-        return None
-    return {**mine, **derived}
+        if (after := followed(before)) != before:
+            original.write_text(json.dumps(after, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+    after = followed(mine)
+    return None if after == mine else after
 
 
 def refresh_source(source_root: Path, project_root: Path, original: Path) -> list[str] | None:
@@ -148,7 +158,13 @@ def refresh_source(source_root: Path, project_root: Path, original: Path) -> lis
             if not keys or not (module.DOCUMENT in refreshed or path.is_file()):
                 continue
             document = refreshed.get(module.DOCUMENT) or json.loads(path.read_text(encoding="utf-8"))
-            kept = _follow_derived(document, exported[module.DOCUMENT], keys, original / CONTENT / module.DOCUMENT)
+            kept = _follow_derived(
+                document,
+                exported[module.DOCUMENT],
+                keys,
+                original / CONTENT / module.DOCUMENT,
+                getattr(module, "follow_source", None),
+            )
             if kept is not None:
                 refreshed[module.DOCUMENT] = kept
         workspace.write(refreshed, snapshot / CONTENT)

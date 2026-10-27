@@ -124,10 +124,13 @@ def recorded(tree: SourceTree) -> dict[str, dict[str, Any]]:
     return found
 
 
-def boss_contexts(tree: SourceTree) -> dict[str, dict[str, Any]]:
+def boss_contexts(tree: SourceTree, artless: bool = False) -> dict[str, dict[str, Any]]:
     """What each boss's asset set draws with, by the set's label: the loads
     (its list's, or those of the lists its code plays), its palette command
-    and an attribute for the first load (see the module text)."""
+    and an attribute for the first load (see the module text). With
+    `artless`, sets that load no art (a Seven Force form keeps the art
+    before it and brings its colours) come too, with no loads, as do the
+    lettered sets (Sirene's timed ones, which install the cut forms)."""
     from retrolarium_kit.games.alien_soldier.assets import asset_lists
     from retrolarium_kit.games.alien_soldier.levels import handlers
     from retrolarium_kit.games.alien_soldier.stages import _boss_files
@@ -139,7 +142,8 @@ def boss_contexts(tree: SourceTree) -> dict[str, dict[str, Any]]:
     fought_on = _stage_palettes(tree)
     found = {}
     for label in tree.order:
-        if not label.endswith("AssetSet") or tree.block(label).kind != "mixed":
+        named = label.endswith("AssetSet") or (artless and re.search(r"AssetSet[A-Z]$", label))
+        if not named or tree.block(label).kind != "mixed":
             continue
         fields = [operand.text for directive in tree.block(label).directives for operand in directive.operands]
         kind = parse_number(fields[0]) if fields else None
@@ -159,9 +163,9 @@ def boss_contexts(tree: SourceTree) -> dict[str, dict[str, Any]]:
             for command in lists[name]
             if command.command == LZSS_TO_VRAM
         ]
-        if not loads:
+        if not loads and not artless:
             continue
-        base = loads[0]["vram"] // 32
+        base = loads[0]["vram"] // 32 if loads else 0
         words = Counter(
             parse_number(match["value"])
             for line in code
@@ -180,6 +184,7 @@ def boss_contexts(tree: SourceTree) -> dict[str, dict[str, Any]]:
             "palettes": commands,
             "line": line,
             "prefix": PurePosixPath(tree.block(handler).file.path).stem.split("_")[0] if handler in tree.blocks else "",
+            "type": kind,
         }
     return found
 
