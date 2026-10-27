@@ -23,6 +23,7 @@ from typing import Any, Mapping
 from retrolarium_kit.games.alien_soldier import (
     animations,
     art,
+    bosses,
     compressed_tiles,
     demos,
     envelopes,
@@ -60,6 +61,7 @@ DOCUMENTS = (
     sound,
     envelopes,
     pcm,
+    bosses,
 )
 DERIVED = (stages, objects, art)
 
@@ -96,11 +98,14 @@ def _call(module, function: str, source: SourceTree, section: Mapping[str, Any],
     return getattr(module, function)(source, *document)
 
 
-def export(root: Path, revision: str) -> dict[str, dict[str, Any]]:
-    """Every document, by its path in the workspace."""
+def export(root: Path, revision: str, modules=None) -> dict[str, dict[str, Any]]:
+    """Every document (or those of `modules`), by its path in the workspace."""
     section = source_profile(root)
     source = tree(root, section, revision)
-    return {module.DOCUMENT: _call(module, "export", source, section, revision) for module in DOCUMENTS + DERIVED}
+    return {
+        module.DOCUMENT: _call(module, "export", source, section, revision)
+        for module in (DOCUMENTS + DERIVED if modules is None else modules)
+    }
 
 
 def write(documents: Mapping[str, Mapping[str, Any]], folder: Path) -> list[str]:

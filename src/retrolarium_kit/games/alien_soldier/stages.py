@@ -882,12 +882,14 @@ def _boss_files(tree: SourceTree, handler: str) -> list[str]:
     same folder (z_leo_core.s, z_leo_rendering.s)."""
     path = PurePosixPath(tree.block(handler).file.path)
     prefix = path.stem.split("_")[0] + "_"
-    found = []
-    for label in tree.order:
-        other = PurePosixPath(tree.block(label).file.path)
-        if other.parent == path.parent and other.name.startswith(prefix) and other.as_posix() not in found:
-            found.append(other.as_posix())
-    return found
+    # The files in the order the build includes them.
+    return [
+        name
+        for name, source in tree.files.items()
+        if (other := PurePosixPath(name)).parent == path.parent
+        and other.name.startswith(prefix)
+        and tree.labels_in(name)
+    ]
 
 
 def _brought_in(tree: SourceTree, lists: dict[str, list[AssetCommand]], kind: int) -> dict[str, Any] | None:

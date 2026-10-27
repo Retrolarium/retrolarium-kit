@@ -211,6 +211,7 @@ class SourceTree:
         self._payloads: dict[str, bytes] = {}
         # Included files read once (a write puts its bytes in _payloads).
         self._included: dict[str, bytes] = {}
+        self._by_file: dict[str, list[str]] | None = None
         self._read(entry)
         self._resolve_equates()
 
@@ -359,7 +360,12 @@ class SourceTree:
 
     def labels_in(self, path: str) -> list[str]:
         """The labels of one file, in order."""
-        return [label for label in self.order if self.blocks[label].file.path == path]
+        # Labels come only from reading the source: index them once.
+        if self._by_file is None:
+            self._by_file = {}
+            for label in self.order:
+                self._by_file.setdefault(self.blocks[label].file.path, []).append(label)
+        return list(self._by_file.get(path, []))
 
     # Writing
 

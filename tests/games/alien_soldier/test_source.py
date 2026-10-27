@@ -293,6 +293,95 @@ class AlienSoldierSourceTests(unittest.TestCase):
             self.assertEqual(len(scene["palette"]["colours"]), 16)
             self.assertIn(table["source"], [load["source"] for load in scene["vram"]])
 
+    def test_jointed_bosses_read_as_skeletons_with_poses_and_animations(self) -> None:
+        document = self.documents["graphics/bosses.json"]
+        titles = [boss["title"] for boss in document["bosses"]]
+        for name in ("Antroid", "Terobuster", "Shellshogun", "Joker", "Xi-Tiger", "Z-Leo", "Madam Barbar"):
+            self.assertIn(name, titles)
+        # Valkirie's forms share an engine this reader cannot tell apart yet.
+        self.assertFalse(any(title.startswith("Valkirie") for title in titles))
+        antroid = next(boss for boss in document["bosses"] if boss["title"] == "Antroid")
+        self.assertEqual((len(antroid["parts"]), antroid["channels"], antroid["timing"]), (26, 15, "set"))
+        self.assertEqual(antroid["asset_set"], "Boss_AntroidAssetSet")
+        self.assertTrue(antroid["checked"])
+        # The poses are the table offsets its animations name: all rows but one.
+        self.assertEqual(
+            [row["offset"] for row in document["poses"][antroid["poses"]]][:9], [0, 16, 32, 48, 64, 80, 96, 112, 144]
+        )
+        self.assertEqual(len(antroid["sequences"]), 16)
+        self.assertIsNone(antroid["parts"][0]["parent"])
+        # A foot hangs from the leg chain and turns with the last leg channel;
+        # the side the pose code tests is field 6.
+        self.assertEqual(antroid["parts"][25]["parent"], 24)
+        self.assertEqual(antroid["joints"][25], 14)
+        self.assertEqual(antroid["side_field"], 6)
+        self.assertEqual(antroid["parts"][14]["angle"], 0x1C0)
+        self.assertEqual(antroid["facing"]["256"]["set"], [2])
+        self.assertEqual(len(document["cosine"]), 256)
+        sequences = {item["label"]: item for item in document["sequences"]}
+        self.assertEqual(
+            sequences["Boss_AntroidIdlePoseCommands"]["commands"],
+            [{"pose": 6, "frames": 32, "steps": 32}, {"pose": 7, "frames": 32, "steps": 32}],
+        )
+        retry = sequences["Boss_AntroidJumpSlamRetryPosePrefix"]
+        self.assertEqual((retry["end"], retry["next"]), ("next", "Boss_AntroidJumpSlamFirstArcPoseCommands"))
+        self.assertIn({"sound": 0xD0}, sequences["Boss_AntroidJumpAttackPoseCommands"]["commands"])
+        # Terobuster adds a signed count to its steps; Joker's hands and feet
+        # are anchors its renderer's code places.
+        terobuster = next(boss for boss in document["bosses"] if boss["title"] == "Terobuster")
+        self.assertEqual(terobuster["timing"], "add")
+        joker = next(boss for boss in document["bosses"] if boss["title"] == "Joker")
+        self.assertTrue(joker["anchor_code"])
+        self.assertEqual([index for index, part in enumerate(joker["parts"]) if part.get("anchor")], [19, 20, 21, 22])
+
+    def test_pose_code_runs_as_the_game_runs_it(self) -> None:
+        from retrolarium_kit.games.alien_soldier import bosses
+
+        antroid = next(boss for boss in self.documents["graphics/bosses.json"]["bosses"] if boss["title"] == "Antroid")
+        words = [value << 8 for value in antroid["neutral_pose"]]
+        words[14] = 0x2000
+        angles = bosses._run_angles(antroid, words)
+        # The foot's angle is the sum of its leg's channels and the body's
+        # (14, 13, 12 and 2), each byte doubled.
+        expected = (
+            2 * (0x20 + antroid["neutral_pose"][13] + antroid["neutral_pose"][12] + antroid["neutral_pose"][2])
+        ) & 0x1FE
+        self.assertEqual(angles[25] & 0x1FE, expected)
+        swapped = bosses._run_angles(antroid, words, side=2)
+        self.assertNotEqual(swapped[25] & 0x1FE, expected)
+
+    def test_poses_and_animations_write_back(self) -> None:
+        from retrolarium_kit.games.alien_soldier import bosses
+
+        document = self.documents["graphics/bosses.json"]
+        label = next(boss["poses"] for boss in document["bosses"] if boss["title"] == "Antroid")
+        rows = [{**row, "values": list(row["values"])} for row in document["poses"][label]]
+        rows[6]["values"][0] = 0x55
+        edited = {**document, "poses": {label: rows}}
+        sequences = [dict(item) for item in document["sequences"]]
+        idle = next(item for item in sequences if item["label"] == "Boss_AntroidIdlePoseCommands")
+        idle["commands"] = [{**command, "frames": 20} for command in idle["commands"]]
+        edited["sequences"] = sequences
+        tree = workspace.tree(self.root, workspace.source_profile(self.root), "jp")
+        bosses.apply(tree, edited)
+        self.assertEqual(tree.data(label)[rows[6]["offset"]], 0x55)
+        self.assertEqual(tree.data("Boss_AntroidIdlePoseCommands")[:2], bytes((20, 32)))
+        again = bosses.export(tree)
+        self.assertEqual(again["poses"][label][6]["values"][0], 0x55)
+        # A step count of zero would divide by zero; an end and the offsets stay.
+        for change in ({"steps": 0}, {"frames": 0x80}):
+            broken = [dict(item) for item in document["sequences"]]
+            target = next(item for item in broken if item["label"] == "Boss_AntroidIdlePoseCommands")
+            target["commands"] = [{**target["commands"][0], **change}, *target["commands"][1:]]
+            with self.assertRaises(bosses.BossError):
+                bosses.apply(tree, {**document, "sequences": broken})
+        broken = [{**item, "end": "hold"} if item["end"] == "loop" else item for item in document["sequences"]]
+        with self.assertRaises(bosses.BossError):
+            bosses.apply(tree, {**document, "sequences": broken})
+        moved = [{**row, "offset": row["offset"] + 1} for row in document["poses"][label]]
+        with self.assertRaises(bosses.BossError):
+            bosses.apply(tree, {**document, "poses": {label: moved}})
+
 
 if __name__ == "__main__":
     unittest.main()
