@@ -183,11 +183,20 @@ def machine(project_root: Path) -> str | None:
     return workspace.source_profile(snapshot)["revisions"][revision].get("machine")
 
 
+def _add_missing(snapshot: Path, revision: str) -> None:
+    """The documents a newer kit edits that the project lacks, as the source
+    gives them: a project an older studio opened last still builds."""
+    missing = [module for module in workspace.DOCUMENTS if not (snapshot / CONTENT / module.DOCUMENT).is_file()]
+    if missing:
+        workspace.write(workspace.export(snapshot, revision, missing), snapshot / CONTENT)
+
+
 def validate(project_root: Path) -> dict[str, str]:
     """Check the snapshot and its documents; the documents' SHA-256."""
     snapshot = Path(project_root) / SOURCE_DIRECTORY
     try:
         record = source_snapshot.verify(snapshot)
+        _add_missing(snapshot, record["revision"])
         workspace.validate(snapshot, record["revision"], workspace.read(snapshot / CONTENT))
     except (source_snapshot.SnapshotError, workspace.WorkspaceError) as exc:
         raise AlienSoldierContentError(str(exc)) from exc
