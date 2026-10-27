@@ -298,8 +298,20 @@ class AlienSoldierSourceTests(unittest.TestCase):
         titles = [boss["title"] for boss in document["bosses"]]
         for name in ("Antroid", "Terobuster", "Shellshogun", "Joker", "Xi-Tiger", "Z-Leo", "Madam Barbar"):
             self.assertIn(name, titles)
-        # Valkirie's forms share an engine this reader cannot tell apart yet.
-        self.assertFalse(any(title.startswith("Valkirie") for title in titles))
+        # The Seven Force's forms read each from its own file and what it
+        # calls; Sirene's tentacles follow a history of the frames before.
+        checked = {boss["title"] for boss in document["bosses"] if boss["checked"]}
+        for name in ("Valkirie battle", "Medusa", "Sylpheed", "Artemis", "Sirene"):
+            self.assertIn(name, checked)
+        # Sharpsteel's animations are written as bytes; Deep Strider's code
+        # alone turns it (fields its setup gives, four-frame tables).
+        self.assertIn("Sharpsteel", checked)
+        strider = next(boss for boss in document["bosses"] if boss["title"] == "Deep Strider")
+        self.assertTrue(strider["checked"])
+        self.assertEqual((strider["poses"], strider["sequences"], strider["channels"]), (None, [], 0))
+        self.assertTrue(all(len(part["frames"]) == 4 for part in strider["parts"] if part["kind"] == "rotation"))
+        sirene = next(boss for boss in document["bosses"] if boss["title"] == "Sirene")
+        self.assertGreater(sirene["settle"], 30)
         antroid = next(boss for boss in document["bosses"] if boss["title"] == "Antroid")
         self.assertEqual((len(antroid["parts"]), antroid["channels"], antroid["timing"]), (26, 15, "set"))
         self.assertEqual(antroid["asset_set"], "Boss_AntroidAssetSet")
@@ -333,6 +345,85 @@ class AlienSoldierSourceTests(unittest.TestCase):
         joker = next(boss for boss in document["bosses"] if boss["title"] == "Joker")
         self.assertTrue(joker["anchor_code"])
         self.assertEqual([index for index, part in enumerate(joker["parts"]) if part.get("anchor")], [19, 20, 21, 22])
+        # Flying-Neo's renderer walks from its third slot, eight parts; its
+        # code puts the second beside the boss.
+        neo = next(boss for boss in document["bosses"] if boss["title"] == "Flying-Neo")
+        self.assertEqual(neo["traversed"], [2, 8])
+        self.assertTrue(neo["anchor_code"] and neo["checked"])
+        # Back Stringer's arms hang in threes from the points half a bone
+        # past the part above; its arms pick their mappings from a table.
+        stringer = next(boss for boss in document["bosses"] if boss["title"] == "Back Stringer")
+        self.assertEqual(
+            [(part.get("reach", False), part.get("from_reach", False)) for part in stringer["parts"][3:6]],
+            [(True, False), (True, True), (False, True)],
+        )
+        table = stringer["symbols"]["Boss_BackStringerPartAngleFrameTable"]
+        self.assertEqual(
+            stringer["tables"][f"{table:06X}"][:8], f"{stringer['symbols']['Boss_BackStringerPartAngleMapping0']:08x}"
+        )
+        self.assertTrue(stringer["anchor_code"] and stringer["checked"])
+        # Each Seven Force form draws in its own colours, its set's command;
+        # the alternate Valkirie steps twelve channels of its own.
+        forms = {boss["title"]: boss for boss in document["bosses"]}
+        self.assertEqual(forms["Medusa"]["palettes"][-1], ["SevenForcesMedusaPaletteCommand", 0])
+        self.assertEqual(forms["Sylpheed"]["palettes"][-1], ["SevenForcesSylpheedPaletteCommand", 0])
+        self.assertEqual(forms["Valkirie alternate"]["channels"], 12)
+        # A debug viewer builds a boss the game cut, in the $3EC set's art:
+        # one animation between two poses. No text names it: the game
+        # repository's name for its entity type does.
+        from retrolarium_kit.core.game_names import GameNames
+
+        viewer = next(boss for boss in document["bosses"] if boss["id"] == "Debug_ValkirieViewerInitialize")
+        self.assertEqual((viewer["asset_set"], len(document["poses"][viewer["poses"]])), ("EntityType3ECAssetSet", 2))
+        self.assertEqual(viewer["title"], GameNames.load(ALIEN_SOLDIER).name("bosses", 0x3EC))
+        # Wolf Garopa's horse's head and neck and its rider's head and arm are
+        # records its setup fills by hand, placed by the code after its
+        # renderer by their pixel places.
+        wolf = forms["Wolf Garopa"]
+        self.assertEqual(
+            [(index, part["source"]) for index, part in enumerate(wolf["parts"]) if part["kind"] == "mapping"][-4:],
+            [
+                (26, "Boss_WolfGaropaInitialPartMapping"),
+                (27, "Boss_WolfGaropaOrbDirectionMapping0"),
+                (28, "Boss_WolfGaropaNearPlayerMapping"),
+                (29, "Boss_WolfGaropaOrbAlternateMapping"),
+            ],
+        )
+        self.assertTrue(wolf["post_code"])
+        # Flying-Neo's head is a mapping, its tail sprites of their own that
+        # swing on a sine table its code builds in RAM.
+        self.assertEqual(neo["parts"][10]["source"], "Boss_FlyingNeoAuxiliaryPartMappingA")
+        self.assertEqual(
+            [(part["kind"], part["size"]) for part in neo["parts"][11:14]],
+            [("sprite", 10), ("sprite", 10), ("sprite", 10)],
+        )
+        self.assertIn("FF9900", neo["tables"])
+
+    def test_big_bosses_have_their_plane_b_bodies(self) -> None:
+        # Where MAME's plane B and scroll put them: Xi-Tiger's patterns
+        # moved down $80 tiles by its setup, Shellshogun's as loaded.
+        bodies = {boss["title"]: boss["body"] for boss in self.documents["graphics/bosses.json"]["bosses"]}
+        self.assertEqual((bodies["Xi-Tiger"]["x"], bodies["Xi-Tiger"]["y"]), (-64, -32))
+        self.assertEqual(bodies["Xi-Tiger"]["cells"][0][3:6], [0xE280, 0xE281, 0xE282])
+        self.assertEqual((bodies["Shellshogun"]["x"], bodies["Shellshogun"]["y"]), (-60, -32))
+        self.assertEqual(len(bodies["Shellshogun"]["cells"]), 8)
+        self.assertEqual((bodies["Terobuster"]["x"], bodies["Terobuster"]["y"]), (-76, -50))
+        # Joker's scrolls down line by line; at rest it sits as the others do.
+        self.assertEqual((bodies["Joker"]["x"], bodies["Joker"]["y"]), (-64, -32))
+        self.assertIsNone(bodies["Antroid"])
+        # Wolf Garopa scrolls by fields of its own; Z-Leo's body is plane A's,
+        # six rows its code queues as it rises, its tile indices moved $280.
+        self.assertEqual((bodies["Wolf Garopa"]["x"], bodies["Wolf Garopa"]["y"]), (-48, -80))
+        self.assertEqual((bodies["Z-Leo"]["plane"], bodies["Z-Leo"]["x"], bodies["Z-Leo"]["y"]), ("A", -96, -68))
+        self.assertEqual(len(bodies["Z-Leo"]["cells"]), 24)
+        self.assertEqual(bodies["Z-Leo"]["cells"][8][:2], [0x62C1, 0x62C2])
+        # Flying-Neo's line and column scroll follow it; its set has no
+        # palette but still loads the patterns. Its tiles carry the sky.
+        self.assertEqual((bodies["Flying-Neo"]["x"], bodies["Flying-Neo"]["y"]), (-48, -24))
+        self.assertTrue(bodies["Flying-Neo"]["scene"])
+        # A boss shows facing as its setup builds its body.
+        faces = {boss["title"]: boss.get("faces") for boss in self.documents["graphics/bosses.json"]["bosses"]}
+        self.assertEqual((faces["Wolf Garopa"], faces["Shellshogun"], faces["Antroid"]), (0, 0x100, None))
 
     def test_pose_code_runs_as_the_game_runs_it(self) -> None:
         from retrolarium_kit.games.alien_soldier import bosses
@@ -349,6 +440,24 @@ class AlienSoldierSourceTests(unittest.TestCase):
         self.assertEqual(angles[25] & 0x1FE, expected)
         swapped = bosses._run_angles(antroid, words, side=2)
         self.assertNotEqual(swapped[25] & 0x1FE, expected)
+        # Back Stringer's arms take a mapping from a table by angle (an
+        # eighth of a turn later), four per arm.
+        from retrolarium_kit.games.alien_soldier import pose_code
+
+        stringer = next(
+            boss for boss in self.documents["graphics/bosses.json"]["bosses"] if boss["title"] == "Back Stringer"
+        )
+        machine = pose_code.Machine({}, {"a5": bosses.SLOT})
+        for at, data in stringer["tables"].items():
+            for offset, value in enumerate(bytes.fromhex(data)):
+                machine.memory[int(at, 16) + offset] = value
+        machine.write(bosses.SLOT + 0x60 + 0x56, 2, 0x40)
+        pose_code.run(stringer["anchor_code"], machine)
+        named = {address: name for name, address in stringer["symbols"].items()}
+        self.assertEqual(
+            [named.get(machine.read(bosses.SLOT + index * 0x60 + 8, 4)) for index in (1, 2)],
+            ["Boss_BackStringerPartAngleMapping1", "Boss_BackStringerPartAngleMapping4"],
+        )
 
     def test_poses_and_animations_write_back(self) -> None:
         from retrolarium_kit.games.alien_soldier import bosses
