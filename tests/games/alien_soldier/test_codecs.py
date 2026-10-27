@@ -133,6 +133,77 @@ class DemoTests(unittest.TestCase):
             demos.recorded_steps(steps, "step 1 0 0\n")
 
 
+class CaptureTests(unittest.TestCase):
+    """The capture script's lines read as fights of frames."""
+
+    def test_a_fight_starts_whole_and_goes_on_in_changes(self) -> None:
+        import base64
+
+        from retrolarium_kit.games.alien_soldier import capture
+
+        chunk = "11" * 32
+        record = "00F4" + "00" * 94
+        lines = [
+            "B F4",
+            "F 0",
+            f"V 2 {chunk}",
+            "C " + "0EEE" * 64,
+            "S " + "0000" * 40,
+            "R " + "00" * 24,
+            f"O 0 {record}",
+            "F 1",
+            f"V 3 {chunk}",
+            "E done",
+        ]
+        fights, end = capture.parse("\n".join(lines))
+        self.assertEqual((end, len(fights), fights[0]["type"]), ("done", 1, 0xF4))
+        first, second = fights[0]["frames"]
+        whole = base64.b64decode(first["vram_all"])
+        # The first frame holds all of VRAM, the chunks it wrote in place.
+        self.assertEqual((len(whole), whole[64:96], whole[:64]), (0x10000, bytes([0x11]) * 32, bytes(64)))
+        self.assertEqual(first["cram"][0], 0xEEE)
+        self.assertEqual(base64.b64decode(first["objects"][0]["record"])[:2], bytes([0, 0xF4]))
+        # The next holds only what changed.
+        self.assertEqual(list(second["vram"]), ["3"])
+        self.assertNotIn("cram", second)
+
+    def test_a_gens_run_keeps_the_fight_scenes(self) -> None:
+        import struct
+
+        from retrolarium_kit.games.alien_soldier import tas_capture
+
+        listing = "Frames, Scene\n20-300, Sega screen\n900-1900, Jetsripper boss\n33500-34220, Viblack mini-boss\n"
+        listing += "36840-38000, Valkirie Force\n76840-77600, Antroid (credits)\n17820-18660, Xi-Tiger cutscene\n"
+        self.assertEqual(
+            tas_capture.scenes(listing),
+            [(900, 1900, "Jetsripper boss"), (33500, 34220, "Viblack mini-boss"), (36840, 38000, "Valkirie Force")],
+        )
+        # States one by one, as Gens writes them: the boss's type from the
+        # first record that holds one, VRAM in changes after the first.
+        pool = (0xFFC620, 0xFFC620 + 2 * 0x60)
+
+        def state(kind: int, tile: int) -> dict[str, bytes]:
+            ram = bytearray(0x10000)
+            ram[0xC620:0xC622] = kind.to_bytes(2, "big")
+            vram = bytearray(0x10000)
+            vram[32:64] = bytes([tile]) * 32
+            return {
+                "ram": bytes(ram),
+                "vram": bytes(vram),
+                "cram": struct.pack("<64H", *([0xEEE] * 64)),
+                "vsram": bytes(80),
+                "regs": bytes(24),
+            }
+
+        fight = tas_capture._Fight({0xE8}, pool)
+        for kind, tile in ((0, 1), (0xE8, 1), (0xE8, 2)):
+            fight.add(state(kind, tile))
+        done = fight.result()
+        self.assertEqual((done["type"], len(done["frames"])), (0xE8, 3))
+        self.assertIn("vram_all", done["frames"][0])
+        self.assertEqual((done["frames"][1]["vram"], list(done["frames"][2]["vram"])), ({}, ["1"]))
+
+
 class PayloadUpgradeTests(unittest.TestCase):
     """An older project's document follows the payloads this kit reads."""
 
