@@ -432,8 +432,9 @@ class AlienSoldierSourceTests(unittest.TestCase):
         for title in ("Jetsripper", "Gusthead", "Caterpillar", "Sunset Sting"):
             self.assertIn("position_field", found[title], title)
             self.assertTrue(found[title]["checked"], title)
-        # Bosses whose records other code places (plane bodies) wait.
-        self.assertNotIn("Jampan", found)
+        # Bosses whose records other code places come as plane bodies, their
+        # records where they stand.
+        self.assertEqual((found["Jampan"]["record_code"], found["Jampan"]["body"]["plane"]), ({}, "B"))
         # Jetsripper's chain hangs on its body ($40/$44); Sunset Sting's
         # record draws nothing, so its ring is shown around its middle.
         self.assertEqual((found["Jetsripper"]["position_field"], found["Jetsripper"]["centre"]), (0x40, [0, 0]))
@@ -458,6 +459,211 @@ class AlienSoldierSourceTests(unittest.TestCase):
         core = machine.read(bosses.SLOT + 0x10, 2), machine.read(bosses.SLOT + 0x14, 2)
         reach = machine.read(segment + 0x10, 2) - core[0], machine.read(segment + 0x14, 2) - core[1]
         self.assertGreater(abs(reach[0]) + abs(reach[1]), 16)
+
+    def test_plane_bosses_bring_the_bodies_their_code_queues(self) -> None:
+        # As Gens's states of the fights hold them: the name-table cells
+        # the boss's code queues, and their corner from the boss as the
+        # scroll shows it.
+        found = {boss["title"]: boss for boss in self.documents["graphics/bosses.json"]["bosses"]}
+        bodies = {
+            title: (found[title]["body"]["plane"], found[title]["body"]["x"], found[title]["body"]["y"])
+            for title in ("Missiray", "Destroyer-Mk2", "Jampan", "Bugmax")
+        }
+        self.assertEqual(
+            bodies,
+            {
+                "Missiray": ("B", -160, -32),
+                "Destroyer-Mk2": ("A", -64, -80),
+                "Jampan": ("B", -36, -36),
+                "Bugmax": ("B", -40, -40),
+            },
+        )
+        missiray = found["Missiray"]["body"]
+        self.assertEqual((len(missiray["cells"]), len(missiray["cells"][0])), (12, 40))
+        # Its segments lift the plane's columns: the middle (its head) stays.
+        self.assertEqual(missiray["columns"][8:12], [0, 0, 0, 0])
+        self.assertEqual(set(missiray["columns"][:8]), {-16})
+        destroyer = found["Destroyer-Mk2"]
+        self.assertEqual((len(destroyer["body"]["cells"]), len(destroyer["body"]["cells"][0])), (20, 16))
+        self.assertTrue(any(part["kind"] == "mapping" for part in destroyer["parts"]))
+        # Epsilon 1 as it waits to fight: four bands of its body and the
+        # wings its animated columns draw, across all of plane A, the wings
+        # eight lines below the body under its column scroll.
+        epsilon = found["Epsilon 1"]["body"]
+        self.assertEqual((epsilon["plane"], epsilon["x"], epsilon["y"]), ("A", -256, -56))
+        self.assertEqual((len(epsilon["cells"]), len(epsilon["cells"][0])), (16, 64))
+        self.assertEqual((set(epsilon["columns"][12:20]), set(epsilon["columns"][:12])), ({0}, {8}))
+
+    def test_the_caterpillar_stands_on_the_ship_its_stage_streams(self) -> None:
+        from retrolarium_kit.games.alien_soldier import bosses, stages
+
+        tree = workspace.tree(self.root, workspace.source_profile(self.root), "jp")
+        # Stage 9 spawns the Caterpillar ($128), then streams plane B from
+        # the secondary camera, the map read from row $700.
+        stream = stages.secondary_streams(tree)[0x128]
+        self.assertEqual(
+            (stream["descriptor"], stream["camera_y"]), ("Stage9_CaterpillarShipColumnTransferDescriptor", 0xF900)
+        )
+        caterpillar = next(
+            boss for boss in self.documents["graphics/bosses.json"]["bosses"] if boss["title"] == "Caterpillar"
+        )
+        body = caterpillar["body"]
+        # Map X $210 to $99F, ten rows, all on line 3 over the sprites.
+        self.assertEqual((body["plane"], len(body["cells"]), len(body["cells"][0])), ("B", 10, 242))
+        self.assertEqual({word & 0xE000 for row in body["cells"] for word in row if word & 0x7FF}, {0xE000})
+        # As in Gens's states of the fight: a segment stands at map X $58 -
+        # $80 of the plane, 24 lines below the ship's top on its column.
+        machine = bytearray(0x10000)
+        for at, data in caterpillar["tables"].items():
+            if int(at, 16) >= 0xFF0000:
+                low = int(at, 16) - 0xFF0000
+                machine[low : low + len(data) // 2] = bytes.fromhex(data)
+        segment = bosses.SLOT + 9 * bosses.PART_SIZE - 0xFF0000
+        word = lambda at: int.from_bytes(machine[at : at + 2], "big")
+        x = word(segment + 0x10) - caterpillar["centre"][0]
+        y = word(segment + 0x14) - caterpillar["centre"][1]
+        self.assertEqual(x - body["x"], word(segment + 0x58) - 0x80 - 0x210)
+        self.assertEqual(y - body["y"], 24)
+
+    def test_victor_and_viblack_come_with_their_planes_and_own_sprites(self) -> None:
+        from retrolarium_kit.games.alien_soldier import stages
+
+        found = {boss["title"]: boss for boss in self.documents["graphics/bosses.json"]["bosses"]}
+        # As in Gens's states of their fights: Victor 32 frames in, flying
+        # in at $1C4 with its velocity; its core, eyes and ring are sprites
+        # the records hold themselves.
+        victor = found["Victor"]
+        self.assertEqual((victor["body"]["plane"], victor["body"]["x"], victor["body"]["y"]), ("B", -40, -40))
+        core = victor["parts"][0]
+        self.assertEqual(
+            (core["kind"], core["size"], core["x"], core["y"], core["attribute"]), ("sprite", 14, -16, -8, 0x632C)
+        )
+        records = bytes.fromhex(victor["tables"][f"{victor['slot']:06X}"])
+        word = lambda index, field: int.from_bytes(records[index * 0x60 + field : index * 0x60 + field + 2], "big")
+        self.assertEqual((word(0, 0x10), word(0, 0x14)), (452, 256))
+        ring = [
+            (
+                (word(index, 0x10) - 452 + 0x8000) % 0x10000 - 0x8000,
+                (word(index, 0x14) - 256 + 0x8000) % 0x10000 - 0x8000,
+            )
+            for index in range(4, 12)
+        ]
+        self.assertEqual(ring, [(-26, 31), (3, 40), (31, 25), (40, -4), (25, -32), (-4, -41), (-32, -26), (-41, 3)])
+        # Viblack lifts its stage's blocks into plane B (stage 16 holds the
+        # camera at $660 for it), shown level as it stands between rocks.
+        tree = workspace.tree(self.root, workspace.source_profile(self.root), "jp")
+        self.assertEqual(stages.spawning_scenes(tree)[0x2B8]["camera_x"], 0x660)
+        viblack = found["Viblack"]
+        body = viblack["body"]
+        self.assertEqual(
+            (body["plane"], body["x"], body["y"], len(body["cells"]), len(body["cells"][0])), ("B", -160, -24, 8, 40)
+        )
+        self.assertEqual(set(body["columns"]), {0})
+        self.assertIn("Stage16TileArt0000", [load["source"] for load in viblack["loads"]])
+        self.assertEqual(viblack["palettes"][-1], ["Boss_ViblackIntroPaletteCommand", 0])
+
+    def test_love_penguin_waves_its_tentacles_as_it_comes_in(self) -> None:
+        # As MAME runs the cut boss in Antroid's place, 141 frames in: its
+        # face in plane B, 24 tentacle segments placed down their tree
+        # (pointers flagged in their top byte), its message on screen.
+        penguin = next(
+            boss for boss in self.documents["graphics/bosses.json"]["bosses"] if boss["title"] == "Love Penguin"
+        )
+        body = penguin["body"]
+        self.assertEqual(
+            (body["plane"], body["x"], body["y"], len(body["cells"]), len(body["cells"][0])), ("B", -36, -36, 12, 12)
+        )
+        self.assertEqual(sum(1 for part in penguin["parts"] if part["kind"] == "mapping"), 25)
+        self.assertEqual(penguin["parts"][1]["source"], "EntityType1C0_EarlyFormPartMapping")
+        records = bytes.fromhex(penguin["tables"][f"{penguin['slot']:06X}"])
+        word = lambda index, field: int.from_bytes(records[index * 0x60 + field : index * 0x60 + field + 2], "big")
+        self.assertEqual((word(0, 4), word(0, 0x10), word(0, 0x14)), (6, 385, 271))
+        self.assertEqual(
+            {
+                index: tuple(
+                    (word(index, field) - word(0, field) + 0x8000) % 0x10000 - 0x8000 for field in (0x10, 0x14)
+                )
+                for index in (5, 10, 15, 20, 24)
+            },
+            {5: (88, 75), 10: (110, 35), 15: (115, -10), 20: (102, -53), 24: (-42, -83)},
+        )
+
+    def test_bosses_bring_what_their_setup_leaves_in_their_records(self) -> None:
+        # Wolf Garopa's hind legs hang from anchors its builder turns back,
+        # Shellshogun draws its arms over its belly and turns its sword with
+        # its hand before its renderer, Flying-Neo's tail has waved a while,
+        # and the debug viewer's body rides on its first part.
+        from retrolarium_kit.games.alien_soldier import pose_code
+
+        found = {boss["title"]: boss for boss in self.documents["graphics/bosses.json"]["bosses"]}
+
+        def word(boss: dict, address: int) -> int:
+            memory = {
+                int(at, 16) + index: byte
+                for at, data in boss["ram"].items()
+                for index, byte in enumerate(bytes.fromhex(data))
+            }
+            return memory.get(address, 0) << 8 | memory.get(address + 1, 0)
+
+        def angle(title: str, index: int) -> int:
+            boss = found[title]
+            return word(boss, boss["slot"] + index * 0x60 + 0x56)
+
+        self.assertEqual([angle("Wolf Garopa", index) for index in range(1, 5)], [0x1F8, 0x1F8, 0x120, 0x120])
+        shellshogun = found["Shellshogun"]
+        slot = shellshogun["slot"]
+        machine = pose_code.Machine({}, {"a5": slot})
+        machine.write(slot + 6 * 0x60 + 0x56, 2, 0x210)
+        pose_code.run(shellshogun["anchor_code"], machine)
+        self.assertEqual((machine.read(slot + 0x23E, 2), machine.read(slot + 0x29C, 2)), (0xC860, 0x190))
+        self.assertEqual(
+            [shellshogun["parts"][index]["attribute"] for index in (1, 6, 8, 13)], [0x8B00, 0x8300, 0x300, 0x8300]
+        )
+        self.assertEqual(len({angle("Flying-Neo", index) for index in range(12, 20)}), 8)
+        body = found["Lambda Bunny"]["body"]
+        self.assertEqual(
+            (body["command"], body["x"], body["y"], body["part"]), ("Debug_ValkirieViewerLeftTileTransfer", -39, -52, 1)
+        )
+
+    def test_shield_viper_lays_its_body_down_its_heads_path(self) -> None:
+        from retrolarium_kit.games.alien_soldier import bosses, pose_code
+
+        viper = next(
+            boss for boss in self.documents["graphics/bosses.json"]["bosses"] if boss["title"] == "Shield Viper"
+        )
+        self.assertTrue(viper["checked"])
+        self.assertEqual(
+            (viper["chain"], viper["position_field"], viper["centre"]), ("Boss_ShieldViperUpdate", 0x10, [0, 0])
+        )
+        # The head and 24 body records drawn; the orbit shot waits hidden.
+        self.assertEqual(sum(1 for part in viper["parts"] if part["kind"] == "mapping"), 25)
+        # Run as the studio runs it, it is Gens's state of the fight 472
+        # frames in: the head circling while its message is on screen, its
+        # body on the path behind it.
+        machine = pose_code.Machine({}, {"a5": bosses.SLOT})
+        for at, data in viper["tables"].items():
+            for offset, value in enumerate(bytes.fromhex(data)):
+                machine.memory[int(at, 16) + offset] = value
+        pose_code.run(viper["pose_code"], machine)
+        for index in range(1, len(viper["parts"])):
+            code = viper["record_code"].get(f"{machine.read(bosses.SLOT + index * bosses.PART_SIZE, 2):X}")
+            if code:
+                machine.a[5] = bosses.SLOT + index * bosses.PART_SIZE
+                pose_code.run(code, machine)
+        head = [machine.read(bosses.SLOT + field, 2) for field in (4, 0x10, 0x14, 0x56)]
+        self.assertEqual(head, [8, 310, 242, 0xFD80])
+
+        def place(index: int) -> tuple[int, int]:
+            record = bosses.SLOT + index * bosses.PART_SIZE
+            return tuple(
+                (machine.read(record + field, 2) - machine.read(bosses.SLOT + field, 2) + 0x8000) % 0x10000 - 0x8000
+                for field in (0x10, 0x14)
+            )
+
+        self.assertEqual(
+            {index: place(index) for index in (1, 6, 12, 18, 24)},
+            {1: (5, -27), 6: (64, -47), 12: (27, 34), 18: (18, -44), 24: (74, -16)},
+        )
 
     def test_a_capture_knows_the_object_records_and_the_bosses(self) -> None:
         from retrolarium_kit.games.alien_soldier import capture

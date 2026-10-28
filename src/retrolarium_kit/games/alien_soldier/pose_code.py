@@ -20,7 +20,21 @@ compares, bit tests and changes, conditional branches, dbf, calls of other routi
 (compiled after the routine, `bsr` to their index), a state table's
 dispatch (`lea States(pc,d0.w),a0` / `adda.w (a0),a0` / `jmp (a0)` over
 `dc.w State-*` offsets: `["switch", "", register, [index, ...]]`, a jump to
-the state the register's word picks, by twos, -1 for one left out) and rts. Compiled
+the state the register's word picks, by twos, -1 for one left out) and rts.
+Routines the kit does in Python instead (`natives`: a tile queue the
+machine's caller records) are `["native", "", None, name]`, or `"tail"` for
+a jump to one (it returns for the routine); only the kit runs those.
+With `tails`, a lenient jump or branch out of the routine to one it may
+follow goes on into that routine (the game's scroll writer ends in one;
+Bugmax branches into its dispatcher) instead of ending it. With `tails` too
+(the kit's own runs), `jmp (aN)` goes to the code a lea of the routine
+left in the register (`["jumpreg", "", register, [[stand-in, index], ...]]`),
+a dbf may leave the routine, and a branch into a routine already placed
+lands inside it (Love Penguin walks its parts so). A dispatch by a
+table of words from a base label (`movea.w T(pc,d0.w),a0` / `adda.l #Base,a0`
+/ `jmp (a0)`, Caterpillar's) is a switch too. A program follows CALLS
+routines it calls at most (a state is no call), or `calls`: the kit's own
+runs follow more (Epsilon 1 queues its body's bands in a dozen). Compiled
 `lenient`ly, code that also does what the subset leaves out (spawns sparks,
 queues tiles) keeps what it can: a routine ends where the disassembly says
 it does, a call the subset cannot follow does nothing, a jump out of the
@@ -77,6 +91,8 @@ BITS = {"btst", "bset", "bclr", "bchg"}
 UNARY = {"clr", "ext", "neg", "not", "swap", "tst"}
 LABEL = re.compile(r"^([A-Za-z_]\w*):")
 LIMIT = 20000
+# Routines a program calls at most (see the module text).
+CALLS = 8
 
 
 def _code(line: str) -> str:
@@ -130,6 +146,11 @@ def evaluate(text: str, equates: dict[str, int]) -> int:
     return total
 
 
+def _register(name: str) -> int:
+    """An address register's number, sp's 7."""
+    return 7 if name == "sp" else int(name[1])
+
+
 def _operand(text: str, equates: dict[str, int]) -> list[Any]:
     text = text.strip()
     if re.fullmatch(r"d[0-7]", text):
@@ -138,12 +159,13 @@ def _operand(text: str, equates: dict[str, int]) -> list[Any]:
         return ["a", 7 if text == "sp" else int(text[1])]
     if text.startswith("#"):
         return ["#", evaluate(text[1:], equates) & 0xFFFFFFFF]
-    match = re.fullmatch(r"\((?P<reg>a[0-7])\)\+", text)
+    # The stack pointer is a7 (Love Penguin keeps registers on it a while).
+    match = re.fullmatch(r"\((?P<reg>a[0-7]|sp)\)\+", text)
     if match:
-        return ["(a)+", int(match["reg"][1])]
-    match = re.fullmatch(r"-\((?P<reg>a[0-7])\)", text)
+        return ["(a)+", _register(match["reg"])]
+    match = re.fullmatch(r"-\((?P<reg>a[0-7]|sp)\)", text)
     if match:
-        return ["-(a)", int(match["reg"][1])]
+        return ["-(a)", _register(match["reg"])]
     match = re.fullmatch(r"(?P<disp>[^()]*)\((?P<base>a[0-7]|pc),(?P<index>[ad][0-7])(?:\.(?P<size>[wl]))?\)", text)
     if match:
         displacement = evaluate(match["disp"], equates) if match["disp"].strip() else 0
@@ -151,9 +173,10 @@ def _operand(text: str, equates: dict[str, int]) -> list[Any]:
         if match["index"][0] == "a":
             raise PoseCodeError(f"an operand outside the subset: {text}")
         return ["(x)", displacement & 0xFFFFFF, register, int(match["index"][1]), match["size"] or "w"]
-    match = re.fullmatch(r"(?P<label>[A-Za-z_]\w*)\(pc\)", text)
+    match = re.fullmatch(r"(?P<label>[A-Za-z_]\w*(?:[+-][$%\w]+)?)\(pc\)", text)
     if match:
-        # A label by the program counter: its address.
+        # A label by the program counter (Love Penguin's with an offset):
+        # its address.
         return ["abs", evaluate(match["label"], equates) & 0xFFFFFF]
     match = re.fullmatch(r"(?P<disp>[^()]*)\((?P<reg>a[0-7])\)", text)
     if match:
@@ -171,16 +194,24 @@ def compile_lines(
     tree: SourceTree | None = None,
     lenient: bool = False,
     follow: Callable[[str], bool] | None = None,
+    natives: frozenset[str] = frozenset(),
+    tails: bool = False,
+    calls: int | None = None,
 ) -> list[list[Any]]:
     """`lines` (a label's code, labels included) as a program, up to the
     first rts that no branch jumps past; it may call only its own labels,
     or with `tree` the source's routines too, those `follow` names when it
     is given (see the module text for `lenient`)."""
     program, labels = _compile(
-        routine_lines(lines) if lenient else lines, equates, lenient, tree.defines if tree is not None else None
+        routine_lines(lines) if lenient else lines,
+        equates,
+        lenient,
+        tree.defines if tree is not None else None,
+        natives,
+        tails,
     )
     if tree is not None:
-        return _link(program, labels, tree, equates, lenient, follow)
+        return _link(program, labels, tree, equates, lenient, follow, natives, tails, calls)
     for step in program:
         if step[0] == "switch":
             raise PoseCodeError(f"a state table the routine alone cannot name: {step[3]}")
@@ -192,7 +223,12 @@ def compile_lines(
 
 
 def _compile(
-    lines: list[str], equates: dict[str, int], lenient: bool = False, defines: dict[str, int] | None = None
+    lines: list[str],
+    equates: dict[str, int],
+    lenient: bool = False,
+    defines: dict[str, int] | None = None,
+    natives: frozenset[str] = frozenset(),
+    tails: bool = False,
 ) -> tuple[list[list[Any]], dict[str, int]]:
     labels: dict[str, int] = {}
     pending: list[tuple[str, str, list[str]]] = []
@@ -230,6 +266,9 @@ def _compile(
             continue
         mnemonic, rest = words[0].lower(), (words[1] if len(words) > 1 else "")
         name, _, size = mnemonic.partition(".")
+        if lenient and name in ("dc", "even", "align", "binclude", "cnop"):
+            # Data inside a routine (a descriptor after its jump) never runs.
+            continue
         pending.append((name, size, _split(rest)))
     program: list[list[Any]] = []
     furthest = 0
@@ -259,6 +298,21 @@ def _compile(
             program.append(["switch", "", [register[0], int(register[1])], dispatch[1]])
             dispatched.update((index + 1, index + 2))
             continue
+        based = (
+            re.fullmatch(r"(\w+)\(pc,(d[0-7])\.w\)", operands[0].strip())
+            if name == "movea" and size == "w" and len(operands) == 2 and operands[1].strip() == "a0"
+            else None
+        )
+        if (
+            based
+            and len(pending) > index + 2
+            and pending[index + 1][:2] == ("adda", "l")
+            and pending[index + 1][2][1:] == ["a0"]
+            and pending[index + 2] == ("jmp", "", ["(a0)"])
+        ):
+            program.append(["switch", "", ["d", int(based[2][1])], based[1]])
+            dispatched.update((index + 1, index + 2))
+            continue
         if index in dispatched:
             # The dispatch's own steps, kept so indices stay the labels'.
             program.append(["nop", "", None, None])
@@ -268,12 +322,33 @@ def _compile(
             target = re.sub(r"^\((\w+)\)(?:\.[wl])?$|^(\w+)\(pc\)$", lambda m: m[1] or m[2], target)
             program.append(["bsr", "", None, target])
             continue
-        if (
-            lenient
-            and name in ("bra", "jmp")
-            and re.sub(r"^\((\w+)\)(?:\.[wl])?$|^(\w+)\(pc\)$", lambda m: m[1] or m[2], operands[0].strip())
-            not in labels
-        ):
+        jumped = (
+            re.sub(r"^\((\w+)\)(?:\.[wl])?$|^(\w+)\(pc\)$", lambda m: m[1] or m[2], operands[0].strip())
+            if name in ("bra", "jmp") and operands
+            else ""
+        )
+        if jumped in natives and jumped not in labels:
+            program.append(["tail", "", None, jumped])
+            continue
+        held = re.fullmatch(r"\((a[0-7])\)", operands[0].strip()) if name == "jmp" and operands else None
+        if lenient and tails and held:
+            # To the code a lea of the routine left in the register
+            # (Love Penguin picks how its parts turn so).
+            loaded = [
+                found[1]
+                for earlier, size_before, given in pending[:index]
+                if earlier == "lea"
+                and len(given) == 2
+                and given[1].strip() == held[1]
+                and (found := re.fullmatch(r"(\w+)\(pc\)", given[0].strip()))
+            ]
+            program.append(["jumpreg", "", ["a", int(held[1][1])], loaded])
+            continue
+        if lenient and tails and name in ("bra", "jmp") and jumped not in labels and re.fullmatch(r"\w+", jumped):
+            # Linked into the routine it goes to, else an rts.
+            program.append(["jump", "", None, jumped])
+            continue
+        if lenient and name in ("bra", "jmp") and jumped not in labels:
             # A jump out of the routine: what it jumps to is left out.
             name = "rts"
         if name in BITS:
@@ -285,6 +360,11 @@ def _compile(
             continue
         if name in ("b" + condition for condition in CONDITIONS) or name in ("bra", "dbf", "dbra"):
             target = operands[-1]
+            if target not in labels and lenient and tails and re.fullmatch(r"\w+", target):
+                # Linked to the routine it goes to, else to an rts.
+                source = _operand(operands[0], equates) if name in ("dbf", "dbra") else None
+                program.append(["dbf" if name == "dbra" else name, "", source, "@" + target])
+                continue
             if target not in labels and lenient and name not in ("dbf", "dbra"):
                 program.append([name, "", None, None])
                 exits.append(program[-1])
@@ -305,6 +385,13 @@ def _compile(
             program.append(["nop", "", None, None])
             continue
         size = size if size in SIZES else ("l" if name in ("moveq", "exg", "swap", "lea") else "w")
+        if (
+            name == "movem"
+            and len(operands) == 2
+            and all(re.fullmatch(r"[ad][0-7]|sp|\(sp\)\+|-\(sp\)|.*\(a[0-7]\).*", item.strip()) for item in operands)
+        ):
+            # One register is a move (Love Penguin keeps a5 so).
+            name = "movea" if operands[1].strip()[0] == "a" and len(operands[1].strip()) == 2 else "move"
         if (
             name
             in {"move", "movea", "moveq", "lea", "exg", "cmp", "cmpi", "cmpa", "muls", "mulu", "divs", "divu"}
@@ -342,21 +429,35 @@ def _link(
     equates: dict[str, int],
     lenient: bool = False,
     follow: Callable[[str], bool] | None = None,
+    natives: frozenset[str] = frozenset(),
+    tails: bool = False,
+    calls: int | None = None,
 ) -> list[list[Any]]:
     """The program with the routines it calls compiled after it. Its own
     labels are the ones up to its rts: `labels` runs on to the file's end."""
     own = len(program)
     placed: dict[str, int] = {}
+    # The labels inside the routines placed (a branch back into one, Love
+    # Penguin's loop over its parts, lands there).
+    inside: dict[str, int] = {}
 
     def place(name: str) -> int:
         """`name` compiled after the program, once: its first index."""
+        if name in inside and name not in placed:
+            return inside[name]
         if name not in placed:
             callee = tree.block(name)
             lines = callee.file.lines[callee.line :]
-            routine, _ = _compile(routine_lines(lines) if lenient else lines, equates, lenient, tree.defines)
+            routine, found = _compile(
+                routine_lines(lines) if lenient else lines, equates, lenient, tree.defines, natives, tails
+            )
             start = len(program)
+            if tails:
+                inside.update({label: start + index for label, index in found.items() if index < len(routine)})
             for part in routine:
-                if part[0] in ("bra", "dbf") or (part[0].startswith("b") and part[0][1:] in CONDITIONS):
+                if (
+                    part[0] in ("bra", "dbf") or (part[0].startswith("b") and part[0][1:] in CONDITIONS)
+                ) and isinstance(part[3], int):
                     part[3] += start
             program.extend(routine)
             placed[name] = start
@@ -364,10 +465,24 @@ def _link(
 
     # States count apart from calls (a state table names seven or eight).
     states = 0
+    returns: list[int] = []
     at = 0
     while at < len(program):
         step = program[at]
         at += 1
+        if isinstance(step[3], str) and step[3].startswith("@"):
+            name = step[3][1:]
+            try:
+                if name not in tree.blocks or (follow and not follow(name)):
+                    raise PoseCodeError(f"a branch the subset cannot follow: {name}")
+                step[3] = labels[name] if name in labels and labels[name] < own else place(name)
+                states += 1
+            except PoseCodeError:
+                if not returns:
+                    returns.append(len(program))
+                    program.append(["rts", "", None, None])
+                step[3] = returns[0]
+            continue
         if step[0] == "switch" and isinstance(step[3], str):
             targets = []
             for state in state_table(tree, step[3]):
@@ -382,15 +497,51 @@ def _link(
             step[3] = targets
             states += len(targets)
             continue
+        if step[0] == "jumpreg" and (not step[3] or isinstance(step[3][0], str)):
+            targets = []
+            for name in step[3]:
+                try:
+                    if name not in tree.blocks or (follow and not follow(name)):
+                        raise PoseCodeError(f"a jump the subset cannot follow: {name}")
+                    index = labels[name] if name in labels and labels[name] < own else place(name)
+                    targets.append([evaluate(name, equates) & 0xFFFFFF, index])
+                except PoseCodeError:
+                    continue
+            step[3] = targets
+            if not targets:
+                program[at - 1] = ["rts", "", None, None]
+            states += 1
+            continue
+        if step[0] == "bsr" and step[3] in natives:
+            step[0] = "native"
+            continue
+        if step[0] == "jump":
+            name = step[3]
+            if name in natives:
+                step[0] = "tail"
+                continue
+            try:
+                if name not in tree.blocks or (follow and not follow(name)):
+                    raise PoseCodeError(f"a jump the subset cannot follow: {name}")
+                program[at - 1] = [
+                    "bra",
+                    "",
+                    None,
+                    labels[name] if name in labels and labels[name] < own else place(name),
+                ]
+                states += 1
+            except PoseCodeError:
+                program[at - 1] = ["rts", "", None, None]
+            continue
         if step[0] != "bsr" or not isinstance(step[3], str):
             continue
         name = step[3]
         if name in labels and labels[name] < own and name not in placed:
             step[3] = labels[name]
             continue
-        if name not in placed:
+        if name not in placed and name not in inside:
             try:
-                if name not in tree.blocks or len(placed) - states >= 8 or (follow and not follow(name)):
+                if name not in tree.blocks or len(placed) - states >= (calls or CALLS) or (follow and not follow(name)):
                     raise PoseCodeError(f"a call the subset cannot follow: {name}")
                 place(name)
             except PoseCodeError:
@@ -398,22 +549,25 @@ def _link(
                     raise
                 program[at - 1] = ["nop", "", None, None]
                 continue
-        step[3] = placed[name]
+        step[3] = placed[name] if name in placed else inside[name]
     return program
 
 
 def state_table(tree: SourceTree, label: str) -> list[str]:
-    """The states a `dc.w State-*` table at `label` names, in order."""
+    """The states a `dc.w State-*` table (or `State-Base`) at `label`
+    names, in order."""
     block = tree.block(label)
     states = []
     for at, raw in enumerate(block.file.lines[block.line :]):
         code = _code(raw)
         code = code.split(":", 1)[1] if at == 0 and ":" in code else code
         if not code.strip():
-            if states:
+            # A comment's line goes on (Viblack's cross-reference under its
+            # first state); an empty one ends the table.
+            if states and not raw.strip():
                 break
             continue
-        match = re.fullmatch(r"dc\.w\s+(\w+)\s*-\s*\*", code.strip(), re.IGNORECASE)
+        match = re.fullmatch(r"dc\.w\s+(\w+)\s*-\s*(?:\*|\w+)", code.strip(), re.IGNORECASE)
         if match is None:
             break
         states.append(match[1])
@@ -432,6 +586,8 @@ class Machine:
         for name, value in (registers or {}).items():
             (self.d if name[0] == "d" else self.a)[int(name[1])] = value & 0xFFFFFFFF
         self.n = self.z = self.v = self.c = False
+        # What the kit runs for routines compiled as natives, by name.
+        self.natives: dict[str, Callable[[Machine], None]] = {}
 
     def read(self, address: int, size: int) -> int:
         value = 0
@@ -550,10 +706,27 @@ def run(program: list[list[Any]], machine: Machine) -> Machine:
             returns.append(at)
             at = target
             continue
+        if name in ("native", "tail"):
+            if target in machine.natives:
+                machine.natives[target](machine)
+            if name == "tail":
+                if not returns:
+                    break
+                at = returns.pop()
+            continue
         if name == "switch":
             # The state's rts returns to the dispatch's caller.
             state = _sign(machine.get(source, 2) & 0xFFFF, 2) // 2
             at = target[state] if 0 <= state < len(target) and target[state] >= 0 else -1
+            if at < 0:
+                if not returns:
+                    break
+                at = returns.pop()
+            continue
+        if name == "jumpreg":
+            # The code whose stand-in address the register holds, if linked.
+            held = machine.get(source, 4) & 0xFFFFFF
+            at = next((index for address, index in target if address == held), -1)
             if at < 0:
                 if not returns:
                     break
