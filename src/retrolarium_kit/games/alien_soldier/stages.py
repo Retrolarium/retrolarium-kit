@@ -236,6 +236,10 @@ QUARTER = re.compile(r"^\s+(?:jsr|jmp|bsr|bra)(?:\.[wsl])?\s+\(?Scroll_UpdateQua
 # How many calls deep a handler is followed to the quarter scroll.
 QUARTER_DEPTH = 2
 ENTITY = re.compile(r"^\s+move\.w\s+#(?P<value>[^,\s]+),\(Entity_ObjectPool\)\.w\s*$")
+CAMERA_X = re.compile(r"^\s+move\.w\s+#(?P<value>[^,\s]+),\((?:PrimaryCameraXPosition|CameraXLowerBound)\)\.w\s*$")
+SECONDARY_Y = re.compile(r"^\s+(?:clr\.w\s+|move\.w\s+#(?P<value>[^,\s]+),)\(SecondaryCameraYPos\)\.w\s*$")
+SECONDARY_D0 = re.compile(r"^\s+move\.w\s+\(SecondaryCameraXPos\)\.w,d0\s*$")
+SECONDARY_D1 = re.compile(r"^\s+move\.w\s+\(SecondaryCameraYPos\)\.w,d1\s*$")
 LOAD_AT_OBJECT = re.compile(r"\bBoss_LoadAssetSetAtObject\b")
 STREAM_X = re.compile(r"^\s+(?:clr\.w\s+|move\.w\s+#(?P<value>[^,\s]+),)\(TilemapRowXOrFillWord\)\.w\s*$")
 STREAM_Y = re.compile(r"^\s+move\.w\s+#(?P<value>[^,\s]+),\(TilemapRowYPosition\)\.w\s*$")
@@ -781,6 +785,80 @@ def plane_streams(tree: SourceTree, handlers: list[str]) -> dict[str, int]:
                 ):
                     found[match["label"]] = -d1
     return found
+
+
+def secondary_streams(tree: SourceTree) -> dict[int, dict[str, Any]]:
+    """The plane columns a stage streams from the secondary camera (d0 its
+    X, d1 its Y), by the object type its handler spawns before (Stage 9
+    streams the Caterpillar's ship so): the scene, the descriptor, and the
+    camera Y the handlers set before."""
+    found_scenes = scenes(tree)
+    found_records = records(tree)
+    loaders = _table_routines(tree, LOADERS)
+    states = stage_states(tree, found_scenes)
+    found: dict[int, dict[str, Any]] = {}
+    for scene in found_scenes:
+        record = found_records.get(scene["record"])
+        if not record or scene["index"] >= len(loaders):
+            continue
+        loader = loaders[scene["index"]]
+        camera_y = 0
+        for handler in _own_handlers(tree, loader, record["state_offset"], states.get(loader, [])):
+            spawned = None
+            for lines in _reached(tree, [handler]):
+                across = down = False
+                for at, line in enumerate(lines):
+                    if match := SECONDARY_Y.match(line):
+                        camera_y = parse_number(match["value"]) if match["value"] else 0
+                    elif match := ENTITY.match(line):
+                        spawned = parse_number(match["value"])
+                    elif SECONDARY_D0.match(line):
+                        across = True
+                    elif SECONDARY_D1.match(line):
+                        down = True
+                    elif (
+                        (match := STREAM_DESCRIPTOR.match(line))
+                        and across
+                        and down
+                        and spawned is not None
+                        and any(QUEUE.search(other) for other in lines[at + 1 : at + 3])
+                        # The first type spawned before it (Xi-Tiger comes
+                        # once the ship has passed).
+                        and all(item["descriptor"] != match["label"] for item in found.values())
+                    ):
+                        found[spawned] = {"scene": scene, "descriptor": match["label"], "camera_y": camera_y & 0xFFFF}
+    return found
+
+
+def spawning_scenes(tree: SourceTree) -> dict[int, dict[str, Any]]:
+    """The scene whose stage handlers first put each object type in the
+    first object record (Stage 16 brings Viblack so), by type, and the
+    camera X they set before (None if none)."""
+    found_scenes = scenes(tree)
+    found_records = records(tree)
+    loaders = _table_routines(tree, LOADERS)
+    states = stage_states(tree, found_scenes)
+    found: dict[int, dict[str, Any]] = {}
+    for scene in found_scenes:
+        record = found_records.get(scene["record"])
+        if not record or scene["index"] >= len(loaders):
+            continue
+        loader = loaders[scene["index"]]
+        handlers = _own_handlers(tree, loader, record["state_offset"], states.get(loader, []))
+        camera_x = None
+        for lines in _reached(tree, handlers):
+            for line in lines:
+                if match := CAMERA_X.match(line):
+                    camera_x = parse_number(match["value"])
+                elif match := ENTITY.match(line):
+                    found.setdefault(parse_number(match["value"]), {"scene": scene, "camera_x": camera_x})
+    return found
+
+
+def scene_ram(tree: SourceTree, scene: dict[str, Any]) -> bytearray:
+    """The $FFFF0000 page as the scene's map loads leave it, the ones its
+    camera brings later too."""
+    return _ram(tree, scene["map_writes"] + [write for load in scene.get("later", []) for write in load["map_writes"]])
 
 
 def blank_tables(tree: SourceTree, handlers: list[str]) -> set[int]:

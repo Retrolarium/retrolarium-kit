@@ -321,23 +321,28 @@ def _spawning_stage(tree: SourceTree, spawn_list: str) -> dict[str, Any] | None:
 
     if not hasattr(_spawning_stage, "cache") or _spawning_stage.cache[0] is not tree:
         found_records = stage_module.records(tree)
-        offsets = {item["label"]: item["commands"] for item in palettes._lists(tree)}
         by_list = {}
         for scene in stage_module.scenes(tree):
             record = found_records.get(scene["record"])
             if not record or record["spawn_list"] in by_list:
                 continue
-            colours = [[palettes.PRELUDE, 0], *(list(pair) for pair in offsets.get(scene["palette_list"], []))]
-            if scene["visual_palette"]:
-                colours.append([scene["visual_palette"], 0])
-            loads = [
-                {"source": load["source"], "command": load["command"], "vram": load["vram"]}
-                for load in scene["vram"]
-                if load["command"] in (UNCOMPRESSED, LZSS_TO_VRAM)
-            ]
-            by_list[record["spawn_list"]] = {"loads": loads, "palettes": colours}
+            by_list[record["spawn_list"]] = scene_context(tree, scene)
         _spawning_stage.cache = (tree, by_list)
     return _spawning_stage.cache[1].get(spawn_list)
+
+
+def scene_context(tree: SourceTree, scene: dict[str, Any]) -> dict[str, Any]:
+    """The art a stage's scene loads into VRAM and the colours it sets."""
+    offsets = {item["label"]: item["commands"] for item in palettes._lists(tree)}
+    colours = [[palettes.PRELUDE, 0], *(list(pair) for pair in offsets.get(scene["palette_list"], []))]
+    if scene["visual_palette"]:
+        colours.append([scene["visual_palette"], 0])
+    loads = [
+        {"source": load["source"], "command": load["command"], "vram": load["vram"]}
+        for load in scene["vram"]
+        if load["command"] in (UNCOMPRESSED, LZSS_TO_VRAM)
+    ]
+    return {"loads": loads, "palettes": colours}
 
 
 def _boss_of(stem: str, sets: dict[str, dict[str, Any]]) -> str | None:
