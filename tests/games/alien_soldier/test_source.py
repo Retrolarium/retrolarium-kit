@@ -540,6 +540,17 @@ class AlienSoldierSourceTests(unittest.TestCase):
         core = machine.read(bosses.SLOT + 0x10, 2), machine.read(bosses.SLOT + 0x14, 2)
         reach = machine.read(segment + 0x10, 2) - core[0], machine.read(segment + 0x14, 2) - core[1]
         self.assertGreater(abs(reach[0]) + abs(reach[1]), 16)
+        # Its stem and head are plane B's cells its code queues, as the
+        # tool-assisted run shows them: centred on it, its line scroll being
+        # its X, at the top of the screen.
+        body = sting["body"]
+        self.assertEqual((body["plane"], len(body["cells"]), len(body["cells"][0])), ("B", 24, 8))
+        self.assertEqual(body["x"] + 4 * len(body["cells"][0]), -sting["centre"][0])
+        # Its visible core, which its intro brings down to the floor under
+        # it, stands there, not at the origin its setup leaves it at.
+        core_record = bosses.SLOT + bosses.PART_SIZE
+        self.assertEqual(machine.read(core_record + 0x10, 2), core[0])
+        self.assertEqual(machine.read(core_record + 0x14, 2), 0x140)
 
     def test_plane_bosses_bring_the_bodies_their_code_queues(self) -> None:
         # As Gens's states of the fights hold them: the name-table cells

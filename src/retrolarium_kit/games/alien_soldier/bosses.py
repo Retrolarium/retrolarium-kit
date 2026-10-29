@@ -2254,6 +2254,35 @@ def _read_chains(
             if chain is None:
                 continue
         machine, settled, shown, symbols = chain["machine"], chain["settled"], chain["shown"], chain["symbols"]
+        # Records the setup draws but leaves where nothing put them (Sunset
+        # Sting's core, which its intro brings down to the floor under it)
+        # stand where the boss's own routines put them, from the boss.
+        if chain["field"] == 0x10:
+            unplaced = [
+                index
+                for index in range(1, POOL_RECORDS)
+                if shown.read(SLOT + index * PART_SIZE + 2, 1) & 0xC0 == 0xC0
+                and shown.read(SLOT + index * PART_SIZE + 0x10, 4) == 0
+                and shown.read(SLOT + index * PART_SIZE + 0x14, 2) == 0
+            ]
+            if unplaced:
+                offsets = _settled_offsets(
+                    tree,
+                    sets,
+                    recorded,
+                    chain["setup"],
+                    path,
+                    int(kind[1:], 16),
+                    files,
+                    by_type,
+                    unplaced,
+                    shown.read(SLOT + 0x14, 2),
+                )
+                for index, (dx, dy) in offsets.items():
+                    for state in (settled, shown):
+                        record = SLOT + index * PART_SIZE
+                        state.write(record + 0x10, 2, (state.read(SLOT + 0x10, 2) + dx) & 0xFFFF)
+                        state.write(record + 0x14, 2, (state.read(SLOT + 0x14, 2) + dy) & 0xFFFF)
         # As the code that places them leaves them (Caterpillar's segments
         # pick their mappings).
         parts, frames = _record_parts(tree, machine, shown, symbols, chain.get("drawn_only", False))
@@ -2293,6 +2322,14 @@ def _read_chains(
                 shown.read(SLOT + 0x10, 2) + centre[0],
                 shown.read(SLOT + 0x14, 2) + centre[1],
             )
+        elif chain["field"] == 0x10 and _scrolls_own_lines(tree, files) and boss_planes.queues_tiles(tree, files):
+            # Its stem and head: the cells its code queues, played out as a
+            # plane-bodied boss's, centred on it as its line scroll puts them.
+            run = _plane_run(tree, sets, recorded, chain["setup"], path, int(kind[1:], 16), files)
+            run.play(by_type)
+            body = run.line_scrolled(shown.read(SLOT + 0x14, 2) + centre[1])
+            if body is not None:
+                body["x"] -= centre[0]
         found.append(
             {
                 "id": chain["setup"],
@@ -2341,6 +2378,103 @@ def _read_chains(
     return found
 
 
+def _settled_offsets(
+    tree: SourceTree,
+    sets: dict[str, Any],
+    recorded: dict[str, Any],
+    label: str,
+    path: str,
+    number: int,
+    files: list[str],
+    by_type: dict[str, str],
+    records: list[int],
+    boss_y: int,
+) -> dict[int, tuple[int, int]]:
+    """Where the boss's routines put `records` (record indices), from the
+    boss: the boss played as boss_planes plays its records; once a record
+    has stood still off (0, 0) for boss_planes.SETTLE frames, its place
+    from the boss on the frame, while it stays, the boss stood nearest
+    `boss_y` (the still shows the boss there: Sunset Sting's core lies on
+    the floor while the boss bobs above it)."""
+    from retrolarium_kit.games.alien_soldier import boss_planes
+
+    run = _plane_run(tree, sets, recorded, label, path, number, files)
+    machine = run.machine
+    found: dict[int, tuple[int, int]] = {}
+    last: dict[int, tuple[int, int]] = {}
+    still = dict.fromkeys(records, 0)
+
+    def signed(value: int) -> int:
+        return value - 0x10000 if value & 0x8000 else value
+
+    nearest: dict[int, int] = {}
+    while run.frame < boss_planes.FRAMES:
+        try:
+            run.step(by_type)
+        except pose_code.PoseCodeError:
+            break
+        boss = machine.read(SLOT + 0x10, 2), machine.read(SLOT + 0x14, 2)
+        for index in records:
+            place = machine.read(SLOT + index * PART_SIZE + 0x10, 2), machine.read(SLOT + index * PART_SIZE + 0x14, 2)
+            still[index] = still[index] + 1 if place == last.get(index) and place != (0, 0) else 0
+            last[index] = place
+            if still[index] >= boss_planes.SETTLE:
+                distance = abs(signed((boss[1] - boss_y) & 0xFFFF))
+                if index not in found or distance < nearest[index]:
+                    nearest[index] = distance
+                    found[index] = (signed((place[0] - boss[0]) & 0xFFFF), signed((place[1] - boss[1]) & 0xFFFF))
+    return found
+
+
+def _scrolls_own_lines(tree: SourceTree, files: list[str]) -> bool:
+    """Whether the files' code writes the boss's own X ($10(a5)) into the
+    line scroll (HScrollBuffer) itself."""
+    for path in files:
+        for label in tree.labels_in(path):
+            body = [line.split(";")[0] for line in tree.body(label)]
+            if any("HScrollBuffer" in line and "lea" in line for line in body) and any(
+                re.search(r"move\.w\s+\$10\(a5\),d\d", line) for line in body
+            ):
+                return True
+    return False
+
+
+def _plane_run(
+    tree: SourceTree,
+    sets: dict[str, Any],
+    recorded: dict[str, Any],
+    label: str,
+    path: str,
+    number: int,
+    files: list[str],
+) -> Any:
+    """A boss of type `number` set up to play as boss_planes plays its
+    records: its stage's RAM where a stage brings it, its own loads, a
+    little health, its message on screen."""
+    from retrolarium_kit.games.alien_soldier import boss_planes, stages
+
+    asset_set, _ = _draws_with(tree, sets, recorded, label, path, [number], {}, [])
+    spawned = stages.spawning_scenes(tree)
+    memory = {}
+    if number in spawned:
+        ram = stages.scene_ram(tree, spawned[number]["scene"])
+        memory = {0xFF0000 + offset: value for offset, value in enumerate(ram) if value}
+    memory.update({0xFF0000 + offset: value for offset, value in _ram_loads(tree, asset_set, files).items()})
+    machine = pose_code.Machine(memory, {"a5": SLOT})
+    machine.write(SLOT, 2, number)
+    # A boss with no health is beaten at once.
+    machine.write(tree.equates["BossHealth"] & 0xFFFFFF, 2, 0x100)
+    # Its message stays on screen: a boss shows as it waits through it
+    # (Love Penguin bobs at the edge of the arena).
+    machine.write(tree.equates["MessageSequenceState"] & 0xFFFFFF, 2, 0x10)
+    run = boss_planes.Run(tree, files, machine, SLOT, PART_SIZE)
+    # Where the stage holds its camera for the fight (Viblack heads for
+    # a place in the stage, not on the screen).
+    if spawned.get(number, {}).get("camera_x") is not None:
+        machine.write(tree.equates["PrimaryCameraXPosition"] & 0xFFFFFF, 2, spawned[number]["camera_x"])
+    return run
+
+
 def _palettes_loaded(tree: SourceTree, files: list[str]) -> list[str]:
     """The palette commands the files' code loads (`lea Command,a0` before
     a call of Gfx_LoadPaletteCommand), in order, once each."""
@@ -2387,26 +2521,10 @@ def _read_planes(
         if not boss_planes.queues_tiles(tree, files):
             continue
         seen.add(prefix)
-        asset_set, context = _draws_with(tree, sets, recorded, label, path, [number], {}, [])
         # The RAM the stage that brings it has filled (Viblack's patterns
         # are its stage's), under the boss's own loads.
-        memory = {}
-        if number in spawned:
-            ram = stages.scene_ram(tree, spawned[number]["scene"])
-            memory = {0xFF0000 + offset: value for offset, value in enumerate(ram) if value}
-        memory.update({0xFF0000 + offset: value for offset, value in _ram_loads(tree, asset_set, files).items()})
-        machine = pose_code.Machine(memory, {"a5": SLOT})
-        machine.write(SLOT, 2, number)
-        # A boss with no health is beaten at once.
-        machine.write(tree.equates["BossHealth"] & 0xFFFFFF, 2, 0x100)
-        # Its message stays on screen: a boss shows as it waits through it
-        # (Love Penguin bobs at the edge of the arena).
-        machine.write(tree.equates["MessageSequenceState"] & 0xFFFFFF, 2, 0x10)
-        run = boss_planes.Run(tree, files, machine, SLOT, PART_SIZE)
-        # Where the stage holds its camera for the fight (Viblack heads for
-        # a place in the stage, not on the screen).
-        if spawned.get(number, {}).get("camera_x") is not None:
-            machine.write(tree.equates["PrimaryCameraXPosition"] & 0xFFFFFF, 2, spawned[number]["camera_x"])
+        run = _plane_run(tree, sets, recorded, label, path, number, files)
+        machine = run.machine
         body = run.play(by_type)
         if body is None:
             continue
