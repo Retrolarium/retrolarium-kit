@@ -78,7 +78,7 @@ of its own, Victor's ring, is a "sprite" part). A boss its stage brings
 plays on the RAM the stage has filled, its camera where the stage holds it;
 one drawn of its stage's art (Viblack) takes the stage's loads and colours.
 A pose is one byte per channel at some offset of the
-boss's pose table (`...PoseTargets`, or the table a field of the boss
+boss's pose table (`...PoseTable`, or the table a field of the boss
 points at); its neutral pose is where a channel's range is centred. An
 animation is a run of commands:
 
@@ -189,7 +189,7 @@ CHECKED = {
     "Boss_InitMedusaState0",
     "Boss_InitSireneMetasprite",
     "Boss_InitArtemisState0",
-    "Boss_SharpssteelInitializeState",
+    "Boss_SharpsteelInitializeState",
     "Boss_DeepStriderIntroRise",
     "Boss_XiTigerSetup",
     "Boss_ZLeoIntroInit",
@@ -206,7 +206,7 @@ CHECKED = {
     # Plane bodies: the name-table cells, and the corner from the boss as
     # the scroll shows it, as in Gens's states of their fights.
     "Boss_MissirayMain",
-    "Boss_DestroyerMK2Main",
+    "Boss_DestroyerMk2Main",
     "Boss_JampanMain",
     "Boss_BugmaxMain",
     # Its core, eyes and ring as it flies in, its own sprites.
@@ -214,9 +214,14 @@ CHECKED = {
     # Its stage's blocks it lifts into plane B, lying level between rocks.
     "Boss_ViblackMain",
     # The cut boss's face and tentacles, as MAME runs it in Antroid's place.
-    "EntityType1C0_InitDispatcher",
+    "Boss_LovePenguinInitDispatcher",
     # Its bands and wings as it waits to fight, column scroll included.
     "Boss_Epsilon1Main",
+    # The same builders as sources before 3.0 spell them, which projects
+    # made from those sources still hold.
+    "Boss_SharpssteelInitializeState",
+    "Boss_DestroyerMK2Main",
+    "EntityType1C0_InitDispatcher",
 }
 
 ENTITY_TYPE = re.compile(r"^\s*move\.w\s+#([^,]+),\(a5\)\s*$")
@@ -1688,7 +1693,7 @@ def _title(stem: str, names: list[str], whole: bool = False) -> str:
         if not whole and "".join(words[:count]).lower() in known:
             return objects.title("_".join(words[:count]), names)
     # The game's name as it spells it when the source doubles a letter
-    # (sharpssteel is Sharpsteel).
+    # (sources before 3.0 spell Sharpsteel with a double s).
     single = {re.sub(r"(.)\1+", r"\1", re.sub(r"[^a-z0-9]", "", name.lower())): name for name in names}
     if not whole and (name := single.get(re.sub(r"(.)\1+", r"\1", words[0].lower()))):
         return name

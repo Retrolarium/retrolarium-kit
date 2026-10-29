@@ -229,8 +229,8 @@ def _stage_palettes(tree: SourceTree) -> dict[str, str]:
         for path in stage_module._boss_files(tree, handler) if handler in tree.blocks else []:
             by_file.setdefault(path, palette_list)
 
-    # Or a file named like a stage's handlers' (seven_forces_form_sequences
-    # and seven_forces_stage_states).
+    # Or a file named like a stage's handlers' (seven_force_form_sequences
+    # and seven_force_stage_states).
     def prefix(path: str) -> str:
         return "_".join(PurePosixPath(path).stem.split("_")[:2])
 

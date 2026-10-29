@@ -52,7 +52,7 @@ class AlienSoldierSourceTests(unittest.TestCase):
         # mappings; a project saved then keeps those blocks.
         document = dict(self.documents["graphics/mappings.json"])
         document["blocks"] = [
-            {"label": "Stage1BaseMappingData4000", "kind": "static", "mappings": []},
+            {"label": "Stage1To4MappingData4000", "kind": "static", "mappings": []},
             *document["blocks"],
         ]
         documents = {module.DOCUMENT: self.documents[module.DOCUMENT] for module in workspace.DOCUMENTS}
@@ -121,8 +121,8 @@ class AlienSoldierSourceTests(unittest.TestCase):
     def test_stages_form_levels_by_block_set(self) -> None:
         exported = self.documents["levels/stages.json"]
         sets = {item["id"]: item["stages"] for item in exported["block_sets"]}
-        self.assertEqual(sets["Stage1BaseMappingData6000"], [0, 1, 2, 3])
-        self.assertEqual(sets["Stage1Phase3AndStage8MappingData6000"], [7, 8])
+        self.assertEqual(sets["Stage1To4MappingData6000"], [0, 1, 2, 3])
+        self.assertEqual(sets["Stage8And9MappingData6000"], [7, 8])
         scenes = exported["scenes"]
         records = {item["label"]: item for item in self.documents["levels/levels.json"]["records"]}
         for index in (0, 1, 2, 3):
@@ -232,7 +232,7 @@ class AlienSoldierSourceTests(unittest.TestCase):
     def test_a_loader_plays_the_shared_tail_it_falls_into(self) -> None:
         scenes = self.documents["levels/stages.json"]["scenes"]
         for index in (20, 21, 22):
-            self.assertIn("Stage3Phase12SharedAssetLoadList", scenes[index]["lists"])
+            self.assertIn("Stage21To23SharedAssetLoadList", scenes[index]["lists"])
             self.assertIsNotNone(scenes[index]["planes"][0])
 
     def test_a_staging_buffer_is_no_map(self) -> None:
@@ -240,7 +240,7 @@ class AlienSoldierSourceTests(unittest.TestCase):
         self.assertTrue(coarse)
         self.assertTrue(all(len(item["values"]) <= 32 * 32 for item in coarse))
         tiles = {item["label"] for item in self.documents["graphics/compressed_tiles.json"]["payloads"]}
-        self.assertLessEqual({"Boss_BackStringerTileArt2", "Stage22And24TileArt2"}, tiles)
+        self.assertLessEqual({"Boss_BackStringerTileArt2", "Stage18WormTileArt"}, tiles)
 
     def test_objects_group_every_mapping_block_once(self) -> None:
         exported = self.documents["graphics/objects.json"]
@@ -263,18 +263,18 @@ class AlienSoldierSourceTests(unittest.TestCase):
         # Blocks drawn from a boss's art take its colours, whatever play
         # matched (the Seven Force).
         self.assertEqual(
-            contexts["SevenForcesRotationSpriteFrame29"]["palettes"][-1], ["SevenForcesValkiriePaletteCommand", 0]
+            contexts["SevenForceRotationSpriteFrame29"]["palettes"][-1], ["SevenForceValkiriePaletteCommand", 0]
         )
         # A borrowed block a stage spawns draws with that stage's art: stage
         # 7's counter alien from the art its first state loads.
-        alien = [load["source"] for load in contexts["IndexedObjectSpriteMapping09"]["loads"]]
+        alien = [load["source"] for load in contexts["Enemy_RisingAlienSpriteMapping09"]["loads"]]
         self.assertIn("Stage7InitialTileArt", alien)
         # A screen's code draws the ending planet's burst in that screen's art.
         burst = contexts["EndingPlanetBurstSpriteMappingB"]
         self.assertIn("EndingSequenceTileArt2000", [load["source"] for load in burst["loads"]])
         # Maps an asset list loads are no sprite mappings.
         blocks = {block["label"] for block in self.documents["graphics/mappings.json"]["blocks"]}
-        self.assertNotIn("Stage1BaseMappingData4000", blocks)
+        self.assertNotIn("Stage1To4MappingData4000", blocks)
         # A boss's art shows in its palette command's line.
         art = {item["label"]: item for item in self.documents["graphics/art.json"]["payloads"]}
         self.assertEqual(
@@ -289,7 +289,7 @@ class AlienSoldierSourceTests(unittest.TestCase):
         seen = [label for label, context in contexts.items() if not context["borrowed"]]
         self.assertGreater(len(seen), 100)
         # The shared explosion frames draw from the art every stage loads at $9000.
-        frame = contexts["SharedCombatSpriteFrame00"]
+        frame = contexts["Effect_SpriteFrame00"]
         self.assertEqual(frame["attribute"] & 0x7FF, 0x480)
         self.assertIn({"source": "SharedSceneAndStageTileArt9000", "command": 7, "vram": 0x9000}, frame["loads"])
         # Most placements of the stages' spawn lists record what they draw.
@@ -377,12 +377,12 @@ class AlienSoldierSourceTests(unittest.TestCase):
         self.assertEqual(len(document["cosine"]), 256)
         sequences = {item["label"]: item for item in document["sequences"]}
         self.assertEqual(
-            sequences["Boss_AntroidIdlePoseCommands"]["commands"],
+            sequences["Boss_AntroidIdlePoses"]["commands"],
             [{"pose": 6, "frames": 32, "steps": 32}, {"pose": 7, "frames": 32, "steps": 32}],
         )
-        retry = sequences["Boss_AntroidJumpSlamRetryPosePrefix"]
-        self.assertEqual((retry["end"], retry["next"]), ("next", "Boss_AntroidJumpSlamFirstArcPoseCommands"))
-        self.assertIn({"sound": 0xD0}, sequences["Boss_AntroidJumpAttackPoseCommands"]["commands"])
+        retry = sequences["Boss_AntroidJumpSlamRetryPoses"]
+        self.assertEqual((retry["end"], retry["next"]), ("next", "Boss_AntroidJumpSlamFirstArcPoses"))
+        self.assertIn({"sound": 0xD0}, sequences["Boss_AntroidJumpAttackPoses"]["commands"])
         # Terobuster adds a signed count to its steps; Joker's hands and feet
         # are anchors its renderer's code places.
         terobuster = next(boss for boss in document["bosses"] if boss["title"] == "Terobuster")
@@ -410,16 +410,18 @@ class AlienSoldierSourceTests(unittest.TestCase):
         # Each Seven Force form draws in its own colours, its set's command;
         # the alternate Valkirie steps twelve channels of its own.
         forms = {boss["title"]: boss for boss in document["bosses"]}
-        self.assertEqual(forms["Medusa"]["palettes"][-1], ["SevenForcesMedusaPaletteCommand", 0])
-        self.assertEqual(forms["Sylpheed"]["palettes"][-1], ["SevenForcesSylpheedPaletteCommand", 0])
+        self.assertEqual(forms["Medusa"]["palettes"][-1], ["SevenForceMedusaPaletteCommand", 0])
+        self.assertEqual(forms["Sylpheed"]["palettes"][-1], ["SevenForceSylpheedPaletteCommand", 0])
         self.assertEqual(forms["Valkirie alternate"]["channels"], 12)
         # A debug viewer builds a boss the game cut, in the $3EC set's art:
         # one animation between two poses. No text names it: the game
         # repository's name for its entity type does.
         from retrolarium_kit.core.game_names import GameNames
 
-        viewer = next(boss for boss in document["bosses"] if boss["id"] == "Debug_ValkirieViewerInitialize")
-        self.assertEqual((viewer["asset_set"], len(document["poses"][viewer["poses"]])), ("EntityType3ECAssetSet", 2))
+        viewer = next(boss for boss in document["bosses"] if boss["id"] == "Debug_LambdaBunnyViewerInitialize")
+        self.assertEqual(
+            (viewer["asset_set"], len(document["poses"][viewer["poses"]])), ("Boss_LambdaBunnyAssetSet", 2)
+        )
         self.assertEqual(viewer["title"], GameNames.load(ALIEN_SOLDIER).name("bosses", 0x3EC))
         # Wolf Garopa's horse's head and neck and its rider's head and arm are
         # records its setup fills by hand, placed by the code after its
@@ -604,7 +606,7 @@ class AlienSoldierSourceTests(unittest.TestCase):
             (body["plane"], body["x"], body["y"], len(body["cells"]), len(body["cells"][0])), ("B", -160, -24, 8, 40)
         )
         self.assertEqual(set(body["columns"]), {0})
-        self.assertIn("Stage16TileArt0000", [load["source"] for load in viblack["loads"]])
+        self.assertIn("Stage14To16TileArt0000", [load["source"] for load in viblack["loads"]])
         self.assertEqual(viblack["palettes"][-1], ["Boss_ViblackIntroPaletteCommand", 0])
 
     def test_love_penguin_waves_its_tentacles_as_it_comes_in(self) -> None:
@@ -619,7 +621,7 @@ class AlienSoldierSourceTests(unittest.TestCase):
             (body["plane"], body["x"], body["y"], len(body["cells"]), len(body["cells"][0])), ("B", -36, -36, 12, 12)
         )
         self.assertEqual(sum(1 for part in penguin["parts"] if part["kind"] == "mapping"), 25)
-        self.assertEqual(penguin["parts"][1]["source"], "EntityType1C0_EarlyFormPartMapping")
+        self.assertEqual(penguin["parts"][1]["source"], "Boss_LovePenguinEarlyFormPartMapping")
         records = bytes.fromhex(penguin["tables"][f"{penguin['slot']:06X}"])
         word = lambda index, field: int.from_bytes(records[index * 0x60 + field : index * 0x60 + field + 2], "big")
         self.assertEqual((word(0, 4), word(0, 0x10), word(0, 0x14)), (6, 385, 271))
@@ -667,7 +669,8 @@ class AlienSoldierSourceTests(unittest.TestCase):
         self.assertEqual(len({angle("Flying-Neo", index) for index in range(12, 20)}), 8)
         body = found["Lambda Bunny"]["body"]
         self.assertEqual(
-            (body["command"], body["x"], body["y"], body["part"]), ("Debug_ValkirieViewerLeftTileTransfer", -39, -52, 1)
+            (body["command"], body["x"], body["y"], body["part"]),
+            ("Debug_LambdaBunnyViewerLeftHeadColumns", -39, -52, 1),
         )
 
     def test_shield_viper_lays_its_body_down_its_heads_path(self) -> None:
@@ -764,19 +767,19 @@ class AlienSoldierSourceTests(unittest.TestCase):
         rows[6]["values"][0] = 0x55
         edited = {**document, "poses": {label: rows}}
         sequences = [dict(item) for item in document["sequences"]]
-        idle = next(item for item in sequences if item["label"] == "Boss_AntroidIdlePoseCommands")
+        idle = next(item for item in sequences if item["label"] == "Boss_AntroidIdlePoses")
         idle["commands"] = [{**command, "frames": 20} for command in idle["commands"]]
         edited["sequences"] = sequences
         tree = workspace.tree(self.root, workspace.source_profile(self.root), "jp")
         bosses.apply(tree, edited)
         self.assertEqual(tree.data(label)[rows[6]["offset"]], 0x55)
-        self.assertEqual(tree.data("Boss_AntroidIdlePoseCommands")[:2], bytes((20, 32)))
+        self.assertEqual(tree.data("Boss_AntroidIdlePoses")[:2], bytes((20, 32)))
         again = bosses.export(tree)
         self.assertEqual(again["poses"][label][6]["values"][0], 0x55)
         # A step count of zero would divide by zero; an end and the offsets stay.
         for change in ({"steps": 0}, {"frames": 0x80}):
             broken = [dict(item) for item in document["sequences"]]
-            target = next(item for item in broken if item["label"] == "Boss_AntroidIdlePoseCommands")
+            target = next(item for item in broken if item["label"] == "Boss_AntroidIdlePoses")
             target["commands"] = [{**target["commands"][0], **change}, *target["commands"][1:]]
             with self.assertRaises(bosses.BossError):
                 bosses.apply(tree, {**document, "sequences": broken})
