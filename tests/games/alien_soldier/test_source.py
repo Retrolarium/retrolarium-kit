@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 import shutil
 import sys
@@ -11,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from helpers import game_repository
 from retrolarium_kit.core import game_names
-from retrolarium_kit.games.alien_soldier import objects, workspace
+from retrolarium_kit.games.alien_soldier import mappings, objects, workspace
 from retrolarium_kit.games.alien_soldier.sequencer import Sequencer
 
 
@@ -58,6 +59,25 @@ class AlienSoldierSourceTests(unittest.TestCase):
         documents = {module.DOCUMENT: self.documents[module.DOCUMENT] for module in workspace.DOCUMENTS}
         documents["graphics/mappings.json"] = document
         self.assertEqual(workspace.apply(self.root, "jp", documents), [])
+
+    def test_a_dynamic_piece_takes_art_of_its_length(self) -> None:
+        tree = workspace.tree(self.root, workspace.source_profile(self.root), "jp")
+        document = copy.deepcopy(self.documents["graphics/mappings.json"])
+        dynamic = [block for block in document["blocks"] if block["kind"] == "dynamic"]
+        pieces = [piece for block in dynamic for mapping in block["mappings"] for piece in mapping["pieces"]]
+        block = dynamic[0]
+        piece = block["mappings"][0]["pieces"][0]
+        length = len(tree.data(piece["art"]))
+        other = next(
+            item["art"] for item in pieces if item["art"] != piece["art"] and len(tree.data(item["art"])) == length
+        )
+        longer = next(item["art"] for item in pieces if len(tree.data(item["art"])) != length)
+        piece["art"] = longer
+        with self.assertRaises(mappings.MappingError):
+            mappings.apply(tree, document)
+        piece["art"] = other
+        mappings.apply(tree, document)
+        self.assertEqual(tree.block(block["label"]).operands[1].text.split("+")[0], other)
 
     def test_every_payload_plays(self) -> None:
         tree = workspace.tree(self.root, workspace.source_profile(self.root), "jp")
@@ -252,13 +272,18 @@ class AlienSoldierSourceTests(unittest.TestCase):
     def test_bosses_draw_with_their_asset_sets(self) -> None:
         exported = self.documents["graphics/objects.json"]
         contexts = exported["contexts"]
-        # Joker was never recorded: his art, at $6000 (tile $300), in the
-        # colours of his stage and his palette command.
+        # Joker, as the tool-assisted run draws him: his art at $6000 (tile
+        # $300), in his palette command's colours.
         joker = contexts["Boss_JokerRotationMappingA0"]
-        self.assertTrue(joker["derived"])
+        self.assertFalse(joker["borrowed"])
         self.assertEqual(joker["attribute"] & 0x7FF, 0x300)
         self.assertIn({"source": "Boss_JokerTileArt", "command": 7, "vram": 0x6000}, joker["loads"])
         self.assertEqual(joker["palettes"][-1], ["Boss_JokerPaletteCommand", 0])
+        # A boss's file play never drew takes its context from the source:
+        # the art its asset set loads, ending in the set's palette command.
+        derived = [context for context in contexts.values() if context.get("derived")]
+        self.assertTrue(derived)
+        self.assertTrue(all(context["loads"] and context["palettes"] for context in derived))
         self.assertIn("Back Stringer", [group["title"] for group in exported["groups"]])
         # Blocks drawn from a boss's art take its colours, whatever play
         # matched (the Seven Force).
@@ -297,6 +322,15 @@ class AlienSoldierSourceTests(unittest.TestCase):
         self.assertGreater(len(spawns), 250)
         first = next(item for item in spawns if item["list"] == "Stage1_ObjectSpawnList" and item["index"] == 0)
         self.assertEqual((first["type"], first["parameter"]), (0x1C, 0x10))
+        # Love Penguin's second form hangs the game before it draws: an outline.
+        self.assertNotIn("Boss_LovePenguinSecondFormSpriteMapping", contexts)
+        # The SEGA logo's colours are a table its code copies into line 2.
+        sega = contexts["FrontendSegaScreenSpriteMapping"]
+        self.assertEqual([(table["label"], table["line"]) for table in sega["tables"]], [("SegaScreenPalette", 2)])
+        self.assertEqual(sega["tables"][0]["colours"][:3], [0, 0xEEE, 0xEC0])
+        art = {item["label"]: item for item in self.documents["graphics/art.json"]["payloads"]}
+        self.assertEqual(art["SegaScreenTileArt"]["line"], 2)
+        self.assertEqual(art["SegaScreenTileArt"]["colours"], {"colours": sega["tables"][0]["colours"]})
 
     def test_object_art_naming_what_the_source_lacks_is_refused(self) -> None:
         path = self.root / objects.ART

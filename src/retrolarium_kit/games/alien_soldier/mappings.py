@@ -18,7 +18,9 @@ Blocks are found by name (labels with SpriteMapping, SpriteFrame or Mapping,
 but not metasprite descriptor tables or what an asset list loads, the maps)
 and kept when they read as whole mappings; a document from a project saved
 when maps were read as mappings applies with those blocks left alone. The document lets positions, attributes, sizes and links change;
-end marks, piece counts and a dynamic piece's art, tile and size stay.
+end marks, piece counts and a dynamic piece's tile and size stay. A dynamic
+piece may take the art of any dynamic piece in the source whose art is as
+long as its own: the upload then fills the same tiles.
 """
 
 from __future__ import annotations
@@ -164,6 +166,15 @@ def apply(tree: SourceTree, document: dict[str, Any]) -> None:
         (label, kind) for label, (kind, _) in source.items()
     ]:
         raise MappingError("the mapping blocks differ from the source")
+    # The art dynamic pieces upload, any of which another piece of the same
+    # length may take.
+    arts = {
+        piece["art"]
+        for kind, mappings in source.values()
+        if kind == "dynamic"
+        for mapping in mappings
+        for piece in mapping["pieces"]
+    }
     for item in items:
         label, kind = item["label"], item["kind"]
         original = source[label][1]
@@ -182,12 +193,12 @@ def apply(tree: SourceTree, document: dict[str, Any]) -> None:
             _number(piece.get("y"), -128, 127, f"{where} y")
             _number(piece.get("x"), -128, 127, f"{where} x")
             if kind == "dynamic":
-                if (
-                    piece.get("art") != old["art"]
-                    or piece.get("size") != old["size"]
-                    or attributes & 0x7FF != old["attributes"] & 0x7FF
+                if piece.get("size") != old["size"] or attributes & 0x7FF != old["attributes"] & 0x7FF:
+                    raise MappingError(f"{where}: a dynamic piece keeps its tile and size")
+                if piece.get("art") != old["art"] and (
+                    piece.get("art") not in arts or len(tree.data(piece["art"])) != len(tree.data(old["art"]))
                 ):
-                    raise MappingError(f"{where}: a dynamic piece keeps its art, tile and size")
+                    raise MappingError(f"{where}: {piece.get('art')} is not a piece's art as long as {old['art']}")
             else:
                 _number(piece.get("size"), 0, 0xFF, f"{where} size")
                 _number(piece.get("link"), 0, 0xFF, f"{where} link")
@@ -203,3 +214,7 @@ def apply(tree: SourceTree, document: dict[str, Any]) -> None:
             for piece in pieces:
                 values += [piece["attributes"], None, ((piece["y"] & 0xFF) << 8) | (piece["x"] & 0xFF)]
             tree.set_values(label, values)
+            for index, (piece, old) in enumerate(zip(pieces, old_pieces)):
+                if piece["art"] != old["art"]:
+                    text = tree.block(label).operands[3 * index + 1].text
+                    tree.set_text(label, 3 * index + 1, piece["art"] + text[len(old["art"]) :])

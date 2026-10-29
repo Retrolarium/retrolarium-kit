@@ -157,9 +157,14 @@ def export(tree: SourceTree, definitions: list[dict[str, Any]], profile: str) ->
     by_label = {block["label"]: block for block in blocks}
     for label, record in records.items():
         line = _piece_lines(by_label[label], record["attribute"]).most_common(1)[0][0]
+        colours: dict[str, Any] = {"commands": record["palettes"]}
+        if record.get("tables"):
+            # A table the code copies itself: its sixteen colours, its line.
+            table = record["tables"][0]
+            colours, line = {"colours": table["colours"]}, table["line"]
         for load in record["loads"]:
             group = "bosses" if load["source"].startswith("Boss_") else "objects"
-            claim(load["source"], {"group": group, "colours": {"commands": record["palettes"]}, "line": line})
+            claim(load["source"], {"group": group, "colours": colours, "line": line})
 
     scene_list = stages.scenes(tree)
     sets, _ = stages.levels(tree, scene_list)
