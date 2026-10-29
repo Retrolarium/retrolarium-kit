@@ -110,6 +110,20 @@ def descriptors(tree: SourceTree, bank_labels: list[str]) -> list[dict[str, Any]
     return found
 
 
+def delays(tree: SourceTree) -> dict[tuple[str, int], int]:
+    """Each request's delay count (the Z80 waits that many loops between
+    levels), by (kind, id): the high byte of its descriptor's third word."""
+    found = {}
+    for kind, label, first in DESCRIPTORS:
+        operands = tree.block(label).operands
+        for index in range(0, len(operands) - 3, 4):
+            word = parse_number(operands[index + 2].text)
+            if word is None:
+                raise PcmError(f"{label} entry {index // 4} has no delay")
+            found[(kind, first + index // 4)] = word >> 8
+    return found
+
+
 def export(tree: SourceTree) -> dict[str, Any]:
     labels = banks(tree)
     high, low = deltas(tree.root)

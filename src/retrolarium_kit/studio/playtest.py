@@ -397,6 +397,36 @@ def studio_flicky_sound_preview(
     }
 
 
+def studio_alien_soldier_sample_preview(path: Path, *, kind: str, number: int) -> dict[str, Any]:
+    """Write one Alien Soldier voice or drum sample to a WAV."""
+    from retrolarium_kit.games.alien_soldier import preview
+
+    inspection = load_studio_project(path)
+    project = inspection["project"]
+    if project["profile"] != "alien-soldier.v1" or project["source_mode"] != "source":
+        raise StudioProjectError("this is not an Alien Soldier project")
+    if kind not in ("voice", "music"):
+        raise StudioProjectError("a sample is a voice or a music (drum) sample")
+    root = Path(inspection["project_root"]).resolve()
+    output_dir = root / "build/sound-preview"
+    wav = output_dir / f"sample-{kind}-{number:02X}.wav"
+    try:
+        report = preview.render_sample(root, kind, number, wav)
+    except (OSError, ValueError, KeyError) as exc:
+        raise StudioProjectError(f"Alien Soldier sample preview failed: {exc}") from exc
+    return {
+        "schema": "retrolarium.alien-soldier-sample-preview",
+        "schema_version": 1,
+        "status": "rendered",
+        "project_file": inspection["project_file"],
+        "kind": kind,
+        "id": number,
+        "rate": report["rate"],
+        "levels": report["levels"],
+        "wav": {"path": str(wav), "size": wav.stat().st_size, "sha256": sha256_file(wav)},
+    }
+
+
 def studio_alien_soldier_sound_preview(
     path: Path,
     *,
