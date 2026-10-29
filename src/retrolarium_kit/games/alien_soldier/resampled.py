@@ -1,6 +1,6 @@
 """Tiles a stage loader works out instead of loading: stages 21 and 22 draw
 their moon's surface in perspective from a packed strip
-(`Gfx_PrepareStage3Phase2ResampledTiles`).
+(`Gfx_PrepareStage21And22ResampledTiles`).
 
 The loader's routine builds a table of scale steps (`$600000 / d1`, d1 from
 $2000 up by $1A0 a line, shifted up 8 bits), points the resampler at the

@@ -47,7 +47,13 @@ GLYPH_LISTS = (
     "Results_TimeBonusGlyphSourceList",
     "StageIntro_EmergencyGlyphSourceList",
 )
-RESULT_LABELS = ("Results_TotalTimeLabel", "Results_TotalClearTimeLabel", "Results_TotalContinueLabel")
+# The results screen's total labels, each with the names sources before 3.0
+# gave it (projects made from those sources still hold them).
+RESULT_LABELS = (
+    ("Results_TotalLimitTimeLabel", "Results_TotalTimeLabel"),
+    ("Results_TotalClearTimeLabel",),
+    ("Results_TotalContinueLabel",),
+)
 
 
 class TextError(ValueError):
@@ -194,7 +200,11 @@ def payloads(tree: SourceTree) -> list[tuple[str, str, int, Callable[[bytes, str
     found += [("lists", label, 1, _glyph_list) for label in GLYPH_LISTS]
     found.append(("japanese", "JapaneseFontMappingData", 2, _japanese))
     found.append(("results", "Results_StageDetailTextTable", 1, lambda data, label: _rows(label, data, 22)))
-    found += [("results", label, 1, _result_label) for label in RESULT_LABELS]
+    labels = set(tree.order)
+    found += [
+        ("results", next((name for name in names if name in labels), names[0]), 1, _result_label)
+        for names in RESULT_LABELS
+    ]
     return found
 
 
