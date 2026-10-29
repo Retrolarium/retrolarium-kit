@@ -18,7 +18,10 @@ boss.
 
 The Caterpillar's body is no code of its own: the stage streams it into
 plane B column by column from the secondary camera, out of a map of its own
-(`streamed_body`).
+(`streamed_body`). Sunset Sting queues its stem and head into plane B and
+writes its own X into the line scroll of the lines they cover, where the
+stage's raster split, which no frame's scroll tables show, leaves them
+unscrolled down: `Run.line_scrolled` places them so.
 """
 
 from __future__ import annotations
@@ -236,9 +239,9 @@ class Run:
             self.machine.memory[address] = value
         return level[0]
 
-    def body(self, boss_x: int, boss_y: int) -> dict[str, Any] | None:
-        """The plane's cells the boss wrote (the plane it wrote most of), and
-        their corner from the boss's place, as the scroll shows them."""
+    def cells(self) -> tuple[int, int, int, list[list[int]]] | None:
+        """The plane the boss wrote most of, the row and column of the
+        corner of what it wrote there, and those cells."""
         planes = {PLANE_A: [], PLANE_B: []}
         for address in self.vram:
             planes[PLANE_A if address < PLANE_B else PLANE_B].append(address)
@@ -252,6 +255,32 @@ class Run:
         grid = [[cells.get((top + row, left + column), 0) for column in range(width)] for row in range(height)]
         if not any(any(row) for row in grid):
             return None
+        return base, top, left, grid
+
+    def line_scrolled(self, boss_y: int) -> dict[str, Any] | None:
+        """The cells of a boss that scrolls the lines they cover by its own
+        X (the plane's X plus the boss's is where they show) on a plane the
+        stage leaves unscrolled down: their corner from the boss at
+        (any X, boss_y)."""
+        layout = self.cells()
+        if layout is None:
+            return None
+        base, top, left, grid = layout
+        return {
+            "plane": "A" if base == PLANE_A else "B",
+            "x": _near(left * 8 + 0x80, ACROSS * 8),
+            "y": top * 8 - (boss_y - 0x80),
+            "cells": grid,
+        }
+
+    def body(self, boss_x: int, boss_y: int) -> dict[str, Any] | None:
+        """The plane's cells the boss wrote (the plane it wrote most of), and
+        their corner from the boss's place, as the scroll shows them."""
+        layout = self.cells()
+        if layout is None:
+            return None
+        base, top, left, grid = layout
+        width, height = len(grid[0]), len(grid)
         machine, tree = self.machine, self.tree
         hscroll = [machine.read((tree.equates["HScrollBuffer"] + 2 * at) & 0xFFFFFF, 2) for at in range(224 * 2)]
         vscroll = [machine.read((tree.equates["VScrollBuffer"] + 2 * at) & 0xFFFFFF, 2) for at in range(40)]
