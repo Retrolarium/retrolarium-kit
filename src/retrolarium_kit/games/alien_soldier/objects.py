@@ -8,7 +8,9 @@ A static piece takes its tiles from VRAM that the stage, a boss or the
 object itself filled; the source does not say which for each mapping. The
 game repository records what was seen in play (config/object_art.json, by
 mapping block: the attribute, each art payload with the VRAM address it was
-loaded at, the palette blocks). A block it does not list takes the context
+loaded at, the palette blocks, and the colour tables its code copies into a
+line itself, where no palette command colours it: the SEGA logo's). A block
+it does not list takes the context
 of the nearest listed block of its file, marked as borrowed. A file with no
 listed block that a stage spawns draws with what that stage loads and its
 colours; a file with no listed block that is named after a boss (back_stringer_sprite_mappings and
@@ -19,7 +21,10 @@ goes, the priority the boss's code gives the objects drawn from it
 ($E(a5)), and the palette line that, exclusive-ored with most of the file's
 pieces' lines, is the one the boss's command writes: in play the bosses'
 own tiles show in that line (Joker's and Deep Strider's in line 3). Other files have no context and their static pieces
-draw as outlines. Dynamic pieces carry their own art and need none.
+draw as outlines. Dynamic pieces carry their own art and need none. The
+repository may also list blocks the game never draws (`outlines`: Love
+Penguin's second form, whose code hangs the game before it draws); they take
+no context of any kind and draw as outlines.
 
 The repository also records what each placement of the stages' spawn lists
 drew when the game spawned it (`spawns`: the list and index, the type and
@@ -48,6 +53,8 @@ ART = Path("config/object_art.json")
 ART_SCHEMA = "alien-soldier.object-art"
 # Commands the studio loads art with: LZSS to VRAM, or an uncompressed block.
 LZSS_TO_VRAM, UNCOMPRESSED = 7, 1
+# A colour table's length: one line.
+TABLE_COLOURS = 16
 
 
 # A boss's code setting an object's attribute word.
@@ -121,7 +128,34 @@ def recorded(tree: SourceTree) -> dict[str, dict[str, Any]]:
                 raise ObjectError(f"{ART.as_posix()}: {label} names no palette command {name}+{offset}")
             commands.append([name, offset])
         found[label] = {"attribute": attribute, "loads": loads, "palettes": commands}
+        tables = []
+        for name, line in record.get("tables", []):
+            if (
+                name not in tree.blocks
+                or tree.block(name).kind != "dc.w"
+                or len(tree.data(name)) < 2 * TABLE_COLOURS
+                or line not in range(4)
+            ):
+                raise ObjectError(f"{ART.as_posix()}: {label} names no colour table {name} for line {line}")
+            data = tree.data(name)
+            values = [int.from_bytes(data[2 * index : 2 * index + 2], "big") for index in range(TABLE_COLOURS)]
+            tables.append({"label": name, "line": line, "colours": values})
+        if tables:
+            found[label]["tables"] = tables
     return found
+
+
+def outlines(tree: SourceTree) -> set[str]:
+    """config/object_art.json's blocks the game never draws, checked
+    against the source."""
+    listed = _document(tree).get("outlines", [])
+    if not listed:
+        return set()
+    blocks = {block["label"] for block in mappings.export(tree)["blocks"]}
+    for label in listed:
+        if label not in blocks:
+            raise ObjectError(f"{ART.as_posix()}: {label} in outlines is not a mapping block")
+    return set(listed)
 
 
 def boss_contexts(tree: SourceTree, artless: bool = False) -> dict[str, dict[str, Any]]:
@@ -350,8 +384,8 @@ def _boss_of(stem: str, sets: dict[str, dict[str, Any]]) -> str | None:
     leading words that the set's label holds (joker_sprite_mappings and
     Boss_JokerAssetSet)."""
     words = stem.split("_")
-    # The boss whose code's files start like this one (valkirie_core and
-    # valkirie_sprite_mappings), else the set named like it.
+    # The boss whose code's files start like this one (lambda_bunny_viewer and
+    # lambda_bunny_sprite_mappings), else the set named like it.
     by_code = next((label for label, item in sets.items() if item.get("prefix") == words[0]), None)
     if by_code and words[0] not in GENERAL:
         return by_code
@@ -386,6 +420,34 @@ def title(stem: str, names: list[str]) -> str:
             at += 1
     text = " ".join(out)
     return text[:1].upper() + text[1:]
+
+
+def _line_colours(
+    colours: dict[str, list[dict[str, Any]]], commands: list[list[Any]], lines: list[int]
+) -> list[int | None]:
+    """Colours 1..15 of each of `lines` once `commands` ([block, offset],
+    in order) have written colour RAM."""
+    cram: list[int | None] = [None] * 64
+    for name, offset in commands:
+        for command in colours.get(name, []):
+            if command["offset"] == offset:
+                start = command["destination"] // 2
+                for at, value in enumerate(command["colours"]):
+                    if 0 <= start + at < 64:
+                        cram[start + at] = value & 0xEEE
+    return [cram[line * 16 + entry] for line in lines for entry in range(1, 16)]
+
+
+def _lines(block: dict[str, Any], attribute: int) -> list[int]:
+    """The palette lines a block's static pieces draw in with `attribute`."""
+    return sorted(
+        {
+            ((piece["attributes"] & 0x7FFF) ^ (attribute & 0xF800)) >> 13 & 3
+            for item in block["mappings"]
+            for piece in item["pieces"]
+            if "art" not in piece
+        }
+    )
 
 
 def spawns(tree: SourceTree) -> list[dict[str, Any]]:
@@ -449,12 +511,20 @@ def export(tree: SourceTree, definitions: list[dict[str, Any]] = (), profile: st
                 contexts[label] = {**context, "borrowed": True, "derived": True}
     _screen_contexts(tree, contexts, blocks, list(definitions), profile)
     # What play recorded matched palette blocks by their colours, not by what
-    # wrote them: a block drawn from a boss's art takes that boss's colours
-    # (the Seven Force, Xi-Tiger's fighting form).
+    # wrote them: a block drawn from a boss's art takes that boss's commands
+    # (the Seven Force, Xi-Tiger's fighting form) when they leave the colours
+    # play recorded on its lines; a block in other colours keeps what play
+    # saw (Kaede Nanase draws from the Seven Force's art in the scene's).
     owners = {load["source"]: label for label, item in sets.items() for load in item["loads"]}
-    for context in contexts.values():
+    colours = palettes.blocks(tree)
+    for label, context in contexts.items():
         owner = next((owners[load["source"]] for load in context["loads"] if load["source"] in owners), None)
-        if owner and not context.get("derived"):
+        if not owner or context.get("derived"):
+            continue
+        lines = _lines(by_label[label], context["attribute"])
+        if not context["palettes"] or _line_colours(colours, sets[owner]["palettes"], lines) == _line_colours(
+            colours, context["palettes"], lines
+        ):
             context["palettes"] = sets[owner]["palettes"]
     # A borrowed block a stage spawns draws with what that stage loads, in its
     # colours (stage 7's counter alien draws from the art its first state
@@ -465,6 +535,8 @@ def export(tree: SourceTree, definitions: list[dict[str, Any]] = (), profile: st
         stage = _spawning_stage(tree, spawn["list"])
         if context and context.get("borrowed") and not context.get("derived") and stage:
             contexts[spawn["block"]] = {"attribute": spawn["attribute"], **stage, "borrowed": True}
+    for label in outlines(tree):
+        contexts.pop(label, None)
     shown: dict[str, list[str]] = {}
     for script in animations.export(tree)["scripts"]:
         for item in script["entries"]:
