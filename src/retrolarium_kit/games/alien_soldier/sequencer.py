@@ -10,7 +10,13 @@ envelope going. The DAC channel names samples instead of notes; the Z80
 plays them (`Dac_Reset` onwards), each byte two levels, at the rate the
 sample's descriptor sets. The quirks are kept as the driver has them (FM
 reads the second operand of $E5 and $F1, PSG the first; a pitch envelope's
-values count only as far as its $84 commands scale them).
+values count only as far as its $84 commands scale them; a pan animation
+reads past its end, pan mode 4 past its jump tables). A frame's writes take
+the time the driver's do, one after another.
+
+Checked against the game in MAME: every song and sound effect makes the
+driver's FM and PSG writes frame by frame, and its samples the Z80's levels
+at the Z80's average pace.
 
 The tables the driver reads (note frequencies, PSG periods, pan animations,
 FM3 offsets, carrier masks, the DAC descriptors' rates) come from the
@@ -23,7 +29,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from retrolarium_kit.games.alien_soldier import pcm
-from retrolarium_kit.platform.megadrive.asl import SourceTree, parse_number
+from retrolarium_kit.platform.megadrive.asl import SourceTree
 from retrolarium_kit.platform.megadrive.sound import (
     DEFAULT_SAMPLE_RATE,
     LEVEL_REGISTERS,
@@ -38,7 +44,6 @@ PSG_PERIODS = "Sound_PSGNotePeriodTable"
 PAN_ANIMATIONS = "Sound_PanAnimationPointerTable"
 FM3_OFFSETS = "Sound_FM3SpecialFrequencyOffsetTable"
 CARRIERS = "Sound_FMAlgorithmCarrierMasks"
-DAC_DESCRIPTORS = "Sound_PCMSampleDescriptors"
 FM3_REGISTERS = (0xAD, 0xA9, 0xAC, 0xA8, 0xAE, 0xAA, 0xA6, 0xA2)
 SSG_REGISTERS = (0x90, 0x50, 0x98, 0x58, 0x94, 0x54, 0x9C, 0x5C)
 AM_REGISTERS = (0x60, 0x68, 0x64, 0x6C)
@@ -46,6 +51,16 @@ AM_REGISTERS = (0x60, 0x68, 0x64, 0x6C)
 # 183 cycles apart, plus 13 per count of the sample's delay loop.
 DAC_BASE_CYCLES = 180.5
 DAC_DELAY_CYCLES = 13
+# The share of the time the 68000 holds the Z80 off the bus (the vertical
+# blank's handler, the driver's own writes): in MAME every sample, whatever
+# its delay, plays 2.5% slower than the playback loop's cycles alone.
+DAC_BUS_SHARE = 0.025
+# How long one chip write of the driver takes, with the code around it and
+# the wait for the Z80 bus: 67 microseconds on average in the game (a frame's
+# writes take 0.1 ms plus that each in MAME). A frame's writes follow each
+# other at that pace, so the chip sees a key-off before the key-on after it
+# and the note starts again.
+WRITE_SECONDS = 67e-6
 # SFX channel records the driver loads a sound effect into, by channel type.
 SFX_SLOTS = {0x02: 0, 0x04: 1, 0x05: 2, 0x80: 3, 0xA0: 4, 0xC0: 5, 0xE0: 5}
 POINTER_BASE = 0x100000
@@ -53,6 +68,11 @@ POINTER_BASE = 0x100000
 
 class SequencerError(ValueError):
     """A payload the sequencer cannot play."""
+
+
+def dac_rate(delay: int) -> float:
+    """The levels a second the Z80 plays a sample with this delay count."""
+    return Z80_CLOCK * (1 - DAC_BUS_SHARE) / (DAC_BASE_CYCLES + DAC_DELAY_CYCLES * (delay or 256))
 
 
 def _signed(value: int) -> int:
@@ -145,10 +165,12 @@ class Sequencer:
         self.periods = self._periods(tree, rom)
         self.fm3_offsets = self._words(tree, FM3_OFFSETS)
         self.carriers = list(tree.data(CARRIERS))
-        self.pan_animations = [tree.data(label) for label in self._pointers(tree, PAN_ANIMATIONS)]
+        self.pan_memory, self.pan_starts = self._pan_animations(tree, rom)
         self.dac = self._dac(tree, samples)
+        self.rom = rom
         self.frame_rate = frame_rate
         self.sample_rate = sample_rate
+        self.write_samples = WRITE_SECONDS * sample_rate
 
     # -- source tables
 
@@ -169,6 +191,24 @@ class Sequencer:
             periods += [int.from_bytes(tail[index : index + 2], "big") for index in range(0, len(tail) - 1, 2)]
         return periods
 
+    @classmethod
+    def _pan_animations(cls, tree: SourceTree, rom: bytes | None) -> tuple[bytes, list[int]]:
+        """The pan animations as the driver reads them, from one run of
+        memory: a step past an animation's end reads on into the next one
+        (and past the last into the code after it, where the ROM is given),
+        step 0 the byte before. The memory starts one byte before the
+        first animation; where each one starts in it."""
+        sequences = [tree.data(label) for label in cls._pointers(tree, PAN_ANIMATIONS)]
+        joined = b"".join(sequences)
+        starts, at = [], 1
+        for sequence in sequences:
+            starts.append(at)
+            at += len(sequence)
+        found = rom.find(joined) if rom else -1
+        if found >= 1:
+            return rom[found - 1 : found + len(joined) + 0x100], starts
+        return bytes(1) + joined + bytes(0x100), starts
+
     @staticmethod
     def _pointers(tree: SourceTree, label: str) -> list[str]:
         return [operand.text for operand in tree.block(label).operands]
@@ -176,8 +216,7 @@ class Sequencer:
     @staticmethod
     def _dac(tree: SourceTree, samples: dict[str, Any]) -> dict[int, tuple[list[int], int]]:
         """The music samples by note: their levels and delay count."""
-        operands = tree.block(DAC_DESCRIPTORS).operands
-        delays = [parse_number(operands[index + 2].text) >> 8 for index in range(0, len(operands) - 3, 4)]
+        delays = pcm.delays(tree)
         deltas = samples["deltas"]
         banks = {item["label"]: item["samples"] for item in samples["banks"]}
         found = {}
@@ -185,24 +224,31 @@ class Sequencer:
             if item["kind"] != "music":
                 continue
             data = bytes.fromhex(banks[item["bank"]][item["sample"]])
-            found[item["id"]] = (pcm.decode(data, deltas["high"], deltas["low"]), delays[item["id"] - 0x81])
+            found[item["id"]] = (pcm.decode(data, deltas["high"], deltas["low"]), delays[("music", item["id"])])
         return found
 
     # -- chip writes
 
     def _write(self, channel: Channel | None, port: int, address: int, value: int) -> None:
+        at = self._tick()
         if channel is not None and self.enabled is not None and channel.index not in self.enabled:
             return
         self.writes.append(
-            ChipWrite(
-                self.now, "ym2612", value & 0xFF, port, address & 0xFF, None if channel is None else channel.index
-            )
+            ChipWrite(at, "ym2612", value & 0xFF, port, address & 0xFF, None if channel is None else channel.index)
         )
 
     def _psg(self, channel: Channel, value: int) -> None:
+        at = self._tick()
         if self.enabled is not None and channel.index not in self.enabled:
             return
-        self.writes.append(ChipWrite(self.now, "sn76489", value & 0xFF, channel=channel.index))
+        self.writes.append(ChipWrite(at, "sn76489", value & 0xFF, channel=channel.index))
+
+    def _tick(self) -> int:
+        """The output sample of a write, and the driver's time past it (a
+        channel left unheard takes its time all the same)."""
+        at = int(self.now)
+        self.now += self.write_samples
+        return at
 
     def _fm(self, channel: Channel, address: int, value: int) -> None:
         """Sound_WriteCurrentFMChannelRegister."""
@@ -320,9 +366,14 @@ class Sequencer:
         elif opcode == 0xE8:
             channel.stop = channel.stop_reload = take()
         elif opcode == 0xE9:
-            # The AM bits go to the current voice's decay registers as the
-            # driver has them (it reads the bytes from an unrelated pointer,
-            # so only the LFO and AMS/FMS writes are followed).
+            # The first operand's top four bits set AM on the operators'
+            # decay registers, over bytes the driver reads through the long
+            # at $20 of the channel record (see _am_bytes); then the same
+            # operand goes to the LFO register.
+            mask = self.data[channel.cursor] if channel.cursor < len(self.data) else 0
+            for operator, (address, value) in enumerate(zip(AM_REGISTERS, self._am_bytes(channel))):
+                if (mask << operator) & 0x80:
+                    self._fm_unless_overridden(channel, address, value | 0x80)
             lfo = take()
             self._write(channel, 0, 0x22, lfo)
             channel.pan = (channel.pan & 0xC0) | take()
@@ -409,6 +460,22 @@ class Sequencer:
             self._extended(channel, take())
         else:
             raise SequencerError(f"unknown command ${opcode:02X}")
+
+    def _am_bytes(self, channel: Channel) -> bytes:
+        """The four bytes $E9 sets AM over: read through the long at $20 of
+        the channel record (a sound effect's record holds its voice table
+        there, a song's its pan animation bytes, which the driver takes as an
+        address); until a song has been loaded the driver reads address 0
+        instead, but here one has. Only the ROM is readable: elsewhere the
+        bytes stand as 0."""
+        if self.group:
+            return self.data[self.instruments : self.instruments + 4]
+        address = (
+            (channel.pan_animation << 24) | (channel.pan_cursor << 16) | (channel.pan_length << 8) | channel.pan_period
+        ) & 0xFFFFFF
+        if self.rom is None or address + 4 > len(self.rom):
+            return bytes(4)
+        return self.rom[address : address + 4]
 
     def _extended(self, channel: Channel, selector: int) -> None:
         take = lambda: self._byte(channel)  # noqa: E731
@@ -581,20 +648,26 @@ class Sequencer:
                 channel.pan_cursor = 0
             channel.pan_counter = 0
             channel.pan_cursor = (channel.pan_cursor + 1) & 0xFF
-        sequence = self.pan_animations[channel.pan_animation - 1]
-        value = sequence[(channel.pan_cursor - 1) % len(sequence)] | (channel.pan & 0x37)
+        at = self.pan_starts[channel.pan_animation - 1] + channel.pan_cursor - 1
+        value = self.pan_memory[at] | (channel.pan & 0x37)
         self._pan(channel, value)
         channel.pan_counter = (channel.pan_counter + 1) & 0xFF
 
+    # The pan mode indexes two jump tables of four branches, the per-note
+    # table straight before the per-tick routine and the per-tick table
+    # straight before the restart: mode 4 runs past the end of both, on a
+    # note into the per-tick routine and from there (as on a tick) into the
+    # restart, so its animation starts over every frame.
+
     def _pan_on_note(self, channel: Channel) -> None:
-        if channel.flags & 2 or channel.pan_mode not in (1, 2, 3):
+        if channel.flags & 2 or channel.pan_mode not in (1, 2, 3, 4):
             return
         self._pan_step(channel, restart=channel.pan_mode != 1)
 
     def _pan_on_tick(self, channel: Channel) -> None:
-        if channel.flags & 2 or channel.pan_mode not in (2, 3):
+        if channel.flags & 2 or channel.pan_mode not in (2, 3, 4):
             return
-        self._pan_step(channel, restart=False)
+        self._pan_step(channel, restart=channel.pan_mode == 4)
 
     # -- PSG volume
 
@@ -743,7 +816,7 @@ class Sequencer:
         levels, delay = found
         self.dac_levels = levels
         self.dac_position = 0
-        self.dac_step = self.sample_rate * (DAC_BASE_CYCLES + DAC_DELAY_CYCLES * (delay or 256)) / Z80_CLOCK
+        self.dac_step = self.sample_rate / dac_rate(delay)
         self.dac_time = float(self.now)
         self.dac_channel = channel
         self._write(channel, 1, 0xB6, channel.pan)
@@ -786,8 +859,13 @@ class Sequencer:
                 channel.instrument = header.get("volume_envelope", 0)
             else:
                 channel.flags = header.get("status", 0x80)
-            channel.pan = 0xC0
+            # The loaders give only the FM records their pan.
+            channel.pan = 0 if channel.psg else 0xC0
             self.channels.append(channel)
+        if self.kind != "bgm":
+            # The driver loads a sound effect's channels into its fixed
+            # records and runs them in the records' order.
+            self.channels.sort(key=lambda channel: SFX_SLOTS.get(channel.type, len(SFX_SLOTS)))
         self.tempo = self.tempo_counter = item.get("tempo", 0) if self.kind == "bgm" else 0
 
     def render(
@@ -805,7 +883,7 @@ class Sequencer:
         channels run)."""
         self.writes: list[ChipWrite] = []
         self.enabled = enabled
-        self.now = 0
+        self.now = 0.0
         self.fm3_mode = False
         self.bgm_fm3 = [0, 0, 0, 0]
         self.sfx_fm3 = [0, 0, 0, 0]
@@ -824,7 +902,8 @@ class Sequencer:
         for frame in range(frames):
             start = frame * self.sample_rate // self.frame_rate
             self._play_dac(start)
-            self.now = start
+            # A frame whose writes ran past the next one's start delays it.
+            self.now = max(float(start), self.now)
             if self.tempo:
                 self.tempo_counter = (self.tempo_counter - 1) & 0xFF
                 if not self.tempo_counter:

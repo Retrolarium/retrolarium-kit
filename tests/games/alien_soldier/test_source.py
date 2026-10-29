@@ -73,6 +73,51 @@ class AlienSoldierSourceTests(unittest.TestCase):
                 self.assertTrue(writes)
                 self.assertTrue(all(write.sample < total for write in writes))
 
+    def test_the_sequencer_writes_what_the_driver_writes(self) -> None:
+        # Each case was checked write for write against the game's own
+        # driver in MAME (every song and effect matches it frame by frame).
+        tree = workspace.tree(self.root, workspace.source_profile(self.root), "jp")
+        sequencer = Sequencer(
+            tree,
+            self.documents["sound/sound.json"],
+            self.documents["sound/envelopes.json"],
+            self.documents["sound/pcm.json"],
+        )
+
+        def frames(label: str, seconds: float = 2) -> dict[int, list]:
+            writes, _ = sequencer.render(label, seconds=seconds)
+            by_frame: dict[int, list] = {}
+            for write in writes:
+                if write.chip == "ym2612" and write.address != 0x2A:
+                    by_frame.setdefault(write.sample * 60 // 44100, []).append(write)
+            return by_frame
+
+        # A pan animation stepped past its end reads on into the next one:
+        # FM5 of the song $8E pans to both sides, not to the left alone.
+        song = frames("Sound_BGM_8E")
+        self.assertEqual({w.value for f in range(19, 23) for w in song[f] if (w.port, w.address) == (1, 0xB5)}, {0xC0})
+        # Pan mode 4 runs past both jump tables into the restart: FM1 of
+        # the song $83 writes its pan every frame of a note.
+        song = frames("Sound_BGM_83")
+        self.assertTrue(all(any((w.port, w.address) == (0, 0xB4) for w in song[f]) for f in range(55, 61)))
+        # $E9 sets AM over the effect's first voice bytes ($31 for FM5's
+        # third operator).
+        effect = frames("Sound_SFX_DD")
+        self.assertIn((1, 0x65, 0xB1), [(w.port, w.address, w.value) for w in effect[1]])
+        # An effect's channels run in the driver's record order, FM4 first.
+        effect = frames("Sound_SFX_A1")
+        voices = [w.address for w in effect[0] if w.port == 1 and w.address in (0xB0, 0xB1)]
+        self.assertEqual(voices, [0xB0, 0xB1])
+        # The writes of a frame take time: a key-on comes after its key-off.
+        writes, _ = sequencer.render("Sound_BGM_84", seconds=10)
+        offs: dict[int, int] = {}
+        for write in writes:
+            if write.chip == "ym2612" and write.address == 0x28:
+                if write.value & 0xF0:
+                    self.assertGreater(write.sample, offs.get(write.value & 7, -1))
+                else:
+                    offs[write.value & 7] = write.sample
+
     def test_stages_form_levels_by_block_set(self) -> None:
         exported = self.documents["levels/stages.json"]
         sets = {item["id"]: item["stages"] for item in exported["block_sets"]}

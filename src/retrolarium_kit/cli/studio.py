@@ -353,6 +353,12 @@ def command_studio_alien_soldier_sound_preview(args: argparse.Namespace) -> None
     )
 
 
+def command_studio_alien_soldier_sample_preview(args: argparse.Namespace) -> None:
+    from retrolarium_kit.studio.playtest import studio_alien_soldier_sample_preview
+
+    print_json(studio_alien_soldier_sample_preview(args.project, kind=args.kind, number=int(args.id, 0)))
+
+
 def command_studio_doraemon_world2_view(args: argparse.Namespace) -> None:
     from retrolarium_kit.games.doraemon.world2.routes import route_view
 
@@ -727,6 +733,14 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     alien_soldier_sound.add_argument("--channel", type=int, action="append")
     alien_soldier_sound.add_argument("--document-override", type=Path)
     alien_soldier_sound.set_defaults(handler=command_studio_alien_soldier_sound_preview)
+    alien_soldier_sample = studio_commands.add_parser(
+        "alien-soldier-sample-preview",
+        help="write an Alien Soldier voice or drum sample to a WAV at the Z80's pace",
+    )
+    alien_soldier_sample.add_argument("project", type=Path)
+    alien_soldier_sample.add_argument("--kind", required=True, choices=("voice", "music"))
+    alien_soldier_sample.add_argument("--id", required=True, help="the request or drum note, e.g. 0x10")
+    alien_soldier_sample.set_defaults(handler=command_studio_alien_soldier_sample_preview)
     flicky_demo = studio_commands.add_parser(
         "flicky-demo-plan",
         help="emit the MAME process that loops a Flicky attract demo or records a new one",
