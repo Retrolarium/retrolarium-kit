@@ -4,8 +4,9 @@ The documents are taken from a snapshot of the Flicky source repository
 (its tracked files and the assets split from the canonical ROM) and staged
 back into a copy of its source to build: levels, graphics assets, text and
 palettes, sprite mappings and animations, and the Z80 sound banks as
-assembly. The game repository keeps the source and its build scripts; this
-package owns the documents and how they are read and written.
+assembly (made from the ROM's banks and the repository's layout of them, see
+sound_source). The game repository keeps the source and its build scripts;
+this package owns the documents and how they are read and written.
 """
 
 from __future__ import annotations
@@ -37,7 +38,6 @@ ARTIFACTS: tuple[Mapping[str, Any], ...] = (
     {
         "id": "z80_sound_banks",
         "kind": "assembly_source",
-        "baseline": "src/sound/z80/data.asm",
         "workspace": "sound/z80_sound_data.asm",
         "output": "build/content/z80_sound_data.bin",
         "capacity": 2804,
@@ -56,6 +56,19 @@ def atomic_copy(source: Path, destination: Path) -> None:
     temporary.replace(destination)
 
 
+def _sound_baseline(root: Path) -> Path:
+    """The unedited sound banks assembly of a snapshot."""
+    from retrolarium_kit.games.flicky.workspace import sound_source
+
+    try:
+        baseline = sound_source.baseline_path(root)
+    except (OSError, sound_source.SoundSourceError) as exc:
+        raise FlickyWorkspaceError(f"cannot make the sound banks assembly: {exc}") from exc
+    if not baseline.is_file():
+        raise FlickyWorkspaceError(f"baseline artifact not found: {baseline}")
+    return baseline
+
+
 def initialize(root: Path, force: bool = False) -> int:
     """Make the documents a snapshot lacks (all of them with `force`)."""
     from retrolarium_kit.games.flicky.workspace import graphics, levels, semantics, sequences
@@ -66,10 +79,7 @@ def initialize(root: Path, force: bool = False) -> int:
         if workspace.exists() and not force:
             continue
         if item["kind"] == "assembly_source":
-            baseline = root / item["baseline"]
-            if not baseline.is_file():
-                raise FlickyWorkspaceError(f"baseline artifact not found: {baseline}")
-            atomic_copy(baseline, workspace)
+            atomic_copy(_sound_baseline(root), workspace)
         else:
             model = {
                 "level_document": levels,
@@ -98,9 +108,7 @@ def validate_workspace(root: Path, zero_edit: bool = False, overrides: Mapping[s
         if not workspace.is_file():
             raise FlickyWorkspaceError(f"workspace artifact not found: {workspace}")
         if item["kind"] == "assembly_source":
-            baseline = root / item["baseline"]
-            if not baseline.is_file():
-                raise FlickyWorkspaceError(f"baseline artifact not found: {baseline}")
+            baseline = _sound_baseline(root)
             if zero_edit and workspace.read_bytes() != baseline.read_bytes():
                 raise FlickyWorkspaceError(f"zero-edit check found a modified artifact: {workspace}")
             sound.validate_document(sound.export_document(workspace), baseline)

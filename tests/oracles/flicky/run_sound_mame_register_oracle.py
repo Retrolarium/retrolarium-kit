@@ -16,6 +16,7 @@ from retrolarium_kit.games.flicky.content import (
     WORKSPACE_FILES,
     import_flicky_source,
 )
+from retrolarium_kit.games.flicky.workspace.sound_source import baseline_path
 from retrolarium_kit.studio.project import build_studio_project, verify_studio_project
 from retrolarium_kit.studio.create import create_flicky_studio_project
 from retrolarium_kit.studio.playtest import (
@@ -176,7 +177,7 @@ def main() -> int:
         else:
             print("Flicky music note uses document edit; Qt click unverified")
             sequence["bytes"][note["offset"]] = 0x81 + new_note
-            model.apply_document(document, source / "src/sound/z80/data.asm", sound_path)
+            model.apply_document(document, baseline_path(source), sound_path)
         saved_document = model.export_document(sound_path)
         saved_sequence = next(item for item in saved_document["sequences"] if item["id"] == sequence["id"])
         assert saved_sequence["bytes"][note["offset"]] == 0x81 + new_note
@@ -253,7 +254,7 @@ def main() -> int:
         else:
             print("Flicky FM voice uses document edit; Qt click unverified")
             voice_bank["voices"][0][0] = (voice_bank["voices"][0][0] & 0xF8) | new_algorithm
-            model.apply_document(voice_document, source / "src/sound/z80/data.asm", sound_path)
+            model.apply_document(voice_document, baseline_path(source), sound_path)
         assert verify_studio_project(project)["status"] == "mismatch"
         voice_preview = studio_flicky_sound_preview(project, header="zMusic83Header", seconds=5)
         voice_reference = vgm_register_writes(Path(voice_preview["vgm"]["path"]).read_bytes())
@@ -331,7 +332,7 @@ def main() -> int:
         else:
             print("Flicky music tempo uses document edit; Qt click unverified")
             music["tempo"] = new_tempo
-            model.apply_document(tempo_document, source / "src/sound/z80/data.asm", sound_path)
+            model.apply_document(tempo_document, baseline_path(source), sound_path)
         assert verify_studio_project(project)["status"] == "mismatch"
         tempo_preview = studio_flicky_sound_preview(project, header="zMusic83Header", seconds=5)
         tempo_vgm = Path(tempo_preview["vgm"]["path"]).read_bytes()

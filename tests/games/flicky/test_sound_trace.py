@@ -18,11 +18,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from helpers import game_repository
 from retrolarium_kit.games.flicky.workspace.sequencer import SoundSequencer
+from retrolarium_kit.games.flicky.workspace.sound_source import baseline_path
 
 
 REPOSITORY = game_repository("flicky_src")
 TRACE = REPOSITORY / "build/sound_trace/gens.csv"
-SOURCE = REPOSITORY / "src/sound/z80/data.asm"
 TIMER_REGISTERS = frozenset((0x24, 0x25, 0x26, 0x27))
 FIRST_FRAME, LAST_FRAME = 320, 457
 MINIMUM_WRITES = 2600
@@ -44,12 +44,11 @@ def gens_writes() -> list[tuple[int, tuple[int, int, int]]]:
     return result
 
 
-@unittest.skipUnless(
-    TRACE.is_file() and SOURCE.is_file(), "Flicky's repository has no Gens sound trace (make trace-sound)"
-)
+@unittest.skipUnless(TRACE.is_file(), "Flicky's repository has no Gens sound trace (make trace-sound)")
 class FlickySoundTraceTests(unittest.TestCase):
     def test_title_song_matches_the_z80_driver_write_for_write(self) -> None:
-        rendered = SoundSequencer.from_source(SOURCE, SOURCE).render("zMusic85Header", seconds=4.0)
+        source = baseline_path(REPOSITORY)
+        rendered = SoundSequencer.from_source(source, source).render("zMusic85Header", seconds=4.0)
         expected = [
             (write.sample, (write.port, write.address, write.value))
             for write in rendered.writes

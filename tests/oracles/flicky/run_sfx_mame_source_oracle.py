@@ -14,6 +14,7 @@ from retrolarium_kit.games.flicky.content import (
     WORKSPACE_FILES,
     import_flicky_source,
 )
+from retrolarium_kit.games.flicky.workspace.sound_source import baseline_path
 from retrolarium_kit.studio.project import build_studio_project, verify_studio_project
 from retrolarium_kit.studio.create import create_flicky_studio_project
 from retrolarium_kit.studio.playtest import studio_flicky_sound_preview
@@ -118,7 +119,7 @@ def main() -> int:
         else:
             print("Flicky SFX90 note uses document edit; Qt click unverified")
             sequence["bytes"][note["offset"]] = 0x81 + new_note
-            model.apply_document(document, source / "src/sound/z80/data.asm", sound_path)
+            model.apply_document(document, baseline_path(source), sound_path)
         saved_sequence = next(
             item for item in model.export_document(sound_path)["sequences"] if item["id"] == sequence["id"]
         )
