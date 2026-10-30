@@ -7,8 +7,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from retrolarium_kit.games.flicky.workspace import sound as sound_studio_model
 from retrolarium_kit.games.flicky.workspace.sequencer import TempoAwareSoundSequencer
+from retrolarium_kit.games.flicky.workspace.sound_source import baseline_path
 from retrolarium_kit.games.flicky.workspace.vgm import write_vgm
 
 
@@ -23,7 +23,7 @@ def render_preview(
     enabled_channels: set[int] | None = None,
     renderer: Path | None = None,
 ) -> tuple[Path, Path | None]:
-    baseline = project / sound_studio_model.SOURCE
+    baseline = baseline_path(project)
     sequencer = TempoAwareSoundSequencer.from_source(workspace, baseline)
     result = sequencer.render(
         header_id,

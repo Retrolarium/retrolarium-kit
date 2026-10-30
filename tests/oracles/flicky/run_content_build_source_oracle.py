@@ -22,6 +22,7 @@ from retrolarium_kit.games.flicky.content import (
     import_flicky_source,
 )
 from retrolarium_core.megadrive import cartridge_checksum
+from retrolarium_kit.games.flicky.workspace.sound_source import baseline_path
 from retrolarium_kit.studio.project import (
     build_studio_project,
     validate_studio_project,
@@ -530,7 +531,7 @@ def main() -> int:
         sound_path = source_copy / WORKSPACE_FILES["z80_sound_banks"]
         sound_original = sound_path.read_bytes()
         sound_model = sound_source_model(source_copy)
-        baseline_sound = source_copy / "src/sound/z80/data.asm"
+        baseline_sound = baseline_path(source_copy)
         sound_document = sound_model.export_document(sound_path)
         sequence = next(record for record in sound_document["sequences"] if record["id"] == "zSFX90Sequence")
         original_sequence = bytes(sequence["bytes"])
