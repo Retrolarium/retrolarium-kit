@@ -56,7 +56,7 @@ DAC_DELAY_CYCLES = 13
 # its delay, plays 2.5% slower than the playback loop's cycles alone.
 DAC_BUS_SHARE = 0.025
 # How long one chip write of the driver takes, with the code around it and
-# the wait for the Z80 bus: 67 microseconds on average in the game (a frame's
+# The wait for the Z80 bus: 67 microseconds on average in the game (a frame's
 # writes take 0.1 ms plus that each in MAME). A frame's writes follow each
 # other at that pace, so the chip sees a key-off before the key-on after it
 # and the note starts again.
@@ -120,7 +120,7 @@ class Channel:
     algorithm: int = 0  # $25: the voice's first byte, or the PSG noise byte
     pitch_cursor: int = 0
     pan: int = 0xC0
-    sample: int = 0  # the DAC channel's sample byte
+    sample: int = 0  # The DAC channel's sample byte
     resume: int = 0  # where the sequence was read from this frame
     memory: bytearray = field(default_factory=lambda: bytearray(0x30))  # loop counters and call stack
 

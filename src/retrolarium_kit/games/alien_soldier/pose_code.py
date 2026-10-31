@@ -26,11 +26,11 @@ machine's caller records) are `["native", "", None, name]`, or `"tail"` for
 a jump to one (it returns for the routine); only the kit runs those.
 With `tails`, a lenient jump or branch out of the routine to one it may
 follow goes on into that routine (the game's scroll writer ends in one;
-Bugmax branches into its dispatcher) instead of ending it. With `tails` too
+the column-backed boss branches into its dispatcher) instead of ending it. With `tails` too
 (the kit's own runs), `jmp (aN)` goes to the code a lea of the routine
 left in the register (`["jumpreg", "", register, [[stand-in, index], ...]]`),
 a dbf may leave the routine, and a branch into a routine already placed
-lands inside it (Love Penguin walks its parts so). A dispatch by a
+lands inside it (the cut boss walks its parts so). A dispatch by a
 table of words from a base label (`movea.w T(pc,d0.w),a0` / `adda.l #Base,a0`
 / `jmp (a0)`, Caterpillar's) is a switch too. A program follows CALLS
 routines it calls at most (a state is no call), or `calls`: the kit's own
@@ -159,7 +159,7 @@ def _operand(text: str, equates: dict[str, int]) -> list[Any]:
         return ["a", 7 if text == "sp" else int(text[1])]
     if text.startswith("#"):
         return ["#", evaluate(text[1:], equates) & 0xFFFFFFFF]
-    # The stack pointer is a7 (Love Penguin keeps registers on it a while).
+    # The stack pointer is a7 (the cut boss keeps registers on it a while).
     match = re.fullmatch(r"\((?P<reg>a[0-7]|sp)\)\+", text)
     if match:
         return ["(a)+", _register(match["reg"])]
@@ -175,7 +175,7 @@ def _operand(text: str, equates: dict[str, int]) -> list[Any]:
         return ["(x)", displacement & 0xFFFFFF, register, int(match["index"][1]), match["size"] or "w"]
     match = re.fullmatch(r"(?P<label>[A-Za-z_]\w*(?:[+-][$%\w]+)?)\(pc\)", text)
     if match:
-        # A label by the program counter (Love Penguin's with an offset):
+        # A label by the program counter (the cut boss's with an offset):
         # its address.
         return ["abs", evaluate(match["label"], equates) & 0xFFFFFF]
     match = re.fullmatch(r"(?P<disp>[^()]*)\((?P<reg>a[0-7])\)", text)
@@ -333,7 +333,7 @@ def _compile(
         held = re.fullmatch(r"\((a[0-7])\)", operands[0].strip()) if name == "jmp" and operands else None
         if lenient and tails and held:
             # To the code a lea of the routine left in the register
-            # (Love Penguin picks how its parts turn so).
+            # (the cut boss picks how its parts turn so).
             loaded = [
                 found[1]
                 for earlier, size_before, given in pending[:index]
@@ -390,7 +390,7 @@ def _compile(
             and len(operands) == 2
             and all(re.fullmatch(r"[ad][0-7]|sp|\(sp\)\+|-\(sp\)|.*\(a[0-7]\).*", item.strip()) for item in operands)
         ):
-            # One register is a move (Love Penguin keeps a5 so).
+            # One register is a move (the cut boss keeps a5 so).
             name = "movea" if operands[1].strip()[0] == "a" and len(operands[1].strip()) == 2 else "move"
         if (
             name
@@ -437,8 +437,8 @@ def _link(
     labels are the ones up to its rts: `labels` runs on to the file's end."""
     own = len(program)
     placed: dict[str, int] = {}
-    # The labels inside the routines placed (a branch back into one, Love
-    # Penguin's loop over its parts, lands there).
+    # The labels inside the routines placed (a branch back into one, the cut
+    # boss's loop over its parts, lands there).
     inside: dict[str, int] = {}
 
     def place(name: str) -> int:
@@ -562,7 +562,7 @@ def state_table(tree: SourceTree, label: str) -> list[str]:
         code = _code(raw)
         code = code.split(":", 1)[1] if at == 0 and ":" in code else code
         if not code.strip():
-            # A comment's line goes on (Viblack's cross-reference under its
+            # A comment's line goes on (the stage-backed boss's cross-reference under its
             # first state); an empty one ends the table.
             if states and not raw.strip():
                 break

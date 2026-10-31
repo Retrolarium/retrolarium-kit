@@ -16,7 +16,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 from retrolarium_kit.core import assets, source_snapshot
-from retrolarium_kit.games.alien_soldier import workspace
+from retrolarium_kit.core.game_names import GameNames
+from retrolarium_kit.games.alien_soldier import reader_catalog, workspace
 
 
 SOURCE_DIRECTORY = "alien-soldier-source"
@@ -124,6 +125,30 @@ def refresh_source(source_root: Path, project_root: Path, original: Path) -> lis
     snapshot = Path(project_root) / SOURCE_DIRECTORY
     try:
         record = source_snapshot.load_record(snapshot)
+        revision, rom_name = record["revision"], record["rom"]
+
+        def remake(fresh: Path) -> None:
+            source_snapshot.create(
+                source_root,
+                snapshot / rom_name,
+                fresh,
+                folders=FOLDERS,
+                revision=revision,
+                rom_name=rom_name,
+                cut=_cut(revision),
+                export=_export(revision),
+            )
+
+        def check(fresh: Path) -> None:
+            workspace.validate(fresh, revision, workspace.read(fresh / CONTENT))
+
+        if GameNames.load(snapshot).catalog("boss_readers") is None:
+            # Older snapshots predate the external symbol catalog. Remake
+            # from the updated repository before asking the new reader to
+            # export them; the normal refresh still verifies the old source
+            # and carries edits only over an unchanged baseline.
+            reader_catalog.load(source_root)
+            return source_snapshot.refresh(snapshot, original, documents(), remake, check)
         # Documents a newer kit edits that the project lacks are added as the
         # source gives them.
         # The derived documents (what the studio draws stages with) are read
@@ -170,25 +195,13 @@ def refresh_source(source_root: Path, project_root: Path, original: Path) -> lis
         workspace.write(refreshed, snapshot / CONTENT)
         if source_snapshot.current(snapshot, source_root, FOLDERS):
             return None
-        revision, rom_name = record["revision"], record["rom"]
-
-        def remake(fresh: Path) -> None:
-            source_snapshot.create(
-                source_root,
-                snapshot / rom_name,
-                fresh,
-                folders=FOLDERS,
-                revision=revision,
-                rom_name=rom_name,
-                cut=_cut(revision),
-                export=_export(revision),
-            )
-
-        def check(fresh: Path) -> None:
-            workspace.validate(fresh, revision, workspace.read(fresh / CONTENT))
-
         return source_snapshot.refresh(snapshot, original, documents(), remake, check)
-    except (source_snapshot.SnapshotError, assets.AssetsError, workspace.WorkspaceError) as exc:
+    except (
+        source_snapshot.SnapshotError,
+        assets.AssetsError,
+        workspace.WorkspaceError,
+        reader_catalog.ReaderCatalogError,
+    ) as exc:
         raise AlienSoldierContentError(str(exc)) from exc
 
 

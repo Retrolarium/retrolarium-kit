@@ -1,6 +1,6 @@
 """Bosses whose body is a plane's tiles their own code queues frame by frame.
 
-Missiray, Destroyer-Mk2, Jampan, Bugmax, Victor and Viblack build no
+The column-scroll boss, the tiled-body boss, the column-backed boss, the column-backed boss, Victor and the stage-backed boss build no
 skeleton: their state machines queue blocks of a plane's name table over
 their first frames (`Tilemap_QueueIndexedRows` and `...Columns`: a VDP
 address word, the patterns' RAM, the block's size in 4x4 groups less one
@@ -18,7 +18,7 @@ boss.
 
 The Caterpillar's body is no code of its own: the stage streams it into
 plane B column by column from the secondary camera, out of a map of its own
-(`streamed_body`). Sunset Sting queues its stem and head into plane B and
+(`streamed_body`). The radial-chain boss queues its stem and head into plane B and
 writes its own X into the line scroll of the lines they cover, where the
 stage's raster split, which no frame's scroll tables show, leaves them
 unscrolled down: `Run.line_scrolled` places them so.
@@ -87,12 +87,12 @@ class Run:
         for name in SCROLL_STATE:
             if name in tree.equates:
                 machine.write(tree.equates[name] & 0xFFFFFF, 2, 0)
-        # The player starts mid-screen on the floor (Viblack rises under it
+        # The player starts mid-screen on the floor (the stage-backed boss rises under it
         # and drops to its feet); the boss's code may move it.
         for name, value in PLAYER:
             if name in tree.equates:
                 machine.write(tree.equates[name] & 0xFFFFFF, 2, value)
-        # A boss that queues no tiles (Shield Viper's records) scrolls nothing.
+        # A boss that queues no tiles (the path-following boss's records) scrolls nothing.
         self.scroll = (
             self._compile(SCROLL, lambda name: True) if SCROLL in tree.blocks and queues_tiles(tree, files) else None
         )
@@ -123,7 +123,7 @@ class Run:
             if handler in self.tree.blocks and self.tree.block(handler).file.path in self.files:
                 # The boss's files and the game's shared sprite, math and
                 # entity helpers (Victor's parts orbit it by one), and those
-                # that rewrite tile words in RAM (Viblack's on its stage's).
+                # that rewrite tile words in RAM (the stage-backed boss's on its stage's).
                 code = self._compile(
                     handler,
                     lambda name: (
@@ -215,7 +215,7 @@ class Run:
     def play(self, handlers: dict[str, str]) -> dict[str, Any] | None:
         """Frames until the body (its cells and its place from the boss) has
         stayed as it is SETTLE frames; the body then. A body that never
-        settles (Viblack rocks on its columns) is the last one that lay
+        settles (the stage-backed boss rocks on its columns) is the last one that lay
         level while the boss stood still, if any, its records put back as
         they were then."""
         body, since, level, stood = None, 0, None, None
@@ -286,7 +286,7 @@ class Run:
         vscroll = [machine.read((tree.equates["VScrollBuffer"] + 2 * at) & 0xFFFFFF, 2) for at in range(40)]
         mode = machine.read((tree.equates["VDPReg11Shadow"] + 1) & 0xFFFFFF, 1)
         which = 0 if base == PLANE_A else 1
-        # The stage, not the boss, sets column scroll (Missiray's): a boss
+        # The stage, not the boss, sets column scroll (the column-scroll boss's): a boss
         # that writes its columns apart scrolls by column (the writer fills
         # only the first column else).
         if len({vscroll[2 * column + which] for column in range(1, 20)} - {0}) > 0:
