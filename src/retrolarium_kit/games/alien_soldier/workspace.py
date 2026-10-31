@@ -14,12 +14,14 @@ documents leave the copy as it was, so the image is the original.
 
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 from pathlib import Path
 import shutil
 import tempfile
 from typing import Any, Mapping
 
+from retrolarium_kit.core.game_names import PATH as NAMES_PATH
 from retrolarium_kit.games.alien_soldier import (
     animations,
     art,
@@ -45,7 +47,7 @@ from retrolarium_kit.platform.megadrive.build import Step, build as assemble, st
 
 PROFILE = Path("config/game_profile.json")
 # Edited documents, in the order a build writes them. The screens come after
-# the maps they share labels with... they share none: each label has one
+# The maps they share labels with... they share none: each label has one
 # owner (see maps.py and screens.py).
 DOCUMENTS = (
     levels,
@@ -92,7 +94,14 @@ def tree(root: Path, section: Mapping[str, Any], revision: str) -> SourceTree:
     return SourceTree(Path(root), entry=entry, defines=_revision(section, revision)["symbols"])
 
 
-def _call(module, function: str, source: SourceTree, section: Mapping[str, Any], revision: str, *document):
+def _call(
+    module,
+    function: str,
+    source: SourceTree,
+    section: Mapping[str, Any],
+    revision: str,
+    *document,
+):
     if module is screens or module is art or module is objects:
         return getattr(module, function)(source, *document, section.get("screens", []), revision)
     return getattr(module, function)(source, *document)
@@ -113,7 +122,11 @@ def write(documents: Mapping[str, Mapping[str, Any]], folder: Path) -> list[str]
     for relative, document in documents.items():
         path = Path(folder) / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(document, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+        path.write_text(
+            json.dumps(document, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
         written.append(relative)
     return written
 
@@ -129,11 +142,11 @@ def read(folder: Path) -> dict[str, dict[str, Any]]:
     return documents
 
 
-def apply(root: Path, revision: str, documents: Mapping[str, Mapping[str, Any]]) -> list[str]:
+def apply(root: Path, revision: str, documents: Mapping[str, Mapping[str, Any]], modules=None) -> list[str]:
     """Write the documents into the source at `root`; the files changed."""
     section = source_profile(root)
     source = tree(root, section, revision)
-    for module in DOCUMENTS:
+    for module in DOCUMENTS if modules is None else modules:
         try:
             _call(module, "apply", source, section, revision, documents[module.DOCUMENT])
         except KeyError:
@@ -143,11 +156,11 @@ def apply(root: Path, revision: str, documents: Mapping[str, Mapping[str, Any]])
     return source.save()
 
 
-def validate(root: Path, revision: str, documents: Mapping[str, Mapping[str, Any]]) -> None:
+def validate(root: Path, revision: str, documents: Mapping[str, Mapping[str, Any]], modules=None) -> None:
     """Raise unless every document would write into the source."""
     section = source_profile(root)
     source = tree(root, section, revision)
-    for module in DOCUMENTS:
+    for module in DOCUMENTS if modules is None else modules:
         try:
             _call(module, "apply", source, section, revision, documents[module.DOCUMENT])
         except KeyError:
@@ -156,7 +169,15 @@ def validate(root: Path, revision: str, documents: Mapping[str, Mapping[str, Any
             raise WorkspaceError(f"{module.DOCUMENT}: {error}") from None
 
 
-def build(root: Path, revision: str, documents: Mapping[str, Mapping[str, Any]], output: Path) -> dict[str, Any]:
+def build(
+    root: Path,
+    revision: str,
+    documents: Mapping[str, Mapping[str, Any]],
+    output: Path,
+    *,
+    modules=None,
+    symbols: list[str] | None = None,
+) -> dict[str, Any]:
     """The ROM the documents make, written to `output`."""
     section = source_profile(root)
     settings = _revision(section, revision)
@@ -167,12 +188,29 @@ def build(root: Path, revision: str, documents: Mapping[str, Mapping[str, Any]],
             shutil.copytree(Path(root) / folder, staged / folder)
         (staged / PROFILE).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(Path(root) / PROFILE, staged / PROFILE)
-        changed = apply(staged, revision, documents)
+        # Readers validate against the same symbol catalog as the export.
+        shutil.copy2(Path(root) / NAMES_PATH, staged / NAMES_PATH)
+        changed = apply(staged, revision, documents, modules)
+        if symbols:
+            last = steps[-1]
+            wrapper = "build/symbol-addresses.s"
+            (staged / wrapper).parent.mkdir(parents=True, exist_ok=True)
+            (staged / wrapper).write_text(
+                f' include "{last.entry}"\n' + "".join(f" dc.l {name}\n" for name in symbols), encoding="utf-8"
+            )
+            steps[-1] = replace(last, entry=wrapper, size=None if last.size is None else last.size + 4 * len(symbols))
         image = assemble(staged, steps, settings.get("defines", {})).read_bytes()
+        addresses = {}
+        if symbols:
+            size = len(image) - 4 * len(symbols)
+            addresses = {
+                name: int.from_bytes(image[size + 4 * i : size + 4 * i + 4], "big") for i, name in enumerate(symbols)
+            }
+            image = image[:size]
     if changed and "checksum" in settings:
         first, end = (int(str(value), 0) for value in settings["checksum"])
         image = stamp(image, first, end)
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_bytes(image)
-    return {"artifact": str(output), "size": len(image), "changed": changed}
+    return {"artifact": str(output), "size": len(image), "changed": changed, "symbols": addresses}

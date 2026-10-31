@@ -9,6 +9,7 @@ password screen sets StageTableIndex to twice the stage's place in it.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from retrolarium_kit.games.alien_soldier import workspace
@@ -64,9 +65,10 @@ DEMO_RAM = (
     "FrameCounter",
     "DemoRotationIndex",
     "DemoPlaybackActive",
-    "DemoCurrentInputWord",
+    "DemoPlaybackInputWord",
     "DemoInputRunFrames",
     "ControllerHeldState",
+    "ControllerPressedState",
     "PaletteFadeMaskStatus",
     "ScenePaletteFadeOffset",
     "DataLoaderControl",
@@ -83,18 +85,52 @@ def ram_environment(tree: SourceTree, names: tuple[str, ...]) -> dict[str, str]:
     return settings
 
 
+def _runtime(snapshot: Path, revision: str) -> dict:
+    # The plan verifies source integrity before reaching this function. Keep
+    # only immutable source-derived RAM constants and passwords across runs.
+    from retrolarium_kit.games.alien_soldier import content
+
+    key = content._cache_key(snapshot)
+    path = snapshot.parent / "build/alien-soldier-runtime.json"
+    try:
+        cached = json.loads(path.read_text(encoding="utf-8"))
+        if cached.get("key") == key and cached.get("revision") == revision:
+            return cached
+    except (OSError, ValueError):
+        pass
+    tree = workspace.tree(snapshot, workspace.source_profile(snapshot), revision)
+    cached = {
+        "key": key,
+        "revision": revision,
+        "passwords": passwords(tree),
+        "ram": ram_environment(tree, tuple(dict.fromkeys(RAM + DEMO_RAM))),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Atomic publication also keeps simultaneous preview requests independent.
+    import os
+    import tempfile
+
+    descriptor, temporary = tempfile.mkstemp(prefix=".runtime-", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(cached, stream)
+        os.replace(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+    return cached
+
+
 def environment(snapshot: Path, revision: str, stage: int) -> dict[str, str]:
     """The playtest script's settings for stage slot `stage` (0-based)."""
-    tree = workspace.tree(snapshot, workspace.source_profile(snapshot), revision)
-    codes = passwords(tree)
+    cached = _runtime(snapshot, revision)
+    codes = cached["passwords"]
     if not 0 <= stage < len(codes):
         raise PlaytestError(f"the password screen opens stages 1..{len(codes)}, not {stage + 1}")
     return {
         "ALIEN_PLAYTEST_STAGE_INDEX": str(2 * stage),
         "ALIEN_PLAYTEST_PASSWORD": f"{codes[stage]:08X}",
-        # The player cannot die while the stage is tried out.
         "ALIEN_PLAYTEST_INVINCIBLE": "1",
-        **ram_environment(tree, RAM),
+        **{f"ALIEN_RAM_{name}": cached["ram"][f"ALIEN_RAM_{name}"] for name in RAM},
     }
 
 
@@ -102,5 +138,8 @@ def demo_environment(snapshot: Path, revision: str, demo: int) -> dict[str, str]
     """The demo script's settings for demo `demo` (0..3)."""
     if not 0 <= demo <= 3:
         raise PlaytestError("the game has demos 1..4")
-    tree = workspace.tree(snapshot, workspace.source_profile(snapshot), revision)
-    return {"ALIEN_DEMO_INDEX": str(demo), **ram_environment(tree, DEMO_RAM)}
+    cached = _runtime(snapshot, revision)
+    return {
+        "ALIEN_DEMO_INDEX": str(demo),
+        **{f"ALIEN_RAM_{name}": cached["ram"][f"ALIEN_RAM_{name}"] for name in DEMO_RAM},
+    }
