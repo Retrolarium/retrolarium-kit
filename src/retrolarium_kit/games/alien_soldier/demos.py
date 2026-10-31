@@ -62,14 +62,15 @@ def export(tree: SourceTree) -> dict[str, Any]:
     return {"schema": SCHEMA, "schema_version": 1, "frames": DEMO_FRAMES, "demos": demos}
 
 
-def apply(tree: SourceTree, document: dict[str, Any]) -> None:
+def encoded(document: dict[str, Any], labels: list[str], originals: dict[str, bytes]):
+    """Validate and encode identically for source writes and fixed ROM slots."""
     if document.get("schema") != SCHEMA or document.get("schema_version") != 1:
         raise DemoError("not an Alien Soldier demo document")
-    labels = pointer_table(tree, STREAMS)
     items = document.get("demos")
     if not isinstance(items, list) or [item.get("label") for item in items] != labels:
         raise DemoError("the demos differ from the source")
     stages = []
+    updates = {}
     for item in items:
         label, steps, stage = item["label"], item.get("steps"), item.get("stage")
         if isinstance(stage, bool) or not isinstance(stage, int) or not 0 <= stage <= 0x30 or stage % 2:
@@ -89,12 +90,69 @@ def apply(tree: SourceTree, document: dict[str, Any]) -> None:
         total = sum(step["frames"] for step in steps)
         if total < DEMO_FRAMES:
             steps[-1]["frames"] += DEMO_FRAMES - total
-        original = tree.data(label)
+        original = originals[label]
         data = encode(steps, len(original))
         # An unchanged demo keeps its stream as it was, bytes after its end included.
         if read_steps(original) != steps:
-            tree.set_data(label, data)
+            updates[label] = data
+    return stages, updates
+
+
+def apply(tree: SourceTree, document: dict[str, Any]) -> None:
+    labels = pointer_table(tree, STREAMS)
+    stages, updates = encoded(document, labels, {label: tree.data(label) for label in labels})
+    for label, data in updates.items():
+        tree.set_data(label, data)
     tree.set_values(STAGES, stages)
+
+
+def layout(tree: SourceTree, image: bytes, addresses: dict[str, int]) -> dict:
+    """Assembler-proven slots, verified against the source's exact bytes."""
+    labels = pointer_table(tree, STREAMS)
+    slots = {}
+    for label in [STAGES, STREAMS, *labels]:
+        data = b"".join(addresses[name].to_bytes(4, "big") for name in labels) if label == STREAMS else tree.data(label)
+        at = addresses[label]
+        if at < 0 or image[at : at + len(data)] != data:
+            raise DemoError(f"{label}: assembled slot differs from the source")
+        slots[label] = {"offset": at, "size": len(data), "file": tree.block(label).file.path}
+    _slot_ranges(image, slots)
+    return {"labels": labels, "slots": slots}
+
+
+def _slot_ranges(image: bytes, slots: dict) -> None:
+    ranges = []
+    for label, slot in slots.items():
+        start, end = slot["offset"], slot["offset"] + slot["size"]
+        if start < 0 or slot["size"] <= 0 or end > len(image) or any(start < b and a < end for a, b in ranges):
+            raise DemoError(f"{label}: invalid or overlapping ROM slot")
+        ranges.append((start, end))
+
+
+def patch(image: bytes, document: dict[str, Any], layout: dict) -> tuple[bytes, list[str]]:
+    """Replace only fixed-size demo slots in a verified baseline image."""
+    slots, labels = layout["slots"], layout["labels"]
+    _slot_ranges(image, slots)
+
+    def original(label):
+        slot = slots[label]
+        return image[slot["offset"] : slot["offset"] + slot["size"]]
+
+    stages, updates = encoded(document, labels, {label: original(label) for label in labels})
+    updates[STAGES] = b"".join(value.to_bytes(2, "big") for value in stages)
+    result = bytearray(image)
+    changed = set()
+    ranges = []
+    for label, data in updates.items():
+        slot = slots[label]
+        start, end = slot["offset"], slot["offset"] + slot["size"]
+        if len(data) != slot["size"] or start < 0 or end > len(image) or any(start < b and a < end for a, b in ranges):
+            raise DemoError(f"{label}: invalid or overlapping ROM slot")
+        ranges.append((start, end))
+        if data != image[start:end]:
+            result[start:end] = data
+            changed.add(slot["file"])
+    return bytes(result), sorted(changed)
 
 
 def recorded_steps(steps: list[dict[str, int]], recording: str) -> list[dict[str, int]]:

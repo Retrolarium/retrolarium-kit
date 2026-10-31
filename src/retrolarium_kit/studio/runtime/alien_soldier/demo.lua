@@ -7,15 +7,11 @@
 -- run the machine powers on again. ALIEN_DEMO_READY, when set, names a file
 -- written when the demo starts.
 --
--- With ALIEN_DEMO_RECORD set, the controller plays the demo once the stage
--- runs (game mode $10): the stream itself starts the game from the title and
--- through the weapon setup, so it plays on until then, and the file's first
--- line says for how many frames ("prefix frames"). From then on, every frame
--- the step the game reads holds the buttons pressed now (and the ones newly
--- pressed), and never runs out, so the game runs the code it runs when it
--- plays a stream back. Each finished step is written as "step frames held
--- pressed", then "end" when the demo ends ($1000 frames, or Start) or MAME
--- stops.
+-- Recording takes over at the weapon setup, preserving only the title's
+-- native input prefix. Each step is counted at the game's own VBlank input
+-- consumption, never at a rendered frame: skipped rendering must not drop
+-- input ticks. The same playback input write receives the live pad word.
+-- Finished runs are written as "step frames held pressed".
 --
 -- The kit reads the RAM addresses from the source by name (ALIEN_RAM_<NAME>).
 -- The buttons are the game's own pad bits (Up $01 ... Start $80).
@@ -38,9 +34,10 @@ for _, name in ipairs({
     "FrameCounter",
     "DemoRotationIndex",
     "DemoPlaybackActive",
-    "DemoCurrentInputWord",
+    "DemoPlaybackInputWord",
     "DemoInputRunFrames",
     "ControllerHeldState",
+    "ControllerPressedState",
     "PaletteFadeMaskStatus",
     "ScenePaletteFadeOffset",
     "DataLoaderControl",
@@ -66,26 +63,18 @@ for tag, port in pairs(machine.ioport.ports) do
 end
 local start_held = false
 
--- The buttons the player holds: the first write of a frame to
--- ControllerHeldState is VBlank's read of the pad; a demo writes after it.
-local live, captured = 0, false
-if recording then
-    held_tap = memory:install_write_tap(
-        ram.ControllerHeldState,
-        ram.ControllerHeldState + 1,
-        "alien-soldier-pad",
-        function(offset, data, mask)
-            -- The held byte is the high half of its word.
-            if not captured and mask & 0xFF00 ~= 0 then
-                live = (data >> 8) & 0xFF
-                captured = true
-            end
-            return data
+local function write_ready()
+    if ready_path ~= nil and ready_path ~= "" then
+        local file = io.open(ready_path, "w")
+        if file ~= nil then
+            file:write("ready")
+            file:close()
         end
-    )
+    end
 end
 
-local in_demo, previous, output, prefix = false, 0, nil, nil
+local in_demo, output, prefix = false, nil, nil
+local consumed = 0
 local step_held, step_pressed, step_frames = nil, nil, 0
 
 local function finish_step()
@@ -118,8 +107,81 @@ if recording then
     stop_subscription = emu.add_machine_stop_notifier(close_recording)
 end
 
+local pad_pressed, delivering = 0, false
+if recording then
+    pressed_tap = memory:install_write_tap(
+        ram.ControllerPressedState,
+        ram.ControllerPressedState + 1,
+        "alien-soldier-demo-pressed",
+        function(_, data, mask)
+            if mask & 0xFF00 == 0 then
+                return data
+            end
+            if delivering then
+                delivering = false
+                return data
+            end
+            pad_pressed = (data >> 8) & 0xFF
+            -- Start confirms weapon setup. Hide it only from the earlier
+            -- real-pad abort check, then deliver it through the demo reader.
+            if
+                memory:read_u16(ram.DemoPlaybackActive) ~= 0
+                and (memory:read_u16(ram.GameModeIndex) == 0x70 or memory:read_u16(ram.GameModeIndex) == 0x74)
+            then
+                return data & 0x7FFF
+            end
+            return data
+        end
+    )
+end
+
+if recording then
+    -- Demo_HandlePlaybackInput writes this word just before copying it to
+    -- the controller. The physical pad is still in ControllerHeldState here.
+    input_tap = memory:install_write_tap(
+        ram.DemoPlaybackInputWord,
+        ram.DemoPlaybackInputWord + 1,
+        "alien-soldier-demo-input",
+        function(_, data, mask)
+            if mask ~= 0xFFFF or memory:read_u16(ram.DemoPlaybackActive) == 0 then
+                return data
+            end
+            local mode = memory:read_u16(ram.GameModeIndex)
+            if prefix == nil and mode == 0x70 then
+                prefix = consumed
+                output = assert(io.open(record_path, "w"))
+                output:write(string.format("prefix %d\n", prefix))
+                output:flush()
+                machine.video.throttled = true
+                machine.sound.ui_mute = false
+                write_ready()
+                print("Alien Soldier demo: recording from weapon setup")
+            end
+            consumed = consumed + 1
+            if prefix == nil then
+                return data
+            end
+            local word = (memory:read_u8(ram.ControllerHeldState) << 8) | pad_pressed
+            local held, pressed = (word >> 8) & 0xFF, word & 0xFF
+            if held & START ~= 0 and mode ~= 0x70 and mode ~= 0x74 then
+                demo_over()
+                return data
+            end
+            if held ~= step_held or pressed ~= step_pressed or step_frames == 0xFFFF then
+                finish_step()
+                step_held, step_pressed, step_frames = held, pressed, 0
+            end
+            step_frames = step_frames + 1
+            -- The native reader decrements this after this write. Keep it
+            -- above zero so it never advances the original stream while live.
+            memory:write_u16(ram.DemoInputRunFrames, 2)
+            delivering = true
+            return word
+        end
+    )
+end
+
 retrolarium_alien_soldier_demo = emu.register_frame_done(function()
-    captured = false
     local mode = memory:read_u16(ram.GameModeIndex)
     if start_held then
         start_field:clear_value()
@@ -144,18 +206,10 @@ retrolarium_alien_soldier_demo = emu.register_frame_done(function()
             end
         elseif memory:read_u16(ram.DemoPlaybackActive) ~= 0 then
             in_demo = true
-            machine.video.throttled = true
-            machine.sound.ui_mute = false
-            if ready_path ~= nil and ready_path ~= "" then
-                local file = io.open(ready_path, "w")
-                if file ~= nil then
-                    file:write("ready")
-                    file:close()
-                end
-            end
-            if recording then
-                output = assert(io.open(record_path, "w"))
-                print("Alien Soldier demo: recording; press Start or stop the emulator to finish")
+            if not recording then
+                machine.video.throttled = true
+                machine.sound.ui_mute = false
+                write_ready()
             end
         end
         return
@@ -163,30 +217,6 @@ retrolarium_alien_soldier_demo = emu.register_frame_done(function()
     if memory:read_u16(ram.DemoPlaybackActive) == 0 then
         demo_over()
         return
-    end
-    if recording and prefix == nil then
-        -- The stream still plays the title and the weapon setup.
-        demo_frames = (demo_frames or 0) + 1
-        if mode == 0x10 then
-            prefix = demo_frames
-            output:write(string.format("prefix %d\n", prefix))
-        end
-    end
-    if recording and prefix ~= nil then
-        local held = live
-        if held & START ~= 0 then
-            demo_over()
-            return
-        end
-        local pressed = held & ~previous & 0xFF
-        previous = held
-        if held ~= step_held or pressed ~= step_pressed or step_frames == 0xFFFF then
-            finish_step()
-            step_held, step_pressed, step_frames = held, pressed, 0
-        end
-        step_frames = step_frames + 1
-        memory:write_u16(ram.DemoCurrentInputWord, (held << 8) | pressed)
-        memory:write_u16(ram.DemoInputRunFrames, 2)
     end
 end, "alien-soldier-demo")
 

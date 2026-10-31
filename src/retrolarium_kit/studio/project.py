@@ -840,10 +840,11 @@ def build_studio_project(
 
     inspection = load_studio_project(path)
     _require_declared_operation(inspection, "build")
-    _validate_editor_documents(inspection)
     game = _source_game(inspection)
     if game is not None:
+        # Source builders validate their staging copy; avoid applying every writer twice.
         return _build_source_project(inspection, game, flicky_level_writer)
+    _validate_editor_documents(inspection)
     if flicky_level_writer is not None:
         raise StudioProjectError("--flicky-level-writer requires a Flicky project")
     if inspection["project"]["source_mode"] == "rom":
