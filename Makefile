@@ -12,6 +12,8 @@ CORE ?= ../retrolarium-core/python/retrolarium_core
 # Stop words in the files Git tracks, their contents and their paths.
 lint:
 	$(PYTHON) $(CORE)/stop_words.py check .
+	$(PYTHON) $(CORE)/name_guard.py check .
+	$(PYTHON) $(CORE)/name_guard.py tables .
 
 # Every tracked file through its language's formatter (retrolarium_core.formatting).
 format:

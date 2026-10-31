@@ -8,7 +8,7 @@ CRAM, VSRAM and the VDP registers, see the game's
 docs/gens_state_dump_spec.md). A run's scene list (`<first>-<last>, <scene>`
 a line, Gens frames) says where its fights are; the movie is played once,
 from the first such scene to the last, and every scene that names a boss,
-a Seven Force form, a mini-boss or one of the scrolling bosses is turned
+a the multi-form encounter form, a mini-boss or one of the scrolling bosses is turned
 into the capture document capture.py writes as its states come (the
 others are deleted as they are written), one per
 stage (the stage the game's StageTableIndex holds), each scene a fight

@@ -32,51 +32,49 @@ boss's side (a walking boss swaps its legs) and, per part, the channel that
 turns its own joint. Parts the skeleton hangs from but does not build (a
 boss's hands and feet) are anchors: the code before the boss's renderer
 places them, and the document carries that code too, as it does the code
-right after the renderer that moves parts further (Madam Barbar's groups;
-Wolf Garopa's code moves parts by their pixel places, with the routines of
+right after the renderer that moves parts further (the grouped boss's groups;
+the mounted boss's code moves parts by their pixel places, with the routines of
 its files it calls: see pose_code.py's lenient code). Records the builder
-fills in by hand besides the skeleton (Wolf Garopa's horse's head and its
-rider's, Flying-Neo's head and tail) are parts too (`hand_built`), with no
+fills in by hand besides the skeleton (the mounted boss's horse's head and its
+rider's, the airborne boss's head and tail) are parts too (`hand_built`), with no
 bone: a mapping, or a sprite of their own (a size byte and offsets in place
-of the mapping). Tables the code builds in RAM before the fight (Flying-Neo's
+of the mapping). Tables the code builds in RAM before the fight (the airborne boss's
 tail swings on a sine table of its own) travel in `tables` too. What the
-builder leaves in the records but their mappings and places (Wolf Garopa's leg anchors'
-angles; the attribute bits it sets, Shellshogun's arms over its belly, go
+builder leaves in the records but their mappings and places (the mounted boss's leg anchors'
+angles; the attribute bits it sets, the armoured boss's arms over its belly, go
 into the parts' attributes) travels in `ram`, in the same form, with where
 code after the renderer that turns parts itself leaves them after
-POST_FRAMES frames (Flying-Neo's tail, which waves on random pushes from a
+POST_FRAMES frames (the airborne boss's tail, which waves on random pushes from a
 heap).
-Back Stringer's renderer lets a part keep a point half a bone past its end
+The extended-reach boss's renderer lets a part keep a point half a bone past its end
 and a child hang from that point; its setup marks those parts, and the
 document marks them too (`reach`, `from_reach`). The tables the code
-indexes (Back Stringer's arms pick their mappings from one by angle) travel
+indexes (the extended-reach boss's arms pick their mappings from one by angle) travel
 with it, at the stand-in addresses its labels get (`tables`). Sirene's pose
 code keeps a history of the frames before for its tentacles to follow: the
-document says how many runs fill it for a held pose (`settle`). The Seven
-Force's forms share their files' name; each reads from its own file and
+document says how many runs fill it for a held pose (`settle`). The multi-form encounter's forms share their files' name; each reads from its own file and
 the files it calls into, and keeps the art of the form before it in colours
-of its own (its set loads no art, only a palette). Sharpsteel writes its animations as bytes. Deep
-Strider has no pose system at all: its code turns the parts from a few
+of its own (its set loads no art, only a palette). The byte-script boss writes its animations as bytes. The directly driven boss has no pose system at all: its code turns the parts from a few
 fields of its own (and a history of one of them), so the document carries
 that code run on the values its setup gives them, with no channels, poses
 or animations (`poses` is null). Bosses with no skeleton but a chain of
-records their code places each frame (Jetsripper's chain, Gusthead's arms,
-Caterpillar's pods, Sunset Sting's ring, see _chain) bring the routine that
+records their code places each frame (the linked-chain boss's chain, the arm-chain boss's arms,
+Caterpillar's pods, the radial-chain boss's ring, see _chain) bring the routine that
 places them (`chain`, as `pose_code`), each record type's own routine
 (`record_code`), the field pair the positions sit in (`position_field`), and
 the RAM as their code leaves it after SETTLE_FRAMES frames, positions shown
 about `centre`; the Caterpillar's ship, which its stage streams, is its
-`body`. Shield Viper's head lays its body down its own path, which takes
-more frames than that: its records are played whole (see PLAYED), and its
+`body`. The path-following boss's head lays its body down its own path, which takes
+more frames than that: its records are played whole (see the game catalog's played builders), and its
 `chain` is the head's own routine. Bosses whose body is a plane's tiles
-their code queues frame by frame (Missiray, Destroyer-Mk2, Jampan, Bugmax,
-Victor, Viblack, the cut Love Penguin) are played, their messages held on
+their code queues frame by frame (the column-scroll boss, the tiled-body boss, the column-backed boss, the column-backed boss,
+Victor, the stage-backed boss, the cut boss) are played, their messages held on
 screen, until it settles (see boss_planes.py): their `body` then, with the
 16-pixel columns' own drops under column scroll (`columns`, from
 `column_x`), and their records where they stand (a record that is one sprite
 of its own, Victor's ring, is a "sprite" part). A boss its stage brings
 plays on the RAM the stage has filled, its camera where the stage holds it;
-one drawn of its stage's art (Viblack) takes the stage's loads and colours.
+one drawn of its stage's art (the stage-backed boss) takes the stage's loads and colours.
 A pose is one byte per channel at some offset of the
 boss's pose table (`...PoseTable`, or the table a field of the boss
 points at); its neutral pose is where a channel's range is centred. An
@@ -100,9 +98,9 @@ plane's pixel P shows at the boss plus P - C + $80 across, P + D + $80
 down, wrapping with the plane). The document carries the body's name-table
 words and where they sit against the boss, and the facing the setup gives
 the boss (`faces`): the body is read for it. When the body's tiles carry the
-scene behind round it (Flying-Neo's sky), `scene` says so. Flying-Neo writes plane B's line
-and column scroll itself (A + x, B - y: C is -A, D is -B). Wolf Garopa writes the scroll
-its own way (the code runs to find C and D); Z-Leo's body sits in plane A,
+scene behind round it (the airborne boss's sky), `scene` says so. The airborne boss writes plane B's line
+and column scroll itself (A + x, B - y: C is -A, D is -B). The mounted boss writes the scroll
+its own way (the code runs to find C and D); the rising boss's body sits in plane A,
 which its code scrolls the same way with the primary camera, and comes in
 row by row as it rises (a table of name-table addresses and one of index
 rows), from patterns its setup moves to its art. The debug viewer queues its
@@ -124,7 +122,7 @@ import re
 from pathlib import PurePosixPath
 from typing import Any
 
-from retrolarium_kit.games.alien_soldier import mappings, objects, pose_code
+from retrolarium_kit.games.alien_soldier import mappings, objects, pose_code, reader_catalog
 from retrolarium_kit.platform.megadrive.asl import AslSourceError, SourceTree, parse_number
 
 
@@ -138,19 +136,13 @@ PART_SIZE = 0x60
 POOL_RECORDS = 60
 # The frames a chain boss's code runs before it is shown.
 SETTLE_FRAMES = 64
-# Chains whose boss's own routine places the records, down the path its
-# head has taken (Shield Viper's body follows the head's history): played
-# whole with boss_planes.Run, its message on screen all the while (the head
-# circles until it ends), until every record drawn lies on the path the
-# head has taken in the state it is in.
-PLAYED = {"Boss_ShieldViperInitialize"}
 ANGLE_FIELD = 0x56
 # What of a record's setup the document does not carry: its mapping
 # pointer ($8, a stand-in of the builder's own: hand-built parts name their
 # mapping), its places and speeds ($10-$1F) and its 16.16 places ($40-$47).
 UNCARRIED = frozenset(range(0x8, 0xC)) | frozenset(range(0x10, 0x20)) | frozenset(range(0x40, 0x48))
 # The frames code after the renderer that turns parts itself runs before
-# the boss is shown (Flying-Neo's tail has waved a while).
+# The boss is shown (the airborne boss's tail has waved a while).
 POST_FRAMES = 300
 FRAME_COUNTER = 0xFFA000
 RANDOM_STATE = 0xFFFF08
@@ -160,70 +152,9 @@ SLOT = 0xFFC620
 INIT = "Sprite_InitializeLinkedMetaspriteParts"
 INIT_MORE = "Sprite_InitializeAdditionalLinkedMetaspriteParts"
 DELTAS = "Anim_CalculatePoseChannelDeltas"
-# The renderers that place the parts down the skeleton.
-TRAVERSALS = (
-    "Sprite_BeginMetaspritePartTraversal",
-    "Sprite_SetMetaspriteTraversalPointers",
-    "Sprite_UpdateMetaspriteEightFrameRotation",
-    "Sprite_UpdateMetaspriteFourFrameRotationAndLoadCount",
-    "Boss_BackStringerUpdateSegmentChainAndLoadCount",
-)
-# Back Stringer's renderer: bit 0 of a part's field $20 also keeps a point
-# half a bone further along it (`reach`), bit 1 hangs the part from its
-# parent's such point instead of its position (`from_reach`).
-CHAIN = "Boss_BackStringerUpdateSegmentChainAndLoadCount"
+# Traversal symbols and verified setup routines come from the game catalog.
 COSINE = "Math_SineTable"
 SOUND, LOOP, HOLD = 0x80, 0xFFFF, 0xFFFE
-# The bosses whose every part this reader placed where MAME's RAM has it
-# (angles and 16.16 positions, several frames of their fights): the others
-# read, but code of their own (anchors, orbits, chains) moves parts too.
-CHECKED = {
-    "Boss_AntroidInitializeBattleState",
-    "Boss_TerobusterSetup",
-    "Boss_ShellshogunSetupPhase",
-    "Boss_JokerInitializeMetasprite",
-    "Boss_FlyingNeoSetup",
-    "Boss_BackStringerInitializeState",
-    "Entity_InitValkirieBattleState0",
-    "Boss_InitSylpheed",
-    "Boss_InitMedusaState0",
-    "Boss_InitSireneMetasprite",
-    "Boss_InitArtemisState0",
-    "Boss_SharpsteelInitializeState",
-    "Boss_DeepStriderIntroRise",
-    "Boss_XiTigerSetup",
-    "Boss_ZLeoIntroInit",
-    "Boss_MadamBarbarSetupState",
-    "Boss_WolfGaropaInitialize",
-    # Chains: their records' positions and mappings as Gens's states of the
-    # fights have them, the frame after.
-    "Boss_JetsripperInitBody",
-    "Boss_GustheadInitializeRootAndParts",
-    "Boss_CaterpillarInitSegments",
-    "Boss_SunsetStingInit",
-    # Its head and body records, the frames its message is on screen.
-    "Boss_ShieldViperInitialize",
-    # Plane bodies: the name-table cells, and the corner from the boss as
-    # the scroll shows it, as in Gens's states of their fights.
-    "Boss_MissirayMain",
-    "Boss_DestroyerMk2Main",
-    "Boss_JampanMain",
-    "Boss_BugmaxMain",
-    # Its core, eyes and ring as it flies in, its own sprites.
-    "Entity_VictorSubtypeDispatcher",
-    # Its stage's blocks it lifts into plane B, lying level between rocks.
-    "Boss_ViblackMain",
-    # The cut boss's face and tentacles, as MAME runs it in Antroid's place.
-    "Boss_LovePenguinInitDispatcher",
-    # Its bands and wings as it waits to fight, column scroll included.
-    "Boss_Epsilon1Main",
-    # The same builders as sources before 3.0 spell them, which projects
-    # made from those sources still hold.
-    "Boss_SharpssteelInitializeState",
-    "Boss_DestroyerMK2Main",
-    "EntityType1C0_InitDispatcher",
-}
-
 ENTITY_TYPE = re.compile(r"^\s*move\.w\s+#([^,]+),\(a5\)\s*$")
 CALL = re.compile(r"^\s*(?:jsr|jmp|bsr(?:\.[swl])?|bra(?:\.[swl])?)\s+\(?(?P<target>\w+)\)?(?:\.l|\(pc\))?\s*$")
 MOVEQ = re.compile(r"^\s*moveq\s+#(?P<value>[^,]+),d(?P<register>[0-7])\s*$")
@@ -244,6 +175,15 @@ TERM = re.compile(r"([+-]?)\s*([A-Za-z_]\w*|\$[0-9A-Fa-f]+|%[01]+|\d+)")
 
 class BossError(ValueError):
     """A boss document that does not fit the source."""
+
+
+def _reader_catalog(tree: SourceTree) -> reader_catalog.ReaderCatalog:
+    """One validated catalog per source read, not one JSON read per instruction."""
+    catalog = getattr(tree, "_alien_soldier_readers", None)
+    if catalog is None:
+        catalog = reader_catalog.load(tree.root)
+        setattr(tree, "_alien_soldier_readers", catalog)
+    return catalog
 
 
 def _code(line: str) -> str:
@@ -296,7 +236,7 @@ def _longs(tree: SourceTree, label: str, count: int) -> list[str]:
 def _table_longs(tree: SourceTree, label: str, most: int) -> list[str]:
     """Up to `most` dc.l operands from `label` on, as far as the longs go: a
     directional table holds eight frames, or four for a boss with the
-    four-direction renderer (Deep Strider)."""
+    four-direction renderer (the directly driven boss)."""
     out: list[str] = []
     for item in _following(tree, label):
         directives = tree.block(item).directives
@@ -395,7 +335,7 @@ def _skeleton(tree: SourceTree, label: str) -> tuple[list[dict[str, Any]], dict[
         elif match := re.match(r"^\s*lea\s+\$([0-9A-Fa-f]+)\(a5\),a4\s*$", line):
             registers["a4"] = int(match[1], 16)
         elif (match := RAM.match(line)) and match["register"] == "4" and match["name"] in tree.equates:
-            # A slot by name (Flying-Neo builds from the boss's second).
+            # A slot by name (the airborne boss builds from the boss's second).
             registers["a4"] = (tree.equates[match["name"]] - SLOT) & 0xFFFF
         elif match := MOVEQ.match(line):
             registers[f"d{match['register']}"] = parse_number(match["value"])
@@ -420,7 +360,7 @@ def _skeleton(tree: SourceTree, label: str) -> tuple[list[dict[str, Any]], dict[
             registers["a4"] += count * PART_SIZE
     if parts:
         # The boss's own record is placed by its code, not by a bone; so are
-        # the anchors the parts hang from that the routine does not build.
+        # The anchors the parts hang from that the routine does not build.
         parts[0] = {**parts[0], "parent": None}
         last = max((part["parent"] for part in parts if part["parent"] is not None), default=0)
         parts += [{"parent": None, "radius": 0, "depth": 0, "kind": "none", "attribute": 0, "anchor": True}] * max(
@@ -614,7 +554,7 @@ def _label_data(tree: SourceTree, symbols: pose_code.Symbols) -> dict[int, int]:
 
 def _ram_tables(tree: SourceTree, files: list[str]) -> dict[str, str]:
     """The tables the boss's code builds in RAM before the fight with the
-    game's table builders (`Math_...Table`: Flying-Neo's tail swings on a
+    game's table builders (`Math_...Table`: the airborne boss tail swings on a
     sine table of its own), as hex address: hex bytes: each call runs with
     the code that sets it up."""
     out: dict[str, str] = {}
@@ -673,7 +613,7 @@ def _built(
         program = pose_code.compile_lines(
             following, symbols, tree, lenient=True, follow=lambda name: tree.block(name).file.path in files
         )
-        # The data it reads by label (Flying-Neo's tail's sprite words).
+        # The data it reads by label (the airborne boss's tail's sprite words).
         machine = pose_code.Machine(_label_data(tree, symbols), {"a5": SLOT})
         for index, part in enumerate(parts or []):
             if index:
@@ -691,13 +631,13 @@ def _hand_built(
     frames: dict[str, Any],
 ) -> None:
     """Records the builder fills in itself after building the skeleton
-    (Wolf Garopa's horse's head and neck and its rider's head and arm,
-    Flying-Neo's head and tail): past the skeleton they join the parts,
+    (Wolf the mount horse's head and neck and its rider's head and arm,
+    the airborne boss head and tail): past the skeleton they join the parts,
     placed by the boss's code; a joint of the skeleton the builder gives a
     sprite draws it. Each draws the mapping it is given (bit 14 of its
     flags), else a sprite of its own (a size byte and X and Y offsets where
     the mapping would be), with its attribute and depth. The skeleton's parts take the attribute
-    bits the builder changes (Shellshogun's arms and shoulders draw over
+    bits the builder changes (the armoured boss arms and shoulders draw over
     its belly)."""
     if found is None:
         return
@@ -768,7 +708,7 @@ def _uncarried(address: int) -> bool:
 
 
 def _setup_ram(machine: pose_code.Machine) -> dict[int, int]:
-    """What the builder leaves in the boss's records (Wolf Garopa's leg
+    """What the builder leaves in the boss's records (Wolf the mount leg
     anchors' angles) but their mappings and places: the bytes it set. The studio puts them
     in before running the boss's code."""
     return {
@@ -780,7 +720,7 @@ def _setup_ram(machine: pose_code.Machine) -> dict[int, int]:
 
 def _post_turns(boss: dict[str, Any], ram: dict[int, int]) -> dict[int, int]:
     """Code after the renderer that turns parts itself, frame after frame
-    (Flying-Neo's tail waves on random pushes, from rest): run POST_FRAMES
+    (the airborne boss tail waves on random pushes, from rest): run POST_FRAMES
     frames, each on the next frame count and random number as the game's,
     it leaves the parts somewhere along the way. The bytes it changed, but
     mappings and places; nothing if it turns no part."""
@@ -896,8 +836,8 @@ def _camera(tree: SourceTree, files: list[str]) -> tuple[int, int, int] | None:
                         index = following.index(line)
                         if re.match(r"^\s*sub\.w\s+\$14\(a5\),d3\s*$", following[index + 1]):
                             return parse_number(first["value"]), -parse_number(raster["value"]), 0
-    # Flying-Neo writes plane B's line and column scroll itself: A + x into
-    # the lines its body crosses, B - y into its columns (so C is -A, D -B).
+    # The airborne boss writes plane B's line and column scroll itself: A + x into
+    # The lines its body crosses, B - y into its columns (so C is -A, D -B).
     for path in files:
         for label in tree.labels_in(path):
             body = [line.strip() for line in tree.body(label) if line.strip()]
@@ -916,7 +856,7 @@ def _camera(tree: SourceTree, files: list[str]) -> tuple[int, int, int] | None:
                     down = -parse_number(first["value"])
             if across is not None and down is not None:
                 return across, down, 0
-    # Any other way of writing it (Wolf Garopa keeps the boss's position in
+    # Any other way of writing it (the mounted boss keeps the boss's position in
     # fields first).
     return _scroll_by_code(tree, files, "SecondaryCameraXPos", "SecondaryCameraYPos")
 
@@ -1011,8 +951,8 @@ def _ram_loads(tree: SourceTree, asset_set: str | None, files: list[str]) -> dic
 def _run_before(tree: SourceTree, label: str, line: str, memory: dict[int, int]) -> dict[int, int]:
     """`memory` after the code just before the queue command (`line` in
     `label`'s routine) runs on it, as far back as the subset follows it,
-    the routines it calls included: Xi-Tiger's setup moves the patterns its
-    body uses down $80 tiles, Wolf Garopa's adds to their tile indices."""
+    the routines it calls included: the camera-only encounter setup moves the patterns its
+    body uses down $80 tiles, Wolf the mount adds to their tile indices."""
     block = tree.block(label)
     lines = block.file.lines
     end = next(
@@ -1048,7 +988,7 @@ def _run_before(tree: SourceTree, label: str, line: str, memory: dict[int, int])
 
 
 def _streamed_rows(tree: SourceTree, files: list[str]) -> list[tuple[str, int, int, bytes]]:
-    """The rows a boss's code queues one by one as it rises (Z-Leo's): a
+    """The rows a boss's code queues one by one as it rises (the rising boss): a
     table of name-table addresses (`lea D(pc),a4`) and one of index rows
     (`lea T(pc),a1`, longs), the patterns' RAM written between them. As
     (table, address word, source, indices) per row, all of them."""
@@ -1079,7 +1019,7 @@ def _streamed_rows(tree: SourceTree, files: list[str]) -> list[tuple[str, int, i
 
 def _run_after_build(tree: SourceTree, builder: str, memory: dict[int, int]) -> dict[int, int]:
     """`memory` after the code right after the builder's skeleton call runs
-    on it, as far as the subset follows it (Z-Leo's moves its patterns'
+    on it, as far as the subset follows it (the rising boss moves its patterns'
     tile indices to where its art sits)."""
     block = tree.block(builder)
     lines = [pose_code._code(line) for line in block.file.lines[block.line :]]
@@ -1114,7 +1054,7 @@ def _body(tree: SourceTree, files: list[str], builder: str, asset_set: str | Non
     """A boss's body in a plane (see the module text), or None."""
     camera, plane = _camera(tree, files), PLANE_B
     if camera is None:
-        # Z-Leo's sits in plane A, which scrolls with it.
+        # The rising boss's sits in plane A, which scrolls with it.
         camera, plane = _scroll_by_code(tree, files, "PrimaryCameraXPosition", "PrimaryCameraYPosition"), PLANE_A
     if camera is None:
         return None
@@ -1122,7 +1062,7 @@ def _body(tree: SourceTree, files: list[str], builder: str, asset_set: str | Non
     def address_of(word: int) -> int:
         return 0xC000 | (word & 0xEFFE & 0x3FFF)
 
-    # The routines the builder calls (Flying-Neo's queues its body in one),
+    # The routines the builder calls (the airborne boss's queues its body in one),
     # itself before those the code after it calls (the debug viewer loads
     # its left-facing body so, and the right-facing one when turned).
     own = {call["target"] for line in tree.body(builder) if (call := CALL.match(line))}
@@ -1148,11 +1088,11 @@ def _body(tree: SourceTree, files: list[str], builder: str, asset_set: str | Non
     blocks: list[tuple[int, int, int, int, bytes]] = []
     memory = _ram_loads(tree, asset_set, files)
     # Rows queued one by one as the boss rises make the whole body; the
-    # blocks queued at once then only patch it (Z-Leo's face).
+    # blocks queued at once then only patch it (the rising boss's face).
     streamed = [row for row in _streamed_rows(tree, files) if plane <= address_of(row[1]) < plane + 0x2000]
     if commands and not streamed:
         # The one the routine that builds the skeleton queues or calls, else
-        # the first.
+        # The first.
         _, name, label, line = min(commands, key=lambda item: item[0])
         data = _bytes(tree, name, 6)
         across, rows = data[4] + 1, data[5] + 1
@@ -1186,9 +1126,9 @@ def _body(tree: SourceTree, files: list[str], builder: str, asset_set: str | Non
     cells = [[placed.get((row, column), 0) for column in range(width)] for row in range(height)]
     if not any(any(row) for row in cells):
         return None
-    # A tile that fills most of the edge is the scene behind (Flying-Neo's
+    # A tile that fills most of the edge is the scene behind (the airborne boss's
     # sky): it draws nothing of the body, and the body's own tiles carry
-    # the scene round it too (`scene`: the studio leaves that out).
+    # The scene round it too (`scene`: the studio leaves that out).
     edge = Counter([*cells[0], *cells[-1], *(row[0] for row in cells), *(row[-1] for row in cells)])
     backdrop, count = edge.most_common(1)[0]
     scene = bool(backdrop & 0x7FF and count * 2 > sum(edge.values()))
@@ -1216,17 +1156,21 @@ def _anchor_code(
 ) -> list[list[Any]] | None:
     """The code a boss runs before its renderer places the parts (setting
     its anchors' positions, or the mappings of parts it turns itself:
-    Back Stringer's arms, or fields of its own `reads`, what its code after
-    the renderer reads: Shellshogun turns its sword with its hand), as a
+    the extended-reach boss arms, or fields of its own `reads`, what its code after
+    the renderer reads: the armoured boss turns its sword with its hand), as a
     program; None when there is none."""
     for path in files:
         for label in tree.labels_in(path):
             body = tree.body(label)
-            calls = [at for at, line in enumerate(body) if (call := CALL.match(line)) and call["target"] in TRAVERSALS]
+            calls = [
+                at
+                for at, line in enumerate(body)
+                if (call := CALL.match(line)) and call["target"] in _reader_catalog(tree).traversals
+            ]
             if not calls:
                 continue
             # From where the routine starts: the labels before that fall
-            # into this one, across the boss's files (Shellshogun's falls
+            # into this one, across the boss's files (the armoured boss's falls
             # in from the file before).
             labels = tree.order
             start = labels.index(label)
@@ -1258,11 +1202,11 @@ def _anchor_code(
 
 
 def _reaches(tree: SourceTree, files: list[str], label: str, parts: list[dict[str, Any]]) -> None:
-    """Mark the parts Back Stringer's renderer reaches past: its setup sets
+    """Mark the parts the extended-reach boss renderer reaches past: its setup sets
     the bits of their field $20 right after building them (the code up to
     its next call runs on an empty record)."""
     if not any(
-        (call := CALL.match(line)) and call["target"] == CHAIN
+        (call := CALL.match(line)) and call["target"] == _reader_catalog(tree).reach_traversal
         for path in files
         for name in tree.labels_in(path)
         for line in tree.body(name)
@@ -1320,7 +1264,7 @@ def _tables(tree: SourceTree, symbols: pose_code.Symbols, programs: list[Any]) -
     (`Table(pc,d0.w)`), at their labels' stand-in addresses (hex address:
     hex bytes): numbers as they assemble, labels as their stand-ins, the
     data labels right after taken in too (up to the stand-ins' spacing),
-    and those right before when the code reads before the label (Jetsripper
+    and those right before when the code reads before the label (the linked-chain boss
     reads the cosine as `-$80(a3,d3.w)` from the sine table)."""
     out: dict[str, str] = {}
     names = {address: name for name, address in symbols.given.items()}
@@ -1377,7 +1321,7 @@ def _tables(tree: SourceTree, symbols: pose_code.Symbols, programs: list[Any]) -
             lead = lead[-before:] if len(lead) >= before else lead
         if data or lead:
             out[f"{symbols.given[name] - len(lead):06X}"] = bytes(lead + data).hex()
-    # Tables of labels the tables name (Love Penguin's parts point at their
+    # Tables of labels the tables name (the cut boss's parts point at their
     # mappings by angle so), as their stand-ins too.
     done = set(names.values())
     while waiting := [name for name in symbols.given if name not in done]:
@@ -1393,7 +1337,7 @@ def _tables(tree: SourceTree, symbols: pose_code.Symbols, programs: list[Any]) -
 
 def _traversal(tree: SourceTree, files: list[str], parts: int) -> list[int]:
     """The slots the renderer places down the skeleton: the first and how
-    many (Flying-Neo's starts at its third; the others at the second)."""
+    many (the airborne boss starts at its third; the others at the second)."""
     for path in files:
         for label in tree.labels_in(path):
             body = tree.body(label)
@@ -1403,7 +1347,11 @@ def _traversal(tree: SourceTree, files: list[str], parts: int) -> list[int]:
                     first = ((tree.equates[match["name"]] - SLOT) & 0xFFFF) // PART_SIZE
                 elif (match := MOVEQ.match(line)) and match["register"] == "7":
                     count = (parse_number(match["value"]) or 0) + 1
-                elif (call := CALL.match(line)) and call["target"] in TRAVERSALS and count is not None:
+                elif (
+                    (call := CALL.match(line))
+                    and call["target"] in _reader_catalog(tree).traversals
+                    and count is not None
+                ):
                     if call["target"] in (
                         "Sprite_BeginMetaspritePartTraversal",
                         "Sprite_SetMetaspriteTraversalPointers",
@@ -1418,11 +1366,15 @@ def _post_code(tree: SourceTree, files: list[str], symbols: pose_code.Symbols) -
     next call, when it moves parts (their 16.16 places, $40 and $44): a
     program, else None. When that code moves none, the rest of the routine
     as far as the subset follows it, when it moves parts by their pixel
-    places ($10 and $14: Wolf Garopa's horse's head and rider)."""
+    places ($10 and $14: Wolf the mount horse's head and rider)."""
     for path in files:
         for label in tree.labels_in(path):
             body = tree.body(label)
-            calls = [at for at, line in enumerate(body) if (call := CALL.match(line)) and call["target"] in TRAVERSALS]
+            calls = [
+                at
+                for at, line in enumerate(body)
+                if (call := CALL.match(line)) and call["target"] in _reader_catalog(tree).traversals
+            ]
             if not calls:
                 continue
             # The file's lines after the call, labels kept for the loops.
@@ -1455,7 +1407,7 @@ def _post_code(tree: SourceTree, files: list[str], symbols: pose_code.Symbols) -
             except (pose_code.PoseCodeError, AslSourceError):
                 return None
             # (Through a5 past the boss's own record, or through a register
-            # pointed at a record: Flying-Neo's tail.)
+            # pointed at a record: the airborne boss's tail.)
             places = any(
                 step[0] == "move"
                 and isinstance(step[3], list)
@@ -1470,7 +1422,7 @@ def _post_code(tree: SourceTree, files: list[str], symbols: pose_code.Symbols) -
 
 def _code_driven(tree: SourceTree, files: list[str], builder: str) -> dict[str, Any] | None:
     """For a boss with no pose system, the code before its renderer when it
-    turns the parts from fields of the boss (Deep Strider's), run on the
+    turns the parts from fields of the boss (the directly driven boss), run on the
     values its setup gives them: a pose system of no channels, poses or
     animations; None when there is no such code."""
     symbols = pose_code.Symbols(tree.equates, tree.blocks)
@@ -1484,7 +1436,11 @@ def _code_driven(tree: SourceTree, files: list[str], builder: str) -> dict[str, 
     for path in files:
         for label in tree.labels_in(path):
             body = tree.body(label)
-            calls = [at for at, line in enumerate(body) if (call := CALL.match(line)) and call["target"] in TRAVERSALS]
+            calls = [
+                at
+                for at, line in enumerate(body)
+                if (call := CALL.match(line)) and call["target"] in _reader_catalog(tree).traversals
+            ]
             if not calls:
                 continue
             start = _routine_start(tree, label)
@@ -1605,7 +1561,7 @@ def _cosine(tree: SourceTree) -> list[int]:
 
 
 def _boss_files(tree: SourceTree, path: str, shared: bool = False) -> list[str]:
-    """The files named like a boss file (antroid_*.s), its own folder first,
+    """The files named like a boss file (the corresponding source symbol*.s), its own folder first,
     then others (a boss's pose code may sit with its projectiles). Forms
     that share the name (Valkirie's) take their own file and the files it
     calls into."""
@@ -1685,7 +1641,7 @@ def _joints(boss: dict[str, Any]) -> list[int | None]:
 
 def _title(stem: str, names: list[str], whole: bool = False) -> str:
     """A boss's name from its file's: the leading words that spell a name
-    the game uses (xi_tiger_battle_states is Xi-Tiger), else the file's
+    the game uses (the corresponding source symbol is the camera-only encounter), else the file's
     words; all of them for forms that share a name (Valkirie Battle)."""
     words = stem.split("_")
     known = {re.sub(r"[^a-z0-9]", "", name.lower()) for name in names}
@@ -1693,7 +1649,7 @@ def _title(stem: str, names: list[str], whole: bool = False) -> str:
         if not whole and "".join(words[:count]).lower() in known:
             return objects.title("_".join(words[:count]), names)
     # The game's name as it spells it when the source doubles a letter
-    # (sources before 3.0 spell Sharpsteel with a double s).
+    # (sources before 3.0 spell the byte-script boss with a double s).
     single = {re.sub(r"(.)\1+", r"\1", re.sub(r"[^a-z0-9]", "", name.lower())): name for name in names}
     if not whole and (name := single.get(re.sub(r"(.)\1+", r"\1", words[0].lower()))):
         return name
@@ -1718,8 +1674,8 @@ def _draws_with(
         (name for name, item in sets.items() if item.get("prefix") == prefix), None
     )
     if asset_set is None:
-        # A set with no palette of its own (Flying-Neo's) is named after
-        # the builder: its loads still fill the RAM its body is built from.
+        # A set with no palette of its own (the airborne boss's) is named after
+        # The builder: its loads still fill the RAM its body is built from.
         words = re.findall(r"[A-Z][a-z0-9]*", label.split("_", 1)[-1])
         asset_set = next(
             (
@@ -1732,9 +1688,9 @@ def _draws_with(
     context = sets.get(asset_set, {})
     if not context.get("loads"):
         own = context.get("palettes")
-        # A Seven Force form keeps the art of the form before it: the set
+        # A the multi-form encounter form keeps the art of the form before it: the set
         # fought on the same stage list that loads art (Valkirie's), in
-        # the form's own colours.
+        # The form's own colours.
         kept = next(
             (
                 item
@@ -1744,7 +1700,7 @@ def _draws_with(
             None,
         )
         if kept is None:
-            # A boss whose code loads its art (Flying-Neo) draws with what
+            # A boss whose code loads its art (the airborne boss) draws with what
             # Objects records for its mappings, as the art first loaded
             # where later loads (the next stage's) write again.
             if not recorded:
@@ -1786,8 +1742,8 @@ def _read(tree: SourceTree) -> list[dict[str, Any]]:
         files = _boss_files(tree, path, shared)
         try:
             parts, frames, base = _skeleton(tree, label)
-            # The four-direction renderer (Deep Strider's) reads four frames:
-            # the longs after them are the next table's.
+            # The four-direction renderer (the directly driven boss's) reads four frames:
+            # The longs after them are the next table's.
             if any(
                 (call := CALL.match(line)) and call["target"] == "Sprite_UpdateMetaspriteFourFrameRotationAndLoadCount"
                 for path in files
@@ -1800,7 +1756,7 @@ def _read(tree: SourceTree) -> list[dict[str, Any]]:
             system = _pose_system(tree, files) or _code_driven(tree, files, label)
             if system is None:
                 continue
-            # A boss its code alone turns (Deep Strider) has no poses or
+            # A boss its code alone turns (the directly driven boss) has no poses or
             # animations: it shows as its setup leaves it.
             driven = system["targets"] is None
             table = _table(tree, system["targets"]) if not driven else b""
@@ -1813,7 +1769,7 @@ def _read(tree: SourceTree) -> list[dict[str, Any]]:
                 except BossError:
                     continue
             # So are bosses whose animations sit in another boss's files (the
-            # Seven Force plays Valkirie's).
+            # The multi-form encounter plays Valkirie's).
             if (not sequences and not driven) or any(
                 tree.block(item["label"]).file.path not in files for item in sequences
             ):
@@ -1873,7 +1829,7 @@ def _read(tree: SourceTree) -> list[dict[str, Any]]:
             poses=system["targets"],
             sequences=[item["label"] for item in sequences],
             slot=SLOT,
-            checked=label in CHECKED,
+            checked=label in _reader_catalog(tree).checked_builders,
             _sequences=sequences,
             _table=table,
         )
@@ -1974,7 +1930,7 @@ def _chain(tree: SourceTree, files: list[str]) -> dict[str, Any] | None:
     """A boss built of records its code places each frame, not a skeleton:
     the routine that fills four or more records with a type (its setup, the
     first such in its files); the routine that, run after it, places the
-    most of them (Jetsripper's chain, Gusthead's arms), if any; and the
+    most of them (the linked-chain boss chain, the arm-chain boss arms), if any; and the
     routines each record's type runs (Caterpillar's segments place
     themselves on its wave and pick their mappings). Run in that order they
     must place four records or more."""
@@ -1996,8 +1952,8 @@ def _chain(tree: SourceTree, files: list[str]) -> dict[str, Any] | None:
         kinds = _records(machine, 0, 2)
         if sum(1 for kind in kinds[1:] if kind) < 4:
             continue
-        # Places relative to the boss's ($40 and $44: Jetsripper's), or
-        # where they are ($10 and $14, longs: Gusthead's arms).
+        # Places relative to the boss's ($40 and $44: the linked-chain boss's), or
+        # where they are ($10 and $14, longs: the arm-chain boss's arms).
         before = {
             field: list(zip(_records(machine, field, 4), _records(machine, field + 4, 4))) for field in (0x40, 0x10)
         }
@@ -2054,7 +2010,7 @@ def _chain(tree: SourceTree, files: list[str]) -> dict[str, Any] | None:
         field = best[3] if best is not None else max((0x10, 0x40), key=lambda item: placed(shown, item))
         if placed(shown, field) < 4:
             continue
-        # The boss as it settles (Sunset Sting's ring opens over its first
+        # The boss as it settles (the radial-chain boss's ring opens over its first
         # frames), as far as its code runs.
         settled = machine
         for _ in range(SETTLE_FRAMES):
@@ -2081,7 +2037,7 @@ def _chain(tree: SourceTree, files: list[str]) -> dict[str, Any] | None:
 
 
 def _played(tree: SourceTree, files: list[str], sets: dict[str, Any], chain: dict[str, Any]) -> dict[str, Any] | None:
-    """`chain` (see PLAYED) as its boss's routines leave it: the boss is the
+    """`chain` (see the game catalog's played builders) as its boss's routines leave it: the boss is the
     type an asset set of its files spawns, its setup the first frame, shown
     the frame every record drawn then lies on the path the boss has taken
     in its state, `chain` its own routine."""
@@ -2168,7 +2124,7 @@ def _record_parts(
     the mapping `shown` gives it (a label `symbols` stands in for), or the
     sprite it holds itself, its attribute word as `machine` has it. With
     `drawn_only`, only the records
-    the game draws then: bits 7 and 6 of byte 2 set (Destroyer-Mk2 hides its
+    the game draws then: bits 7 and 6 of byte 2 set (the tiled-body boss hides its
     linked parts so; a chain's setup leaves parts it shows later hidden)."""
     stand_ins = {address: name for name, address in symbols.given.items()}
     parts, frames = [], {}
@@ -2184,7 +2140,7 @@ def _record_parts(
             "hand_built": True,
         }
         drawn = not drawn_only or shown.read(record + 2, 1) & 0xC0 == 0xC0
-        # The 68000 reads 24 address bits (Love Penguin flags its pointers).
+        # The 68000 reads 24 address bits (the cut boss flags its pointers).
         name = stand_ins.get(shown.read(record + 8, 4) & 0xFFFFFF) if drawn else None
         try:
             pieces = _frame(tree, name) if name else None
@@ -2245,17 +2201,17 @@ def _read_chains(
             chain = _chain(tree, files)
         except (BossError, AslSourceError, pose_code.PoseCodeError, KeyError, TypeError, IndexError):
             continue
-        if chain is None or chain["setup"] not in CHECKED:
-            # Records other code places too (plane bodies' Jampan, Bugmax)
+        if chain is None or chain["setup"] not in _reader_catalog(tree).checked_builders:
+            # Records other code places too (plane bodies' the column-backed boss, the column-backed boss)
             # wait for a reader of their own.
             continue
-        if chain["setup"] in PLAYED:
+        if chain["setup"] in _reader_catalog(tree).played_builders:
             chain = _played(tree, files, sets, chain)
             if chain is None:
                 continue
         machine, settled, shown, symbols = chain["machine"], chain["settled"], chain["shown"], chain["symbols"]
-        # Records the setup draws but leaves where nothing put them (Sunset
-        # Sting's core, which its intro brings down to the floor under it)
+        # Records the setup draws but leaves where nothing put them (the radial-chain
+        # boss's core, which its intro brings down to the floor under it)
         # stand where the boss's own routines put them, from the boss.
         if chain["field"] == 0x10:
             unplaced = [
@@ -2287,7 +2243,7 @@ def _read_chains(
         # pick their mappings).
         parts, frames = _record_parts(tree, machine, shown, symbols, chain.get("drawn_only", False))
         # Fewer than four parts drawn is not a boss this reader takes in
-        # (Missiray's segments are its plane-B body's columns).
+        # (the column-scroll boss's segments are its plane-B body's columns).
         if sum(1 for part in parts if part["kind"] != "none") < 4:
             continue
         kinds = [int(kind[1:], 16), machine.read(SLOT, 2)]
@@ -2359,14 +2315,14 @@ def _read_chains(
                 "poses": None,
                 "sequences": [],
                 "slot": SLOT,
-                "checked": chain["setup"] in CHECKED,
-                # The setup's field $54 (Jetsripper's chain length) stays.
+                "checked": chain["setup"] in _reader_catalog(tree).checked_builders,
+                # The setup's field $54 (the linked-chain boss's chain length) stays.
                 "faces": machine.read(SLOT + 0x54, 2),
                 "chain": chain["places"],
                 "position_field": chain["field"],
                 # Positions are relative to the boss's, less this: nothing when
-                # the boss draws, else the middle of the parts drawn (Sunset
-                # Sting's ring, Caterpillar's segments far along the train).
+                # the boss draws, else the middle of the parts drawn (the radial-chain
+                # boss's ring, Caterpillar's segments far along the train).
                 "centre": centre,
                 "record_code": chain["record_code"],
                 "tables": tables,
@@ -2394,7 +2350,7 @@ def _settled_offsets(
     boss: the boss played as boss_planes plays its records; once a record
     has stood still off (0, 0) for boss_planes.SETTLE frames, its place
     from the boss on the frame, while it stays, the boss stood nearest
-    `boss_y` (the still shows the boss there: Sunset Sting's core lies on
+    `boss_y` (the still shows the boss there: the radial-chain boss core lies on
     the floor while the boss bobs above it)."""
     from retrolarium_kit.games.alien_soldier import boss_planes
 
@@ -2465,10 +2421,10 @@ def _plane_run(
     # A boss with no health is beaten at once.
     machine.write(tree.equates["BossHealth"] & 0xFFFFFF, 2, 0x100)
     # Its message stays on screen: a boss shows as it waits through it
-    # (Love Penguin bobs at the edge of the arena).
+    # (the cut boss bobs at the edge of the arena).
     machine.write(tree.equates["MessageSequenceState"] & 0xFFFFFF, 2, 0x10)
     run = boss_planes.Run(tree, files, machine, SLOT, PART_SIZE)
-    # Where the stage holds its camera for the fight (Viblack heads for
+    # Where the stage holds its camera for the fight (the stage-backed boss heads for
     # a place in the stage, not on the screen).
     if spawned.get(number, {}).get("camera_x") is not None:
         machine.write(tree.equates["PrimaryCameraXPosition"] & 0xFFFFFF, 2, spawned[number]["camera_x"])
@@ -2515,13 +2471,13 @@ def _read_planes(
         path = tree.block(label).file.path
         prefix = PurePosixPath(path).stem.split("_")[0]
         number = int(kind[1:], 16)
-        if prefix in seen or label not in CHECKED:
+        if prefix in seen or label not in _reader_catalog(tree).checked_builders:
             continue
         files = _boss_files(tree, path)
         if not boss_planes.queues_tiles(tree, files):
             continue
         seen.add(prefix)
-        # The RAM the stage that brings it has filled (Viblack's patterns
+        # The RAM the stage that brings it has filled (the stage-backed boss's patterns
         # are its stage's), under the boss's own loads.
         run = _plane_run(tree, sets, recorded, label, path, number, files)
         machine = run.machine
@@ -2531,7 +2487,7 @@ def _read_planes(
         parts, frames = _record_parts(tree, machine, machine, run.symbols, drawn_only=True)
         asset_set, context = _draws_with(tree, sets, recorded, label, path, [number], frames, parts)
         if not context.get("loads") and number in spawned:
-            # A body of its stage's art (Viblack's): the stage's loads and
+            # A body of its stage's art (the stage-backed boss's): the stage's loads and
             # colours, then the colours its own code loads.
             context = objects.scene_context(tree, spawned[number]["scene"])
             context["palettes"] += [[name, 0] for name in _palettes_loaded(tree, files)]
@@ -2578,6 +2534,8 @@ def _read_planes(
 
 
 def export(tree: SourceTree) -> dict[str, Any]:
+    # Re-exporting the same source tree observes any metadata edits.
+    setattr(tree, "_alien_soldier_readers", reader_catalog.load(tree.root))
     bosses = _read(tree)
     poses: dict[str, list[dict[str, Any]]] = {}
     sequences: list[dict[str, Any]] = []

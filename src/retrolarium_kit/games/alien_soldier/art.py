@@ -127,7 +127,7 @@ def export(tree: SourceTree, definitions: list[dict[str, Any]], profile: str) ->
             continue
         line = commands[boss["palette"]][0]["destination"] // 32
         # The set's list, then the lists the boss's own code plays (Sniper
-        # Honeyviper loads its art itself).
+        # The self-loading boss loads its art itself).
         names = [boss["list"]] if boss["list"] in lists else []
         handler = types.get(f"${boss['type']:X}")
         if handler in tree.blocks:

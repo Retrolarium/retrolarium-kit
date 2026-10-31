@@ -33,7 +33,7 @@ or pin it at for the boss (the handlers from the record's state offset up
 to the boss's, or to the next stage's first). A climb they wait for or pin
 (more than half a screen) adds the screen-wide column it climbs, at the
 furthest X (the area lists its `parts`: the run and the column). Handlers that
-never draw the map (Xi-Tiger's only move the camera and the rasters) leave
+never draw the map (the camera-only encounter's only move the camera and the rasters) leave
 the picture the entry drew at the record's X, so the stage is measured from
 there. A camera Y the handlers work out before the stage scrolls (Epsilon
 1's parallax sets it to $28 minus a value the handler stores, $10) moves
@@ -46,24 +46,24 @@ as an arena (`arenas`): the 256 lines streamed down from row -Y (all the
 plane holds; the camera shows a part of them), with the camera X folded into
 the 512-pixel plane. A handler may set the stream up in code it ends by
 branching to, and a stage that restarts another's run (stage 22 sets the
-state to the Destroyer Prototype's backdrop) goes on with that run's
+state to the ascent encounter's backdrop) goes on with that run's
 handlers, up to another restart. A boss loaded once the stage has its
 screen, or a second boss, ends the search: what follows is the next part.
 Without a boss brought in, the screen draws with the set the stage loaded
 for its own boss. The boss fought there is the one the stage's own boss
 brings in (an asset set its code, in the files named after it, loads at an
-object: Viblack brings Back Stringer); the arena draws with that set's
+object: the stage-backed boss brings the extended-reach boss); the arena draws with that set's
 maps and art and is coloured by its palette command (`palettes`).
 A boss may move the fight elsewhere itself: the asset set its handler loads
 names the boss's object type, and the code of that type's handler (its
-file) sets the camera to an X and Y and waits for camera Ys (Z-Leo starts
+file) sets the camera to an X and Y and waits for camera Ys (the rising boss starts
 at (0, $100) and rises to $240). That screen, from camera Y 0 to the
 highest, is an arena drawn with the maps the boss loads (`list`, its RAM
 writes and VRAM loads) and shown with the stage (`inline`). A row descriptor
 the boss streams its plane from (`Tilemap_QueueRowFromDescriptor`: coarse
 map, chunks, patterns and the plane's name table) is the arena's plane
-(`planes`; Z-Leo's rise draws plane B with plane A's patterns, his body
-takes plane A). The asset lists the boss's code plays (Z-Leo's battle entry
+(`planes`; the rising boss's rise draws plane B with plane A's patterns, his body
+takes plane A). The asset lists the boss's code plays (the rising boss's battle entry
 loads new patterns at $4020) are drawn after its set's, and the set's
 palette command colours the arena.
 
@@ -78,17 +78,17 @@ keeps the 512 pixels the entry drew from the record's camera X (`fixed_x`),
 repeated however far the camera goes.
 
 A stage whose handlers move the camera off the record's X without drawing
-(Xi-Tiger's) keeps the picture the entry drew: it is not part of the level's
+(the camera-only encounter's) keeps the picture the entry drew: it is not part of the level's
 strip but a screen apart (`apart` in its area), shown as its boss finds it,
 with the asset lists its handlers play (later loads from its first X: the
-caterpillar's and Xi-Tiger's art turn the train's tiles into clouds) and
+caterpillar's and the camera-only encounter's art turn the train's tiles into clouds) and
 without a plane its handlers fill with blank rows (`Tilemap_QueueNextConstantRow`
 over plane B's table).
 
 A boss that widens the camera's X bounds (`subi.w #n,(CameraXLowerBound)`)
 where the stage pins the camera fights on a screen apart too: from the pinned
 X less the widening, between the camera Ys the boss's state handler swings
-through (Flying-Neo, over the train's roof). Its plane B is streamed from the
+through (the airborne boss, over the train's roof). Its plane B is streamed from the
 rows the handlers before the boss queue it from (`d1` = camera Y + n into
 `Tilemap_Queue{Column,Row}FromDescriptor`), measured from plane A's.
 
@@ -822,7 +822,7 @@ def secondary_streams(tree: SourceTree) -> dict[int, dict[str, Any]]:
                         and down
                         and spawned is not None
                         and any(QUEUE.search(other) for other in lines[at + 1 : at + 3])
-                        # The first type spawned before it (Xi-Tiger comes
+                        # The first type spawned before it (the camera-only encounter comes
                         # once the ship has passed).
                         and all(item["descriptor"] != match["label"] for item in found.values())
                     ):
@@ -832,7 +832,7 @@ def secondary_streams(tree: SourceTree) -> dict[int, dict[str, Any]]:
 
 def spawning_scenes(tree: SourceTree) -> dict[int, dict[str, Any]]:
     """The scene whose stage handlers first put each object type in the
-    first object record (Stage 16 brings Viblack so), by type, and the
+    first object record (Stage 16 brings the stage-backed boss so), by type, and the
     camera X they set before (None if none)."""
     found_scenes = scenes(tree)
     found_records = records(tree)
@@ -957,7 +957,7 @@ def _asset_set(tree: SourceTree, lists: dict[str, list[AssetCommand]], label: st
 
 def _boss_files(tree: SourceTree, handler: str) -> list[str]:
     """The source file of a boss's handler and those named after it, in the
-    same folder (z_leo_core.s, z_leo_rendering.s)."""
+    same folder (the corresponding source symbol.s, the corresponding source symbol.s)."""
     path = PurePosixPath(tree.block(handler).file.path)
     prefix = path.stem.split("_")[0] + "_"
     # The files in the order the build includes them.
@@ -972,7 +972,7 @@ def _boss_files(tree: SourceTree, handler: str) -> list[str]:
 
 def _brought_in(tree: SourceTree, lists: dict[str, list[AssetCommand]], kind: int) -> dict[str, Any] | None:
     """The boss asset set the code of object type `kind` loads at an object:
-    a set in the handler's file or the files named after it (viblack_*)."""
+    a set in the handler's file or the files named after it (the corresponding source symbol*)."""
     from retrolarium_kit.games.alien_soldier.levels import handlers
 
     handler = handlers(tree).get(f"${kind:X}")
@@ -1022,7 +1022,7 @@ def arenas(
             break  # another stage's restart
         # The stage's fight streams before or after its boss loads; a boss
         # loaded after that fight's screen, or a second one, belongs to what
-        # follows (stage 21 runs on into 22's, 22's into Wolf-Garopa's).
+        # follows (stage 21 runs on into 22's, 22's into the mounted boss's).
         if any(BOSS.search(line) for line in lines):
             bosses += 1
             if found or bosses > 1:
@@ -1060,9 +1060,9 @@ def arenas(
             }
             fought = _brought_in(tree, lists or {}, boss) if boss is not None and lists else None
             if defeated and not fought:
-                # After the boss, only a boss brought in fights there (Viblack
-                # brings Back Stringer); the Destroyer Prototype's stage sets
-                # up Shield Viper's backdrop once it is gone.
+                # After the boss, only a boss brought in fights there (the stage-backed boss
+                # brings the extended-reach boss); the ascent encounter's stage sets
+                # up the path-following boss's backdrop once it is gone.
                 continue
             # Else the set the stage loaded for its boss.
             fought = fought or loaded
@@ -1092,7 +1092,7 @@ def climbed_arenas(
     planes: list[dict[str, Any] | None] = (),
 ) -> list[dict[str, Any]]:
     """The screen a stage's camera climbs to before its boss loads, when the
-    stage's area does not take it in (the Destroyer Prototype fights in the
+    stage's area does not take it in (the the ascent encounter fights in the
     empty space above the asteroid field, camera Y $F600). Plane B's camera
     stays where the record put it, so plane B is read from the climbed
     camera Y less that one (the stars, not the asteroids)."""
@@ -1107,7 +1107,7 @@ def climbed_arenas(
             if climb is None or not found:
                 return []
             # Rows are read at -Y; a climb within a screen of the start is no
-            # other screen (Flying-Neo's lift).
+            # other screen (the airborne boss's lift).
             top = -_signed(climb)
             if abs(top - area["y"]) < SCREEN[1]:
                 return []
@@ -1159,7 +1159,7 @@ def _place_inline(
     tree: SourceTree, scene: dict[str, Any], arena: dict[str, Any], run: dict[str, Any], record: dict[str, Any]
 ) -> None:
     """Widen an inline arena to what its own plane B holds across the plane
-    (Z-Leo's core room is 384 pixels: the camera follows him across it), and
+    (the rising boss core room is 384 pixels: the camera follows him across it), and
     show it over the end of the stage's run where the stage's plane B reads
     the same rows of the same map (the room the corridor ends in, as the
     plane repeats every 512 pixels): (`shown`)."""

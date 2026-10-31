@@ -172,11 +172,11 @@ class CaptureTests(unittest.TestCase):
 
         from retrolarium_kit.games.alien_soldier import tas_capture
 
-        listing = "Frames, Scene\n20-300, Sega screen\n900-1900, Jetsripper boss\n33500-34220, Viblack mini-boss\n"
-        listing += "36840-38000, Valkirie Force\n76840-77600, Antroid (credits)\n17820-18660, Xi-Tiger cutscene\n"
+        listing = "Frames, Scene\n20-300, Sega screen\n900-1900, Example boss\n33500-34220, Other mini-boss\n"
+        listing += "36840-38000, Example Force\n76840-77600, Example (credits)\n17820-18660, Example cutscene\n"
         self.assertEqual(
             tas_capture.scenes(listing),
-            [(900, 1900, "Jetsripper boss"), (33500, 34220, "Viblack mini-boss"), (36840, 38000, "Valkirie Force")],
+            [(900, 1900, "Example boss"), (33500, 34220, "Other mini-boss"), (36840, 38000, "Example Force")],
         )
         # States one by one, as Gens writes them: the boss's type from the
         # first record that holds one, VRAM in changes after the first.
@@ -241,7 +241,7 @@ class PayloadUpgradeTests(unittest.TestCase):
         self.assertEqual(kept, {"screens": ["new"], "payloads": [2]})
         original = json.loads(self.original.read_text(encoding="utf-8"))
         # The original reads the same as the document but for the edit, so
-        # the edit is still the only difference.
+        # The edit is still the only difference.
         self.assertEqual(original, {"screens": ["new"], "payloads": [1]})
         self.assertIsNone(content._follow_derived(kept, {"screens": ["new"]}, ("screens",), self.original))
 
@@ -276,6 +276,99 @@ class PayloadUpgradeTests(unittest.TestCase):
     def test_a_current_document_is_left(self) -> None:
         mine = {"schema": "s", "payloads": [{"label": "A", "v": 1}, {"label": "C", "v": 7}]}
         self.assertIsNone(content._follow_payloads(mine, self.exported, self.original))
+
+
+class ReaderCatalogTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.path = self.root / "config/names.json"
+        self.path.parent.mkdir()
+        self.catalog = {
+            "schema_version": 1,
+            "checked_builders": ["SetupLinked", "SetupPlayed"],
+            "played_builders": ["SetupPlayed"],
+            "traversals": ["WalkParts", "WalkReach"],
+            "reach_traversal": "WalkReach",
+        }
+
+    def write(self) -> None:
+        self.path.write_text(json.dumps({"schema": "retrolarium.names", "catalogs": {"boss_readers": self.catalog}}))
+
+    def test_source_bindings_are_read_from_the_repository(self) -> None:
+        from retrolarium_kit.games.alien_soldier.reader_catalog import load
+
+        self.write()
+        self.assertEqual(load(self.root).checked_builders, frozenset({"SetupLinked", "SetupPlayed"}))
+        # Reloading metadata must not reuse a catalog from an earlier export.
+        self.catalog["checked_builders"].append("SetupNew")
+        self.write()
+        self.assertIn("SetupNew", load(self.root).checked_builders)
+
+    def test_missing_metadata_fails_before_export_instead_of_dropping_bosses(self) -> None:
+        from retrolarium_kit.games.alien_soldier.reader_catalog import ReaderCatalogError, load
+
+        with self.assertRaisesRegex(ReaderCatalogError, "refresh the game repository"):
+            load(self.root)
+
+    def test_a_legacy_snapshot_is_refreshed_before_the_new_reader_exports_it(self) -> None:
+        from unittest.mock import patch
+        from retrolarium_kit.games.alien_soldier import content
+
+        self.write()
+        project = self.root / "project"
+        original = self.root / "original"
+        snapshot = project / content.SOURCE_DIRECTORY
+        snapshot.mkdir(parents=True)
+        with (
+            patch.object(
+                content.source_snapshot, "load_record", return_value={"revision": "jp", "rom": "reference.bin"}
+            ),
+            patch.object(content.workspace, "export", side_effect=AssertionError("legacy snapshot exported too soon")),
+            patch.object(content.source_snapshot, "refresh", return_value=["kept-edit"]) as refresh,
+        ):
+            self.assertEqual(content.refresh_source(self.root, project, original), ["kept-edit"])
+        self.assertEqual(refresh.call_args.args[:3], (snapshot, original, content.documents()))
+
+    def test_reexport_observes_catalog_edits_on_the_same_source_tree(self) -> None:
+        from unittest.mock import patch
+        from retrolarium_kit.games.alien_soldier import bosses
+
+        self.write()
+        # Empty source is sufficient: export must load the new metadata
+        # before the source-specific reader starts, even when it yields no bosses.
+        from types import SimpleNamespace
+
+        tree = SimpleNamespace(root=self.root)
+        with patch.object(bosses, "_read", return_value=[]), patch.object(bosses, "_cosine", return_value=[]):
+            bosses.export(tree)
+            self.assertNotIn("SetupNew", bosses._reader_catalog(tree).checked_builders)
+            self.catalog["checked_builders"].append("SetupNew")
+            self.write()
+            bosses.export(tree)
+            self.assertIn("SetupNew", bosses._reader_catalog(tree).checked_builders)
+
+    def test_invalid_catalog_versions_types_and_bindings_are_refused(self) -> None:
+        from retrolarium_kit.games.alien_soldier.reader_catalog import ReaderCatalogError, load
+
+        for key, value in [
+            ("schema_version", 2),
+            ("schema_version", True),
+            ("checked_builders", [" "]),
+            ("checked_builders", "SetupLinked"),
+            ("traversals", []),
+            ("reach_traversal", "Unknown"),
+            ("played_builders", ["Unchecked"]),
+            ("checked_builders", ["SetupLinked", "SetupLinked"]),
+        ]:
+            with self.subTest(key=key, value=value):
+                previous = self.catalog[key]
+                self.catalog[key] = value
+                self.write()
+                with self.assertRaises(ReaderCatalogError):
+                    load(self.root)
+                self.catalog[key] = previous
 
 
 if __name__ == "__main__":

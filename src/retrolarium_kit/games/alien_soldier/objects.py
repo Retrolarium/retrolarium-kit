@@ -13,17 +13,16 @@ line itself, where no palette command colours it: the SEGA logo's). A block
 it does not list takes the context
 of the nearest listed block of its file, marked as borrowed. A file with no
 listed block that a stage spawns draws with what that stage loads and its
-colours; a file with no listed block that is named after a boss (back_stringer_sprite_mappings and
-Boss_BackStringerAssetSet) takes that boss's context from the source, marked
+colours; a file with no listed block that is named after a boss (the corresponding source symbol and
+the corresponding source symbol) takes that boss's context from the source, marked
 as derived: the art its asset set loads (or the lists its code plays), the
 stage's palette list and the set's palette command, and an attribute whose base tile is where that art
 goes, the priority the boss's code gives the objects drawn from it
 ($E(a5)), and the palette line that, exclusive-ored with most of the file's
 pieces' lines, is the one the boss's command writes: in play the bosses'
-own tiles show in that line (Joker's and Deep Strider's in line 3). Other files have no context and their static pieces
+own tiles show in that line (Joker's and the directly driven boss's in line 3). Other files have no context and their static pieces
 draw as outlines. Dynamic pieces carry their own art and need none. The
-repository may also list blocks the game never draws (`outlines`: Love
-Penguin's second form, whose code hangs the game before it draws); they take
+repository may also list blocks the game never draws (`outlines`: the cut boss's second form, whose code hangs the game before it draws); they take
 no context of any kind and draw as outlines.
 
 The repository also records what each placement of the stages' spawn lists
@@ -65,7 +64,7 @@ LIST_REFERENCE = re.compile(r"(?:lea|movea\.l)\s+#?\(?([A-Za-z_][A-Za-z0-9_]*)\)
 GENERAL = {"stage", "shared", "data", "entity", "frontend", "palette", "scene", "options", "password", "planet", "ship"}
 PRIORITY = 0x8000
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
-# Words that close a file name without naming anything (back_stringer_sprite_mappings).
+# Words that close a file name without naming anything (the corresponding source symbol).
 TAIL = {
     "sprite",
     "sprites",
@@ -162,7 +161,7 @@ def boss_contexts(tree: SourceTree, artless: bool = False) -> dict[str, dict[str
     """What each boss's asset set draws with, by the set's label: the loads
     (its list's, or those of the lists its code plays), its palette command
     and an attribute for the first load (see the module text). With
-    `artless`, sets that load no art (a Seven Force form keeps the art
+    `artless`, sets that load no art (a the multi-form encounter form keeps the art
     before it and brings its colours) come too, with no loads, as do the
     lettered sets (Sirene's timed ones, which install the cut forms)."""
     from retrolarium_kit.games.alien_soldier.assets import asset_lists
@@ -243,7 +242,7 @@ def _stage_palettes(tree: SourceTree) -> dict[str, str]:
         loader = loaders[scene["index"]]
         own = stage_module._own_handlers(tree, loader, record["state_offset"], states.get(loader, []))
         # The stage's handlers, the routines they call, and the code of the
-        # objects they spawn (Viblack, the Seven Force).
+        # objects they spawn (the stage-backed boss, the multi-form encounter).
         for lines in stage_module._reached(tree, own):
             for line in lines:
                 if (match := stage_module.BOSS_SET.match(line)) and match["label"].endswith("AssetSet"):
@@ -256,15 +255,15 @@ def _stage_palettes(tree: SourceTree) -> dict[str, str]:
             by_file.setdefault(tree.block(routine).file.path, scene["palette_list"])
     # A set loaded elsewhere takes the stage of the file that loads it: a
     # stage's handlers' file, or the code of a boss whose stage is known
-    # (Viblack brings Back Stringer in).
+    # (the stage-backed boss brings the extended-reach boss in).
     for label, palette_list in list(found.items()):
         fields = [operand.text for directive in tree.block(label).directives for operand in directive.operands]
         handler = types.get(f"${parse_number(fields[0]) or 0:X}") if fields else None
         for path in stage_module._boss_files(tree, handler) if handler in tree.blocks else []:
             by_file.setdefault(path, palette_list)
 
-    # Or a file named like a stage's handlers' (seven_force_form_sequences
-    # and seven_force_stage_states).
+    # Or a file named like a stage's handlers' (the corresponding source symbol
+    # and the corresponding source symbol).
     def prefix(path: str) -> str:
         return "_".join(PurePosixPath(path).stem.split("_")[:2])
 
@@ -384,8 +383,8 @@ def _boss_of(stem: str, sets: dict[str, dict[str, Any]]) -> str | None:
     leading words that the set's label holds (joker_sprite_mappings and
     Boss_JokerAssetSet)."""
     words = stem.split("_")
-    # The boss whose code's files start like this one (lambda_bunny_viewer and
-    # lambda_bunny_sprite_mappings), else the set named like it.
+    # The boss whose code's files start like this one (the corresponding source symbol and
+    # The corresponding source symbol), else the set named like it.
     by_code = next((label for label, item in sets.items() if item.get("prefix") == words[0]), None)
     if by_code and words[0] not in GENERAL:
         return by_code
@@ -477,7 +476,7 @@ def export(tree: SourceTree, definitions: list[dict[str, Any]] = (), profile: st
         groups.setdefault(stem, []).append(block["label"])
     from retrolarium_kit.core.game_names import GameNames
 
-    # The stage names as the game spells them ("Viblack / Back Stringer": both).
+    # The stage names as the game spells them ("the stage-backed boss / the extended-reach boss": both).
     names = [
         part.strip()
         for value in GameNames.load(tree.root).names.get("stages", {}).values()
@@ -512,9 +511,9 @@ def export(tree: SourceTree, definitions: list[dict[str, Any]] = (), profile: st
     _screen_contexts(tree, contexts, blocks, list(definitions), profile)
     # What play recorded matched palette blocks by their colours, not by what
     # wrote them: a block drawn from a boss's art takes that boss's commands
-    # (the Seven Force, Xi-Tiger's fighting form) when they leave the colours
+    # (the multi-form encounter, the camera-only encounter's fighting form) when they leave the colours
     # play recorded on its lines; a block in other colours keeps what play
-    # saw (Kaede Nanase draws from the Seven Force's art in the scene's).
+    # saw (the scene character draws from the multi-form encounter's art in the scene's).
     owners = {load["source"]: label for label, item in sets.items() for load in item["loads"]}
     colours = palettes.blocks(tree)
     for label, context in contexts.items():
