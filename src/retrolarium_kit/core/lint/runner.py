@@ -8,7 +8,8 @@
     }
 
 `assembly` is the house style of the game's assembler (ca65, or asl with its
-column settings); `text` is the text-format contract, with its JSON layout
+column settings). Set `assembly.label_length` to true to check labels on the
+original sources, independently of formatting. `text` is the text-format contract, with its JSON layout
 ("indent" or "valid") and the trees it skips beyond the ones every repository
 skips. A section left out is not run. `code` runs Retrolarium Core's
 formatters over the other languages (retrolarium_core.formatting: Markdown,
@@ -23,7 +24,7 @@ import json
 from pathlib import Path
 from typing import Any, Callable
 
-from retrolarium_kit.core.lint import asl, ca65, text
+from retrolarium_kit.core.lint import asl, ca65, labels, text
 from retrolarium_kit.core.lint.issues import Issue, LintError
 
 SCHEMA = "retrolarium.lint"
@@ -68,8 +69,13 @@ def parse_config(document: dict[str, Any]) -> LintConfig:
         if dialect not in DIALECTS:
             raise LintError(f"lint config: assembly dialect must be one of {', '.join(DIALECTS)}")
         paths = tuple(settings.pop("paths", ["src"]))
+        label_length = settings.pop("label_length", False)
+        if not isinstance(label_length, bool):
+            raise LintError("lint config: assembly label_length must be true or false")
         style = _style(dialect, settings)
         sections.append("assembly")
+        if label_length:
+            sections.append("labels")
     text_skip = None
     json_layout = "valid"
     if document.get("text") is not None:
@@ -97,15 +103,18 @@ def load_config(root: Path, path: Path | None = None) -> LintConfig:
         raise LintError(f"lint config {config} is not JSON: {exc}") from exc
 
 
-def assembly_files(root: Path, config: LintConfig, paths: tuple[str, ...] = ()) -> list[Path]:
+def assembly_files(
+    root: Path, config: LintConfig, paths: tuple[str, ...] = (), *, suffixes: tuple[str, ...] = ()
+) -> list[Path]:
     module, _ = DIALECTS[config.dialect]
+    suffixes = suffixes or module.SUFFIXES
     files: set[Path] = set()
     for entry in paths or config.paths:
         path = root / entry
         if path.is_dir():
-            for suffix in module.SUFFIXES:
+            for suffix in suffixes:
                 files.update(path.rglob(f"*{suffix}"))
-        elif path.suffix.lower() in module.SUFFIXES:
+        elif path.suffix.lower() in suffixes:
             files.add(path)
     return sorted(files, key=lambda item: item.as_posix().lower())
 
@@ -120,7 +129,7 @@ def run(
     report: Callable[[str], None] = print,
 ) -> list[Issue]:
     """Check (and with fix, first normalize) the tree; return what is left.
-    `paths` narrows the assembly section to those files or folders."""
+    `paths` narrows assembly and label checks to those files or folders."""
     root = root.resolve()
     selected = [section for section in config.sections if not only or section in only]
     issues: list[Issue] = []
@@ -137,6 +146,17 @@ def run(
             f"[{'OK' if not found else 'FAIL'}] {config.dialect} style: {action} {len(files)} source(s)"
             + (f", {len(found)} issue(s)" if found else "")
         )
+    if "labels" in selected:
+        exceptions = labels.load_exceptions(root)
+        files = assembly_files(root, config, paths, suffixes=labels.SUFFIXES)
+        if not files:
+            raise LintError(f"no assembly sources under {', '.join(paths or config.paths)} for label check")
+        found = []
+        for path in files:
+            source = path.relative_to(root).as_posix()
+            found.extend(labels.lint_file(path, config.dialect, exceptions.get(source, {})))
+        issues += found
+        report(f"[{'FAIL' if found else 'OK'}] assembly labels: checked {len(files)} source(s)")
     if "text" in selected:
         files = text.project_files(root, config.text_skip or ())
         changed = 0

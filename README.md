@@ -232,9 +232,9 @@ in `RETROLARIUM_CORE`; a source checkout uses the one built in
 Every game repository keeps one house style, checked and applied by the kit: the
 ca65 layout of the NES disassemblies, the AS layout of the Mega Drive ones and a
 text-format contract for the rest of the tree (LF endings, no trailing spaces,
-one final newline, valid JSON). A game keeps only `config/lint.json`, which
-names its assembler dialect and source folders and the trees the text contract
-skips; checks about one game's own source stay in its repository.
+one final newline, valid JSON). A game configures its assembler dialect, source
+folders and text exclusions in `config/lint.json`. Checks about one game's own
+source stay in its repository.
 
 ```json
 {
@@ -256,6 +256,28 @@ assembles to the same bytes. The text contract reads the files Git sees and
 always skips `.git`, `build`, `.retrolarium` and `hack`. `"json": "indent"` also
 lays JSON out with two-space indentation, for games that write their JSON by
 machine.
+
+Set `"label_length": true` in the `assembly` object to enforce a maximum of 40
+characters per label in `.s`, `.inc` and `.asm` files. The check includes local
+labels and AS named declaration fields such as `equ` and `macro`. It counts the
+identifier as written, including a local prefix such as `.` or `@`, and excludes
+the colon. `--fix` never renames a symbol.
+
+An optional `config/asm-label-exceptions.json` allows a specific spelling in a
+specific source file. Use a project-relative path with forward slashes and give
+each exception a reason.
+
+```json
+{
+  "src/system/interface.s": {
+    "LegacyExternalInterfaceNameSharedWithOtherTools": "External interface with independently maintained consumers"
+  }
+}
+```
+
+Projects with a custom assembly formatter can run
+`rltool lint --project . --only labels` from `make lint` to check their original
+sources directly. The rule is disabled until the project enables it.
 
 `rltool hooks install --project .` (a game's `make hooks`) installs the core's
 Git hooks: every commit and push is checked for stop words, and every commit

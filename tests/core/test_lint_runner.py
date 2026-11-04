@@ -47,6 +47,7 @@ class ConfigTests(unittest.TestCase):
             {**CONFIG, "extra": {}},
             {**CONFIG, "assembly": {"dialect": "nasm"}},
             {**CONFIG, "assembly": {"dialect": "ca65", "comment_column": 40}},
+            {**CONFIG, "assembly": {"dialect": "asl", "label_length": 40}},
             {**CONFIG, "text": {"json": "pretty"}},
         ):
             with self.assertRaises(LintError):
@@ -54,6 +55,45 @@ class ConfigTests(unittest.TestCase):
 
 
 class RunTests(unittest.TestCase):
+    def test_label_limit_applies_to_original_assembly_and_exact_exceptions(self) -> None:
+        config = {
+            **CONFIG,
+            "assembly": {"dialect": "asl", "label_length": True},
+            "code": False,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repository(root, config)
+            local = "." + "L" * 40
+            long_name = "N" * 41
+            source = f'{"A" * 40}:\n{local}:\n; {long_name}:\n                dc.b    "{long_name}:"\n'
+            (root / "src/main.asm").write_bytes(source.encode())
+            (root / "src/defs.inc").write_bytes(f"{long_name} equ 1\n{long_name} dc.b 1\n".encode())
+            command = ["lint", "--project", str(root), "--only", "labels", "--fix"]
+            errors = io.StringIO()
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(errors):
+                self.assertEqual(main(command), 1)
+            self.assertIn("src/main.asm:2: [label-length]", errors.getvalue())
+            self.assertIn("src/defs.inc:1: [label-length]", errors.getvalue())
+            self.assertIn("src/defs.inc:2: [label-length]", errors.getvalue())
+            self.assertNotIn("src/main.asm:1:", errors.getvalue())
+            self.assertNotIn("src/main.asm:3:", errors.getvalue())
+            self.assertNotIn("src/main.asm:4:", errors.getvalue())
+            self.assertEqual((root / "src/main.asm").read_bytes(), source.encode())
+
+            exceptions = root / "config/asm-label-exceptions.json"
+            exceptions.write_text(json.dumps({"src/defs.inc": {local: "Retained external name"}}), encoding="utf-8")
+            issues = run(root, load_config(root), only=("labels",), report=lambda line: None)
+            self.assertEqual(len(issues), 3)
+            exceptions.write_text(
+                json.dumps({"src/main.asm": {local: "Retained external name"}, "src/defs.inc": {long_name: "ABI"}}),
+                encoding="utf-8",
+            )
+            self.assertEqual(run(root, load_config(root), only=("labels",), report=lambda line: None), [])
+            exceptions.write_text(json.dumps({"src/defs.inc": {long_name: "  "}}), encoding="utf-8")
+            with self.assertRaisesRegex(LintError, "nonempty reason"):
+                run(root, load_config(root), only=("labels",), report=lambda line: None)
+
     def test_a_clean_tree_passes_and_fix_repairs_a_dirty_one(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

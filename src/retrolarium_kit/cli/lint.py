@@ -63,7 +63,7 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     lint.add_argument("--config", type=Path, help="lint config (default: config/lint.json)")
     lint.add_argument("--fix", action="store_true", help="normalize the files before checking them")
     lint.add_argument(
-        "--only", action="append", choices=("assembly", "text", "code"), help="run one section (repeatable)"
+        "--only", action="append", choices=("assembly", "labels", "text", "code"), help="run one section (repeatable)"
     )
     lint.add_argument("--limit", type=int, default=200, help="issues to print (0: all)")
     lint.add_argument("paths", nargs="*", type=Path, help="assembly files or folders to check instead of the config's")
