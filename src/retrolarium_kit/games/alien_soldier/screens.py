@@ -138,6 +138,10 @@ def credit_scenes(tree: SourceTree, lists: dict[str, Any]) -> list[dict[str, Any
         table = tables[0]
         size = len(lzss.decompress(tree.data(table.source), blocks=True))
         rows = size // (2 * NAME_TABLE_CELLS)
+        palette_data = tree.data(palette)
+        if len(palette_data) % 2:
+            raise ScreenError(f"{palette} has an incomplete CRAM word")
+        colours = [int.from_bytes(palette_data[at : at + 2], "big") for at in range(0, len(palette_data), 2)]
         found.append(
             {
                 "id": f"credits-{number:02d}",
@@ -152,7 +156,7 @@ def credit_scenes(tree: SourceTree, lists: dict[str, Any]) -> list[dict[str, Any
                 "planes": [None, None],
                 "camera_x": [0, 0],
                 "lookup_y": [0, 0],
-                "palette": {"colours": tree.block(palette).values()},
+                "palette": {"colours": colours},
                 "transforms": [],
                 "size": [8 * NAME_TABLE_CELLS, 8 * rows],
                 "name_table": {"source": table.source, "vram": table.destination & 0xFFFF, "rows": rows},
