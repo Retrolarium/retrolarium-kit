@@ -131,7 +131,7 @@ def recorded(tree: SourceTree) -> dict[str, dict[str, Any]]:
         for name, line in record.get("tables", []):
             if (
                 name not in tree.blocks
-                or tree.block(name).kind != "dc.w"
+                or tree.block(name).kind not in {"dc.w", "binclude"}
                 or len(tree.data(name)) < 2 * TABLE_COLOURS
                 or line not in range(4)
             ):
