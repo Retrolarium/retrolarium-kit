@@ -250,10 +250,16 @@ class DescriptorTests(unittest.TestCase):
             fetch_repository("pacman", self.root / "games", source=str(archives / "{repository}.zip"))
         self.assertFalse((self.root / "escape.txt").exists())
 
-    def test_downloads_name_a_release_tag_or_a_branch(self) -> None:
+    def test_downloads_name_a_release_tag_branch_or_commit(self) -> None:
         catalog = repository.repository_catalog()
         for game, entry in catalog["games"].items():
-            self.assertRegex(entry["ref"], r"^(tags|heads)/[\w.-]+$", game)
+            self.assertRegex(entry["ref"], r"^(?:(tags|heads)/[\w.-]+|[0-9a-f]{40})$", game)
+        flicky = catalog["games"]["flicky"]
+        self.assertRegex(flicky["ref"], r"^[0-9a-f]{40}$")
+        self.assertEqual(
+            f"https://github.com/RetrolariumLab/flicky_src/archive/{flicky['ref']}.zip",
+            repository._archive_url(catalog, flicky, None),
+        )
         self.assertEqual(
             "https://github.com/RetrolariumLab/pacman_src/archive/refs/tags/source-reconstruction-3.1.zip",
             repository._archive_url(catalog, catalog["games"]["pacman"], None),
