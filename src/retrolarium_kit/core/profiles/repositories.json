@@ -116,7 +116,7 @@
     "flicky": {
       "repository": "flicky_src",
       "descriptor": "flicky.rlj",
-      "ref": "tags/source-reconstruction-3.1",
+      "ref": "dc47be622a7e4e3984395bf93a1f28742d9ec31d",
       "revisions": [
         {
           "id": "ue",

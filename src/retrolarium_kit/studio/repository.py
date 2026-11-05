@@ -894,10 +894,14 @@ def repository_catalog() -> Mapping[str, Any]:
 
 
 def _archive_url(catalog: Mapping[str, Any], entry: Mapping[str, Any], source: str | None) -> str:
-    template = (
-        source or os.environ.get("RETROLARIUM_GAMES_SOURCE") or "{organization}/{repository}/archive/refs/{ref}.zip"
-    )
     try:
+        ref = entry["ref"]
+        default = (
+            "{organization}/{repository}/archive/{ref}.zip"
+            if re.fullmatch(r"[0-9a-f]{40}", ref)
+            else "{organization}/{repository}/archive/refs/{ref}.zip"
+        )
+        template = source or os.environ.get("RETROLARIUM_GAMES_SOURCE") or default
         return template.format(organization=catalog["organization"], repository=entry["repository"], ref=entry["ref"])
     except (KeyError, IndexError, ValueError) as exc:
         raise GameRepositoryError(
