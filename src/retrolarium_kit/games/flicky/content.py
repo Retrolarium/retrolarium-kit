@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath, PureWindowsPath
+import re
 import shutil
 import subprocess
 import tempfile
@@ -49,6 +50,12 @@ WORKSPACE_FILES = {
     "z80_sound_banks": "content/workspace/sound/z80_sound_data.asm",
 }
 SNAPSHOT_RECORD = "retrolarium-flicky-snapshot.json"
+SHARED_PALETTE_SOURCE = "src/game/screens/game_over.s"
+SHARED_PALETTE_ASSET = "data/palettes/shared-compact.bin"
+SHARED_PALETTE_INCLUDE = re.compile(
+    r'^(Gfx_SharedPalette:[ \t]*)binclude[ \t]+"data/palettes/shared-compact\.bin"(?=[ \t]*(?:;.*)?$)',
+    re.MULTILINE,
+)
 
 
 class FlickyContentError(ValueError):
@@ -147,6 +154,33 @@ def _extract_assets(snapshot: Path, rom: Path) -> None:
         target.write_bytes(content)
 
 
+def _shared_palette_source(root: Path) -> str:
+    path = root / SHARED_PALETTE_SOURCE
+    return path.read_text(encoding="utf-8") if path.is_file() else ""
+
+
+def _expand_shared_palette(snapshot: Path) -> str | None:
+    """Give the Studio scene reader its word table in the local snapshot."""
+    source = _shared_palette_source(snapshot)
+    match = SHARED_PALETTE_INCLUDE.search(source)
+    if match is None:
+        return None
+    payload = (snapshot / SHARED_PALETTE_ASSET).read_bytes()
+    if not payload or len(payload) % 2:
+        raise FlickyContentError("Flicky shared palette must contain big-endian words")
+    words = [f"${int.from_bytes(payload[i : i + 2], 'big'):04X}" for i in range(0, len(payload), 2)]
+    rows = [", ".join(words[i : i + 8]) for i in range(0, len(words), 8)]
+    table = match[1] + "dc.w " + "\n                dc.w ".join(rows)
+    path = snapshot / SHARED_PALETTE_SOURCE
+    original_hash = _sha256(path)
+    path.write_text(
+        source[: match.start()] + table + source[match.end() :],
+        encoding="utf-8",
+        newline="\n",
+    )
+    return original_hash
+
+
 def _snapshot_files(root: Path, files: list[Path]) -> dict[str, str]:
     return {relative.as_posix(): _sha256(root / relative) for relative in files}
 
@@ -203,6 +237,7 @@ def import_flicky_source(source_root: Path, canonical_rom: Path, project_root: P
             shutil.copy2(source_root / relative, target)
         shutil.copy2(canonical_rom, staging / ROM_NAME)
         _extract_assets(staging, staging / ROM_NAME)
+        shared_palette_source_hash = _expand_shared_palette(staging)
         try:
             initialize_workspace(staging)
         except FlickyWorkspaceError as exc:
@@ -231,6 +266,8 @@ def import_flicky_source(source_root: Path, canonical_rom: Path, project_root: P
             "canonical_sha256": CANONICAL_SHA256,
             "files": _snapshot_files(staging, files + asset_files),
         }
+        if shared_palette_source_hash is not None:
+            snapshot_record["shared_palette_source_sha256"] = shared_palette_source_hash
         (staging / SNAPSHOT_RECORD).write_text(
             json.dumps(snapshot_record, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
@@ -290,7 +327,10 @@ def refresh_flicky_source(source_root: Path, project_root: Path, original: Path)
     manifest = json.loads((snapshot / "assets/manifest.json").read_text(encoding="utf-8"))
     assets = {Path("data", *PurePosixPath(item["path"]).parts).as_posix() for item in manifest.get("assets", [])}
     imported = {name: digest for name, digest in record.get("files", {}).items() if name not in assets}
-    if imported == _snapshot_files(source_root, _tracked_files(source_root)):
+    if original_hash := record.get("shared_palette_source_sha256"):
+        imported[SHARED_PALETTE_SOURCE] = original_hash
+    current = _snapshot_files(source_root, _tracked_files(source_root))
+    if imported == current and not SHARED_PALETTE_INCLUDE.search(_shared_palette_source(snapshot)):
         return None
     staging = Path(tempfile.mkdtemp(prefix=".flicky-refresh-", dir=project_root))
     try:

@@ -502,6 +502,29 @@ class FlickyDescriptorTests(unittest.TestCase):
             self.assertEqual("ready", ready["status"])
             inspection = load_studio_project(Path(ready["project"]))
             self.assertEqual("flicky-content", inspection["project"]["source_mode"])
+            palette_source = root / "src/game/screens/game_over.s"
+            if 'binclude "data/palettes/shared-compact.bin"' in palette_source.read_text(encoding="utf-8"):
+                revision = root / ".retrolarium/ue"
+                snapshot_source = revision / "flicky-source/src/game/screens/game_over.s"
+                text = snapshot_source.read_text(encoding="utf-8")
+                palette = text.split("Gfx_SharedPalette:", 1)[1].splitlines()
+                words = []
+                for line in palette:
+                    if "dc.w " not in line:
+                        break
+                    words.extend(
+                        int(word.strip().removeprefix("$"), 16) for word in line.split("dc.w ", 1)[1].split(",")
+                    )
+                self.assertEqual(
+                    (root / "data/palettes/shared-compact.bin").read_bytes(),
+                    b"".join(word.to_bytes(2, "big") for word in words),
+                )
+                self.assertIn(
+                    'binclude "data/palettes/shared-compact.bin"',
+                    palette_source.read_text(encoding="utf-8"),
+                )
+                self.assertEqual("ready", prepare_revision(descriptor, "ue")["status"])
+                self.assertFalse((revision / "flicky-source.before-refresh").exists())
             self.assertFalse(revision_statuses(descriptor)["revisions"][0]["edited"])
             levels = root / ".retrolarium" / "ue" / "flicky-source" / "content" / "workspace" / "level" / "levels.json"
             levels.write_text(levels.read_text(encoding="utf-8").replace("\n", "\n ", 1) + " ", encoding="utf-8")
