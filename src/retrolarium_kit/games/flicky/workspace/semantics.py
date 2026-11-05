@@ -36,7 +36,8 @@ TEXT_RE = re.compile(
 )
 PALETTE_LABEL_RE = re.compile(r"^(?:Level_Palette\d+|Level_AccentPalette\d+|Title_LogoPalette)$")
 PALETTE_RE = re.compile(
-    r"^(?P<label>[A-Za-z_][A-Za-z0-9_]*):(?P<spacing>\s+)dc\.w\s+(?P<values>[^;\r\n]+)$",
+    r"^(?P<label>[A-Za-z_][A-Za-z0-9_]*):(?P<spacing>\s+)"
+    r'(?:dc\.w\s+(?P<values>[^;\r\n]+)|binclude[ \t]+"(?P<asset>data/palettes/[a-z0-9-]+\.bin)")$',
     re.MULTILINE,
 )
 
@@ -73,13 +74,14 @@ def export_document(root: Path) -> dict[str, Any]:
             label = match.group("label")
             if not PALETTE_LABEL_RE.fullmatch(label):
                 continue
-            palettes.append(
-                {
-                    "id": label,
-                    "source": relative,
-                    "colours": [parse_number(item) for item in match.group("values").split(",")],
-                }
-            )
+            if asset := match.group("asset"):
+                payload = (root / asset).read_bytes()
+                if not payload or len(payload) % 2:
+                    raise ValueError(f"{label}: expected a nonempty palette of big-endian words")
+                colours = [int.from_bytes(payload[i : i + 2], "big") for i in range(0, len(payload), 2)]
+            else:
+                colours = [parse_number(item) for item in match.group("values").split(",")]
+            palettes.append({"id": label, "source": relative, "colours": colours})
     return {
         "schema_version": 1,
         "profile": "canonical",
@@ -183,16 +185,28 @@ def apply_document(document: dict[str, Any], root: Path, staged_source: Path) ->
                     lambda match: f'{match.group("head")}"{replacement}"{match.group("tail")}',
                     source,
                 )
+                if count != 1:
+                    raise ValueError(f"{identifier}: expected exactly one owning source record")
             else:
                 original = baseline_palettes[identifier]
                 if record["colours"] == original["colours"]:
                     continue
-                pattern = re.compile(
-                    rf"^(?P<head>{re.escape(identifier)}:\s+dc\.w\s+)[^;\r\n]+$",
-                    re.MULTILINE,
+                matches = [match for match in PALETTE_RE.finditer(source) if match.group("label") == identifier]
+                if len(matches) != 1:
+                    raise ValueError(f"{identifier}: expected exactly one owning source record")
+                match = matches[0]
+                if asset := match.group("asset"):
+                    output = staged_source.parent / "palettes" / Path(asset).name
+                    include = output.relative_to(root).as_posix()
+                    output.parent.mkdir(parents=True, exist_ok=True)
+                    output.write_bytes(b"".join(colour.to_bytes(2, "big") for colour in record["colours"]))
+                    replacement = f'binclude "{include}"'
+                else:
+                    values = ", ".join(format_colour(colour) for colour in record["colours"])
+                    replacement = f"dc.w {values}"
+                source = (
+                    source[: match.start()]
+                    + f"{identifier}:{match.group('spacing')}{replacement}"
+                    + source[match.end() :]
                 )
-                values = ", ".join(format_colour(colour) for colour in record["colours"])
-                source, count = pattern.subn(lambda match: match.group("head") + values, source)
-            if count != 1:
-                raise ValueError(f"{identifier}: expected exactly one owning source record")
         path.write_text(source, encoding="utf-8", newline="\n")
