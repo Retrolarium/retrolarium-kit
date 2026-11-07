@@ -5,4 +5,5 @@ src/retrolarium_kit/core/profiles/game_pacman.json  # the font's character codes
 src/retrolarium_kit/games/pacman/sound.py  # the APU length-counter table (hardware)
 src/retrolarium_kit/games/smb/apu.py  # the APU length-counter table (hardware)
 src/retrolarium_kit/platform/nes/sound_effects.py  # the APU length-counter table (hardware)
+src/retrolarium_kit/platform/nes/preview.py  # the NES 2C02 display colors (hardware), matching Studio
 tests/platforms/nes/test_sound_effects.py  # a synthetic 6502 test program

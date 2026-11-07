@@ -15,6 +15,49 @@ from helpers import game_repository
 from retrolarium_kit.platform.nes import profile_tables
 
 
+class ProfileResourceTablesTests(unittest.TestCase):
+    def test_tables_can_span_resources_with_revision_overrides(self) -> None:
+        profile = {
+            "revisions": [
+                {
+                    "id": "fixture",
+                    "resource_overrides": [
+                        {"id": "sound", "parameters": {"tables": {"music": {"file_offset": 32, "size": 8}}}},
+                    ],
+                }
+            ],
+            "resources": [
+                {
+                    "id": "art",
+                    "codec": profile_tables.CODEC,
+                    "parameters": {"tables": {"graphics": {"file_offset": 16, "size": 8}}},
+                },
+                {
+                    "id": "sound",
+                    "codec": profile_tables.CODEC,
+                    "parameters": {"tables": {"music": {"file_offset": 24, "size": 8}}},
+                },
+            ],
+        }
+        self.assertEqual(
+            {"graphics": {"file_offset": 16, "size": 8}, "music": {"file_offset": 32, "size": 8}},
+            profile_tables._profile_tables(profile, "fixture", {"graphics", "music"}),
+        )
+        profile["revisions"][0]["resources"] = [profile["resources"][0]]
+        with self.assertRaisesRegex(profile_tables.ProfileTablesError, "no.*music"):
+            profile_tables._profile_tables(profile, "fixture", {"graphics", "music"})
+
+    def test_duplicate_table_names_are_rejected(self) -> None:
+        resource = {
+            "id": "one",
+            "codec": profile_tables.CODEC,
+            "parameters": {"tables": {"shared": {"file_offset": 16, "size": 8}}},
+        }
+        profile = {"revisions": [{"id": "fixture"}], "resources": [resource, {**resource, "id": "two"}]}
+        with self.assertRaisesRegex(profile_tables.ProfileTablesError, "more than one"):
+            profile_tables._profile_tables(profile, "fixture", {"shared"})
+
+
 class ProfileTablesTests(unittest.TestCase):
     def setUp(self) -> None:
         self.game = game_repository("pacman_src")
