@@ -18,3 +18,5 @@ How the kit builds projects and what each game's editable resources look like.
   [games/pacman/screens.md](games/pacman/screens.md),
   [games/pacman/sound.md](games/pacman/sound.md): Pac-Man maze, screens and
   sound.
+- [games/doraemon/rooms.md](games/doraemon/rooms.md) documents seeded World 3
+  room generation, matching neighbor passages and candidate previews.

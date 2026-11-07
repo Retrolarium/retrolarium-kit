@@ -219,26 +219,29 @@ def listing(game_root: Path, spec: dict, which: str) -> list[str]:
 
 def _profile_tables(profile: dict, revision_id: str, names: set[str]) -> dict:
     """A revision's tables as config/game_profile.json records them: the
-    byte-tables resource naming these tables, from the revision's own
+    byte-tables resources naming these tables, from the revision's own
     resources or from the shared ones with the revision's override."""
     revision = next((r for r in profile.get("revisions", []) if r["id"] == revision_id), None)
     if revision is None:
         raise ProfileTablesError(f"{revision_id} is not a revision of the profile")
     own = revision.get("resources")
-    resources = [
-        r
-        for r in (own if own is not None else profile.get("resources", []))
-        if r.get("codec") == CODEC and names <= set(r.get("parameters", {}).get("tables", {}))
-    ]
-    if len(resources) != 1:
-        raise ProfileTablesError(f"{revision_id}: the profile has {len(resources)} {CODEC} resources with these tables")
-    resource = resources[0]
-    tables = resource["parameters"]["tables"]
-    if own is None:
-        for override in revision.get("resource_overrides") or []:
-            if override.get("id") == resource["id"] and "tables" in override.get("parameters", {}):
-                tables = override["parameters"]["tables"]
-    return tables
+    recorded = {}
+    for resource in own if own is not None else profile.get("resources", []):
+        if resource.get("codec") != CODEC:
+            continue
+        tables = resource.get("parameters", {}).get("tables", {})
+        if own is None:
+            for override in revision.get("resource_overrides") or []:
+                if override.get("id") == resource["id"] and "tables" in override.get("parameters", {}):
+                    tables = override["parameters"]["tables"]
+        for name in sorted(names & tables.keys()):
+            if name in recorded:
+                raise ProfileTablesError(f"{revision_id}: table {name} belongs to more than one {CODEC} resource")
+            recorded[name] = tables[name]
+    missing = names - recorded.keys()
+    if missing:
+        raise ProfileTablesError(f"{revision_id}: the profile has no {CODEC} tables {sorted(missing)}")
+    return recorded
 
 
 def check(game_root: Path, spec: dict, revisions: set[str] | None = None) -> list[str]:
