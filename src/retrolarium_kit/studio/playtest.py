@@ -21,7 +21,12 @@ from retrolarium_kit.games.flicky.content import (
     FlickyContentError,
 )
 from retrolarium_core.fds import FdsError, parse_fds_side
-from retrolarium_kit.core.project import launch_image_plan, launch_image_smoke, sha256_file, vs_machine
+from retrolarium_kit.core.project import (
+    launch_image_plan,
+    launch_image_smoke,
+    sha256_file,
+    vs_machine,
+)
 from retrolarium_kit.studio.source_games import source_game
 from retrolarium_kit.studio.project import (
     SOLOMON_REVISIONS,
@@ -45,7 +50,11 @@ SMB_SCRIPTED_REVISIONS = frozenset({"ju", "pc10", "pal"})
 # worlds (file $40) load from the disk while the game runs; the playtest puts
 # that file in RAM the way the game's loader does and records it in the file
 # list number ($07F7).
-SMB_POINT_PLAYTEST_REVISIONS = SMB_SCRIPTED_REVISIONS | {"fds_smb", "smb2_jp_fds", "ann_fds"}
+SMB_POINT_PLAYTEST_REVISIONS = SMB_SCRIPTED_REVISIONS | {
+    "fds_smb",
+    "smb2_jp_fds",
+    "ann_fds",
+}
 SMB_LATE_FDS_RUNNING_TASKS = {"smb2_jp_fds": 4, "ann_fds": 5}
 SMB_LATE_FDS_HARD_WORLDS = frozenset({"world-hard", "world-extended"})
 
@@ -219,7 +228,13 @@ def studio_alien_soldier_playtest_plan(path: Path, *, mame: Path, stage: int) ->
         {
             "operation": "retrolarium.studio.alien-soldier-playtest",
             "backend": "mame-lua",
-            "arguments": [*plan["arguments"], "-autoboot_delay", "0", "-autoboot_script", str(lua.resolve())],
+            "arguments": [
+                *plan["arguments"],
+                "-autoboot_delay",
+                "0",
+                "-autoboot_script",
+                str(lua.resolve()),
+            ],
             "environment": settings,
             "project_file": inspection["project_file"],
             "script": {"path": str(lua.resolve()), "sha256": sha256_file(lua)},
@@ -230,13 +245,21 @@ def studio_alien_soldier_playtest_plan(path: Path, *, mame: Path, stage: int) ->
 
 
 def studio_alien_soldier_demo_plan(
-    path: Path, *, mame: Path, demo: int, record: Path | None = None, ready: Path | None = None
+    path: Path,
+    *,
+    mame: Path,
+    demo: int,
+    record: Path | None = None,
+    ready: Path | None = None,
 ) -> dict[str, Any]:
     """Loop one Alien Soldier attract demo (0..3) of the current build, or play
     it with the controller and write the steps to `record`."""
     from retrolarium_kit.core.source_snapshot import load_record
     from retrolarium_kit.games.alien_soldier.content import SOURCE_DIRECTORY
-    from retrolarium_kit.games.alien_soldier.playtest import PlaytestError, demo_environment
+    from retrolarium_kit.games.alien_soldier.playtest import (
+        PlaytestError,
+        demo_environment,
+    )
 
     inspection = load_studio_project(path)
     _require_declared_operation(inspection, "launch")
@@ -265,7 +288,13 @@ def studio_alien_soldier_demo_plan(
         {
             "operation": "retrolarium.studio.alien-soldier-demo",
             "backend": "mame-lua",
-            "arguments": [*plan["arguments"], "-autoboot_delay", "0", "-autoboot_script", str(lua.resolve())],
+            "arguments": [
+                *plan["arguments"],
+                "-autoboot_delay",
+                "0",
+                "-autoboot_script",
+                str(lua.resolve()),
+            ],
             "environment": settings,
             "project_file": inspection["project_file"],
             "script": {"path": str(lua.resolve()), "sha256": sha256_file(lua)},
@@ -392,8 +421,16 @@ def studio_flicky_sound_preview(
         "enabled_channels": list(range(track_count)) if enabled_channels is None else list(enabled_channels),
         "document_sha256": sha256_file(document),
         "renderer_sha256": sha256_file(renderer),
-        "vgm": {"path": str(vgm), "size": vgm.stat().st_size, "sha256": sha256_file(vgm)},
-        "wav": {"path": str(wav), "size": wav.stat().st_size, "sha256": sha256_file(wav)},
+        "vgm": {
+            "path": str(vgm),
+            "size": vgm.stat().st_size,
+            "sha256": sha256_file(vgm),
+        },
+        "wav": {
+            "path": str(wav),
+            "size": wav.stat().st_size,
+            "sha256": sha256_file(wav),
+        },
     }
 
 
@@ -423,7 +460,11 @@ def studio_alien_soldier_sample_preview(path: Path, *, kind: str, number: int) -
         "id": number,
         "rate": report["rate"],
         "levels": report["levels"],
-        "wav": {"path": str(wav), "size": wav.stat().st_size, "sha256": sha256_file(wav)},
+        "wav": {
+            "path": str(wav),
+            "size": wav.stat().st_size,
+            "sha256": sha256_file(wav),
+        },
     }
 
 
@@ -490,7 +531,13 @@ def studio_alien_soldier_sound_preview(
             )
             os.replace(temporary / "preview.vgm", vgm)
             os.replace(temporary / "preview.wav", wav)
-        except (OSError, ValueError, KeyError, SequencerError, subprocess.CalledProcessError) as exc:
+        except (
+            OSError,
+            ValueError,
+            KeyError,
+            SequencerError,
+            subprocess.CalledProcessError,
+        ) as exc:
             raise StudioProjectError(f"Alien Soldier sound preview failed: {exc}") from exc
     return {
         "schema": "retrolarium.alien-soldier-sound-preview",
@@ -503,8 +550,16 @@ def studio_alien_soldier_sound_preview(
         "frame_rate": report["frame_rate"],
         "enabled_channels": None if enabled_channels is None else list(enabled_channels),
         "renderer_sha256": sha256_file(renderer),
-        "vgm": {"path": str(vgm), "size": vgm.stat().st_size, "sha256": sha256_file(vgm)},
-        "wav": {"path": str(wav), "size": wav.stat().st_size, "sha256": sha256_file(wav)},
+        "vgm": {
+            "path": str(vgm),
+            "size": vgm.stat().st_size,
+            "sha256": sha256_file(vgm),
+        },
+        "wav": {
+            "path": str(wav),
+            "size": wav.stat().st_size,
+            "sha256": sha256_file(wav),
+        },
     }
 
 
@@ -843,20 +898,29 @@ def studio_castle_excellent_point_playtest_plan(
 
     artifact = Path(verification["artifact"]["absolute_path"]).resolve()
     source = artifact.read_bytes()
-    # iNES header + PRG offset $22B1: LDA #$47; STA $37. Both supported
-    # revisions share this sequence. Only the immediate operand is changed.
+    profile = game_profiles().get("castle-excellent")
+    revision = next(item for item in profile.revisions if item.revision_id == document["revision"])
+    rooms_resource = next(item for item in profile.resources_for(revision) if item.resource_id == "rooms")
+    initial_room_cpu = _bounded_integer(
+        rooms_resource.parameters.get("initial_room_cpu", 0xA2B1),
+        "initial_room_cpu",
+        0x8000,
+        0xFFFC,
+    )
+    initial_room_offset = 16 + initial_room_cpu - 0x8000
+    # The profile may relocate new-game setup. Guard LDA #room; STA $37
+    # before changing only its immediate operand in the isolated preview.
     if (
         len(source) != 65552
         or source[:4] != b"NES\x1a"
-        or source[0x22C1] != 0xA9
-        or source[0x22C3:0x22C5] != b"\x85\x37"
+        or source[initial_room_offset] != 0xA9
+        or source[initial_room_offset + 2 : initial_room_offset + 4] != b"\x85\x37"
     ):
         raise StudioProjectError("Castle Excellent build does not match the guarded initial-room layout")
     preview = bytearray(source)
-    preview[0x22C2] = room
+    preview[initial_room_offset + 1] = room
     # The player cannot die.
-    profile = game_profiles().get("castle-excellent")
-    apply_invincible(preview, next(item for item in profile.revisions if item.revision_id == document["revision"]))
+    apply_invincible(preview, revision)
     project_root = Path(inspection["project_root"]).resolve()
     preview_directory = project_root / "build" / "point-playtest"
     preview_directory.mkdir(parents=True, exist_ok=True)
@@ -1151,12 +1215,22 @@ def _doraemon_playtest_point(
         return (
             f"camera {cx} {cy} {sx} {sy} {area}",
             DORAEMON_WORLD1_START_WRITES,
-            {"world": 1, "block": [x, y], "camera": [cx, cy], "player": [sx, sy], "area": area},
+            {
+                "world": 1,
+                "block": [x, y],
+                "camera": [cx, cy],
+                "player": [sx, sy],
+                "area": area,
+            },
         )
     if world == 2 and stage is not None:
         if stage not in (0, 1, 2):
             raise StudioProjectError("World 2 stages are 0-2")
-        return f"stage {stage}", DORAEMON_WORLD2_START_WRITES, {"world": 2, "stage": stage}
+        return (
+            f"stage {stage}",
+            DORAEMON_WORLD2_START_WRITES,
+            {"world": 2, "stage": stage},
+        )
     if world == 3 and room is not None:
         if not 1 <= room <= 63:
             raise StudioProjectError("World 3 rooms are 1-63 (room 0 is the start)")
@@ -1236,7 +1310,12 @@ def studio_doraemon_playtest_plan(
         raise StudioProjectError(f"packaged Doraemon playtest script is missing: {lua}")
     # The player cannot be hurt.
     _, revision = _source_revision(inspection)
-    plan = launch_image_plan(invincible_image(artifact, revision), platform="nes", mame=executable, machine="nes")
+    plan = launch_image_plan(
+        invincible_image(artifact, revision),
+        platform="nes",
+        mame=executable,
+        machine="nes",
+    )
     plan.update(
         {
             "operation": "retrolarium.studio.doraemon-playtest",

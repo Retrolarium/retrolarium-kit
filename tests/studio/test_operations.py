@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 import tempfile
 import unittest
@@ -488,11 +489,21 @@ class StudioOperationTests(unittest.TestCase):
         (game_repository("castle_excellent_src") / "config" / "game_profile.json").is_file(),
         "the Castle Excellent repository is not available",
     )
-    def test_castle_excellent_point_playtest_prepares_isolated_room_preview(self) -> None:
+    def test_castle_excellent_point_playtest_prepares_isolated_room_preview(
+        self,
+    ) -> None:
         # The invincibility patches come from the repository's profile.
         repository_profile(game_repository("castle_excellent_src"))
-        for revision in ("castle-excellent-japan-hsp-05", "castlequest-usa"):
-            with self.subTest(revision=revision), tempfile.TemporaryDirectory() as temporary:
+        for revision, initial_room_cpu in (
+            ("castle-excellent-japan-hsp-05", 0xA2B1),
+            ("castlequest-usa", 0xA2B1),
+            ("castle-excellent-japan-hsp-05", 0x9FE3),
+            ("castlequest-usa", 0x9FE3),
+        ):
+            with (
+                self.subTest(revision=revision, initial_room_cpu=initial_room_cpu),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
                 root = Path(temporary)
                 state = self.prepare(root)
                 state["project"]["profile"] = "castle-excellent.v1"
@@ -513,9 +524,26 @@ class StudioOperationTests(unittest.TestCase):
                 )
                 source = bytearray(65552)
                 source[:16] = b"NES\x1a" + bytes([2, 4, 0x30]) + bytes(9)
-                source[0x22C1:0x22C5] = b"\xa9\x47\x85\x37"
+                initial_room_offset = 16 + initial_room_cpu - 0x8000
+                source[initial_room_offset : initial_room_offset + 4] = b"\xa9\x47\x85\x37"
                 spec = next(
                     item for item in game_profiles().get("castle-excellent").revisions if item.revision_id == revision
+                )
+                original_profile = game_profiles().get("castle-excellent")
+                profile = replace(
+                    original_profile,
+                    resources=tuple(
+                        replace(
+                            resource,
+                            parameters={
+                                **resource.parameters,
+                                "initial_room_cpu": initial_room_cpu,
+                            },
+                        )
+                        if resource.resource_id == "rooms"
+                        else resource
+                        for resource in original_profile.resources
+                    ),
                 )
                 for code in spec.invincible:
                     source[code.offset : code.offset + len(code.expect)] = code.expect
@@ -528,6 +556,7 @@ class StudioOperationTests(unittest.TestCase):
                     "artifact": {"absolute_path": str(artifact)},
                 }
                 with (
+                    patch("retrolarium_kit.studio.playtest.game_profiles") as profiles,
                     patch(
                         "retrolarium_kit.studio.playtest.load_studio_project",
                         return_value=state,
@@ -537,6 +566,7 @@ class StudioOperationTests(unittest.TestCase):
                         return_value=verification,
                     ),
                 ):
+                    profiles.return_value.get.return_value = profile
                     plan = studio_castle_excellent_point_playtest_plan(
                         root / "fixture.rlj",
                         mame=mame,
@@ -546,7 +576,7 @@ class StudioOperationTests(unittest.TestCase):
                     )
                     preview = Path(plan["arguments"][2])
                     expected = bytearray(source)
-                    expected[0x22C2] = 42
+                    expected[initial_room_offset + 1] = 42
                     # The player cannot die in the preview.
                     for code in spec.invincible:
                         expected[code.offset : code.offset + len(code.write)] = code.write
@@ -555,7 +585,10 @@ class StudioOperationTests(unittest.TestCase):
                     self.assertEqual("42", plan["environment"]["CASTLE_EXCELLENT_PLAYTEST_ROOM"])
                     self.assertEqual("312", plan["environment"]["CASTLE_EXCELLENT_PLAYTEST_X"])
                     self.assertEqual("156", plan["environment"]["CASTLE_EXCELLENT_PLAYTEST_Y"])
-                    self.assertEqual("retrolarium.studio.castle-excellent-point-playtest", plan["operation"])
+                    self.assertEqual(
+                        "retrolarium.studio.castle-excellent-point-playtest",
+                        plan["operation"],
+                    )
                     self.assertTrue(Path(plan["arguments"][-1]).is_file())
                     with self.assertRaisesRegex(StudioProjectError, "room must be"):
                         studio_castle_excellent_point_playtest_plan(
@@ -573,7 +606,7 @@ class StudioOperationTests(unittest.TestCase):
                             x=320,
                             y=0,
                         )
-                    source[0x22C3] = 0
+                    source[initial_room_offset + 2] = 0
                     artifact.write_bytes(source)
                     with self.assertRaisesRegex(StudioProjectError, "guarded"):
                         studio_castle_excellent_point_playtest_plan(
@@ -643,8 +676,14 @@ class StudioOperationTests(unittest.TestCase):
                 )
 
             with (
-                patch("retrolarium_kit.studio.create.load_studio_project", return_value=state),
-                patch("retrolarium_kit.studio.create._project_source", return_value=root / "base.nes"),
+                patch(
+                    "retrolarium_kit.studio.create.load_studio_project",
+                    return_value=state,
+                ),
+                patch(
+                    "retrolarium_kit.studio.create._project_source",
+                    return_value=root / "base.nes",
+                ),
                 patch("retrolarium_kit.games.catalog.extract_game", side_effect=extract),
             ):
                 added = studio_create._add_bundle_resources(
@@ -665,7 +704,9 @@ class StudioOperationTests(unittest.TestCase):
                 self.assertEqual(
                     [],
                     studio_create._add_bundle_resources(
-                        root / "fixture.rlj", profile="doraemon.v1", codec="nes.chr-2bpp.v1"
+                        root / "fixture.rlj",
+                        profile="doraemon.v1",
+                        codec="nes.chr-2bpp.v1",
                     ),
                 )
 
@@ -678,7 +719,10 @@ class StudioOperationTests(unittest.TestCase):
             artifact.write_bytes(b"NES" + bytes((1, 1)) + bytes(10) + bytes(0x4000 + 0x2000))
             mame = root / "mame.exe"
             mame.write_bytes(b"fixture")
-            verification = {"status": "current", "artifact": {"absolute_path": str(artifact)}}
+            verification = {
+                "status": "current",
+                "artifact": {"absolute_path": str(artifact)},
+            }
             with (
                 patch(
                     "retrolarium_kit.studio.playtest.load_studio_project",
@@ -708,8 +752,14 @@ class StudioOperationTests(unittest.TestCase):
         # The hooks come from the repository's profile, which the studio has
         # opened by the time a playtest runs.
         repository_profile(game_repository("solomon_no_kagi_src"))
-        for revision, hook, machine in (("usa", 0x9021, "nes"), ("europe", 0x9030, "nespal")):
-            with self.subTest(revision=revision), tempfile.TemporaryDirectory() as temporary:
+        for revision, hook, machine in (
+            ("usa", 0x9021, "nes"),
+            ("europe", 0x9030, "nespal"),
+        ):
+            with (
+                self.subTest(revision=revision),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
                 root = Path(temporary)
                 state = self.prepare(root)
                 state["project"]["profile"] = "solomons-key.v1"

@@ -290,7 +290,16 @@ class CastleExcellentCodecTests(unittest.TestCase):
             {
                 "file_offset": 31623,
                 "size": 53,
-                "record_names": ["title", "load", "save", "reset", "back", "game", "loading", "saving"],
+                "record_names": [
+                    "title",
+                    "load",
+                    "save",
+                    "reset",
+                    "back",
+                    "game",
+                    "loading",
+                    "saving",
+                ],
                 "record_sizes": [12, 5, 5, 6, 5, 5, 8, 7],
             },
         )
@@ -370,6 +379,35 @@ class CastleExcellentCodecTests(unittest.TestCase):
         self.assertEqual(rebuilt[prg_start + 0x240 : prg_start + 0x244], bytes((1, 0, 1, 0)))
         self.assertEqual(rebuilt[prg_start + 0x250 : prg_start + 0x255], bytes((0, 1, 1, 2, 2)))
         self.assertEqual(rebuilt[prg_start + 0x260 : prg_start + 0x265], bytes((0, 1, 2, 2, 2)))
+
+    def test_runtime_slots_include_all_cell_spawned_platforms(self) -> None:
+        for marker in (0x49, 0x4A, 0x4B, 0x4D, 0x51):
+            with self.subTest(marker=marker):
+                image = bytearray(synthetic_image())
+                image[16] = marker  # replace the first prefix code's cell, $10
+                image = bytes(image)
+                profile, revision = synthetic_profile(image)
+                profile = replace(
+                    profile,
+                    resources=tuple(
+                        replace(
+                            resource,
+                            parameters={**resource.parameters, "maximum_per_room": 24},
+                        )
+                        if resource.resource_id == "objects"
+                        else resource
+                        for resource in profile.resources
+                    ),
+                )
+                document = decode_levels(image, profile, revision)
+                rebuilt, _report = build_levels(image, document, profile, revision)
+                self.assertEqual(rebuilt, image)
+                overloaded = replace(
+                    document,
+                    objects=((document.objects[0][0],) * 24, *document.objects[1:]),
+                )
+                with self.assertRaisesRegex(CastleExcellentError, "from cells"):
+                    build_levels(image, overloaded, profile, revision)
 
     def test_room_arena_overflow_is_rejected(self) -> None:
         image = synthetic_image()
@@ -454,7 +492,9 @@ class CastleExcellentCodecTests(unittest.TestCase):
             with self.assertRaisesRegex(CastleExcellentError, "overflows CHR bank 2"):
                 validate_game(image_path, document_path, custom_profile=profile_path)
 
-    def test_castle_excellent_rooms_and_two_chr_banks_build_as_one_transaction(self) -> None:
+    def test_castle_excellent_rooms_and_two_chr_banks_build_as_one_transaction(
+        self,
+    ) -> None:
         image = synthetic_image()
         base, revision = synthetic_profile(image)
         profile = replace(

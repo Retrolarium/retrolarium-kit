@@ -235,22 +235,36 @@ def _rendering_configuration(resource: ResourceSpec) -> tuple[Any, ...]:
     )
     has_object_rendering = any(key in parameters for key in object_keys)
     runtime_types_cpu = (
-        _integer(parameters.get("runtime_object_types_cpu"), "room-rendering.runtime_object_types_cpu")
+        _integer(
+            parameters.get("runtime_object_types_cpu"),
+            "room-rendering.runtime_object_types_cpu",
+        )
         if has_object_rendering
         else 0
     )
     runtime_type_count = (
-        _integer(parameters.get("runtime_object_type_count"), "room-rendering.runtime_object_type_count", minimum=1)
+        _integer(
+            parameters.get("runtime_object_type_count"),
+            "room-rendering.runtime_object_type_count",
+            minimum=1,
+        )
         if has_object_rendering
         else 0
     )
     descriptors_cpu = (
-        _integer(parameters.get("metasprite_descriptors_cpu"), "room-rendering.metasprite_descriptors_cpu")
+        _integer(
+            parameters.get("metasprite_descriptors_cpu"),
+            "room-rendering.metasprite_descriptors_cpu",
+        )
         if has_object_rendering
         else 0
     )
     descriptors_size = (
-        _integer(parameters.get("metasprite_descriptors_size"), "room-rendering.metasprite_descriptors_size", minimum=1)
+        _integer(
+            parameters.get("metasprite_descriptors_size"),
+            "room-rendering.metasprite_descriptors_size",
+            minimum=1,
+        )
         if has_object_rendering
         else 0
     )
@@ -261,9 +275,19 @@ def _rendering_configuration(resource: ResourceSpec) -> tuple[Any, ...]:
     )
     for index, raw in enumerate(raw_previews):
         item = _mapping(raw, f"room-rendering.object_previews[{index}]")
-        runtime_type = _integer(item.get("runtime_type"), f"room-rendering.object_previews[{index}].runtime_type")
-        descriptor_cpu = _integer(item.get("descriptor_cpu"), f"room-rendering.object_previews[{index}].descriptor_cpu")
-        offsets = _document_bytes(item.get("x_offsets"), f"room-rendering.object_previews[{index}].x_offsets", None)
+        runtime_type = _integer(
+            item.get("runtime_type"),
+            f"room-rendering.object_previews[{index}].runtime_type",
+        )
+        descriptor_cpu = _integer(
+            item.get("descriptor_cpu"),
+            f"room-rendering.object_previews[{index}].descriptor_cpu",
+        )
+        offsets = _document_bytes(
+            item.get("x_offsets"),
+            f"room-rendering.object_previews[{index}].x_offsets",
+            None,
+        )
         if runtime_type > 0xFF:
             raise CastleExcellentError("room-rendering object preview type must fit a byte")
         if not 1 <= len(offsets) <= 4:
@@ -279,15 +303,30 @@ def _rendering_configuration(resource: ResourceSpec) -> tuple[Any, ...]:
         _integer(parameters.get("chr_bank"), "room-rendering.chr_bank"),
         _integer(parameters.get("chr_size"), "room-rendering.chr_size", minimum=1),
         _integer(parameters.get("room_palette_cpu"), "room-rendering.room_palette_cpu"),
-        _integer(parameters.get("room_palette_size"), "room-rendering.room_palette_size", minimum=1),
+        _integer(
+            parameters.get("room_palette_size"),
+            "room-rendering.room_palette_size",
+            minimum=1,
+        ),
         _integer(parameters.get("left_tiles_cpu"), "room-rendering.left_tiles_cpu"),
         _integer(parameters.get("right_tiles_cpu"), "room-rendering.right_tiles_cpu"),
         _integer(parameters.get("cell_attributes_cpu"), "room-rendering.cell_attributes_cpu"),
         _integer(parameters.get("cell_count"), "room-rendering.cell_count", minimum=1),
-        _integer(parameters.get("initial_attributes_cpu"), "room-rendering.initial_attributes_cpu"),
-        _integer(parameters.get("initial_attributes_size"), "room-rendering.initial_attributes_size", minimum=1),
+        _integer(
+            parameters.get("initial_attributes_cpu"),
+            "room-rendering.initial_attributes_cpu",
+        ),
+        _integer(
+            parameters.get("initial_attributes_size"),
+            "room-rendering.initial_attributes_size",
+            minimum=1,
+        ),
         _integer(parameters.get("attribute_masks_cpu"), "room-rendering.attribute_masks_cpu"),
-        _integer(parameters.get("attribute_masks_size"), "room-rendering.attribute_masks_size", minimum=1),
+        _integer(
+            parameters.get("attribute_masks_size"),
+            "room-rendering.attribute_masks_size",
+            minimum=1,
+        ),
     )
     if (
         values[1] != 0x2000
@@ -370,10 +409,19 @@ def _parse_rendering(value: object) -> CastleExcellentRenderingData:
     if item.get("codec") != ROOM_RENDERING_CODEC:
         raise CastleExcellentError("level document rendering codec is unsupported")
     has_object_rendering = any(
-        name in item for name in ("runtime_object_types", "metasprite_descriptors", "object_previews")
+        name in item
+        for name in (
+            "runtime_object_types",
+            "metasprite_descriptors",
+            "object_previews",
+        )
     )
     descriptors = (
-        _document_bytes(item.get("metasprite_descriptors"), "level document rendering.metasprite_descriptors", 406)
+        _document_bytes(
+            item.get("metasprite_descriptors"),
+            "level document rendering.metasprite_descriptors",
+            406,
+        )
         if has_object_rendering
         else b""
     )
@@ -387,13 +435,17 @@ def _parse_rendering(value: object) -> CastleExcellentRenderingData:
     for index, raw in enumerate(raw_previews):
         preview = _mapping(raw, f"level document rendering.object_previews[{index}]")
         runtime_type = _integer(
-            preview.get("runtime_type"), f"level document rendering.object_previews[{index}].runtime_type"
+            preview.get("runtime_type"),
+            f"level document rendering.object_previews[{index}].runtime_type",
         )
         descriptor_offset = _integer(
-            preview.get("descriptor_offset"), f"level document rendering.object_previews[{index}].descriptor_offset"
+            preview.get("descriptor_offset"),
+            f"level document rendering.object_previews[{index}].descriptor_offset",
         )
         offsets = _document_bytes(
-            preview.get("x_offsets"), f"level document rendering.object_previews[{index}].x_offsets", None
+            preview.get("x_offsets"),
+            f"level document rendering.object_previews[{index}].x_offsets",
+            None,
         )
         if runtime_type > 0xFF or not 1 <= len(offsets) <= 4:
             raise CastleExcellentError("level document rendering object preview is invalid")
@@ -410,13 +462,23 @@ def _parse_rendering(value: object) -> CastleExcellentRenderingData:
         _document_bytes(item.get("left_tiles"), "level document rendering.left_tiles", 100),
         _document_bytes(item.get("right_tiles"), "level document rendering.right_tiles", 100),
         _document_bytes(item.get("cell_attributes"), "level document rendering.cell_attributes", 100),
-        _document_bytes(item.get("initial_attributes"), "level document rendering.initial_attributes", 16),
+        _document_bytes(
+            item.get("initial_attributes"),
+            "level document rendering.initial_attributes",
+            16,
+        ),
         _document_bytes(item.get("attribute_masks"), "level document rendering.attribute_masks", 4),
         _document_bytes(
-            item.get("attribute_preserving_cells"), "level document rendering.attribute_preserving_cells", None
+            item.get("attribute_preserving_cells"),
+            "level document rendering.attribute_preserving_cells",
+            None,
         ),
         (
-            _document_bytes(item.get("runtime_object_types"), "level document rendering.runtime_object_types", 61)
+            _document_bytes(
+                item.get("runtime_object_types"),
+                "level document rendering.runtime_object_types",
+                61,
+            )
             if has_object_rendering
             else b""
         ),
@@ -514,7 +576,9 @@ def encode_prefix_stream(cells: Sequence[int], entries: Sequence[PrefixEntry]) -
     )
 
 
-def _room_configuration(resource: ResourceSpec) -> tuple[int, int, int, int, int, tuple[RoomArena, ...]]:
+def _room_configuration(
+    resource: ResourceSpec,
+) -> tuple[int, int, int, int, int, tuple[RoomArena, ...]]:
     parameters = resource.parameters
     count = _integer(parameters.get("room_count"), "rooms.room_count", minimum=1)
     width = _integer(parameters.get("width"), "rooms.width", minimum=1)
@@ -589,7 +653,9 @@ def _decode_rooms(image: InesImage, resource: ResourceSpec) -> tuple[tuple[Room,
     return tuple(rooms), codebook
 
 
-def _object_configuration(resource: ResourceSpec) -> tuple[int, int, int, int, int, int, int, int, int, int]:
+def _object_configuration(
+    resource: ResourceSpec,
+) -> tuple[int, int, int, int, int, int, int, int, int, int]:
     parameters = resource.parameters
     return (
         _integer(parameters.get("room_count"), "objects.room_count", minimum=1),
@@ -606,9 +672,18 @@ def _object_configuration(resource: ResourceSpec) -> tuple[int, int, int, int, i
 
 
 def _decode_objects(image: InesImage, resource: ResourceSpec) -> tuple[tuple[ObjectRecord, ...], ...]:
-    count, width, height, stream_cpu, stream_end_cpu, counts_cpu, offsets_cpu, state_capacity, type_count, maximum = (
-        _object_configuration(resource)
-    )
+    (
+        count,
+        width,
+        height,
+        stream_cpu,
+        stream_end_cpu,
+        counts_cpu,
+        offsets_cpu,
+        state_capacity,
+        type_count,
+        maximum,
+    ) = _object_configuration(resource)
     start = _cpu_offset(stream_cpu)
     end = _cpu_offset(stream_end_cpu)
     if start >= end or end > len(image.prg):
@@ -692,7 +767,12 @@ def decode_levels(payload: bytes, profile: GameProfile, revision: RevisionSpec) 
         raise CastleExcellentError(f"input mapper {image.mapper} does not match revision mapper {revision.mapper}")
     rooms_resource = _resource(profile, revision, "rooms", "castle-excellent.prefix-rooms.v1")
     objects_resource = _resource(profile, revision, "objects", "castle-excellent.object-stream.v1")
-    mutable_resource = _resource(profile, revision, "mutable-cell-state", "castle-excellent.mutable-cell-state.v1")
+    mutable_resource = _resource(
+        profile,
+        revision,
+        "mutable-cell-state",
+        "castle-excellent.mutable-cell-state.v1",
+    )
     rendering_resource = _optional_resource(profile, revision, "room-rendering", ROOM_RENDERING_CODEC)
     rooms, _codebook = _decode_rooms(image, rooms_resource)
     objects = _decode_objects(image, objects_resource)
@@ -819,7 +899,12 @@ def build_levels(
     image = parse_ines(source)
     rooms_resource = _resource(profile, revision, "rooms", "castle-excellent.prefix-rooms.v1")
     objects_resource = _resource(profile, revision, "objects", "castle-excellent.object-stream.v1")
-    mutable_resource = _resource(profile, revision, "mutable-cell-state", "castle-excellent.mutable-cell-state.v1")
+    mutable_resource = _resource(
+        profile,
+        revision,
+        "mutable-cell-state",
+        "castle-excellent.mutable-cell-state.v1",
+    )
     rendering_resource = _optional_resource(profile, revision, "room-rendering", ROOM_RENDERING_CODEC)
     if document.rendering is not None:
         if rendering_resource is None:
@@ -831,7 +916,10 @@ def build_levels(
             and not document.rendering.object_previews
         ):
             expected_rendering = replace(
-                expected_rendering, runtime_object_types=b"", metasprite_descriptors=b"", object_previews=()
+                expected_rendering,
+                runtime_object_types=b"",
+                metasprite_descriptors=b"",
+                object_previews=(),
             )
         if document.rendering != expected_rendering:
             raise CastleExcellentError("level document rendering data is read-only in schema version 1")
@@ -906,6 +994,12 @@ def build_levels(
     for index, records in enumerate(document.objects):
         if len(records) > maximum:
             raise CastleExcellentError(f"room {index + 1} has too many static objects")
+        generated = sum(cell in {0x49, 0x4A, 0x4B, 0x4D, 0x51} for row in document.rooms[index].cells for cell in row)
+        if len(records) + generated > maximum:
+            raise CastleExcellentError(
+                f"room {index + 1} needs {len(records) + generated} runtime objects "
+                f"({len(records)} static + {generated} from cells), limit is {maximum}"
+            )
         for record in records:
             if (
                 record.encoded_type >= type_count
