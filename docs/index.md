@@ -20,3 +20,5 @@ How the kit builds projects and what each game's editable resources look like.
   sound.
 - [games/doraemon/rooms.md](games/doraemon/rooms.md) documents seeded World 3
   room generation, matching neighbor passages and candidate previews.
+- [games/castle_excellent/reachability.md](games/castle_excellent/reachability.md)
+  documents the bounded original-mechanics room route prototype.
