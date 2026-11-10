@@ -3,7 +3,8 @@
 Commands are grouped by what they work on: project and build-tools
 (cli/project.py), game (cli/game.py), studio (cli/studio.py), audio
 (cli/audio.py), lint and hooks (cli/lint.py), movie (cli/movie.py), assets
-(cli/assets.py), profile (cli/profile.py) and fds (cli/fds.py). Each
+(cli/assets.py), profile (cli/profile.py), fds (cli/fds.py) and assembly
+analysis (cli/asm.py). Each
 command imports the modules it runs, so `rltool --help` and the Studio's
 frequent short calls do not pay for loading every game's codecs.
 """
@@ -15,7 +16,7 @@ from pathlib import Path
 import sys
 
 from retrolarium_kit import __version__
-from retrolarium_kit.cli import assets, audio, fds, game, lint, movie, profile, project, studio
+from retrolarium_kit.cli import asm, assets, audio, fds, game, lint, movie, profile, project, studio
 
 
 # The errors a command reports as a one-line message, by the module that
@@ -27,6 +28,7 @@ EXPECTED_ERRORS = {
     "retrolarium_core.megadrive": "MegaDriveError",
     "retrolarium_core.snes": "SnesError",
     "retrolarium_kit.core.assets": "AssetsError",
+    "retrolarium_kit.core.assembly_similarity": "AssemblySimilarityError",
     "retrolarium_kit.core.authoring": "AuthoringError",
     "retrolarium_kit.core.build_toolchains": "BuildToolchainError",
     "retrolarium_kit.core.game_names": "GameNamesError",
@@ -50,7 +52,7 @@ def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(prog="rltool", description=__doc__.split("\n", 1)[0])
     root.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     commands = root.add_subparsers(dest="command", required=True)
-    for group in (project, game, studio, audio, lint, movie, assets, profile, fds):
+    for group in (project, game, studio, audio, lint, movie, assets, profile, fds, asm):
         group.add_parsers(commands)
     return root
 
