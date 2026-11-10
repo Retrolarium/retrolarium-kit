@@ -529,3 +529,9 @@ Foundation, either version 3 of the License, or (at your option) any later
 version (`GPL-3.0-or-later`, text in `LICENSE`). It comes without any warranty.
 The bundled toolchains keep their own licenses
 (`src/retrolarium_kit/core/toolchains/licenses`).
+
+## Similar assembly routines
+
+Use `rltool asm similar` to compare 6502, 65816 and 68000 routine blocks.
+[The source similarity guide](docs/assembly_similarity.md) describes scores,
+platforms, path filters and structured reports.
