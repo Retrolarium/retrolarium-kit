@@ -46,11 +46,12 @@ simulating control flow or inferring a caller's CPU mode.
 
 ## Boundaries and limits
 
-The parser uses ca65 `.proc` blocks and `End of function` comments where
-available. Other blocks are inferred from labels, direct call targets, terminal
-instructions and directive barriers. Each match reports its boundary method and
-source lines. Data, includes and unknown operations break a contiguous block.
-Macro and repetition definitions are skipped rather than expanded.
+The parser uses ca65 `.proc` blocks and `End of function`/`End of subroutine`
+comments where available. Other blocks are inferred from labels, direct call
+targets, terminal instructions and directive barriers. Each match reports its
+boundary method and source lines. Data, includes and unknown operations break a
+contiguous block. Macro and repetition definitions are skipped rather than
+expanded.
 
 Conditional branches of the assembly source are scanned separately and marked as
 conditional. The command does not evaluate project defines, expand macros or

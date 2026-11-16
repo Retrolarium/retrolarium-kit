@@ -54,7 +54,7 @@ SUFFIXES = {".asm", ".s", ".inc", ".a65", ".a"}
 IGNORED = {".git", ".venv", "__pycache__", "build", "data", "node_modules", "vendor"}
 LABEL = re.compile(r"^([A-Za-z_@.?][\w@.?]*|[+-]+|\d+):\s*")
 PROC = re.compile(r"^\.proc\s+([A-Za-z_][\w.]*)", re.I)
-END = re.compile(r";\s*End of function\s+(\S+)", re.I)
+END = re.compile(r";\s*End of (?:function|subroutine)\s+(\S+)", re.I)
 GENERATED = re.compile(r"(?:loc(?:ret)?|sub|[Ll])_[0-9A-Fa-f]+$|Bank\d+_Label_", re.I)
 LEXER = re.compile(
     r"""(?P<string>"(?:[^"\\]|\\.|"")*"|'(?:[^'\\]|\\.|'')*')"""
@@ -152,6 +152,15 @@ def _tokens(
             strict.append(("number", int(digits, radix)))
             shape.append("number")
         elif kind == "symbol":
+            if (
+                cpu == "68000"
+                and text.lower() in {".b", ".w", ".l"}
+                and instruction.operands[: token.start()].rstrip().endswith(")")
+            ):
+                # AS absolute-address widths belong to the operand, not the label scope.
+                strict.append(("address-width", text.lower()))
+                shape.append(("address-width", text.lower()))
+                continue
             if text.upper() in REGISTERS[cpu]:
                 strict.append(("register", text.upper()))
                 shape.append(("register", text.upper()))
@@ -262,6 +271,11 @@ def _blocks(path: str, text: str, cpu: str, diagnostics: Counter) -> list[Block]
         if op in {".endproc", ".scope", ".endscope", "endsection", ".endsection"}:
             flush()
             scope = ""
+            continue
+        if cpu == "68000" and re.fullmatch(r"[+-]+", code):
+            # AS permits an anonymous label on its own without a trailing colon.
+            current.labels[code].append(len(current.instructions))
+            current.names.append((len(current.instructions), code, False))
             continue
         if code.startswith(":"):
             current.labels[":"].append(len(current.instructions))

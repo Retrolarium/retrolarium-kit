@@ -194,3 +194,40 @@ class SimilarityTests(unittest.TestCase):
             self.assertEqual(
                 main(["asm", "similar", "--root", str(self.root), "--platform", "nes", "--min-instructions", "1"]), 1
             )
+
+    def test_m68k_address_width_suffixes_are_not_local_symbols(self):
+        body = """{name}:
+ move.w (SharedRam).w,d0
+ move.l (SharedRamLong).l,d1
+ jsr (RenderFrame).l
+ add.w d1,d0
+ move.w d0,(SharedRam).w
+ rts
+; End of function {name}
+"""
+        self.write("a.s", body.format(name="First"))
+        self.write("b.s", body.format(name="Second"))
+        self.assertEqual(self.scan("genesis")["matches"][0]["kind"], "same-normalized-source")
+        self.write("b.s", body.format(name="Second").replace("(SharedRam).w", "(SharedRam).l"))
+        self.assertTrue(all(row["kind"] != "same-normalized-source" for row in self.scan("genesis")["matches"]))
+
+    def test_as_anonymous_labels_without_colons_keep_target_positions(self):
+        self.write("a.s", M68K.format(name="First", label="Loop"))
+        self.write("b.s", M68K.format(name="Second", label="-").replace("-:\n", "-\n"))
+        report = self.scan("genesis")
+        self.assertEqual(report["counts"]["routines"], 2)
+        self.assertEqual(report["matches"][0]["kind"], "same-normalized-source")
+        self.write(
+            "b.s", M68K.format(name="Second", label="-").replace("-:\n", "-\n").replace("bne.s -", "bne.s Missing")
+        )
+        self.assertTrue(all(row["kind"] != "same-normalized-source" for row in self.scan("genesis")["matches"]))
+
+    def test_end_of_subroutine_comments_mark_explicit_boundaries(self):
+        for name in ("First", "Second"):
+            self.write(
+                name + ".s", M68K.format(name=name, label="Loop").replace("End of function", "End of subroutine")
+            )
+        report = self.scan("genesis")
+        self.assertTrue(
+            all(row[side]["boundary"] == "explicit" for row in report["matches"] for side in ("left", "right"))
+        )
