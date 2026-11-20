@@ -22,7 +22,7 @@ src/retrolarium_kit/
   platform/   console codecs: nes/ (the resource bundle, CHR, palettes,
               nametables, text, PPU packets, metatiles, APU effects) and fds/
   games/      a package per game: smb, pacman, castle_excellent, solomon, flicky,
-              doraemon; catalog.py dispatches profile operations to them and
+              doraemon, alien_soldier; catalog.py dispatches operations and
               nes_codecs.py registers their NES codecs with the platform
   studio/     the .rlj project (project.py), create.py, playtest.py, demo.py,
               audio.py, repository.py and the MAME Lua scripts (runtime/)
@@ -128,6 +128,44 @@ With `--release`, `check` also checks the `retrolarium` section of the
 repository's 3.0 or 3.x release manifest: the descriptor, profile and revisions
 it names, the editors it lists as removed, and the kit version it pins, which
 must be the running kit's unless the manifest is still in `development`.
+
+### Games and source snapshots
+
+| Game                            | Recognized ROM revisions                                                              | Editing model        |
+| ------------------------------- | ------------------------------------------------------------------------------------- | -------------------- |
+| Super Mario Bros.               | Japan/USA, Europe, PlayChoice-10, Vs., FDS, All Night Nippon, Super Mario Bros. 2 FDS | ROM-backed documents |
+| Castle Excellent / Castlequest  | Japan HSP-05, USA                                                                     | ROM-backed documents |
+| Solomon's Key / Solomon no Kagi | USA, Europe, Japan                                                                    | ROM-backed documents |
+| Pac-Man                         | Japan v1.0, v1.1                                                                      | ROM-backed documents |
+| Doraemon                        | Japan original                                                                        | ROM-backed documents |
+| Flicky                          | USA/Europe                                                                            | Source snapshot      |
+| Alien Soldier                   | Japan, Europe                                                                         | Source snapshot      |
+
+ROM-backed projects keep documents in `hack/<revision>/`. Source-built games
+keep documents inside `.retrolarium/<revision>/`, together with a source
+snapshot and its original documents. Flicky uses `flicky-source` and the
+`flicky-content` project mode. Alien Soldier uses `alien-soldier-source` and the
+`source` mode. Both rebuild the edited source with the kit's assembler.
+
+For a local Alien Soldier checkout, prepare each version independently:
+
+```powershell
+rltool studio prepare path/to/alien_soldier.rlj --revision jp --rom path/to/japanese-rom.bin
+rltool studio prepare path/to/alien_soldier.rlj --revision eu --rom path/to/european-rom.bin
+```
+
+Each answer names the generated revision project. Pass that project's `.rlj` to
+`rltool studio build` or open it in Studio. Its views cover levels and objects,
+graphics, palettes, animations, screens, text, sound and demos. Payloads retain
+their allocated capacities. The game's
+[editing guide](https://github.com/RetrolariumLab/alien_soldier_src/blob/main/docs/retrolarium.md)
+describes the individual limits and verified previews.
+
+Open ROM downloads the revision pinned by `core/profiles/repositories.json`. Run
+`python tools/check_game_repositories.py` before a release. It downloads each
+configured archive into a temporary directory, loads its descriptor and compares
+its ROM identities with the catalog. It needs internet access and removes its
+temporary downloads when it finishes.
 
 ### The game's names
 

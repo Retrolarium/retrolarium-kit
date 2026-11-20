@@ -260,6 +260,12 @@ class DescriptorTests(unittest.TestCase):
             f"https://github.com/RetrolariumLab/flicky_src/archive/{flicky['ref']}.zip",
             repository._archive_url(catalog, flicky, None),
         )
+        alien = catalog["games"]["alien-soldier"]
+        self.assertRegex(alien["ref"], r"^[0-9a-f]{40}$")
+        self.assertEqual(
+            f"https://github.com/RetrolariumLab/alien_soldier_src/archive/{alien['ref']}.zip",
+            repository._archive_url(catalog, alien, None),
+        )
         self.assertEqual(
             "https://github.com/RetrolariumLab/pacman_src/archive/refs/tags/source-reconstruction-3.1.zip",
             repository._archive_url(catalog, catalog["games"]["pacman"], None),

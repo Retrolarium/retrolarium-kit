@@ -128,7 +128,7 @@
     "alien-soldier": {
       "repository": "alien_soldier_src",
       "descriptor": "alien_soldier.rlj",
-      "ref": "tags/source-reconstruction-3.1",
+      "ref": "5c074f2aec87fbddff94fe52d7912d7689d81a5b",
       "revisions": [
         {
           "id": "jp",
