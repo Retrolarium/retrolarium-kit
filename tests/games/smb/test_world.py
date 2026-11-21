@@ -5,6 +5,7 @@ import hashlib
 from pathlib import Path
 import sys
 import unittest
+from unittest import mock
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
@@ -18,6 +19,7 @@ from retrolarium_kit.core.authoring import (
 )
 from retrolarium_core.fds import fds_payload
 from helpers import game_profile
+from retrolarium_kit.core.game_profiles import game_profiles
 from retrolarium_kit.games.catalog import profile_catalog
 from retrolarium_kit.platform.nes.resources import (
     build_resources,
@@ -638,8 +640,16 @@ class SmbWorldTests(unittest.TestCase):
         )
         self.assertEqual(fds_resources["swim-stomp-envelope"].payload, "prg")
 
+    def test_profile_catalog_does_not_depend_on_earlier_tests(self) -> None:
+        with mock.patch.dict("retrolarium_kit.core.game_profiles._OPENED", clear=True):
+            self.test_profile_catalog_resolves_each_revision_override()
+            self.assertEqual((), tuple(game_profiles().identifiers()))
+
     def test_profile_catalog_resolves_each_revision_override(self) -> None:
-        catalog = profile_catalog()
+        with mock.patch.dict("retrolarium_kit.core.game_profiles._OPENED", clear=True) as opened:
+            profile = game_profile("smb1")
+            opened[profile.game_id] = profile
+            catalog = profile_catalog()
         smb = next(item for item in catalog["profiles"] if item["id"] == "smb1")
         details = {item["id"]: item for item in smb["revision_details"]}
         self.assertEqual(

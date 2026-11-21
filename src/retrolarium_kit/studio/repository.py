@@ -472,10 +472,12 @@ def _split_status(descriptor: GameDescriptor, *, run: bool) -> dict[str, object]
         except assets.AssetsError as exc:
             return {"status": "failed", "output": str(exc)}
         return {"status": "made"}
+    if not run:
+        # A legacy check is executable code. Status reads cannot establish
+        # validity without running it; explicit preparation performs the check.
+        return {"status": "needed"}
     if "check" in split and _run(descriptor, split["check"], rom).returncode == 0:
         return {"status": "ok"}
-    if not run:
-        return {"status": "needed"}
     result = _run(descriptor, split["command"], rom)
     if result.returncode != 0:
         return {"status": "failed", "output": (result.stdout + result.stderr)[-2000:]}
@@ -894,8 +896,10 @@ def repository_catalog() -> Mapping[str, Any]:
 
 
 def _archive_url(catalog: Mapping[str, Any], entry: Mapping[str, Any], source: str | None) -> str:
+    ref = entry.get("ref")
+    if not isinstance(ref, str) or not ref:
+        raise GameRepositoryError("the repository catalog entry needs a non-empty Git ref")
     try:
-        ref = entry["ref"]
         default = (
             "{organization}/{repository}/archive/{ref}.zip"
             if re.fullmatch(r"[0-9a-f]{40}", ref)
