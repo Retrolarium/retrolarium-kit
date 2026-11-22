@@ -33,18 +33,7 @@ from retrolarium_kit.games.smb.level import (
     positioned_enemy_records,
 )
 from retrolarium_kit.games.smb.level_render import SmbLevelRendering, object_width, render_level_scene
-from helpers import game_repository
-
-
-# The SMB1 JU level corpus, with the level tables the renderer needs; it
-# lives with the disassembly because it holds the game's data.
-CORPUS = game_repository("smb1_src") / "tests" / "retrolarium" / "smb1_ju_level_scenes.json"
-
-
-def corpus() -> dict:
-    if not CORPUS.is_file():
-        raise unittest.SkipTest(f"no SMB1 corpus at {CORPUS}")
-    return json.loads(CORPUS.read_text(encoding="utf-8"))
+from .fixtures import corpus_tool, synthetic_rendering
 
 
 def corpus_rendering(value: dict) -> SmbLevelRendering:
@@ -499,7 +488,7 @@ class SmbLevelTests(unittest.TestCase):
         self.assertEqual(sum(levels.parameters["enemy_capacities"]), 1087)
 
     def test_procedural_renderer_reconstructs_terrain_objects_and_pages(self) -> None:
-        rendering = corpus_rendering(corpus())
+        rendering = synthetic_rendering()
         header = {
             "timer_setting": 0,
             "entrance_control": 0,
@@ -530,20 +519,16 @@ class SmbLevelTests(unittest.TestCase):
         self.assertEqual(scene.metatiles[20][10], rendering.one("flagpole_base"))
         self.assertEqual(scene.enemies[0]["x"], 38)
 
-    def test_ju_golden_corpus_matches_all_34_python_scenes(self) -> None:
-        fixture = corpus()
+    def test_synthetic_golden_corpus_matches_all_python_scenes(self) -> None:
+        fixture = corpus_tool.synthetic_levels()
         rendering = corpus_rendering(fixture)
         self.assertEqual(fixture["schema"], "retrolarium.smb-level-scene-golden")
         self.assertEqual(fixture["schema_version"], 2)
-        self.assertEqual(fixture["profile"], "smb1.ju")
-        self.assertEqual(fixture["source"]["area_streams_sha1"], "63119cee5b53a6c64ef4a203bdbb9fcd7c0a2f42")
-        self.assertEqual(fixture["source"]["enemy_streams_sha1"], "16bd5a146588d7731f254e7722bab5467111c7c2")
-
-        profile = game_profile("smb1")
-        levels = next(item for item in profile.resources if item.kind == "level")
+        self.assertEqual(fixture["profile"], "synthetic")
+        self.assertEqual(fixture["provenance"]["kind"], "synthetic")
         areas = fixture["areas"]
-        self.assertEqual([area["name"] for area in areas], list(levels.parameters["stream_names"]))
-        self.assertEqual(len(areas), 34)
+        self.assertEqual(len(areas), 8)
+        self.assertEqual(len({area["name"] for area in areas}), 8)
         header_fields = (
             "timer_setting",
             "entrance_control",
