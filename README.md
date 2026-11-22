@@ -27,7 +27,7 @@ src/retrolarium_kit/
   studio/     the .rlj project (project.py), create.py, playtest.py, demo.py,
               audio.py, repository.py and the MAME Lua scripts (runtime/)
   schemas/    JSON schemas of the published documents
-tests/        python -m unittest discover -s tests: games/<game>/,
+tests/        python tools/test.py --suite python: games/<game>/,
               platforms/{nes,fds}/, core/, studio/, cli/ like the package;
               oracles/ holds manual MAME checks run one by one
 tools/        maintenance scripts (OpenDiskSys update, SMB demo MIDI)
@@ -596,7 +596,7 @@ python rltool.py project verify `
 python rltool.py project launch `
   build/game-disassembly/manifest.json `
   --mame path/to/mame.exe --seconds 2
-python -m unittest discover -s tests
+python tools/test.py --suite python
 ```
 
 Generated NES/SNES projects use the bundled `ca65-ld65-v1` recipe, and Mega
@@ -651,3 +651,39 @@ The bundled toolchains keep their own licenses
 Use `rltool asm similar` to compare 6502, 65816 and 68000 routine blocks.
 [The source similarity guide](docs/assembly_similarity.md) describes scores,
 platforms, path filters and structured reports.
+
+## Portable test runner
+
+The same entrypoint runs on Windows, Linux and macOS with Python 3.11 or later.
+Clone the current `retrolarium-core` beside the other products (or install a
+Core that includes `retrolarium_core.testing`). The runner selects the
+checkout's sources explicitly. No PowerShell or Bash wrapper is needed. Python
+suites use Git for repository fixtures. Native suites additionally need CMake
+and the chosen build tool, such as MSBuild, Ninja or Make. The CI matrix covers
+Windows and Linux.
+
+```text
+python tools/test.py
+python tools/test.py --suite python
+python tools/test.py --suite checks
+python tools/test.py --suite checks --format --history
+```
+
+The default runs all tests this product has. Core and Studio also build and run
+their native tests with CMake and a host C++ compiler. The Kit and Disassembler
+have Python suites. `--suite python` needs no compiler or Qt. Repository guards
+and formatting are separate opt-in checks. The test runner explicitly excludes
+the PowerShell formatter, so it never probes or starts PowerShell. The other
+formatters retain their own language-specific tools; the separate `make format`
+command still supports PowerShell files. A private stop-word list comes from
+`RETROLARIUM_STOPWORDS`, an ancestor `.stopwords`, or CI's `STOPWORDS_LIST`. A
+missing unconfigured list is reported as skipped; a configured missing file
+fails. `--history` still checks historical objects.
+
+Native test failures and timeouts fail the command. Missing game fixtures and a
+test's exit code 77 count as skips, never passes. Missing executables or tracked
+repository fixtures are failures. `--game-sources PATH` selects the prepared
+game repositories; paths with spaces work without shell quoting inside the
+runner. `--jobs`, `--config` and `--build-dir` control CMake. Windows, POSIX and
+filesystem-specific assertions still run on their own platforms; the common
+runner does not pretend another host has those APIs.

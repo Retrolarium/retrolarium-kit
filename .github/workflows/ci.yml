@@ -1,16 +1,13 @@
-# Retrolarium Kit's checks: the unit tests on Linux and Windows with Python
-# 3.11 and 3.13, against retrolarium-core checked out beside the kit (the
-# tests and the Makefile find it at ../retrolarium-core), and the formatting
-# of the tracked files.
 name: CI
-
 on:
   push:
   pull_request:
-
 permissions:
   contents: read
-
+defaults:
+  run:
+    shell: python {0}
+    working-directory: retrolarium-kit
 jobs:
   tests:
     name: Python ${{ matrix.python }} (${{ matrix.os }})
@@ -20,10 +17,6 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
         python: ["3.11", "3.13"]
-    defaults:
-      run:
-        shell: bash
-        working-directory: retrolarium-kit
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,22 +30,13 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Unit tests
         run: |
-          separator=$(python -c "import os; print(os.pathsep)")
-          export PYTHONPATH="src${separator}../retrolarium-core/python"
-          python -m unittest discover -s tests
-
+          import subprocess, sys
+          subprocess.run([sys.executable, "tools/test.py", "--suite", "python"], check=True)
   checks:
-    name: Formatting and stop words
+    name: Formatting and repository guards
     runs-on: ubuntu-latest
     env:
-      # The stop-word list lives outside the repositories; a repository
-      # secret supplies it when one is set (retrolarium_core/stop_words.py).
-      # Without it `make lint` is skipped: the check fails closed in CI.
       STOPWORDS_LIST: ${{ secrets.RETROLARIUM_STOPWORDS }}
-    defaults:
-      run:
-        shell: bash
-        working-directory: retrolarium-kit
     steps:
       - uses: actions/checkout@v4
         with:
@@ -65,12 +49,10 @@ jobs:
         with:
           python-version: "3.13"
       - name: Formatters
-        run: python -m pip install ruff mdformat mdformat-gfm shfmt-py
-      - name: Format check
-        run: make format-check PYTHON=python
-      - name: Lint (stop words, name guard)
-        if: env.STOPWORDS_LIST != ''
         run: |
-          printf '%s\n' "$STOPWORDS_LIST" > "$RUNNER_TEMP/stopwords"
-          export RETROLARIUM_STOPWORDS="$RUNNER_TEMP/stopwords"
-          make lint PYTHON=python
+          import subprocess, sys
+          subprocess.run([sys.executable, "-m", "pip", "install", "ruff", "mdformat", "mdformat-gfm", "shfmt-py"], check=True)
+      - name: Format and guard checks
+        run: |
+          import subprocess, sys
+          subprocess.run([sys.executable, "tools/test.py", "--suite", "checks", "--format"], check=True)
