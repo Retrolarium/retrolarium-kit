@@ -358,11 +358,15 @@ class FetchTests(unittest.TestCase):
             with self.assertRaises(GameRepositoryError):
                 repository.ensure_repository_verified(target)
         (target / "scripts/split.py").write_bytes(FILES["scripts/split.py"])
-        cache = target / repository.REFUSAL
+        # Exercise two spellings of the same file on every host. Windows
+        # TEMP may similarly use an 8.3 alias, while verification resolves it.
+        cache = target / "src" / ".." / repository.REFUSAL
         actual = Path.unlink
+        denied = []
 
         def unlink(path, *args, **options):
-            if path == cache:
+            if path.resolve() == cache.resolve():
+                denied.append(path)
                 raise PermissionError("the cache is read-only")
             return actual(path, *args, **options)
 
@@ -374,6 +378,7 @@ class FetchTests(unittest.TestCase):
             repository.ensure_repository_verified(target)
         self.assertEqual(1, download.call_count)
         self.assertEqual(COMMIT, repository_trust.read_marker(target)["commit"])
+        self.assertEqual(1, len(denied))
         self.assertTrue(cache.is_file())
 
     def test_a_changed_snapshot_still_cannot_run_after_its_root_is_verified(
