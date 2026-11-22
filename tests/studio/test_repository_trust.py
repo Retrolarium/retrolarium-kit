@@ -106,7 +106,10 @@ class CatalogTests(unittest.TestCase):
         for key in ("commit", "content_sha256"):
             document = catalog("0" * 64)
             del document["games"]["probe"][key]
-            with self.subTest(missing=key), self.assertRaisesRegex(GameRepositoryError, key.split("_")[0]):
+            with (
+                self.subTest(missing=key),
+                self.assertRaisesRegex(GameRepositoryError, key.split("_")[0]),
+            ):
                 repository.validate_catalog(document)
         document = catalog("0" * 64)
         document["games"]["probe"]["commit"] = "tags/v1"
@@ -133,7 +136,8 @@ class FetchTests(unittest.TestCase):
         self.root = Path(folder.name)
         self.games = self.root / "games"
         environment = mock.patch.dict(
-            "os.environ", {"RETROLARIUM_GAMES_SOURCE": "", "RETROLARIUM_UNVERIFIED_GAMES": ""}
+            "os.environ",
+            {"RETROLARIUM_GAMES_SOURCE": "", "RETROLARIUM_UNVERIFIED_GAMES": ""},
         )
         environment.start()
         self.addCleanup(environment.stop)
@@ -152,13 +156,19 @@ class FetchTests(unittest.TestCase):
         descriptor = self.fetch(FILES)
         self.assertEqual(self.games / "probe_src" / "probe.rlj", descriptor)
         marker = repository_trust.read_marker(descriptor.parent)
-        self.assertEqual((COMMIT, expected_digest(FILES)), (marker["commit"], marker["content_sha256"]))
+        self.assertEqual(
+            (COMMIT, expected_digest(FILES)),
+            (marker["commit"], marker["content_sha256"]),
+        )
         self.assertEqual(f"https://example.invalid/lab/probe_src/tree/{COMMIT}", marker["url"])
         self.assertEqual(
             {"scripts/build/__init__.py", "scripts/split.py"},
             set(marker["scripts"]),
         )
-        self.assertEqual([], [path.name for path in self.games.iterdir() if path.name.startswith(".download-")])
+        self.assertEqual(
+            [],
+            [path.name for path in self.games.iterdir() if path.name.startswith(".download-")],
+        )
 
     def test_a_changed_file_is_refused_and_nothing_is_kept(self) -> None:
         changed = {**FILES, "scripts/split.py": b"print('something else')\n"}
@@ -168,8 +178,15 @@ class FetchTests(unittest.TestCase):
         self.assertEqual([], list(self.games.iterdir()))
 
     def test_an_unverified_source_is_accepted_only_when_asked(self) -> None:
-        changed = {**FILES, "scripts/split.py": b"print('local work')\n", repository_trust.MARKER: b"{}"}
-        with mock.patch.dict("os.environ", {"RETROLARIUM_UNVERIFIED_GAMES": "1"}), mock.patch("sys.stderr"):
+        changed = {
+            **FILES,
+            "scripts/split.py": b"print('local work')\n",
+            repository_trust.MARKER: b"{}",
+        }
+        with (
+            mock.patch.dict("os.environ", {"RETROLARIUM_UNVERIFIED_GAMES": "1"}),
+            mock.patch("sys.stderr"),
+        ):
             descriptor = self.fetch(changed)
         # Unverified: no record (not even the one the archive brought).
         self.assertIsNone(repository_trust.read_marker(descriptor.parent))
@@ -230,7 +247,10 @@ class FetchTests(unittest.TestCase):
         self.assertEqual(COMMIT, repository_trust.read_marker(target)["commit"])
 
     def test_an_older_download_with_other_scripts_stays_unverified(self) -> None:
-        target = write_tree(self.games / "probe_src", {**FILES, "scripts/split.py": b"print('edited')\n"})
+        target = write_tree(
+            self.games / "probe_src",
+            {**FILES, "scripts/split.py": b"print('edited')\n"},
+        )
         archive = write_archive(self.root / "pinned.zip", FILES)
         opened = mock.patch("urllib.request.urlopen", side_effect=self.serving(archive))
         errors = io.StringIO()
@@ -241,7 +261,10 @@ class FetchTests(unittest.TestCase):
 
     def test_a_saved_source_project_upgrades_without_reopening_its_rom(self) -> None:
         target = write_tree(self.games / "probe_src", {**FILES, "hack/v1/edits.json": b"edited"})
-        snapshot = write_tree(target / ".retrolarium/v1/source", {k: v for k, v in FILES.items() if k != "probe.rlj"})
+        snapshot = write_tree(
+            target / ".retrolarium/v1/source",
+            {k: v for k, v in FILES.items() if k != "probe.rlj"},
+        )
         archive = write_archive(self.root / "pinned.zip", FILES)
         with mock.patch("urllib.request.urlopen", side_effect=self.serving(archive)) as download:
             repository.ensure_repository_verified(snapshot)
@@ -252,7 +275,9 @@ class FetchTests(unittest.TestCase):
             with self.assertRaises(repository_trust.ConsentNeeded):
                 repository_trust.authorize_scripts(snapshot, ["scripts/split.py"])
 
-    def test_flicky_build_upgrades_a_saved_project_before_running_its_builder(self) -> None:
+    def test_flicky_build_upgrades_a_saved_project_before_running_its_builder(
+        self,
+    ) -> None:
         from retrolarium_kit.games.flicky import content
         from retrolarium_kit.studio.source_games import source_game
 
@@ -279,7 +304,81 @@ class FetchTests(unittest.TestCase):
                 repository.ensure_repository_verified(target)
         self.assertIsNone(repository_trust.read_marker(target))
 
-    def test_a_changed_snapshot_still_cannot_run_after_its_root_is_verified(self) -> None:
+    def test_changed_scripts_are_refused_again_without_another_download(self) -> None:
+        target = write_tree(self.games / "probe_src", {**FILES, "scripts/split.py": b"edited"})
+        archive = write_archive(self.root / "pinned.zip", FILES)
+        with mock.patch("urllib.request.urlopen", side_effect=self.serving(archive)) as download:
+            for _ in range(2):
+                with self.assertRaisesRegex(GameRepositoryError, "scripts in"):
+                    repository.ensure_repository_verified(target)
+        self.assertEqual(1, download.call_count)
+        self.assertTrue((target / repository.REFUSAL).is_file())
+        # Restoring the pinned scripts lifts the refusal and gives a record.
+        (target / "scripts/split.py").write_bytes(FILES["scripts/split.py"])
+        with mock.patch("urllib.request.urlopen", side_effect=self.serving(archive)):
+            repository.ensure_repository_verified(target)
+        self.assertEqual(COMMIT, repository_trust.read_marker(target)["commit"])
+        self.assertFalse((target / repository.REFUSAL).exists())
+
+    def test_an_offline_check_explains_itself_and_is_tried_again(self) -> None:
+        target = write_tree(self.games / "probe_src", FILES)
+        archive = write_archive(self.root / "pinned.zip", FILES)
+        with mock.patch("urllib.request.urlopen", side_effect=OSError("network is unreachable")):
+            with self.assertRaisesRegex(GameRepositoryError, "no verification record.*network is unreachable"):
+                repository.ensure_repository_verified(target)
+        self.assertFalse((target / repository.REFUSAL).exists())
+        with mock.patch("urllib.request.urlopen", side_effect=self.serving(archive)):
+            repository.ensure_repository_verified(target)
+        self.assertIsNotNone(repository_trust.read_marker(target))
+
+    def test_the_comparison_copy_is_made_outside_the_project_tree(self) -> None:
+        target = write_tree(self.games / "probe_src", FILES)
+        archive = write_archive(self.root / "pinned.zip", FILES)
+        made: list[str] = []
+        real = tempfile.mkdtemp
+
+        def mkdtemp(*args, **options):
+            folder = real(*args, **options)
+            made.append(folder)
+            return folder
+
+        with (
+            mock.patch("urllib.request.urlopen", side_effect=self.serving(archive)),
+            mock.patch.object(repository.tempfile, "mkdtemp", side_effect=mkdtemp),
+        ):
+            repository.ensure_repository_verified(target)
+        self.assertEqual(1, len(made))
+        self.assertFalse(Path(made[0]).resolve().is_relative_to(self.games.resolve()))
+        self.assertFalse(Path(made[0]).exists())
+
+    def test_a_cache_that_cannot_be_removed_does_not_undo_verification(self) -> None:
+        target = write_tree(self.games / "probe_src", {**FILES, "scripts/split.py": b"edited"})
+        archive = write_archive(self.root / "pinned.zip", FILES)
+        with mock.patch("urllib.request.urlopen", side_effect=self.serving(archive)):
+            with self.assertRaises(GameRepositoryError):
+                repository.ensure_repository_verified(target)
+        (target / "scripts/split.py").write_bytes(FILES["scripts/split.py"])
+        cache = target / repository.REFUSAL
+        actual = Path.unlink
+
+        def unlink(path, *args, **options):
+            if path == cache:
+                raise PermissionError("the cache is read-only")
+            return actual(path, *args, **options)
+
+        with (
+            mock.patch("urllib.request.urlopen", side_effect=self.serving(archive)) as download,
+            mock.patch.object(Path, "unlink", unlink),
+        ):
+            repository.ensure_repository_verified(target)
+            repository.ensure_repository_verified(target)
+        self.assertEqual(1, download.call_count)
+        self.assertEqual(COMMIT, repository_trust.read_marker(target)["commit"])
+        self.assertTrue(cache.is_file())
+
+    def test_a_changed_snapshot_still_cannot_run_after_its_root_is_verified(
+        self,
+    ) -> None:
         target = write_tree(self.games / "probe_src", FILES)
         snapshot = write_tree(
             target / ".retrolarium/v1/source",
@@ -323,21 +422,34 @@ class ScriptVerificationTests(unittest.TestCase):
         )
         # The user agreed to run this download's scripts.
         environment = mock.patch.dict(
-            "os.environ", {"RETROLARIUM_UNVERIFIED_GAMES": "", "RETROLARIUM_ALLOW_REPOSITORY_SCRIPTS": "0" * 64}
+            "os.environ",
+            {
+                "RETROLARIUM_UNVERIFIED_GAMES": "",
+                "RETROLARIUM_ALLOW_REPOSITORY_SCRIPTS": "0" * 64,
+            },
         )
         environment.start()
         self.addCleanup(environment.stop)
 
     def run_split(self) -> mock.MagicMock:
         with mock.patch.object(
-            repository.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "", "")
+            repository.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess([], 0, "", ""),
         ) as run:
             repository._run(self.descriptor, ["scripts/split.py"], self.root / "image.bin")
         return run
 
     def test_an_unchanged_script_of_a_verified_download_runs(self) -> None:
         # Edited documents, ROM copies and the kit's own folders do not count.
-        write_tree(self.root, {"src/main.asm": b"; edited\n", ".retrolarium/base/x.py": b"", "hack/base/a.json": b""})
+        write_tree(
+            self.root,
+            {
+                "src/main.asm": b"; edited\n",
+                ".retrolarium/base/x.py": b"",
+                "hack/base/a.json": b"",
+            },
+        )
         self.assertEqual(1, self.run_split().call_count)
 
     def test_a_changed_script_does_not_run(self) -> None:
@@ -345,7 +457,8 @@ class ScriptVerificationTests(unittest.TestCase):
         with (
             mock.patch.object(repository.subprocess, "run") as run,
             self.assertRaisesRegex(
-                RepositoryTrustError, "scripts/build/__init__.py changed since the kit downloaded probe_src"
+                RepositoryTrustError,
+                "scripts/build/__init__.py changed since the kit downloaded probe_src",
             ),
         ):
             repository._run(self.descriptor, ["scripts/split.py"], self.root / "image.bin")
@@ -365,11 +478,16 @@ class ScriptVerificationTests(unittest.TestCase):
 
     def test_a_command_outside_the_scripts_must_be_part_of_the_download(self) -> None:
         write_tree(self.root, {"data/evil.txt": b"print('x')\n"})
-        with mock.patch.object(repository.subprocess, "run") as run, self.assertRaises(RepositoryTrustError):
+        with (
+            mock.patch.object(repository.subprocess, "run") as run,
+            self.assertRaises(RepositoryTrustError),
+        ):
             repository._run(self.descriptor, ["data/evil.txt"], self.root / "image.bin")
         run.assert_not_called()
 
-    def test_a_repository_the_kit_did_not_verify_runs_nothing_unless_accepted(self) -> None:
+    def test_a_repository_the_kit_did_not_verify_runs_nothing_unless_accepted(
+        self,
+    ) -> None:
         (self.root / repository_trust.MARKER).unlink()
         with (
             mock.patch.object(repository.subprocess, "run") as run,
@@ -378,17 +496,29 @@ class ScriptVerificationTests(unittest.TestCase):
             repository._run(self.descriptor, ["scripts/split.py"], self.root / "image.bin")
         run.assert_not_called()
         errors = io.StringIO()
-        accepted = {"RETROLARIUM_UNVERIFIED_GAMES": "1", "RETROLARIUM_ALLOW_REPOSITORY_SCRIPTS": "all"}
-        with mock.patch.dict("os.environ", accepted), contextlib.redirect_stderr(errors):
+        accepted = {
+            "RETROLARIUM_UNVERIFIED_GAMES": "1",
+            "RETROLARIUM_ALLOW_REPOSITORY_SCRIPTS": "all",
+        }
+        with (
+            mock.patch.dict("os.environ", accepted),
+            contextlib.redirect_stderr(errors),
+        ):
             self.assertEqual(1, self.run_split().call_count)
         self.assertIn("unverified repository", errors.getvalue())
 
     def test_a_snapshot_inside_the_download_is_checked_against_its_record(self) -> None:
         snapshot = write_tree(
             self.root / ".retrolarium" / "base" / "probe-source",
-            {"scripts/split.py": FILES["scripts/split.py"], "content/levels.json": b"{}"},
+            {
+                "scripts/split.py": FILES["scripts/split.py"],
+                "content/levels.json": b"{}",
+            },
         )
-        self.assertEqual("probe_src", repository_trust.verify_scripts(snapshot, ["scripts/split.py"])["repository"])
+        self.assertEqual(
+            "probe_src",
+            repository_trust.verify_scripts(snapshot, ["scripts/split.py"])["repository"],
+        )
         (snapshot / "scripts" / "split.py").write_text("print('edited')\n", encoding="utf-8")
         with self.assertRaisesRegex(RepositoryTrustError, "changed since"):
             repository_trust.verify_scripts(snapshot, ["scripts/split.py"])
@@ -423,7 +553,15 @@ class ReleaseManifestShapeTests(unittest.TestCase):
         self.root = Path(folder.name)
         (self.root / "probe.rlj").write_text("", encoding="utf-8")
         self.descriptor = repository.GameDescriptor(
-            self.root / "probe.rlj", self.root, "probe", "Probe", "nes", "probe.v1", (), None, {}
+            self.root / "probe.rlj",
+            self.root,
+            "probe",
+            "Probe",
+            "nes",
+            "probe.v1",
+            (),
+            None,
+            {},
         )
 
     def test_a_manifest_that_is_not_an_object_is_refused(self) -> None:
@@ -454,7 +592,10 @@ class ReleaseManifestShapeTests(unittest.TestCase):
             with self.subTest(path=path):
                 report = repository.check_release(self.descriptor, manifest)
                 self.assertEqual("failed", report["status"])
-                self.assertIn("removed_authoring[0].path must be a relative path", " ".join(report["problems"]))
+                self.assertIn(
+                    "removed_authoring[0].path must be a relative path",
+                    " ".join(report["problems"]),
+                )
 
 
 if __name__ == "__main__":

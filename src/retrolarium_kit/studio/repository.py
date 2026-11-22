@@ -1075,21 +1075,67 @@ def download_repository(url: str, staging: Path) -> Path:
     return unpack_archive(archive, unpacked)
 
 
+# A repository whose scripts differ from its pinned commit stays refused until
+# they change: the record keeps a saved project from downloading the archive
+# again before every build. Under .retrolarium/, outside the script digest.
+REFUSAL = Path(".retrolarium", "verification-refused.json")
+
+
+def _refusal(target: Path, entry: Mapping[str, Any], scripts: str) -> str | None:
+    """The reason recorded for refusing these scripts at this commit, if any."""
+    try:
+        document = json.loads((target / REFUSAL).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if (
+        not isinstance(document, dict)
+        or document.get("commit") != entry["commit"]
+        or document.get("scripts_digest") != scripts
+        or not isinstance(document.get("reason"), str)
+    ):
+        return None
+    return document["reason"]
+
+
+def _record_refusal(target: Path, entry: Mapping[str, Any], scripts: str, reason: str) -> None:
+    path = target / REFUSAL
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        document = {"commit": entry["commit"], "scripts_digest": scripts, "reason": reason}
+        path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
+    except OSError:
+        pass  # Only a cache: the next build checks again.
+
+
 def _reverify(game_id: str, catalog: Mapping[str, Any], entry: Mapping[str, Any], target: Path) -> None:
     """Give a repository an older kit downloaded (no verification record) its
     record: download the pinned commit again and, when its content matches
     the catalog and its scripts are the ones in `target`, record `target` as
-    verified. Anything else leaves it unverified (its scripts do not run)."""
-    games = target.parent
-    staging = Path(tempfile.mkdtemp(prefix=".download-", dir=games))
+    verified. Anything else leaves it unverified (its scripts do not run).
+    Changed scripts are remembered, so later builds refuse them at once; a
+    failed download is not, so the next build tries again."""
+    scripts = repository_trust.scripts_digest(repository_trust.script_files(target))
+    reason = _refusal(target, entry, scripts)
+    if reason is not None:
+        raise GameRepositoryError(reason)
+    # The comparison copy goes to the system's temporary folder: the folder
+    # above `target` may be any ancestor of a saved project, or read-only.
+    staging = Path(tempfile.mkdtemp(prefix="retrolarium-verify-"))
     try:
-        root = download_repository(_archive_url(catalog, entry, None), staging)
+        try:
+            root = download_repository(_archive_url(catalog, entry, None), staging)
+        except GameRepositoryError as exc:
+            raise GameRepositoryError(
+                f"{target} has no verification record, and the kit cannot compare it with "
+                f"{entry['repository']} at {entry['commit'][:12]} now ({exc}); "
+                "its scripts run once that check succeeds"
+            ) from exc
         if repository_trust.tree_digest(root) != entry["content_sha256"]:
             raise GameRepositoryError(f"the content of {entry['repository']} does not match the catalog")
         if repository_trust.script_files(root) != repository_trust.script_files(target):
-            raise GameRepositoryError(
-                f"the scripts in {target} are not those of {entry['repository']} at {entry['commit'][:12]}"
-            )
+            reason = f"the scripts in {target} are not those of {entry['repository']} at {entry['commit'][:12]}"
+            _record_refusal(target, entry, scripts, reason)
+            raise GameRepositoryError(reason)
         repository_trust.write_marker(
             target,
             game=game_id,
@@ -1098,6 +1144,10 @@ def _reverify(game_id: str, catalog: Mapping[str, Any], entry: Mapping[str, Any]
             content_sha256=entry["content_sha256"],
             url=repository_url(catalog, entry),
         )
+        try:
+            (target / REFUSAL).unlink(missing_ok=True)
+        except OSError:
+            pass  # A stale refusal cache must not undo successful verification.
     finally:
         shutil.rmtree(staging, ignore_errors=True)
 
