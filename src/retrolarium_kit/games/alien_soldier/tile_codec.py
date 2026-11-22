@@ -25,7 +25,9 @@ one colour) or is written as plain runs, whichever is shorter.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import lru_cache
+
+from retrolarium_kit.core.bounded_cache import BoundedCache
+from retrolarium_kit.core.errors import KitError
 
 
 TILE_PIXELS = 64
@@ -33,7 +35,7 @@ TILE_BYTES = 32
 NEAR = {1: 7, 2: 8, 3: 9}
 
 
-class TileCodecError(ValueError):
+class TileCodecError(ValueError, KitError):
     """A payload the decoder would not read as tiles."""
 
 
@@ -122,11 +124,16 @@ def _unpack(tile: bytes) -> list[int]:
 
 
 def decompress(payload: bytes) -> bytes:
-    """The tiles a payload decodes to, kept by the payload's bytes."""
-    return _decompress(bytes(payload))
+    """The tiles a payload decodes to, kept by the payload's SHA-256 within a
+    byte budget."""
+    payload = bytes(payload)
+    return _CACHE.get(payload, None, lambda: _decompress(payload))
 
 
-@lru_cache(maxsize=1024)
+# What decompress keeps of its results (inputs are keyed by their hash).
+_CACHE = BoundedCache(8 << 20)
+
+
 def _decompress(payload: bytes) -> bytes:
     if len(payload) < 2:
         raise TileCodecError("a payload needs a count and a stream")

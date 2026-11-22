@@ -30,7 +30,7 @@ def main() -> int:
                 print(f"FAIL {game_id}: {exc}", file=sys.stderr)
                 failed = True
             else:
-                print(f"OK {game_id}: {entry['ref']}")
+                print(f"OK {game_id}: {entry['ref']} at {entry['commit']}")
     return int(failed)
 
 

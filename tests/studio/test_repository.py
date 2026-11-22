@@ -130,6 +130,23 @@ class IpsTests(unittest.TestCase):
         patch = ips_patch(original, bytes(edited))
         self.assertEqual(bytes(edited), apply_ips(original, patch))
 
+    def test_a_file_of_exactly_16_mib_patches_its_last_byte(self) -> None:
+        original = bytes(0x1000000)
+        edited = bytearray(original)
+        edited[0xFFFFFF] = 0x5A
+        patch = ips_patch(original, bytes(edited))
+        self.assertEqual(b"\xff\xff\xff\x00\x01\x5a", patch[5:11])
+        self.assertEqual(bytes(edited), apply_ips(original, patch))
+
+    def test_a_record_may_run_past_16_mib_but_not_start_there(self) -> None:
+        original = bytes(0x1000000)
+        grown = bytearray(original + bytes(4))
+        grown[0xFFFFFE:] = b"\x01" * 6
+        self.assertEqual(bytes(grown), apply_ips(original, ips_patch(original, bytes(grown))))
+        # Growth the last record does not reach starts at 0x1000000.
+        with self.assertRaisesRegex(GameRepositoryError, "offset 0x1000000"):
+            ips_patch(original, original + b"\x01")
+
     def test_shrinking_is_refused(self) -> None:
         with self.assertRaises(GameRepositoryError):
             ips_patch(bytes(4), bytes(2))
@@ -229,6 +246,10 @@ class DescriptorTests(unittest.TestCase):
             bundle.write(PROFILE, "pacman_src-main/config/game_profile.json")
         games = self.root / "games"
         source = str(archives / "{repository}.zip")
+        # A test archive is not the catalog's commit: accepted unverified.
+        unverified = mock.patch.dict("os.environ", {"RETROLARIUM_UNVERIFIED_GAMES": "1"})
+        unverified.start()
+        self.addCleanup(unverified.stop)
         first = open_rom(V11, games, source=source)
         self.assertEqual(("ready", "japan-v11", True), (first["status"], first["revision"], first["downloaded"]))
         self.assertTrue((games / "pacman_src" / "hack" / "japan-v11" / "demo.json").is_file())
@@ -254,6 +275,7 @@ class DescriptorTests(unittest.TestCase):
         catalog = repository.repository_catalog()
         for game, entry in catalog["games"].items():
             self.assertRegex(entry["ref"], r"^(?:(tags|heads)/[\w.-]+|[0-9a-f]{40})$", game)
+            self.assertRegex(entry["commit"], r"^[0-9a-f]{40}$", game)
         flicky = catalog["games"]["flicky"]
         self.assertRegex(flicky["ref"], r"^[0-9a-f]{40}$")
         self.assertEqual(
@@ -266,9 +288,12 @@ class DescriptorTests(unittest.TestCase):
             f"https://github.com/RetrolariumLab/alien_soldier_src/archive/{alien['ref']}.zip",
             repository._archive_url(catalog, alien, None),
         )
+        # A release tag only names the commit the catalog pins and downloads.
+        pacman = catalog["games"]["pacman"]
+        self.assertEqual("tags/source-reconstruction-3.1", pacman["ref"])
         self.assertEqual(
-            "https://github.com/RetrolariumLab/pacman_src/archive/refs/tags/source-reconstruction-3.1.zip",
-            repository._archive_url(catalog, catalog["games"]["pacman"], None),
+            f"https://github.com/RetrolariumLab/pacman_src/archive/{pacman['commit']}.zip",
+            repository._archive_url(catalog, pacman, None),
         )
 
     def test_a_view_can_belong_to_some_revisions(self) -> None:
@@ -346,6 +371,14 @@ class DescriptorTests(unittest.TestCase):
     def built(self, build: str) -> None:
         (self.root / "pacman.rlj").write_text(DESCRIPTOR + BUILT + build, encoding="utf-8")
         self.descriptor = load_descriptor(self.root / "pacman.rlj")
+        # The repository is a test checkout, not a verified download: its
+        # build script runs only as an accepted unverified repository, with
+        # consent for every repository's scripts.
+        unverified = mock.patch.dict(
+            "os.environ", {"RETROLARIUM_UNVERIFIED_GAMES": "1", "RETROLARIUM_ALLOW_REPOSITORY_SCRIPTS": "all"}
+        )
+        unverified.start()
+        self.addCleanup(unverified.stop)
 
     def test_a_built_revision_is_made_from_its_base_rom(self) -> None:
         # A stand-in build: it copies the ROM it is given, which is not the
@@ -381,7 +414,11 @@ class DescriptorTests(unittest.TestCase):
         "the Pac-Man repository keeps no expanded revision",
     )
     def test_the_repository_builds_its_expanded_revision(self) -> None:
-        report = check_repository(load_descriptor(PACMAN / "pacman.rlj"), ["japan-v10-nrom256"])
+        # The checkout beside the kit is the developer's own, not a download.
+        with mock.patch.dict(
+            "os.environ", {"RETROLARIUM_UNVERIFIED_GAMES": "1", "RETROLARIUM_ALLOW_REPOSITORY_SCRIPTS": "all"}
+        ):
+            report = check_repository(load_descriptor(PACMAN / "pacman.rlj"), ["japan-v10-nrom256"])
         self.assertEqual(("ok", "ok"), (report["status"], report["revisions"][0]["status"]))
 
 

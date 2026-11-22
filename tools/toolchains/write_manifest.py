@@ -15,8 +15,10 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import re
 
 TOOLCHAINS = Path(__file__).resolve().parents[2] / "src" / "retrolarium_kit" / "core" / "toolchains"
+DOCKERFILE = Path(__file__).resolve().with_name("Dockerfile")
 HOSTS = {"windows-x86_64": ".exe", "linux-x86_64": ""}
 ASL_REVISION = "721a327a803585e2d1f59acac93cbd0768213d06"
 BUILD = "tools/toolchains/build.sh"
@@ -108,6 +110,17 @@ def component(definition: dict) -> dict:
     return result
 
 
+def build_environment() -> dict:
+    """The compiler image the payloads come from: the Dockerfile's base image
+    and the Debian snapshot its packages are installed from."""
+    text = DOCKERFILE.read_text(encoding="utf-8")
+    image = re.search(r"^FROM (\S+)$", text, re.M)
+    snapshot = re.search(r"^ARG SNAPSHOT=(\S+)$", text, re.M)
+    if image is None or snapshot is None:
+        raise SystemExit(f"{DOCKERFILE} names no FROM image or ARG SNAPSHOT")
+    return {"image": image.group(1), "debian_snapshot": snapshot.group(1), "dockerfile": "tools/toolchains/Dockerfile"}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--release", default="2026.10.11")
@@ -116,6 +129,7 @@ def main() -> int:
         "schema": "retrolarium.build-toolchains",
         "schema_version": 1,
         "release": arguments.release,
+        "build_environment": build_environment(),
         "suites": {"nes": {"components": ["cc65"]}, "megadrive": {"components": ["asl", "p2bin"]}},
         "components": {name: component(definition) for name, definition in COMPONENTS.items()},
     }

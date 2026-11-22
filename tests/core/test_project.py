@@ -123,7 +123,7 @@ def write_project(root: Path, rom: bytes | None = None) -> Path:
 class ProjectOperationTests(unittest.TestCase):
     def test_direct_image_launch_plan_validates_container_and_machine(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             rom = root / "edited.nes"
             rom.write_bytes(b"NES\x1a" + bytes((1, 0, 0, 0)) + bytes(8) + bytes(0x4000))
             mame = root / "consoles.exe"
@@ -137,7 +137,7 @@ class ProjectOperationTests(unittest.TestCase):
 
     def test_disk_launch_plan_falls_back_to_open_disk_sys(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             disk = root / "edited.fds"
             disk.write_bytes(fds_fixture())
             mame = root / "consoles.exe"
@@ -174,7 +174,7 @@ class ProjectOperationTests(unittest.TestCase):
 
     def test_vs_launch_plan_writes_the_boards_rom_set(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             chips = bytes(range(256)) * (0xC000 // 256)
             # iNES with 2 x 16 KiB PRG, 2 x 8 KiB CHR, mapper 99 (Vs. System).
             rom = root / "edited.nes"
@@ -221,7 +221,7 @@ class ProjectOperationTests(unittest.TestCase):
 
     def test_older_bios_dump_installs_under_the_name_mame_loads(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             mame = root / "consoles.exe"
             mame.write_bytes(b"mame")
             older = root / "disksys.rom"
@@ -237,7 +237,7 @@ class ProjectOperationTests(unittest.TestCase):
 
     def test_disk_launch_plan_refuses_a_semicolon_in_the_rom_path(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory) / "a;b"
+            root = Path(directory).resolve() / "a;b"
             root.mkdir()
             disk = root / "edited.fds"
             disk.write_bytes(fds_fixture())
@@ -256,7 +256,7 @@ class ProjectOperationTests(unittest.TestCase):
 
     def test_direct_image_smoke_retains_a_run_result(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             rom = root / "edited.nes"
             rom.write_bytes(b"NES\x1a" + bytes((1, 0, 0, 0)) + bytes(8) + bytes(0x4000))
             mame = root / "consoles.exe"
@@ -277,7 +277,7 @@ class ProjectOperationTests(unittest.TestCase):
 
     def test_launch_plan_is_explicit_argv_and_restricts_machine(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             manifest = write_project(root)
             mame = root / "consoles.exe"
             mame.write_bytes(b"mame")
@@ -292,7 +292,7 @@ class ProjectOperationTests(unittest.TestCase):
 
     def test_smoke_launch_writes_run_result(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             manifest = write_project(root)
             mame = root / "consoles.exe"
             mame.write_bytes(b"mame")
@@ -312,7 +312,7 @@ class ProjectOperationTests(unittest.TestCase):
 
     def test_smoke_launch_records_timeout_output(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             manifest = write_project(root)
             mame = root / "consoles.exe"
             mame.write_bytes(b"mame")
@@ -333,7 +333,7 @@ class ProjectOperationTests(unittest.TestCase):
 
     def test_smoke_launch_classifies_missing_mame_device_rom(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             manifest = write_project(root)
             mame = root / "consoles.exe"
             mame.write_bytes(b"mame")
@@ -367,8 +367,9 @@ class ProjectOperationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             manifest = write_project(Path(directory))
             completed = subprocess.CompletedProcess([], 0)
+            # The declared container runs only when asked (--container default).
             with patch("retrolarium_kit.core.project.subprocess.run", return_value=completed) as run:
-                result = build_project(manifest)
+                result = build_project(manifest, container="default")
 
             command = run.call_args.args[0]
             self.assertEqual("docker", command[0])
@@ -377,9 +378,56 @@ class ProjectOperationTests(unittest.TestCase):
             self.assertEqual("built", result["status"])
             self.assertTrue((Path(directory) / "build-result.json").is_file())
 
+    def test_build_without_a_recipe_runs_a_container_only_when_asked(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = write_project(Path(directory))
+            with (
+                patch("retrolarium_kit.core.project.subprocess.run") as run,
+                self.assertRaisesRegex(ProjectError, "needs a container: rerun with --container test-ca65:1"),
+            ):
+                build_project(manifest)
+            run.assert_not_called()
+            completed = subprocess.CompletedProcess([], 0)
+            with patch("retrolarium_kit.core.project.subprocess.run", return_value=completed) as run:
+                build_project(manifest, container="other-ca65:2")
+            self.assertIn("other-ca65:2", run.call_args.args[0])
+
+    def test_container_default_needs_a_declared_image(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = write_project(Path(directory))
+            document = json.loads(manifest.read_text(encoding="utf-8"))
+            del document["operations"]["build"]["default_container"]
+            manifest.write_text(json.dumps(document), encoding="utf-8")
+            with (
+                patch("retrolarium_kit.core.project.subprocess.run") as run,
+                self.assertRaisesRegex(ProjectError, "needs a default_container"),
+            ):
+                build_project(manifest, container="default")
+            run.assert_not_called()
+
+    def test_a_container_build_that_hangs_is_stopped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = write_project(Path(directory))
+            calls = []
+
+            def run(command, **options):
+                calls.append(command)
+                if command[1] == "run":
+                    raise subprocess.TimeoutExpired(command, options["timeout"], output=b"assembling\n")
+                return subprocess.CompletedProcess(command, 0)
+
+            with (
+                patch("retrolarium_kit.core.project.subprocess.run", side_effect=run),
+                patch("sys.stderr"),
+                self.assertRaisesRegex(ProjectError, "docker did not finish in 15 minutes"),
+            ):
+                build_project(manifest, container="default")
+            name = calls[0][calls[0].index("--name") + 1]
+            self.assertEqual(["docker", "kill", name], calls[1])
+
     def test_verify_reports_exact_and_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             manifest = write_project(root)
             self.assertEqual("exact", verify_project(manifest)["status"])
 

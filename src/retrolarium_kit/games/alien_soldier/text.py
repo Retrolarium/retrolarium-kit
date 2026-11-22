@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.platform.megadrive.asl import AslSourceError, SourceTree
 
 
@@ -56,7 +57,7 @@ RESULT_LABELS = (
 )
 
 
-class TextError(ValueError):
+class TextError(ValueError, KitError):
     """A text document that does not fit the source."""
 
 

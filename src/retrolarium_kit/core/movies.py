@@ -47,6 +47,8 @@ from pathlib import Path
 import subprocess
 import tempfile
 
+from retrolarium_kit.core.errors import KitError
+
 # MAME's controller masks: NES joypad (:ctrlN:joypad:JOYPAD) and the Mega
 # Drive 3-button pad (:ctrlN:mdpad:PAD).
 NES_MASKS = {"A": 0x01, "B": 0x02, "S": 0x04, "T": 0x08, "U": 0x10, "D": 0x20, "L": 0x40, "R": 0x80}
@@ -68,7 +70,7 @@ PLUGINS = Path(__file__).with_name("mame_plugins")
 POWER_ON = {"fm2": ("00000000ffffffff", 0x800)}
 
 
-class MovieError(ValueError):
+class MovieError(ValueError, KitError):
     pass
 
 

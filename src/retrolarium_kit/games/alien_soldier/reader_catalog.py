@@ -5,10 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.core.game_names import GameNames
 
 
-class ReaderCatalogError(ValueError):
+class ReaderCatalogError(ValueError, KitError):
     """The source snapshot lacks the bindings its reader needs."""
 
 

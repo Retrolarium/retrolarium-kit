@@ -7,6 +7,8 @@
       "repository": "pacman_src",
       "descriptor": "pacman.rlj",
       "ref": "tags/source-reconstruction-3.1",
+      "commit": "107a5c6fc5ddc6f549c90d95e9df9a220061f13e",
+      "content_sha256": "ddc5f5fd0371c06f0b5d9ecdc8583cb37e11e84b4be65acfe09ca92fa5fae873",
       "revisions": [
         {
           "id": "japan-v10",
@@ -24,6 +26,8 @@
       "repository": "castle_excellent_src",
       "descriptor": "castle_excellent.rlj",
       "ref": "tags/source-reconstruction-3.1",
+      "commit": "eb2c80ef5c1db6affb78b5d5b90f7ca58ddc354a",
+      "content_sha256": "253254504ab95ee8100e042ac106d5dc4634d526954ff292ba269e82780c5997",
       "revisions": [
         {
           "id": "castle-excellent-japan-hsp-05",
@@ -41,6 +45,8 @@
       "repository": "doraemon_src",
       "descriptor": "doraemon.rlj",
       "ref": "tags/source-reconstruction-3.1",
+      "commit": "368ca5f0f48d4e83c1dd5e6d91be3ceeeb6cd722",
+      "content_sha256": "e5d3dd4f8f626feb57e72efa27ac5d4c3b44dbe67d3508d65d719191ae0e7896",
       "revisions": [
         {
           "id": "original",
@@ -53,6 +59,8 @@
       "repository": "smb1_src",
       "descriptor": "super_mario_bros.rlj",
       "ref": "tags/source-reconstruction-3.1",
+      "commit": "eb8faad337056e074e78ec5f3b496be24e7de761",
+      "content_sha256": "2dc4ea2ad9c9bc1524ef7f2c913ad655dd6e5b405c67692d4e41d8fb61a9d98e",
       "revisions": [
         {
           "id": "ju",
@@ -95,6 +103,8 @@
       "repository": "solomon_no_kagi_src",
       "descriptor": "solomons_key.rlj",
       "ref": "tags/source-reconstruction-3.1",
+      "commit": "f1a689b92f3dc1bba43689a91ba51db011ec09e1",
+      "content_sha256": "a9a5a858f9dd00679693de7a330d1af7e018428b784fed0a883f343ba7393ac5",
       "revisions": [
         {
           "id": "usa",
@@ -117,6 +127,8 @@
       "repository": "flicky_src",
       "descriptor": "flicky.rlj",
       "ref": "dc47be622a7e4e3984395bf93a1f28742d9ec31d",
+      "commit": "dc47be622a7e4e3984395bf93a1f28742d9ec31d",
+      "content_sha256": "af43c78947e645fe5e5e3fda853762a53c88bfa031a9a931f43ca4f4f582c79b",
       "revisions": [
         {
           "id": "ue",
@@ -129,6 +141,8 @@
       "repository": "alien_soldier_src",
       "descriptor": "alien_soldier.rlj",
       "ref": "5c074f2aec87fbddff94fe52d7912d7689d81a5b",
+      "commit": "5c074f2aec87fbddff94fe52d7912d7689d81a5b",
+      "content_sha256": "7a5feddc99af1fe2a73f87587b3eaebb1539d4a8ce5a6aa3f3fc2d0adedeb563",
       "revisions": [
         {
           "id": "jp",

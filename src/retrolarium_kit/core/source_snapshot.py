@@ -29,12 +29,14 @@ import tempfile
 import time
 from typing import Callable, Iterable
 
+from retrolarium_kit.core.errors import KitError
+
 
 RECORD = "retrolarium-source-snapshot.json"
 SCHEMA = "retrolarium.source-snapshot"
 
 
-class SnapshotError(ValueError):
+class SnapshotError(ValueError, KitError):
     """A snapshot cannot be made, refreshed or trusted."""
 
 

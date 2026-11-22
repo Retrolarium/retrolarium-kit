@@ -28,6 +28,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.platform.megadrive.asl import AslSourceError, SourceTree, parse_number
 
 
@@ -38,7 +39,7 @@ NAME_MARKERS = ("SpriteMapping", "SpriteFrame", "Mapping")
 ART_OPERAND = re.compile(r"^(?P<art>[A-Za-z_][A-Za-z0-9_]*)(?:\+\$(?P<addend>[0-9A-Fa-f]+))?$")
 
 
-class MappingError(ValueError):
+class MappingError(ValueError, KitError):
     """A mapping document that does not fit the source."""
 
 

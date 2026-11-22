@@ -19,6 +19,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from retrolarium_kit.core.errors import KitError
+
 LAYOUT = "config/z80_sound_data.layout"
 LEGACY_SOURCE = "src/sound/z80/data.asm"
 BANKS_ASSET = "data/sound/data_z80_part2.bin"
@@ -67,7 +69,7 @@ HEX_RE = re.compile(r"^\$[0-9A-F]{2}$")
 DECIMAL_RE = re.compile(r"^[0-9]+$")
 
 
-class SoundSourceError(ValueError):
+class SoundSourceError(ValueError, KitError):
     """The layout and the banks do not fit together."""
 
 

@@ -31,6 +31,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.games.alien_soldier import lzss
 from retrolarium_kit.games.alien_soldier.assets import LZSS_TO_RAM, LZSS_TO_VRAM, asset_lists, pointer_table
 from retrolarium_kit.games.alien_soldier.compressed_tiles import vram_sources
@@ -53,7 +54,7 @@ NAME_TABLE_CELLS = 64
 DERIVED_KEYS = ("screens",)
 
 
-class ScreenError(ValueError):
+class ScreenError(ValueError, KitError):
     """A screen definition or document that does not fit the source."""
 
 

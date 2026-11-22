@@ -39,6 +39,12 @@ def midi_file(*tracks: bytes, division: int = 96, format_type: int = 1) -> bytes
 
 
 class MidiTests(unittest.TestCase):
+    def test_a_file_without_tracks_is_a_midi_error_even_under_optimisation(self) -> None:
+        # Format 1, no tracks, 96 ticks per quarter note.
+        header = b"MThd" + bytes((0, 0, 0, 6, 0, 1, 0, 0, 0, 96))
+        with self.assertRaisesRegex(MidiError, "no tracks"):
+            parse_midi_channel(header, 0)
+
     def test_encode_round_trip_preserves_notes_and_tempo(self) -> None:
         notes = (MidiNote(60, 0, 240), MidiNote(64, 360, 840))
         encoded = encode_midi(notes, division=960, tempo=500_000)

@@ -19,6 +19,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from retrolarium_kit.core import assets, source_snapshot
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.core.game_names import GameNames
 from retrolarium_kit.games.alien_soldier import reader_catalog, workspace
 
@@ -32,7 +33,7 @@ MANIFEST = "assets/manifest.json"
 OUTPUT = "build/alien-soldier-edited.bin"
 
 
-class AlienSoldierContentError(ValueError):
+class AlienSoldierContentError(ValueError, KitError):
     """A snapshot that cannot be made, trusted or built."""
 
 

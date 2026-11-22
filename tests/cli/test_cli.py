@@ -183,7 +183,7 @@ class CliTests(unittest.TestCase):
 
         kit = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             (root / "assets").mkdir()
             (root / "assets" / "manifest.json").write_text(
                 json.dumps(

@@ -21,6 +21,7 @@ import shutil
 import tempfile
 from typing import Any, Mapping
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.core.game_names import PATH as NAMES_PATH
 from retrolarium_kit.games.alien_soldier import (
     animations,
@@ -68,7 +69,7 @@ DOCUMENTS = (
 DERIVED = (stages, objects, art)
 
 
-class WorkspaceError(ValueError):
+class WorkspaceError(ValueError, KitError):
     """The workspace cannot be exported, validated or built."""
 
 

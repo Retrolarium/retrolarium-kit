@@ -220,7 +220,8 @@ def parse_midi_channel(data: bytes, channel: int) -> MidiTrack:
         end_tick = max(end_tick, parsed.end_tick)
         for feature, count in parsed.discarded_events:
             discarded[feature] = discarded.get(feature, 0) + count
-    assert reference is not None
+    if reference is None:
+        raise MidiError("the MIDI file has no tracks")
     ordered = tuple(sorted(combined, key=lambda note: (note.start_tick, note.end_tick, note.note)))
     previous_end = 0
     for note in ordered:

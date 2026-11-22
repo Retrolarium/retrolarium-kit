@@ -23,8 +23,10 @@ from pathlib import Path, PurePosixPath
 import re
 from typing import Iterable, Mapping
 
+from retrolarium_kit.core.errors import KitError
 
-class AslSourceError(ValueError):
+
+class AslSourceError(ValueError, KitError):
     """The source cannot be read as data, or a write would not fit it."""
 
 

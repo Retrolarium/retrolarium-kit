@@ -45,6 +45,8 @@ from typing import Any, Mapping
 from importlib import resources
 
 from retrolarium_kit.core.authoring import AuthoringError
+from retrolarium_kit.core.errors import BUILD_TIMEOUT, KitError
+from retrolarium_kit.core import repository_trust
 from retrolarium_kit.core.self_command import child_environment
 from retrolarium_kit.studio.source_games import SourceGame, source_game
 
@@ -53,8 +55,13 @@ SCHEMA = "retrolarium.game"
 SCHEMA_VERSION = 1
 WORKSPACE_DIRECTORY = ".retrolarium"
 HACK_DIRECTORY = "hack"
-# How long a repository's split, check or build script may run, in seconds.
-SCRIPT_TIMEOUT = 15 * 60
+# How long a repository's split, check or build script may run, in seconds:
+# the kit's BUILD_TIMEOUT (core/errors.py). The Studio waits 20 minutes for the
+# kit as a backstop, so keep this below that.
+SCRIPT_TIMEOUT = BUILD_TIMEOUT
+# The record of the last legacy split check or split that succeeded, in the
+# workspace: what lets a status read say "ok" without running the check.
+SPLIT_MARKER = "split-ok.json"
 PLATFORMS = frozenset({"nes", "snes", "megadrive"})
 
 
@@ -434,6 +441,10 @@ def _edited(descriptor: GameDescriptor, revision: Revision) -> bool:
 def _run(descriptor: GameDescriptor, command: list[str], rom: Path) -> subprocess.CompletedProcess[str]:
     # The game's scripts ask this kit for its assemblers through RLTOOL.
     arguments = [part.replace("{rom}", str(rom)) for part in command]
+    # Only the scripts of the download the kit verified, unchanged, and only
+    # with the user's consent.
+    ensure_repository_verified(descriptor.root)
+    repository_trust.authorize_scripts(descriptor.root, [arguments[0]])
     # Bounded: a script that hangs must not hold the Studio's task queue.
     try:
         return subprocess.run(
@@ -441,6 +452,8 @@ def _run(descriptor: GameDescriptor, command: list[str], rom: Path) -> subproces
             cwd=descriptor.root,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             env=child_environment(),
             timeout=SCRIPT_TIMEOUT,
         )
@@ -472,16 +485,51 @@ def _split_status(descriptor: GameDescriptor, *, run: bool) -> dict[str, object]
         except assets.AssetsError as exc:
             return {"status": "failed", "output": str(exc)}
         return {"status": "made"}
+    marker = descriptor.root / WORKSPACE_DIRECTORY / SPLIT_MARKER
+    state = _split_state(descriptor, reference)
     if not run:
-        # A legacy check is executable code. Status reads cannot establish
-        # validity without running it; explicit preparation performs the check.
-        return {"status": "needed"}
+        # A legacy check is executable code, which a status read never runs:
+        # the split is ok when the last check or split that succeeded was
+        # made from this ROM by these scripts and this kit.
+        try:
+            recorded = json.loads(marker.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            recorded = None
+        return {"status": "ok" if state is not None and recorded == state else "needed"}
+    marker.unlink(missing_ok=True)
     if "check" in split and _run(descriptor, split["check"], rom).returncode == 0:
+        _write_split_marker(marker, state)
         return {"status": "ok"}
     result = _run(descriptor, split["command"], rom)
     if result.returncode != 0:
         return {"status": "failed", "output": (result.stdout + result.stderr)[-2000:]}
+    _write_split_marker(marker, state)
     return {"status": "made"}
+
+
+def _split_state(descriptor: GameDescriptor, reference: Revision) -> dict[str, str] | None:
+    """What a legacy split's outputs depend on: the ROM it splits, the
+    repository's scripts (those of the commands among them) and the kit."""
+    from retrolarium_kit import __version__
+
+    split = descriptor.split or {}
+    commands = [split[key][0] for key in ("check", "command") if key in split]
+    try:
+        scripts = repository_trust.script_files(descriptor.root, commands)
+    except (repository_trust.RepositoryTrustError, OSError):
+        return None
+    return {
+        "rom_sha256": reference.sha256,
+        "scripts_digest": repository_trust.scripts_digest(scripts),
+        "kit_version": __version__,
+    }
+
+
+def _write_split_marker(marker: Path, state: dict[str, str] | None) -> None:
+    if state is None:
+        return
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
 
 
 def revision_statuses(descriptor: GameDescriptor) -> dict[str, object]:
@@ -697,6 +745,19 @@ def _repository_files(root: Path) -> list[str]:
     )
 
 
+def _process_failure(error: subprocess.CalledProcessError) -> str:
+    """A failed child process as a check reason: its exit code and the last
+    lines of what it printed."""
+    output = "".join(
+        value.decode("utf-8", errors="replace") if isinstance(value, bytes) else value
+        for value in (error.stdout, error.stderr)
+        if value
+    )
+    tail = "\n".join(output.strip().splitlines()[-5:])
+    command = error.cmd[0] if isinstance(error.cmd, (list, tuple)) and error.cmd else error.cmd
+    return f"{command} failed with exit code {error.returncode}" + (f":\n{tail}" if tail else "")
+
+
 def check_repository(
     descriptor: GameDescriptor,
     revision_ids: list[str] | None = None,
@@ -759,7 +820,12 @@ def check_repository(
                 report = build_studio_project(
                     project, flicky_level_writer=flicky_level_writer if shadow.source_mode == "flicky-content" else None
                 )
-            except ValueError as exc:  # every kit refusal is a ValueError
+            except subprocess.CalledProcessError as exc:
+                entry.update(status="failed", reason=_process_failure(exc))
+                continue
+            except (KitError, ValueError, OSError) as exc:
+                # A kit refusal (KitError; older ones are still ValueErrors)
+                # or a file it cannot use fails this revision, not the check.
                 entry.update(status="failed", reason=str(exc))
                 continue
             built = (project.parent / report["artifact"]["path"]).read_bytes()
@@ -802,6 +868,8 @@ def check_release(descriptor: GameDescriptor, manifest: Path) -> dict[str, objec
         document = json.loads(manifest.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise GameRepositoryError(f"cannot read the release manifest {manifest}: {exc}") from exc
+    if not isinstance(document, dict):
+        raise GameRepositoryError(f"the release manifest {manifest} is not a JSON object")
     line = document.get("release_line")
     if RELEASE_LINES.get(str(line)) != document.get("release_kind"):
         problems.append(
@@ -837,8 +905,14 @@ def check_release(descriptor: GameDescriptor, manifest: Path) -> dict[str, objec
         for index, item in enumerate(removed):
             if not isinstance(item, Mapping) or not item.get("path") or not item.get("replaced_by"):
                 problems.append(f"removed_authoring[{index}] needs path and replaced_by")
-            elif (descriptor.root / str(item["path"])).exists():
-                problems.append(f"removed_authoring[{index}] {item['path']} is still in the repository")
+                continue
+            try:
+                removed_path = _relative(item["path"], f"removed_authoring[{index}].path")
+            except GameRepositoryError as exc:
+                problems.append(str(exc))
+                continue
+            if (descriptor.root / removed_path).exists():
+                problems.append(f"removed_authoring[{index}] {removed_path} is still in the repository")
     if (descriptor.root / "scripts" / "authoring").is_dir() and any(
         (descriptor.root / "scripts" / "authoring").rglob("*.py")
     ):
@@ -883,20 +957,51 @@ def _prepare_source(
     return created
 
 
+# The limits of a repository archive: no game repository comes near them.
+ARCHIVE_ENTRIES = 20_000
+ARCHIVE_BYTES = 2 << 30
+_COMMIT = re.compile(r"[0-9a-f]{40}")
+_DIGEST = re.compile(r"[0-9a-f]{64}")
+
+
+def validate_catalog(document: object) -> Mapping[str, Any]:
+    """The repository catalog, checked: every game is pinned to a commit and
+    to the digest of its archive's content (repository_trust.tree_digest)."""
+    if not isinstance(document, Mapping) or document.get("schema") != "retrolarium.game-repositories":
+        raise GameRepositoryError("the repository catalog is not a retrolarium.game-repositories document")
+    if not isinstance(document.get("organization"), str) or not isinstance(document.get("games"), Mapping):
+        raise GameRepositoryError("the repository catalog needs organization and games")
+    for game_id, entry in document["games"].items():
+        if not isinstance(entry, Mapping):
+            raise GameRepositoryError(f"the catalog entry for {game_id} is not an object")
+        for key in ("repository", "descriptor", "ref"):
+            if not isinstance(entry.get(key), str) or not entry[key]:
+                raise GameRepositoryError(f"the catalog entry for {game_id} has no {key}")
+        _identifier(entry["repository"], f"the catalog entry for {game_id}: repository")
+        if not isinstance(entry.get("commit"), str) or not _COMMIT.fullmatch(entry["commit"]):
+            raise GameRepositoryError(f"the catalog entry for {game_id} is not pinned to a commit (40 hex digits)")
+        if not isinstance(entry.get("content_sha256"), str) or not _DIGEST.fullmatch(entry["content_sha256"]):
+            raise GameRepositoryError(f"the catalog entry for {game_id} has no content_sha256 (64 hex digits)")
+        if not isinstance(entry.get("revisions"), list):
+            raise GameRepositoryError(f"the catalog entry for {game_id} lists no revisions")
+    return document
+
+
 def repository_catalog() -> Mapping[str, Any]:
     """The game repositories the kit knows: where each game's disassembly
-    is published, the Git ref to download (a release tag, refs/tags/...,
-    or a branch, refs/heads/..., for a game with no Retrolarium release
-    yet), the descriptor at its root, and the revisions Open ROM
-    recognizes by their SHA-256."""
+    is published, the commit to download (and the release tag or branch,
+    `ref`, it was taken from), the digest of that archive's content, the
+    descriptor at its root, and the revisions Open ROM recognizes by their
+    SHA-256."""
     from importlib import resources
 
     path = resources.files("retrolarium_kit.core").joinpath("profiles", "repositories.json")
-    return json.loads(path.read_text(encoding="utf-8"))
+    return validate_catalog(json.loads(path.read_text(encoding="utf-8")))
 
 
 def _archive_url(catalog: Mapping[str, Any], entry: Mapping[str, Any], source: str | None) -> str:
-    ref = entry.get("ref")
+    # The commit the catalog pins; the tag or branch only names it.
+    ref = entry.get("commit") or entry.get("ref")
     if not isinstance(ref, str) or not ref:
         raise GameRepositoryError("the repository catalog entry needs a non-empty Git ref")
     try:
@@ -906,21 +1011,124 @@ def _archive_url(catalog: Mapping[str, Any], entry: Mapping[str, Any], source: s
             else "{organization}/{repository}/archive/refs/{ref}.zip"
         )
         template = source or os.environ.get("RETROLARIUM_GAMES_SOURCE") or default
-        return template.format(organization=catalog["organization"], repository=entry["repository"], ref=entry["ref"])
+        return template.format(organization=catalog["organization"], repository=entry["repository"], ref=ref)
     except (KeyError, IndexError, ValueError) as exc:
         raise GameRepositoryError(
             f"the source template {template!r} may use {{organization}}, {{repository}} and {{ref}} only"
         ) from exc
 
 
-def fetch_repository(game_id: str, games: Path, *, source: str | None = None) -> Path:
-    """Download a game's repository as an archive (no Git needed) into
-    games/<repository> and return its descriptor. `source` (or
-    $RETROLARIUM_GAMES_SOURCE) is a URL or file template with {organization},
-    {repository} and {ref}."""
-    import urllib.request
+def repository_url(catalog: Mapping[str, Any], entry: Mapping[str, Any]) -> str:
+    """Where a person reads the pinned commit of a game repository."""
+    return f"{str(catalog['organization']).rstrip('/')}/{entry['repository']}/tree/{entry['commit']}"
+
+
+def unpack_archive(archive: Path, unpacked: Path) -> Path:
+    """Unpack a repository archive into `unpacked` and return its root (the
+    one folder a GitHub archive holds, <repository>-<commit>). Refused: more
+    than ARCHIVE_ENTRIES entries or ARCHIVE_BYTES bytes, a path that leads
+    out of the folder, a symbolic link."""
+    import stat
     import zipfile
 
+    try:
+        with zipfile.ZipFile(archive) as bundle:
+            entries = bundle.infolist()
+            if len(entries) > ARCHIVE_ENTRIES:
+                raise GameRepositoryError(f"the archive holds more than {ARCHIVE_ENTRIES} entries")
+            if sum(item.file_size for item in entries) > ARCHIVE_BYTES:
+                raise GameRepositoryError(f"the archive unpacks to more than {ARCHIVE_BYTES >> 30} GiB")
+            for item in entries:
+                name = item.filename
+                parts = PurePosixPath(name).parts
+                if name.startswith("/") or "\\" in name or ".." in parts or (parts and ":" in parts[0]):
+                    raise GameRepositoryError(f"the archive holds an unsafe path: {name}")
+                if stat.S_ISLNK(item.external_attr >> 16):
+                    raise GameRepositoryError(f"the archive holds a symbolic link: {name}")
+            bundle.extractall(unpacked)
+    except zipfile.BadZipFile as exc:
+        raise GameRepositoryError(f"{archive.name} is not a zip archive: {exc}") from exc
+    entries = list(unpacked.iterdir())
+    return entries[0] if len(entries) == 1 and entries[0].is_dir() else unpacked
+
+
+def download_repository(url: str, staging: Path) -> Path:
+    """The repository at `url` (a URL, a zip file or a folder) unpacked under
+    `staging`; its root."""
+    import urllib.request
+
+    unpacked = staging / "unpacked"
+    if Path(url).is_dir():
+        # A folder for development: copied as it is, without its Git data.
+        root = unpacked / Path(url).name
+        shutil.copytree(url, root, symlinks=True, ignore=shutil.ignore_patterns(".git"))
+        return root
+    archive = staging / "repository.zip"
+    if Path(url).is_file():
+        shutil.copyfile(url, archive)
+    else:
+        try:
+            with urllib.request.urlopen(url, timeout=60) as response, archive.open("wb") as out:
+                shutil.copyfileobj(response, out)
+        except OSError as exc:
+            raise GameRepositoryError(f"cannot download {url}: {exc}") from exc
+    return unpack_archive(archive, unpacked)
+
+
+def _reverify(game_id: str, catalog: Mapping[str, Any], entry: Mapping[str, Any], target: Path) -> None:
+    """Give a repository an older kit downloaded (no verification record) its
+    record: download the pinned commit again and, when its content matches
+    the catalog and its scripts are the ones in `target`, record `target` as
+    verified. Anything else leaves it unverified (its scripts do not run)."""
+    games = target.parent
+    staging = Path(tempfile.mkdtemp(prefix=".download-", dir=games))
+    try:
+        root = download_repository(_archive_url(catalog, entry, None), staging)
+        if repository_trust.tree_digest(root) != entry["content_sha256"]:
+            raise GameRepositoryError(f"the content of {entry['repository']} does not match the catalog")
+        if repository_trust.script_files(root) != repository_trust.script_files(target):
+            raise GameRepositoryError(
+                f"the scripts in {target} are not those of {entry['repository']} at {entry['commit'][:12]}"
+            )
+        repository_trust.write_marker(
+            target,
+            game=game_id,
+            repository=entry["repository"],
+            commit=entry["commit"],
+            content_sha256=entry["content_sha256"],
+            url=repository_url(catalog, entry),
+        )
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+
+def ensure_repository_verified(base: Path) -> None:
+    """Upgrade an older project's missing verification record before scripts run.
+
+    Opening a saved project bypasses fetch_repository. Locate its catalogued
+    repository (also above source snapshots), then compare its scripts with
+    the pinned archive. This never grants consent or accepts changed scripts.
+    Explicit development overrides retain their existing behavior.
+    """
+    if repository_trust.unverified_allowed() or repository_trust.find_marker(base) is not None:
+        return
+    catalog = repository_catalog()
+    base = base.resolve()
+    for folder in (base, *base.parents):
+        for game_id, entry in catalog["games"].items():
+            if (folder / entry["descriptor"]).is_file():
+                _reverify(game_id, catalog, entry, folder)
+                return
+
+
+def fetch_repository(game_id: str, games: Path, *, source: str | None = None) -> Path:
+    """Download a game's repository as an archive (no Git needed) into
+    games/<repository> and return its descriptor. The archive is the commit
+    the catalog pins, and its content must match the catalog's digest.
+    `source` (or $RETROLARIUM_GAMES_SOURCE) is a URL, file or folder template
+    with {organization}, {repository} and {ref}; its content is checked the
+    same way unless RETROLARIUM_UNVERIFIED_GAMES=1 accepts a different one
+    (for development), which leaves the download unverified."""
     catalog = repository_catalog()
     entry = catalog["games"].get(game_id)
     if entry is None:
@@ -928,6 +1136,16 @@ def fetch_repository(game_id: str, games: Path, *, source: str | None = None) ->
     target = games / entry["repository"]
     descriptor = target / entry["descriptor"]
     if descriptor.is_file():
+        if (
+            source is None
+            and not os.environ.get("RETROLARIUM_GAMES_SOURCE")
+            and not (target / ".git").exists()
+            and repository_trust.read_marker(target) is None
+        ):
+            try:
+                _reverify(game_id, catalog, entry, target)
+            except (GameRepositoryError, repository_trust.RepositoryTrustError, OSError) as exc:
+                print(f"warning: {target} stays unverified: {exc}", file=sys.stderr)
         return descriptor
     if target.exists():
         raise GameRepositoryError(f"{target} exists but has no {entry['descriptor']}")
@@ -935,33 +1153,32 @@ def fetch_repository(game_id: str, games: Path, *, source: str | None = None) ->
     games.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=".download-", dir=games))
     try:
-        archive = staging / "repository.zip"
-        if Path(url).is_file():
-            shutil.copyfile(url, archive)
-        else:
-            try:
-                with urllib.request.urlopen(url, timeout=60) as response, archive.open("wb") as out:
-                    shutil.copyfileobj(response, out)
-            except OSError as exc:
-                raise GameRepositoryError(f"cannot download {url}: {exc}") from exc
-        unpacked = staging / "unpacked"
-        try:
-            with zipfile.ZipFile(archive) as bundle:
-                for name in bundle.namelist():
-                    parts = PurePosixPath(name).parts
-                    if name.startswith("/") or ".." in parts or (parts and ":" in parts[0]):
-                        raise GameRepositoryError(f"the archive holds an unsafe path: {name}")
-                bundle.extractall(unpacked)
-        except zipfile.BadZipFile as exc:
-            raise GameRepositoryError(f"{url} is not a zip archive: {exc}") from exc
-        # GitHub archives hold one folder, <repository>-<tag or branch>.
-        entries = list(unpacked.iterdir())
-        root = entries[0] if len(entries) == 1 and entries[0].is_dir() else unpacked
+        root = download_repository(url, staging)
         if not (root / entry["descriptor"]).is_file():
             raise GameRepositoryError(f"the archive has no {entry['descriptor']} at its top")
+        verified = repository_trust.tree_digest(root) == entry["content_sha256"]
+        if not verified:
+            overridden = source is not None or bool(os.environ.get("RETROLARIUM_GAMES_SOURCE"))
+            if not (overridden and repository_trust.unverified_allowed()):
+                raise GameRepositoryError(
+                    f"the content of {url} does not match the catalog's {entry['repository']} at commit "
+                    f"{entry['commit'][:12]}; the kit does not use it"
+                )
+            print(f"warning: {url} is not the catalog's {entry['repository']}; it stays unverified", file=sys.stderr)
+            # Whatever record an unverified archive carries is not the kit's.
+            (root / repository_trust.MARKER).unlink(missing_ok=True)
         root.rename(target)
     finally:
         shutil.rmtree(staging, ignore_errors=True)
+    if verified:
+        repository_trust.write_marker(
+            target,
+            game=game_id,
+            repository=entry["repository"],
+            commit=entry["commit"],
+            content_sha256=entry["content_sha256"],
+            url=repository_url(catalog, entry),
+        )
     return descriptor
 
 
@@ -1012,12 +1229,11 @@ def open_rom(rom: Path, games: Path, *, known: list[Path] = (), source: str | No
 
 
 def ips_patch(original: bytes, edited: bytes) -> bytes:
-    """An IPS patch from `original` to `edited` (same size or larger; IPS
-    addresses 16 MiB)."""
+    """An IPS patch from `original` to `edited` (same size or larger). A
+    record starts at a 24-bit offset, so a change may begin at 0xFFFFFF at
+    the latest (a file of exactly 16 MiB is patchable)."""
     if len(edited) < len(original):
         raise GameRepositoryError("IPS cannot shrink a ROM")
-    if len(edited) > 0xFFFFFF:
-        raise GameRepositoryError("IPS addresses at most 16 MiB")
     out = bytearray(b"PATCH")
     index = 0
     size = len(edited)
@@ -1026,6 +1242,8 @@ def ips_patch(original: bytes, edited: bytes) -> bytes:
             index += 1
             continue
         start = index
+        if start > 0xFFFFFF:
+            raise GameRepositoryError(f"IPS cannot address a change at offset 0x{start:X} (beyond 16 MiB)")
         # Offset 0x454F46 spells "EOF": a record starts one byte earlier
         # there, so it holds one byte less of the run.
         limit = 0xFFFE if start == 0x454F46 else 0xFFFF

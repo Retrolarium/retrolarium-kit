@@ -19,6 +19,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.platform.megadrive.asl import SourceTree
 
 
@@ -31,7 +32,7 @@ COLOURS = 64
 LIST_ENTRY = re.compile(r"^\(?(?P<label>[A-Za-z_][A-Za-z0-9_]*)(?:\+\$(?P<offset>[0-9A-Fa-f]+))?\)?-" + LOADER + "$")
 
 
-class PaletteError(ValueError):
+class PaletteError(ValueError, KitError):
     """A palette document that does not fit the source's commands."""
 
 

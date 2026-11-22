@@ -21,6 +21,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.platform.megadrive.asl import SourceTree, parse_number
 
 
@@ -34,7 +35,7 @@ BANK_OPERAND = re.compile(r"^\((?P<bank>[A-Za-z_][A-Za-z0-9_]*)\s*>>\s*\$8\)$")
 INITIAL_LEVEL = 0x80
 
 
-class PcmError(ValueError):
+class PcmError(ValueError, KitError):
     """A sample document that does not fit the source."""
 
 

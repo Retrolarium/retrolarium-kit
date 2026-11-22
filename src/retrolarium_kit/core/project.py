@@ -10,9 +10,12 @@ import re
 import subprocess
 import sys
 import tempfile
-from typing import Any
+from typing import Any, Callable
+import uuid
 
 from retrolarium_kit.core.build_toolchains import ResolvedToolchain, default_cache_root, materialize_build_toolchain
+from retrolarium_kit.core.containers import ContainerError, docker_run_command
+from retrolarium_kit.core.errors import BUILD_TIMEOUT, KitError
 from retrolarium_core.contracts import artifact_path, load_disassembly_manifest
 from retrolarium_core.fds import FdsError, parse_fds_side
 from retrolarium_core.ines import InesError, load_ines, parse_ines_prefix
@@ -20,7 +23,7 @@ from retrolarium_core.megadrive import load_megadrive
 from retrolarium_core.snes import load_snes
 
 
-class ProjectError(RuntimeError):
+class ProjectError(RuntimeError, KitError):
     """A declared project operation could not be completed."""
 
 
@@ -128,21 +131,38 @@ def _operation_argv(operation: dict[str, Any]) -> list[str]:
     return argv
 
 
+def _minutes(seconds: float) -> str:
+    return f"{seconds / 60:g} minutes"
+
+
 def _run_build_process(
     command: list[str],
     *,
     project_directory: Path,
     environment: dict[str, str] | None = None,
+    on_timeout: Callable[[], object] | None = None,
 ) -> None:
     # The build's own output goes to stderr: stdout is the kit's JSON answer,
     # which callers (the Studio) parse.
-    result = subprocess.run(
-        command,
-        cwd=project_directory,
-        env=environment,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
+    try:
+        result = subprocess.run(
+            command,
+            cwd=project_directory,
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=BUILD_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired as exc:
+        if on_timeout is not None:
+            try:
+                on_timeout()
+            except (OSError, subprocess.SubprocessError):
+                pass
+        output = process_text(exc.stdout)
+        if output:
+            sys.stderr.write(output if output.endswith("\n") else output + "\n")
+        raise ProjectError(f"{Path(command[0]).name} did not finish in {_minutes(BUILD_TIMEOUT)}") from None
     output = process_text(result.stdout)
     if output:
         sys.stderr.write(output if output.endswith("\n") else output + "\n")
@@ -154,18 +174,19 @@ def _run_build_process(
 def _docker_build(operation: dict[str, Any], project_directory: Path, selected_container: str) -> dict[str, str]:
     if operation.get("z80_prebuild"):
         raise ProjectError("container build cannot assemble declared Z80 sources")
-    command = [
-        "docker",
-        "run",
-        "--rm",
-        "--mount",
-        f"type=bind,source={project_directory},target=/work",
-        "--workdir",
-        "/work",
-        selected_container,
-        *_operation_argv(operation),
-    ]
-    _run_build_process(command, project_directory=project_directory)
+    # Named, so a build that runs out of time is stopped, not only its client.
+    name = f"retrolarium-build-{uuid.uuid4().hex[:12]}"
+    try:
+        command = docker_run_command(selected_container, project_directory, _operation_argv(operation), name=name)
+    except ContainerError as exc:
+        raise ProjectError(str(exc)) from exc
+    _run_build_process(
+        command,
+        project_directory=project_directory,
+        on_timeout=lambda: subprocess.run(
+            ["docker", "kill", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60
+        ),
+    )
     return {"kind": "docker", "container": selected_container}
 
 
@@ -356,15 +377,25 @@ def build_project(
         output.relative_to(project_directory)
     except ValueError as exc:
         raise ProjectError("build output must be inside the project directory") from exc
+    default_container = operation.get("default_container")
+    if not isinstance(default_container, str) or not default_container:
+        default_container = None
+    if container == "default":
+        # --container default: the image the manifest names.
+        if default_container is None:
+            raise ProjectError("--container default needs a default_container in the build operation")
+        container = default_container
     if container is not None:
         runner = _docker_build(operation, project_directory, container)
     elif operation.get("runner") == "retrolarium-kit":
         runner = _bundled_build(operation, project_directory, output, toolchain_cache)
+    elif default_container is not None:
+        # Docker runs only when asked: the kit never starts a container itself.
+        raise ProjectError(
+            f"this build needs a container: rerun with --container {default_container} (or --container default)"
+        )
     else:
-        default_container = operation.get("default_container")
-        if not isinstance(default_container, str) or not default_container:
-            raise ProjectError("build operation has neither a bundled recipe nor a container")
-        runner = _docker_build(operation, project_directory, default_container)
+        raise ProjectError("build operation has neither a bundled recipe nor a container")
     if not output.is_file():
         raise ProjectError(f"build did not produce declared artifact: {output}")
     document = {

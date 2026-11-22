@@ -22,6 +22,8 @@ import time
 
 from retrolarium_core.megadrive import stamp_cartridge_checksum
 from retrolarium_kit.core.build_toolchains import BuildToolchainError, materialize_build_toolchain
+from retrolarium_kit.core.errors import KitError
+from retrolarium_kit.core.repository_trust import authorize_scripts
 from retrolarium_kit.games.flicky.bonus_motion import export_bonus_motion, validate_bonus_motion
 from retrolarium_kit.games.flicky.demo import export_attract_demos, validate_attract_demos
 from retrolarium_kit.games.flicky.bonus_placement import (
@@ -58,7 +60,7 @@ SHARED_PALETTE_INCLUDE = re.compile(
 )
 
 
-class FlickyContentError(ValueError):
+class FlickyContentError(ValueError, KitError):
     """The Flicky source snapshot or build violates its contract."""
 
 
@@ -427,6 +429,10 @@ def build_flicky_source_snapshot(
     writer = Path(selected_writer).resolve()
     if not writer.is_file():
         raise FlickyContentError(f"native Flicky level writer is missing: {writer}")
+    # The snapshot's own scripts build it: only those of the repository the
+    # kit downloaded and verified, unchanged (or an unverified one the user
+    # accepts), and only with the user's consent.
+    authorize_scripts(source, ["scripts/run.py"])
     try:
         build_content(source, as_bin=as_bin, p2bin=p2bin, level_writer=writer)
     except (FlickyWorkspaceError, subprocess.CalledProcessError) as exc:

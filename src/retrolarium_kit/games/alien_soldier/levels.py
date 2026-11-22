@@ -23,6 +23,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.platform.megadrive.asl import SourceTree, parse_number
 
 
@@ -66,7 +67,7 @@ WORD_TABLES = {
 }
 
 
-class LevelError(ValueError):
+class LevelError(ValueError, KitError):
     """A level document that does not fit the source."""
 
 

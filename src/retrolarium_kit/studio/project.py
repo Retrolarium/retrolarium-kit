@@ -19,6 +19,7 @@ import tomllib
 from typing import Any
 
 from retrolarium_core.contracts import ContractError, load_disassembly_manifest
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.games.catalog import (
     build_game,
     build_game_documents,
@@ -33,7 +34,7 @@ from retrolarium_core.snes import load_snes
 from retrolarium_kit.studio.source_games import MODES as SOURCE_GAME_MODES, SourceGame, source_game
 
 
-class StudioProjectError(ValueError):
+class StudioProjectError(ValueError, KitError):
     """Raised when a ``.rlj`` project violates the public contract."""
 
 

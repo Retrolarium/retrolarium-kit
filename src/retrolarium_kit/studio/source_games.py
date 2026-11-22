@@ -25,8 +25,10 @@ import json
 from pathlib import Path
 from typing import Any, Callable
 
+from retrolarium_kit.core.errors import KitError
 
-class SourceGameError(ValueError):
+
+class SourceGameError(ValueError, KitError):
     """A source-built project that cannot be prepared, checked or built."""
 
 
@@ -57,6 +59,14 @@ class SourceGame:
 def _flicky() -> SourceGame:
     from retrolarium_kit.games.flicky import content
 
+    def build(project: Path, native_writer: Path | None = None, **_: Any) -> dict[str, Any]:
+        from retrolarium_kit.studio.repository import ensure_repository_verified
+
+        # Flicky executes scripts/run.py from its snapshot. Alien Soldier's
+        # native assembler path does not execute repository Python scripts.
+        ensure_repository_verified(project)
+        return content.build_flicky_source_snapshot(project, native_writer=native_writer)
+
     return SourceGame(
         profile="flicky-ue.v1",
         mode="flicky-content",
@@ -72,9 +82,7 @@ def _flicky() -> SourceGame:
             content.WORKSPACE_FILES[key]: digest
             for key, digest in content.validate_flicky_source_snapshot(project).items()
         },
-        build=lambda project, native_writer=None, **_: content.build_flicky_source_snapshot(
-            project, native_writer=native_writer
-        ),
+        build=build,
         errors=(content.FlickyContentError,),
         original=lambda project: project / content.SOURCE_DIRECTORY / content.ROM_NAME,
     )

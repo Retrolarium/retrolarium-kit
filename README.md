@@ -161,11 +161,79 @@ their allocated capacities. The game's
 [editing guide](https://github.com/RetrolariumLab/alien_soldier_src/blob/main/docs/retrolarium.md)
 describes the individual limits and verified previews.
 
-Open ROM downloads the revision pinned by `core/profiles/repositories.json`. Run
+### Downloaded repositories
+
+Open ROM downloads the game's repository as the archive of the commit that
+`core/profiles/repositories.json` pins (`commit`; `ref` only names the release
+tag or branch it was taken from) and accepts it only when the digest of its
+content matches the catalog's `content_sha256`: SHA-256 over one line
+`<path>\0<sha256 of the file>\n` per regular file, sorted by POSIX path
+(`core/repository_trust.py`, `tree_digest`). Archives with links, more than
+20,000 entries or more than 2 GiB unpacked are refused. A verified download gets
+a record, `games/<repository>/.retrolarium-verified`, naming the commit, the
+content digest and the hash of every file Python could run there (all of
+`scripts/`, every `.py`, `.pyw`, `.pyd`, `.so` and `.pth` file).
+
+You edit files of a downloaded repository, so its whole content is checked only
+when it is downloaded. Before the kit runs one of its scripts (a descriptor's
+split, check or build command, a Flicky snapshot's `scripts/run.py`), it checks
+that every such file is one the record lists, unchanged; a changed or added
+script stops the command. A repository the kit did not download and verify (a
+checkout of your own, a download of an older kit that the pinned commit no
+longer matches, a test archive) runs no script unless
+`RETROLARIUM_UNVERIFIED_GAMES=1` says you accept unverified game repositories.
+The same variable lets a `--source` or `RETROLARIUM_GAMES_SOURCE` archive whose
+content differs from the catalog be used, unverified, for development; the
+default download is never accepted unverified.
+
+#### Consent before a repository's scripts run
+
+Even a verified repository's scripts run only with your consent, given per
+content digest. `RETROLARIUM_ALLOW_REPOSITORY_SCRIPTS` holds the
+`content_sha256` values you agreed to, separated by commas or white space, or
+`all`; the global flag `rltool --allow-repository-scripts` (accepted anywhere on
+the command line) stands for `all` for that one command. An unverified
+repository (`RETROLARIUM_UNVERIFIED_GAMES=1`) has no digest to agree to, so its
+scripts need `all`.
+
+Without consent the command stops before any script runs, exits with code 3 and
+prints exactly one JSON object on stdout (the reason goes to stderr):
+
+```json
+{
+  "schema": "retrolarium.consent-needed",
+  "schema_version": 1,
+  "repository": "flicky_src",
+  "commit": "<40 hex digits>",
+  "content_sha256": "<64 hex digits>",
+  "url": "https://github.com/RetrolariumLab/flicky_src/tree/<commit>"
+}
+```
+
+The Studio shows the repository and the link, remembers your answer for that
+repository and digest, and runs the command again with the digest in
+`RETROLARIUM_ALLOW_REPOSITORY_SCRIPTS`. Of the catalog's games only Flicky's
+build runs repository scripts today (its snapshot's `scripts/run.py`); the
+others split with the kit's own assets manifest. Older descriptors with a split
+`command` and `check` run them on `prepare` only: `studio revisions` never runs
+the check, and reports the split `ok` from `.retrolarium/split-ok.json`, which
+records the ROM, the scripts' digest and the kit version of the last check or
+split that succeeded.
+
+Every repository script and build step has 15 minutes (`SCRIPT_TIMEOUT`,
+`BUILD_TIMEOUT`); the Studio waits 20 minutes for the kit as a backstop. The
+Flicky oracles under `tests/oracles/flicky` build local checkouts, so run them
+with `RETROLARIUM_UNVERIFIED_GAMES=1` and
+`RETROLARIUM_ALLOW_REPOSITORY_SCRIPTS=all`.
+
+To move a game to a newer release, change its `ref` and run
+`python tools/pin_game_repositories.py`: it resolves each ref to its commit
+through the GitHub API, downloads that archive, computes its content digest and
+writes both into the catalog (`--check` only reports). Run
 `python tools/check_game_repositories.py` before a release. It downloads each
 configured archive into a temporary directory, loads its descriptor and compares
-its ROM identities with the catalog. It needs internet access and removes its
-temporary downloads when it finishes.
+its ROM identities with the catalog. Both need internet access and remove their
+temporary downloads when they finish.
 
 ### The game's names
 
@@ -260,10 +328,13 @@ AS is GPL-2.0-or-later: its source snapshot ships beside the binaries built from
 it, with the license. cc65 (zlib) and p2bin (ISC) notices ship as well.
 
 The Mega Drive compressions (Nemesis, Enigma) are the core's C++, which the kit
-runs as `rlcore` (Flicky's graphics need it). The Studio ships it and names it
-in `RETROLARIUM_CORE`; a source checkout uses the one built in
+runs as `rlcore` (Flicky's graphics need it). The core looks for it in this
+order: `RETROLARIUM_CORE` (the Studio names the `rlcore` it ships there), the
+one inside the core's wheel, then `PATH`. A source checkout builds it in
 `retrolarium-core` (`cmake -S . -B build` there, then
-`cmake --build build --target rlcore`).
+`cmake --build build --target rlcore`) and either names it in `RETROLARIUM_CORE`
+or sets `RETROLARIUM_CORE_DEV=1`, which alone lets the core use the checkout's
+`build/rlcore`. The core refuses an `rlcore` whose version is not its own.
 
 ## Shared linter
 
@@ -531,9 +602,16 @@ python -m unittest discover -s tests
 Generated NES/SNES projects use the bundled `ca65-ld65-v1` recipe, and Mega
 Drive projects use `asl-p2bin-v1`. `project build` therefore needs neither
 Docker nor a local compiler directory; pass `--container IMAGE` only when an
-explicit compatibility build is wanted.
+explicit compatibility build is wanted (`--container default` runs the image the
+manifest names as `default_container`). The kit never starts Docker on its own:
+a manifest without a bundled recipe fails with the `--container` to add.
 
-Build or install the kit from a checkout of this repository:
+Build or install the kit from a checkout of this repository. A wheel carries the
+assembler payloads, which are not tracked: build them first with
+`tools/build_toolchains.ps1` (Windows) or `tools/build_toolchains.sh` (Linux,
+macOS), and check them with `python tools/check_toolchain_payloads.py`, which
+fails when any file the manifest pins is missing or differs
+([docs/toolchains.md](docs/toolchains.md)):
 
 ```powershell
 python -m pip install .

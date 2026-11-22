@@ -18,11 +18,13 @@ import json
 from pathlib import Path
 from typing import Any
 
+from retrolarium_kit.core.errors import KitError
+
 PATH = Path("config/names.json")
 SCHEMA = "retrolarium.names"
 
 
-class GameNamesError(ValueError):
+class GameNamesError(ValueError, KitError):
     """A names document is not one."""
 
 

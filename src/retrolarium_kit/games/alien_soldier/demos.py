@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.games.alien_soldier.assets import pointer_table
 from retrolarium_kit.platform.megadrive.asl import SourceTree
 
@@ -28,7 +29,7 @@ STREAMS = "Demo_InputStreamPointers"
 DEMO_FRAMES = 0x1000
 
 
-class DemoError(ValueError):
+class DemoError(ValueError, KitError):
     """A demo document that does not fit the source."""
 
 

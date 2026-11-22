@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.games.alien_soldier import lzss
 from retrolarium_kit.games.alien_soldier.compressed_tiles import payloads as tile_payloads, vram_sources
 from retrolarium_kit.games.alien_soldier.stages import RAM_BASE, regions, scenes
@@ -25,7 +26,7 @@ DOCUMENT = "levels/maps.json"
 WIDTHS = {"patterns": 2, "chunks": 1, "coarse": 1}
 
 
-class MapError(ValueError):
+class MapError(ValueError, KitError):
     """A map document that does not fit the source."""
 
 

@@ -27,8 +27,10 @@ therefore keep an unedited stream as it was and only compress what changed.
 
 from __future__ import annotations
 
-from functools import lru_cache
 import struct
+
+from retrolarium_kit.core.bounded_cache import BoundedCache
+from retrolarium_kit.core.errors import KitError
 
 
 BLOCK = 0x400
@@ -39,7 +41,7 @@ MAX_LITERAL = 32
 MAX_REPEAT = 33
 
 
-class LzssError(ValueError):
+class LzssError(ValueError, KitError):
     """A stream the game's decompressor would not read as intended."""
 
 
@@ -57,11 +59,15 @@ def decompress(payload: bytes, *, blocks: bool = False) -> bytes:
     """What the decompressor writes. With `blocks`, as the VRAM loader runs
     it: a match may not reach before the start of its $400 block. Readers
     ask for the same payloads many times while a project opens, so the
-    output is kept by the input's bytes."""
-    return _decompress(bytes(payload), blocks)
+    output is kept, by the input's SHA-256, within a byte budget."""
+    payload = bytes(payload)
+    return _CACHE.get(payload, blocks, lambda: _decompress(payload, blocks))
 
 
-@lru_cache(maxsize=4096)
+# What decompress keeps of its results (inputs are keyed by their hash).
+_CACHE = BoundedCache(32 << 20)
+
+
 def _decompress(payload: bytes, blocks: bool) -> bytes:
     end = stream_end(payload)
     out = bytearray()

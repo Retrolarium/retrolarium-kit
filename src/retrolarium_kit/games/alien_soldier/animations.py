@@ -18,6 +18,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.platform.megadrive.asl import SourceTree, parse_number
 
 
@@ -26,7 +27,7 @@ DOCUMENT = "graphics/animations.json"
 RELATIVE = re.compile(r"^(?P<target>[A-Za-z_][A-Za-z0-9_]*)-\*$")
 
 
-class AnimationError(ValueError):
+class AnimationError(ValueError, KitError):
     """An animation document that does not fit the source."""
 
 

@@ -28,6 +28,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.games.alien_soldier import pcm
 from retrolarium_kit.platform.megadrive.asl import SourceTree
 from retrolarium_kit.platform.megadrive.sound import (
@@ -66,7 +67,7 @@ SFX_SLOTS = {0x02: 0, 0x04: 1, 0x05: 2, 0x80: 3, 0xA0: 4, 0xC0: 5, 0xE0: 5}
 POINTER_BASE = 0x100000
 
 
-class SequencerError(ValueError):
+class SequencerError(ValueError, KitError):
     """A payload the sequencer cannot play."""
 
 

@@ -31,10 +31,12 @@ import json
 from pathlib import Path, PurePosixPath
 from typing import Iterable, Mapping
 
+from retrolarium_kit.core.errors import KitError
+
 SCHEMA = "retrolarium.assets"
 
 
-class AssetsError(ValueError):
+class AssetsError(ValueError, KitError):
     """A manifest, an image or an asset is not what it should be."""
 
 

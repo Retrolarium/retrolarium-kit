@@ -122,6 +122,7 @@ import re
 from pathlib import PurePosixPath
 from typing import Any
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.games.alien_soldier import mappings, objects, pose_code, reader_catalog
 from retrolarium_kit.platform.megadrive.asl import AslSourceError, SourceTree, parse_number
 
@@ -173,7 +174,7 @@ ADDED_TIMING = re.compile(r"^\s*add\.w\s+d\d,\$C\(a5\)\s*$")
 TERM = re.compile(r"([+-]?)\s*([A-Za-z_]\w*|\$[0-9A-Fa-f]+|%[01]+|\d+)")
 
 
-class BossError(ValueError):
+class BossError(ValueError, KitError):
     """A boss document that does not fit the source."""
 
 

@@ -15,19 +15,23 @@ import json
 import os
 from pathlib import Path
 import shutil
+import socket
 import stat
 import tempfile
 import time
+import uuid
 from types import MappingProxyType
 from typing import Any, Mapping
 
 from retrolarium_core.host import normalize_host
 
+from retrolarium_kit.core.errors import KitError
+
 
 MANIFEST_NAME = "manifest.json"
 
 
-class BuildToolchainError(RuntimeError):
+class BuildToolchainError(RuntimeError, KitError):
     """A bundled compiler suite is unavailable or fails identity checks."""
 
 
@@ -134,31 +138,114 @@ def load_build_toolchain_manifest() -> dict[str, Any]:
     return manifest
 
 
+# A lock older than this is abandoned whoever holds it; one whose holder is
+# a process of this host that no longer runs is abandoned at once.
+LOCK_STALE_SECONDS = 600.0
+# How long a kit waits for another to finish installing: longer than the
+# stale age, so a waiter outlives an abandoned lock and takes it over.
+LOCK_WAIT_SECONDS = 900.0
+
+
+def _process_alive(pid: int) -> bool:
+    """Whether a process of this host runs; True when it cannot be told."""
+    if pid <= 0:
+        return True
+    if os.name == "nt":
+        import ctypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return ctypes.get_last_error() != 87  # ERROR_INVALID_PARAMETER: no such process
+        try:
+            code = ctypes.c_ulong()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return True
+            return code.value == 259  # STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True
+    return True
+
+
+def _lock_is_stale(text: str, modified: float) -> bool:
+    """Whether a lock (its text and mtime) was abandoned: older than the stale
+    age, or held by a process of this host that no longer runs. A lock that
+    names no holder (an older kit's) waits for the stale age."""
+    if time.time() - modified > LOCK_STALE_SECONDS:
+        return True
+    try:
+        holder = json.loads(text)
+        pid, host = holder["pid"], holder["host"]
+    except (ValueError, TypeError, KeyError):
+        return False
+    return isinstance(pid, int) and host == socket.gethostname() and not _process_alive(pid)
+
+
+def _take_stale_lock(lock: Path, judged: str) -> None:
+    """Remove a lock judged abandoned (`judged`: the text it held then). The
+    lock is moved aside first; if what was moved is not what was judged,
+    another kit took the lock meanwhile, and it goes back when nothing holds
+    the place yet."""
+    aside = lock.with_name(f"{lock.name}.stale-{uuid.uuid4().hex}")
+    try:
+        os.replace(lock, aside)
+    except FileNotFoundError:
+        return
+    try:
+        if aside.read_text(encoding="utf-8", errors="replace") != judged:
+            try:
+                os.link(aside, lock)
+            except OSError:
+                pass
+    finally:
+        aside.unlink(missing_ok=True)
+
+
 @contextmanager
-def _publishing(lock: Path, wait: float = 300.0):
+def _publishing(lock: Path, wait: float | None = None):
     """Holds `lock` (a file only one process can create) while a suite is
-    published; a lock left by a process that died is taken over after ten
-    minutes."""
-    deadline = time.monotonic() + wait
+    published. The lock names its holder (PID, host, start time); a lock
+    whose holder died on this host is taken over at once, any other only
+    after LOCK_STALE_SECONDS."""
+    deadline = time.monotonic() + (LOCK_WAIT_SECONDS if wait is None else wait)
+    token = json.dumps(
+        {"pid": os.getpid(), "host": socket.gethostname(), "started": time.time(), "token": uuid.uuid4().hex}
+    )
     while True:
         try:
             descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
             break
         except FileExistsError:
             try:
-                if time.time() - lock.stat().st_mtime > 600:
-                    lock.unlink(missing_ok=True)
-                    continue
+                text = lock.read_text(encoding="utf-8", errors="replace")
+                modified = lock.stat().st_mtime
             except FileNotFoundError:
+                continue
+            if _lock_is_stale(text, modified):
+                _take_stale_lock(lock, text)
                 continue
             if time.monotonic() > deadline:
                 raise BuildToolchainError(f"another kit is still installing the toolchain ({lock})") from None
             time.sleep(0.2)
     try:
-        yield
+        os.write(descriptor, token.encode("utf-8"))
     finally:
         os.close(descriptor)
-        lock.unlink(missing_ok=True)
+    try:
+        yield
+    finally:
+        # Only our own lock: one taken over as stale belongs to another kit now.
+        try:
+            if lock.read_text(encoding="utf-8", errors="replace") == token:
+                lock.unlink(missing_ok=True)
+        except FileNotFoundError:
+            pass
 
 
 def _publish_suite(destination: Path, components, suite_id: str) -> None:

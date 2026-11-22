@@ -16,6 +16,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, TypeVar
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.platform.nes.sound_effects import Cpu6502, SoundEffectError
 
 if TYPE_CHECKING:
@@ -42,7 +43,7 @@ SPAWN_MARKERS = 0xED08
 OBJECT_WIDTHS, OBJECT_HEIGHTS = 0xAAEA, 0xAB1A
 
 
-class ReachabilityError(ValueError):
+class ReachabilityError(ValueError, KitError):
     """Invalid input, unsupported mechanics, or an oracle execution failure."""
 
 

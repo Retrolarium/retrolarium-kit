@@ -15,8 +15,10 @@ import shutil
 from pathlib import Path
 from typing import Any, Mapping
 
+from retrolarium_kit.core.errors import KitError
 
-class FlickyWorkspaceError(ValueError):
+
+class FlickyWorkspaceError(ValueError, KitError):
     """A Flicky content document is missing or does not fit the source."""
 
 

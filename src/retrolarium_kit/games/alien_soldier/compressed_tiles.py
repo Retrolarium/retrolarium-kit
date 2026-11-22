@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.games.alien_soldier import lzss, tile_codec
 from retrolarium_kit.games.alien_soldier.assets import (
     LZSS_TO_VRAM,
@@ -30,7 +31,7 @@ SCHEMA = "alien-soldier.compressed-tiles"
 DOCUMENT = "graphics/compressed_tiles.json"
 
 
-class CompressedTileError(ValueError):
+class CompressedTileError(ValueError, KitError):
     """A compressed tile document that does not fit the source."""
 
 

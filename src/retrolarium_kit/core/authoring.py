@@ -13,11 +13,13 @@ import re
 from types import MappingProxyType
 from typing import Any, Generic, Iterable, Mapping, TypeVar
 
+from retrolarium_kit.core.errors import KitError
+
 
 _IDENTIFIER = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 
 
-class AuthoringError(ValueError):
+class AuthoringError(ValueError, KitError):
     """An authoring contract, document or binary operation is invalid."""
 
 

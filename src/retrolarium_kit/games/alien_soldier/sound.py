@@ -30,6 +30,7 @@ from __future__ import annotations
 from collections import deque
 from typing import Any
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.platform.megadrive.asl import SourceTree
 
 
@@ -59,7 +60,7 @@ STOPS = {0xE3, 0xF2}
 FLOW = {0xF6: (0, 1), 0xF7: (0, 2, 3), 0xF8: (0, 1)}
 
 
-class SoundError(ValueError):
+class SoundError(ValueError, KitError):
     """A sound document that does not fit the source."""
 
 

@@ -17,10 +17,11 @@ import hashlib
 import os
 import re
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.core.lint.ca65 import MNEMONICS, split_comment
 
 
-class AssemblySimilarityError(ValueError):
+class AssemblySimilarityError(ValueError, KitError):
     """The inputs or scan limits do not describe a bounded source scan."""
 
 

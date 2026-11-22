@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.platform.megadrive.asl import SourceTree
 from retrolarium_kit.platform.megadrive.vdp import TILE_BYTES, tile_bytes, tiles_hex
 
@@ -21,7 +22,7 @@ DOCUMENT = "graphics/tiles.json"
 ART = "data/artunc/"
 
 
-class TileArtError(ValueError):
+class TileArtError(ValueError, KitError):
     """A tile document that does not fit the source's art."""
 
 

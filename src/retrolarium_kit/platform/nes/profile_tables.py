@@ -32,11 +32,13 @@ from bisect import bisect_right
 from dataclasses import dataclass
 from pathlib import Path
 
+from retrolarium_kit.core.errors import KitError
+
 IMMEDIATE = re.compile(r"^\s*(?:[A-Za-z_][A-Za-z0-9_]*:\s*)?(?:LD[AXY]|CMP|CP[XY]|ORA|AND|ADC|SBC|EOR)\s+#", re.I)
 CODEC = "nes.byte-tables.v1"
 
 
-class ProfileTablesError(ValueError):
+class ProfileTablesError(ValueError, KitError):
     """A spec, debug file or profile the tables cannot be worked out from."""
 
 

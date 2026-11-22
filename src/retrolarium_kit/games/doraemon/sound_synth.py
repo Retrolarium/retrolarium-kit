@@ -14,6 +14,7 @@ from typing import Any
 import wave
 
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.games.doraemon import audio_streams
 
 
@@ -95,7 +96,7 @@ class _ChannelState:
     events: list[LaneEvent] = field(default_factory=list)
 
 
-class SynthError(ValueError):
+class SynthError(ValueError, KitError):
     """The edited native stream cannot be rendered safely."""
 
 

@@ -16,6 +16,7 @@ from pathlib import Path
 import subprocess
 import sys
 
+from retrolarium_kit.core.errors import BUILD_TIMEOUT
 from retrolarium_kit.games.flicky.bonus_motion import stage_bonus_motion
 from retrolarium_kit.games.flicky.demo import stage_attract_demos
 from retrolarium_kit.games.flicky.title_layout import stage_title_layout
@@ -31,8 +32,28 @@ from retrolarium_kit.games.flicky.workspace.content import (
 )
 
 
+def _process(command: list[str], root: Path, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    """A bounded child process, its output (stderr with it) read as UTF-8
+    whatever it prints."""
+    try:
+        return subprocess.run(
+            command,
+            cwd=root,
+            env=env,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=BUILD_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        name = " ".join(command[2:4]) if len(command) > 2 else Path(command[0]).name
+        raise FlickyWorkspaceError(f"{name} did not finish in {BUILD_TIMEOUT / 60:g} minutes") from None
+
+
 def _run(command: list[str], root: Path, env: dict[str, str]) -> None:
-    result = subprocess.run(command, cwd=root, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    result = _process(command, root, env)
     if result.returncode:
         raise FlickyWorkspaceError(
             f"Flicky source command failed ({result.returncode}): "
@@ -110,7 +131,11 @@ def build_content(root: Path, *, as_bin: Path, p2bin: Path, level_writer: Path, 
     expected_stage = root / "build/content/src"
     if staged.resolve() != expected_stage.resolve():
         raise FlickyWorkspaceError("Flicky level staging is not the disposable build output")
-    subprocess.run([str(level_writer), str(level_path), str(staged)], cwd=root, check=True)
+    written = _process([str(level_writer), str(level_path), str(staged)], root)
+    if written.returncode:
+        raise FlickyWorkspaceError(
+            f"the Flicky level writer failed ({written.returncode}):\n" + (written.stdout or "")[-8000:]
+        )
     levels = json.loads(level_path.read_text(encoding="utf-8"))
     stage_attract_demos(levels, root, staged)
 

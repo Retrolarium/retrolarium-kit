@@ -49,10 +49,11 @@ import re
 from collections.abc import Callable
 from typing import Any
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.platform.megadrive.asl import SourceTree, parse_number
 
 
-class PoseCodeError(ValueError):
+class PoseCodeError(ValueError, KitError):
     """Pose code outside the subset."""
 
 

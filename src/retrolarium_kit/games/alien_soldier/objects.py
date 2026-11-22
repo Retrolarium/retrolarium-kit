@@ -42,6 +42,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.games.alien_soldier import animations, compressed_tiles, mappings, palettes, tiles
 from retrolarium_kit.platform.megadrive.asl import SourceTree, parse_number
 
@@ -80,7 +81,7 @@ TAIL = {
 }
 
 
-class ObjectError(ValueError):
+class ObjectError(ValueError, KitError):
     """An object art record that does not fit the source."""
 
 

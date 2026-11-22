@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.games.alien_soldier.assets import pointer_table
 from retrolarium_kit.platform.megadrive.asl import SourceTree
 
@@ -31,7 +32,7 @@ FAMILIES = {
 }
 
 
-class EnvelopeError(ValueError):
+class EnvelopeError(ValueError, KitError):
     """An envelope document that does not fit the source."""
 
 

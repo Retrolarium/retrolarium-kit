@@ -38,6 +38,7 @@ import subprocess
 import tempfile
 from typing import Any
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.games.alien_soldier import mappings, playtest, pose_code, workspace
 from retrolarium_kit.platform.megadrive.asl import AslSourceError, SourceTree
 
@@ -53,7 +54,7 @@ RAM = ("BossHealth", "GameModeIndex", "StageTableIndex")
 MAPPING_FIELD = 8
 
 
-class CaptureError(ValueError):
+class CaptureError(ValueError, KitError):
     """A capture that cannot be made or read."""
 
 

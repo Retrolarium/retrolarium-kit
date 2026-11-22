@@ -8,8 +8,10 @@ from pathlib import Path
 import stat
 import tempfile
 
+from retrolarium_kit.core.errors import KitError
 
-class LintError(RuntimeError):
+
+class LintError(RuntimeError, KitError):
     """The tree breaks the house style, or the lint config is unusable."""
 
 

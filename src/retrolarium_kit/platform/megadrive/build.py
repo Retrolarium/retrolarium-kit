@@ -27,9 +27,10 @@ import tempfile
 from typing import Any, Mapping
 
 from retrolarium_kit.core.build_toolchains import ResolvedToolchain, materialize_build_toolchain
+from retrolarium_kit.core.errors import BUILD_TIMEOUT, KitError
 
 
-class MegaDriveBuildError(ValueError):
+class MegaDriveBuildError(ValueError, KitError):
     """A build description or an assembly that fails."""
 
 
@@ -59,6 +60,24 @@ def toolchain() -> ResolvedToolchain:
     return materialize_build_toolchain("megadrive")
 
 
+def _tool(command: list[str], root: Path, environment: Mapping[str, str]) -> subprocess.CompletedProcess[str]:
+    """One assembler or converter run, bounded, its output read as UTF-8
+    whatever it prints."""
+    try:
+        return subprocess.run(
+            command,
+            cwd=root,
+            env=environment,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=BUILD_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        raise MegaDriveBuildError(f"{Path(command[0]).name} did not finish in {BUILD_TIMEOUT / 60:g} minutes") from None
+
+
 def assemble(root: Path, step: Step, defines: Mapping[str, int], tools: ResolvedToolchain | None = None) -> Path:
     """One step: the image it writes, replaced only when the step succeeds."""
     tools = tools or toolchain()
@@ -70,22 +89,12 @@ def assemble(root: Path, step: Step, defines: Mapping[str, int], tools: Resolved
     arguments = [part for name, value in defines.items() for part in ("-D", f"{name}={value}")]
     with tempfile.TemporaryDirectory(prefix=".assemble-", dir=output.parent) as directory:
         obj, image = Path(directory) / "image.p", Path(directory) / "image.bin"
-        result = subprocess.run(
-            [str(asl), "-i", ".", "-q", "-maxerrors", "2", "-o", str(obj), *arguments, step.entry],
-            cwd=root,
-            env=environment,
-            capture_output=True,
-            text=True,
+        result = _tool(
+            [str(asl), "-i", ".", "-q", "-maxerrors", "2", "-o", str(obj), *arguments, step.entry], root, environment
         )
         if result.returncode or not obj.is_file():
             raise MegaDriveBuildError(f"{step.entry} does not assemble:\n{(result.stdout + result.stderr)[-3000:]}")
-        result = subprocess.run(
-            [str(p2bin), str(obj), str(image), f"-p={step.fill:02X}"],
-            cwd=root,
-            env=environment,
-            capture_output=True,
-            text=True,
-        )
+        result = _tool([str(p2bin), str(obj), str(image), f"-p={step.fill:02X}"], root, environment)
         if result.returncode or not image.is_file():
             raise MegaDriveBuildError(f"{step.entry} does not convert:\n{(result.stdout + result.stderr)[-3000:]}")
         if step.size is not None and image.stat().st_size != step.size:

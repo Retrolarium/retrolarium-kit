@@ -70,8 +70,19 @@ class FdsTests(unittest.TestCase):
         image = fixture()
         trailing = bytearray(image)
         trailing[-1] = 1
-        with self.assertRaisesRegex(FdsError, "nonzero data"):
-            parse_fds_side(bytes(trailing))
+        from retrolarium_core import fds as core_fds
+
+        if hasattr(core_fds, "inspect_fds_side"):
+            # The core keeps data after the declared files (hidden files, an
+            # older write) with a warning instead of refusing the side.
+            side = core_fds.inspect_fds_side(bytes(trailing))
+            self.assertEqual(parse_fds_side(image), side.records)
+            self.assertEqual(parse_fds_side(image), parse_fds_side(bytes(trailing)))
+            self.assertEqual(b"\x01", side.trailing_data.strip(b"\0"))
+            self.assertEqual(1, len(side.warnings))
+        else:
+            with self.assertRaisesRegex(FdsError, "nonzero data"):
+                parse_fds_side(bytes(trailing))
         with self.assertRaisesRegex(FdsError, "non-empty and unique"):
             fds_payload(image, (3, 3))
         with self.assertRaisesRegex(FdsError, "not unique"):

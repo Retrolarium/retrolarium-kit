@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from retrolarium_kit.core.errors import KitError
 from retrolarium_kit.games.alien_soldier import workspace
 from retrolarium_kit.platform.megadrive.asl import SourceTree
 
@@ -40,7 +41,7 @@ RAM = (
 )
 
 
-class PlaytestError(ValueError):
+class PlaytestError(ValueError, KitError):
     """A stage the password screen cannot open, or a source without what the
     script needs."""
 
