@@ -9,6 +9,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shutil
 import stat
 import subprocess
 import sys
@@ -87,6 +88,20 @@ class TreeDigestTests(unittest.TestCase):
         (self.root / "src" / "main.asm").write_bytes(b"; changed\n")
         self.assertNotEqual(before, tree_digest(self.root))
 
+    @unittest.skipUnless(os.name == "nt", "NTFS junctions are Windows-specific")
+    def test_a_junction_cannot_redirect_a_verified_script_tree(self) -> None:
+        import _winapi
+
+        outside = tempfile.TemporaryDirectory()
+        self.addCleanup(outside.cleanup)
+        write_tree(Path(outside.name), {"unexpected.py": b"raise SystemExit('never executed')\n"})
+        link = self.root / "link"
+        _winapi.CreateJunction(outside.name, str(link))
+        self.addCleanup(link.rmdir)
+        for read in (tree_digest, repository_trust.script_files):
+            with self.subTest(read=read.__name__), self.assertRaisesRegex(RepositoryTrustError, "link is a link"):
+                read(self.root)
+
     @unittest.skipIf(os.name == "nt", "symbolic links need privileges on Windows")
     def test_a_symbolic_link_is_refused(self) -> None:
         write_tree(self.root, FILES)
@@ -137,14 +152,20 @@ class FetchTests(unittest.TestCase):
         self.games = self.root / "games"
         environment = mock.patch.dict(
             "os.environ",
-            {"RETROLARIUM_GAMES_SOURCE": "", "RETROLARIUM_UNVERIFIED_GAMES": ""},
+            {
+                "RETROLARIUM_GAMES_SOURCE": "",
+                "RETROLARIUM_UNVERIFIED_GAMES": "",
+                "RETROLARIUM_VERIFIED_HOME": str(self.root / "verified"),
+            },
         )
         environment.start()
         self.addCleanup(environment.stop)
         self.use_catalog(expected_digest(FILES))
 
     def use_catalog(self, content_sha256: str) -> None:
-        patcher = mock.patch.object(repository, "repository_catalog", return_value=catalog(content_sha256))
+        patcher = mock.patch.object(
+            repository_trust.catalog, "repository_catalog", return_value=catalog(content_sha256)
+        )
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -169,6 +190,56 @@ class FetchTests(unittest.TestCase):
             [],
             [path.name for path in self.games.iterdir() if path.name.startswith(".download-")],
         )
+
+    def test_a_forged_project_record_cannot_reuse_previous_consent(self) -> None:
+        target = write_tree(self.games / "probe_src", {**FILES, "scripts/split.py": b"print('changed')\n"})
+        record = {
+            "schema": repository_trust.MARKER_SCHEMA,
+            "schema_version": 1,
+            "game": "probe",
+            "repository": "probe_src",
+            "commit": COMMIT,
+            "content_sha256": expected_digest(FILES),
+            "url": f"https://example.invalid/lab/probe_src/tree/{COMMIT}",
+            "scripts": repository_trust.script_files(target),
+        }
+        (target / repository_trust.MARKER).write_text(json.dumps(record), encoding="utf-8")
+        with mock.patch.dict(os.environ, {repository_trust.CONSENT_VARIABLE: expected_digest(FILES)}):
+            with self.assertRaises(RepositoryTrustError):
+                repository_trust.authorize_scripts(target, ["scripts/split.py"])
+            archive = write_archive(self.root / "pinned.zip", FILES)
+            with mock.patch("urllib.request.urlopen", side_effect=self.serving(archive)):
+                with self.assertRaisesRegex(GameRepositoryError, "scripts in"):
+                    repository.ensure_repository_verified(target)
+
+    def test_verification_is_saved_outside_the_project_and_bound_to_its_path(self) -> None:
+        target = self.fetch(FILES).parent
+        self.assertFalse((target / repository_trust.MARKER).exists())
+        self.assertIsNotNone(repository_trust.read_marker(target))
+        copied = self.root / "copied"
+        shutil.copytree(target, copied)
+        with self.assertRaises(RepositoryTrustError):
+            repository_trust.authorize_scripts(copied, ["scripts/split.py"])
+
+    def test_a_record_for_an_old_catalog_identity_is_not_trusted(self) -> None:
+        target = self.fetch(FILES).parent
+        for key, value in (("commit", "1" * 40), ("content_sha256", "1" * 64)):
+            changed = catalog(expected_digest(FILES))
+            changed["games"]["probe"][key] = value
+            with mock.patch.object(repository_trust.catalog, "repository_catalog", return_value=changed):
+                self.assertIsNone(repository_trust.read_marker(target))
+                with self.assertRaises(RepositoryTrustError):
+                    repository_trust.verify_scripts(target, ["scripts/split.py"])
+
+    def test_own_git_checkout_is_not_downloaded_or_marked(self) -> None:
+        target = write_tree(self.games / "probe_src", FILES)
+        (target / ".git").mkdir()
+        with mock.patch.object(repository, "download_repository") as download:
+            repository.ensure_repository_verified(target)
+        download.assert_not_called()
+        self.assertIsNone(repository_trust.read_marker(target))
+        with self.assertRaisesRegex(RepositoryTrustError, "RETROLARIUM_UNVERIFIED_GAMES=1"):
+            repository_trust.authorize_scripts(target, ["scripts/split.py"])
 
     def test_a_changed_file_is_refused_and_nothing_is_kept(self) -> None:
         changed = {**FILES, "scripts/split.py": b"print('something else')\n"}
@@ -233,6 +304,28 @@ class FetchTests(unittest.TestCase):
             self.assertRaisesRegex(GameRepositoryError, "unpacks to more than"),
         ):
             self.fetch(FILES)
+
+    def test_download_is_bounded_before_unpacking(self) -> None:
+        archive = write_archive(self.root / "incoming.zip", FILES)
+        with mock.patch.object(repository, "ARCHIVE_DOWNLOAD_BYTES", 16):
+            for source in (str(archive), archive.as_uri()):
+                with self.subTest(source=source), self.assertRaisesRegex(GameRepositoryError, "download exceeds"):
+                    fetch_repository("probe", self.games, source=source)
+        self.assertFalse((self.games / "probe_src").exists())
+
+    def test_download_has_an_overall_deadline(self) -> None:
+        archive = write_archive(self.root / "incoming.zip", FILES)
+        with (
+            mock.patch("urllib.request.urlopen", side_effect=self.serving(archive)),
+            mock.patch.object(repository.time, "monotonic", side_effect=[0, repository.DOWNLOAD_SECONDS + 1]),
+            self.assertRaisesRegex(GameRepositoryError, "time limit"),
+        ):
+            fetch_repository("probe", self.games)
+
+    def test_a_local_archive_path_may_contain_literal_braces(self) -> None:
+        archive = write_archive(self.root / "archive{literal}.zip", FILES)
+        descriptor = fetch_repository("probe", self.games, source=str(archive))
+        self.assertTrue(descriptor.is_file())
 
     @staticmethod
     def serving(archive: Path):
@@ -417,6 +510,12 @@ class ScriptVerificationTests(unittest.TestCase):
             {"revision": "base", "command": ["scripts/split.py"]},
             {},
         )
+        for patcher in (
+            mock.patch.dict(os.environ, {repository_trust.VERIFIED_HOME_VARIABLE: str(Path(folder.name) / "verified")}),
+            mock.patch.object(repository_trust.catalog, "repository_catalog", return_value=catalog("0" * 64)),
+        ):
+            patcher.start()
+            self.addCleanup(patcher.stop)
         repository_trust.write_marker(
             self.root,
             game="probe",
@@ -424,6 +523,7 @@ class ScriptVerificationTests(unittest.TestCase):
             commit=COMMIT,
             content_sha256="0" * 64,
             url=f"https://example.invalid/lab/probe_src/tree/{COMMIT}",
+            expected_scripts=repository_trust.script_files(self.root),
         )
         # The user agreed to run this download's scripts.
         environment = mock.patch.dict(
@@ -493,7 +593,8 @@ class ScriptVerificationTests(unittest.TestCase):
     def test_a_repository_the_kit_did_not_verify_runs_nothing_unless_accepted(
         self,
     ) -> None:
-        (self.root / repository_trust.MARKER).unlink()
+        repository_trust.record_path(self.root).unlink()
+        (self.root / ".git").mkdir()  # An intentionally unverified developer checkout.
         with (
             mock.patch.object(repository.subprocess, "run") as run,
             self.assertRaisesRegex(RepositoryTrustError, "RETROLARIUM_UNVERIFIED_GAMES=1"),
@@ -527,6 +628,14 @@ class ScriptVerificationTests(unittest.TestCase):
         (snapshot / "scripts" / "split.py").write_text("print('edited')\n", encoding="utf-8")
         with self.assertRaisesRegex(RepositoryTrustError, "changed since"):
             repository_trust.verify_scripts(snapshot, ["scripts/split.py"])
+
+    def test_new_bytecode_and_import_archives_are_not_ignored(self) -> None:
+        for name in ("tools/extra.pyc", "__pycache__/helper.cpython-311.pyc", "tools/extra.pyz", "extra.zip"):
+            with self.subTest(name=name):
+                write_tree(self.root, {name: b"synthetic executable bytes"})
+                with self.assertRaisesRegex(RepositoryTrustError, "is not part of"):
+                    repository_trust.verify_scripts(self.root, ["scripts/split.py"])
+                (self.root / name).unlink()
 
 
 class FlickyBuildVerificationTests(unittest.TestCase):

@@ -20,6 +20,10 @@ import re
 TOOLCHAINS = Path(__file__).resolve().parents[2] / "src" / "retrolarium_kit" / "core" / "toolchains"
 DOCKERFILE = Path(__file__).resolve().with_name("Dockerfile")
 HOSTS = {"windows-x86_64": ".exe", "linux-x86_64": ""}
+DISTRIBUTION = {
+    "windows-x86_64": "Windows Studio release payloads",
+    "linux-x86_64": "Development only; public Linux distribution requires a separate glibc licensing/linkage review",
+}
 ASL_REVISION = "721a327a803585e2d1f59acac93cbd0768213d06"
 BUILD = "tools/toolchains/build.sh"
 
@@ -129,6 +133,7 @@ def main() -> int:
         "schema": "retrolarium.build-toolchains",
         "schema_version": 1,
         "release": arguments.release,
+        "distribution": DISTRIBUTION,
         "build_environment": build_environment(),
         "suites": {"nes": {"components": ["cc65"]}, "megadrive": {"components": ["asl", "p2bin"]}},
         "components": {name: component(definition) for name, definition in COMPONENTS.items()},

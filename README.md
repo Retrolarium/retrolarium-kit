@@ -11,6 +11,31 @@ Disassembling a ROM is the job of
 (`rldisasm`); the kit builds, verifies and launches the projects it produces
 (`rltool project ...`). Both build on `retrolarium-core`.
 
+## Installation and quick start
+
+Windows users who want the editor can download
+[Retrolarium Studio](https://github.com/Retrolarium/retrolarium-studio/releases):
+its ZIP and installer include Kit, Python, Core and the Windows assemblers. You
+supply your own ROM. Recognized revisions and whole-file hashes are listed in
+[supported_roms.md](docs/supported_roms.md).
+
+For command-line development, use Python 3.11+ and Git. Clone Core beside Kit,
+then install the chosen local sources together without replacing Core from an
+index:
+
+```sh
+python -m pip install --no-deps -e ../retrolarium-core -e .
+rltool --version
+```
+
+Core's native `rlcore` is also needed for Mega Drive compression; build it with
+Core's CMake instructions and set `RETROLARIUM_CORE` to that executable. An
+ordinary `pip install .` pins the Core source by a Git commit in
+`pyproject.toml`; it does not resolve an unqualified Core name from PyPI.
+Assembler payloads are not tracked. Build and verify them before making a wheel,
+as described in [toolchains.md](docs/toolchains.md). An editable install alone
+does not manufacture those payloads.
+
 ## Layout
 
 ```text
@@ -169,10 +194,19 @@ tag or branch it was taken from) and accepts it only when the digest of its
 content matches the catalog's `content_sha256`: SHA-256 over one line
 `<path>\0<sha256 of the file>\n` per regular file, sorted by POSIX path
 (`core/repository_trust.py`, `tree_digest`). Archives with links, more than
-20,000 entries or more than 2 GiB unpacked are refused. A verified download gets
-a record, `games/<repository>/.retrolarium-verified`, naming the commit, the
-content digest and the hash of every file Python could run there (all of
-`scripts/`, every `.py`, `.pyw`, `.pyd`, `.so` and `.pth` file).
+20,000 entries, more than 2 GiB downloaded or unpacked, or an expired download
+deadline are refused. A verified download gets a record outside the project:
+`%LOCALAPPDATA%/Retrolarium/Kit/verified` on Windows, or
+`$XDG_DATA_HOME/retrolarium/kit/verified` (default `~/.local/share/...`) on
+POSIX. `RETROLARIUM_VERIFIED_HOME` selects a different data directory for tests.
+Records name the canonical root, current catalog identity and the hashes of all
+files Python could run (including bytecode, extension libraries and import
+archives). A `.retrolarium-verified` inside a project is never trusted.
+
+Projects from older versions and projects moved to another folder need one
+comparison with the pinned archive before running scripts. An offline attempt
+explains the missing verification and can be retried. Own Git checkouts are not
+downloaded or marked implicitly; the development overrides below apply.
 
 You edit files of a downloaded repository, so its whole content is checked only
 when it is downloaded. Before the kit runs one of its scripts (a descriptor's
@@ -466,7 +500,11 @@ authoring family on the MIT-licensed HonkeyPong fixture.
 all 512 CHR-ROM tiles as typed JSON, then uses the same transactional
 `BuildPlan` and public game commands. It supports zero-edit exact rebuilds,
 edited builds and the common MAME launch path without a HonkeyPong-specific CLI
-branch.
+branch. The ROM below is generated locally, not included in Git. From the
+sibling Disassembler checkout, first run
+`python fixtures/scripts/build_fixtures.py toolchain nes`, then
+`python fixtures/scripts/build_fixtures.py build nes.honkeypong`. Return to the
+Kit checkout for these commands:
 
 ```powershell
 rltool game inspect ../retrolarium-disassembler/fixtures/nes/bin/HonkeyPong.nes `

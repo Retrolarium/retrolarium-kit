@@ -32,6 +32,10 @@ def self_command() -> list[str]:
 def child_environment(base: Mapping[str, str] | None = None) -> dict[str, str]:
     """An environment whose RLTOOL runs this kit, for a game's build."""
     environment = dict(os.environ if base is None else base)
+    environment["PYTHONUTF8"] = "1"
+    # Repositories are checked before execution, including cached bytecode.
+    # Do not create new unrecorded executable files during a verified run.
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
     command = self_command()
     environment["RLTOOL"] = subprocess.list2cmdline(command) if os.name == "nt" else shlex.join(command)
     if command[1:2] == ["-m"]:

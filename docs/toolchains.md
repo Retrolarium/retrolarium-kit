@@ -2,6 +2,13 @@
 
 ## Decision
 
+The current public binary distribution is the Windows Studio package only. Linux
+payloads and wheels are development builds and are not part of that release. The
+current Linux recipe links glibc statically; publishing a Linux wheel requires a
+separate distribution review, complete LGPL notices and corresponding
+source/relinking material, or a reviewed alternative linkage. Do not infer Linux
+release readiness from passing development tests.
+
 `retrolarium-kit` owns the compiler identities required by its generated and
 authoring projects. A normal wheel installation carries the payload bytes; first
 use materializes them from package data into a writable cache and checks every

@@ -4,8 +4,9 @@ of the repository's Python scripts.
 The kit's repository catalog (core/profiles/repositories.json) pins every
 game to a commit and to the digest of the archive's content (tree_digest).
 A download whose content does not match is refused. A verified download
-gets a record at its root (MARKER) naming the repository, the commit, the
-content digest and the digest of every script file in it.
+gets a record in the user's data directory, bound to its canonical root,
+the catalog identity and the digest of every script file in it. A marker
+inside a project is never evidence of verification.
 
 The user edits files of a downloaded repository (the documents, the ROM
 copies, hack/ and .retrolarium/), so the whole tree is checked only when it
@@ -38,24 +39,27 @@ from pathlib import Path, PurePosixPath
 import re
 import stat
 import sys
+import tempfile
 from typing import Any, Iterable, Mapping
 
 from retrolarium_kit.core.errors import KitError
+from retrolarium_kit.core import repository_catalog as catalog
 
 
 MARKER = ".retrolarium-verified"
 MARKER_SCHEMA = "retrolarium.verified-repository"
+VERIFIED_HOME_VARIABLE = "RETROLARIUM_VERIFIED_HOME"
 UNVERIFIED_VARIABLE = "RETROLARIUM_UNVERIFIED_GAMES"
 CONSENT_VARIABLE = "RETROLARIUM_ALLOW_REPOSITORY_SCRIPTS"
 CONSENT_SCHEMA = "retrolarium.consent-needed"
 # rltool's exit code when a command stops for the user's consent.
 CONSENT_EXIT_CODE = 3
 # The files Python may run or load besides those under scripts/.
-SCRIPT_SUFFIXES = frozenset({".py", ".pyw", ".pyd", ".so", ".pth"})
-# Folders at the top of a repository that the kit and its builds make, and
-# caches anywhere: never part of the scripts.
+SCRIPT_SUFFIXES = frozenset({".py", ".pyw", ".pyd", ".so", ".pth", ".pyc", ".pyz", ".zip", ".dll", ".dylib"})
+# Generated top-level folders and Git metadata are not part of the scripts.
+# Bytecode caches remain in the scan: Python can execute their contents.
 _MADE_AT_TOP = frozenset({".retrolarium", "hack", "build"})
-_MADE_ANYWHERE = frozenset({".git", "__pycache__"})
+_MADE_ANYWHERE = frozenset({".git"})
 
 
 class RepositoryTrustError(ValueError, KitError):
@@ -107,7 +111,13 @@ def _regular_files(root: Path, skip_made: bool) -> list[str]:
                     entry.name in _MADE_ANYWHERE or (len(relative.parts) == 1 and entry.name in _MADE_AT_TOP)
                 ):
                     continue
-                mode = entry.stat(follow_symlinks=False).st_mode
+                info = entry.stat(follow_symlinks=False)
+                # Name-surrogate reparses redirect paths (junctions/links).
+                # Ordinary hydrated cloud files can also have REPARSE_POINT,
+                # without redirecting names, and are still regular files.
+                if getattr(info, "st_reparse_tag", 0) & 0x20000000:
+                    raise RepositoryTrustError(f"{relative.as_posix()} is a link or a special file")
+                mode = info.st_mode
                 if stat.S_ISDIR(mode):
                     pending.append(path)
                 elif stat.S_ISREG(mode):
@@ -135,7 +145,7 @@ def _is_script(name: str) -> bool:
 def script_files(root: Path, executed: Iterable[str] = ()) -> dict[str, str]:
     """The files Python could run in `root`, by POSIX relative path, with
     their SHA-256: everything under scripts/, every Python source or
-    extension module (not in .git, caches or what the kit makes at the top)
+    extension module (not in .git or what the kit makes at the top)
     and the scripts named in `executed`."""
     names = {name for name in _regular_files(root, skip_made=True) if _is_script(name)}
     for name in executed:
@@ -157,38 +167,97 @@ def scripts_digest(scripts: Mapping[str, str]) -> str:
     return digest.hexdigest()
 
 
-def write_marker(root: Path, *, game: str, repository: str, commit: str, content_sha256: str, url: str) -> None:
-    """Record a verified download at its root."""
+def verified_directory() -> Path:
+    """User-owned verification records; never supplied by a game project."""
+    override = os.environ.get(VERIFIED_HOME_VARIABLE)
+    if override:
+        return Path(override).expanduser().resolve()
+    if os.name == "nt":
+        base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData/Local")
+        return base / "Retrolarium/Kit/verified"
+    return Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share") / "retrolarium/kit/verified"
+
+
+def record_path(root: Path) -> Path:
+    """One opaque name per canonical root, independent of project metadata."""
+    key = os.path.normcase(str(root.resolve()))
+    return verified_directory() / (hashlib.sha256(key.encode("utf-8")).hexdigest() + ".json")
+
+
+def write_marker(
+    root: Path,
+    *,
+    game: str,
+    repository: str,
+    commit: str,
+    content_sha256: str,
+    url: str,
+    expected_scripts: Mapping[str, str],
+) -> None:
+    """Save a verified download outside its tree, after comparison to the catalog."""
+    root = root.resolve()
+    path = record_path(root)
+    if path.resolve().is_relative_to(root):
+        raise RepositoryTrustError("verification records must be stored outside the game repository")
     document = {
         "schema": MARKER_SCHEMA,
-        "schema_version": 1,
+        "schema_version": 2,
+        "root": str(root),
         "game": game,
         "repository": repository,
         "commit": commit,
         "content_sha256": content_sha256,
         "url": url,
-        "scripts": script_files(root),
+        "scripts": dict(expected_scripts),
     }
-    (root / MARKER).write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", newline="\n", dir=path.parent, prefix=".verified-", delete=False
+        ) as stream:
+            temporary = Path(stream.name)
+            stream.write(json.dumps(document, indent=2, sort_keys=True) + "\n")
+        temporary.replace(path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def read_marker(root: Path) -> dict[str, Any] | None:
-    """The verification record at a repository's root, or None."""
-    path = root / MARKER
+    """A user-owned record for this root and current catalog, or None.
+
+    Legacy markers in the project are deliberately ignored. Invalid or stale
+    external records trigger the normal comparison to the pinned archive.
+    """
+    root = root.resolve()
+    path = record_path(root)
+    if path.resolve().is_relative_to(root):
+        return None
     if not path.is_file() or path.is_symlink():
         return None
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise RepositoryTrustError(f"cannot read {path}: {exc}") from exc
+    except (OSError, ValueError):
+        return None
     if (
         not isinstance(document, dict)
         or document.get("schema") != MARKER_SCHEMA
-        or document.get("schema_version") != 1
+        or document.get("schema_version") != 2
+        or not isinstance(document.get("root"), str)
+        or os.path.normcase(document["root"]) != os.path.normcase(str(root))
+        or not isinstance(document.get("game"), str)
         or not isinstance(document.get("scripts"), dict)
         or not all(isinstance(document.get(key), str) for key in ("repository", "commit", "content_sha256", "url"))
     ):
-        raise RepositoryTrustError(f"{path} is not a verification record this kit reads")
+        return None
+    # The bundled catalog is the authority, never project metadata.
+    entries = catalog.repository_catalog()
+    entry = entries["games"].get(document["game"])
+    if entry is None or any(document[key] != entry[key] for key in ("repository", "commit", "content_sha256")):
+        return None
+    if document["url"] != catalog.repository_url(entries, entry):
+        return None
     return document
 
 

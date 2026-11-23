@@ -40,6 +40,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import tomllib
 from typing import Any, Mapping
 from importlib import resources
@@ -960,46 +961,31 @@ def _prepare_source(
 # The limits of a repository archive: no game repository comes near them.
 ARCHIVE_ENTRIES = 20_000
 ARCHIVE_BYTES = 2 << 30
+ARCHIVE_DOWNLOAD_BYTES = 2 << 30
+DOWNLOAD_SECONDS = 15 * 60
 _COMMIT = re.compile(r"[0-9a-f]{40}")
 _DIGEST = re.compile(r"[0-9a-f]{64}")
 
 
 def validate_catalog(document: object) -> Mapping[str, Any]:
-    """The repository catalog, checked: every game is pinned to a commit and
-    to the digest of its archive's content (repository_trust.tree_digest)."""
-    if not isinstance(document, Mapping) or document.get("schema") != "retrolarium.game-repositories":
-        raise GameRepositoryError("the repository catalog is not a retrolarium.game-repositories document")
-    if not isinstance(document.get("organization"), str) or not isinstance(document.get("games"), Mapping):
-        raise GameRepositoryError("the repository catalog needs organization and games")
-    for game_id, entry in document["games"].items():
-        if not isinstance(entry, Mapping):
-            raise GameRepositoryError(f"the catalog entry for {game_id} is not an object")
-        for key in ("repository", "descriptor", "ref"):
-            if not isinstance(entry.get(key), str) or not entry[key]:
-                raise GameRepositoryError(f"the catalog entry for {game_id} has no {key}")
-        _identifier(entry["repository"], f"the catalog entry for {game_id}: repository")
-        if not isinstance(entry.get("commit"), str) or not _COMMIT.fullmatch(entry["commit"]):
-            raise GameRepositoryError(f"the catalog entry for {game_id} is not pinned to a commit (40 hex digits)")
-        if not isinstance(entry.get("content_sha256"), str) or not _DIGEST.fullmatch(entry["content_sha256"]):
-            raise GameRepositoryError(f"the catalog entry for {game_id} has no content_sha256 (64 hex digits)")
-        if not isinstance(entry.get("revisions"), list):
-            raise GameRepositoryError(f"the catalog entry for {game_id} lists no revisions")
-    return document
+    from retrolarium_kit.core import repository_catalog as catalog
+
+    try:
+        return catalog.validate_catalog(document)
+    except catalog.CatalogError as exc:
+        raise GameRepositoryError(str(exc)) from exc
 
 
 def repository_catalog() -> Mapping[str, Any]:
-    """The game repositories the kit knows: where each game's disassembly
-    is published, the commit to download (and the release tag or branch,
-    `ref`, it was taken from), the digest of that archive's content, the
-    descriptor at its root, and the revisions Open ROM recognizes by their
-    SHA-256."""
-    from importlib import resources
+    from retrolarium_kit.core import repository_catalog as catalog
 
-    path = resources.files("retrolarium_kit.core").joinpath("profiles", "repositories.json")
-    return validate_catalog(json.loads(path.read_text(encoding="utf-8")))
+    return catalog.repository_catalog()
 
 
 def _archive_url(catalog: Mapping[str, Any], entry: Mapping[str, Any], source: str | None) -> str:
+    literal = source or os.environ.get("RETROLARIUM_GAMES_SOURCE")
+    if literal and Path(literal).exists():
+        return literal  # Existing local paths may contain literal braces.
     # The commit the catalog pins; the tag or branch only names it.
     ref = entry.get("commit") or entry.get("ref")
     if not isinstance(ref, str) or not ref:
@@ -1065,11 +1051,29 @@ def download_repository(url: str, staging: Path) -> Path:
         return root
     archive = staging / "repository.zip"
     if Path(url).is_file():
+        if Path(url).stat().st_size > ARCHIVE_DOWNLOAD_BYTES:
+            raise GameRepositoryError(f"the archive download exceeds {ARCHIVE_DOWNLOAD_BYTES} bytes")
         shutil.copyfile(url, archive)
     else:
         try:
+            deadline = time.monotonic() + DOWNLOAD_SECONDS
             with urllib.request.urlopen(url, timeout=60) as response, archive.open("wb") as out:
-                shutil.copyfileobj(response, out)
+                total = 0
+                # HTTP read1 returns after one underlying read, so a slowly
+                # arriving body cannot keep read(size) filling forever.
+                read = getattr(response, "read1", response.read)
+                while True:
+                    if time.monotonic() >= deadline:
+                        raise GameRepositoryError("the repository download exceeded its time limit")
+                    block = read(min(1 << 20, ARCHIVE_DOWNLOAD_BYTES - total + 1))
+                    if time.monotonic() >= deadline:
+                        raise GameRepositoryError("the repository download exceeded its time limit")
+                    if not block:
+                        break
+                    total += len(block)
+                    if total > ARCHIVE_DOWNLOAD_BYTES:
+                        raise GameRepositoryError(f"the archive download exceeds {ARCHIVE_DOWNLOAD_BYTES} bytes")
+                    out.write(block)
         except OSError as exc:
             raise GameRepositoryError(f"cannot download {url}: {exc}") from exc
     return unpack_archive(archive, unpacked)
@@ -1132,7 +1136,8 @@ def _reverify(game_id: str, catalog: Mapping[str, Any], entry: Mapping[str, Any]
             ) from exc
         if repository_trust.tree_digest(root) != entry["content_sha256"]:
             raise GameRepositoryError(f"the content of {entry['repository']} does not match the catalog")
-        if repository_trust.script_files(root) != repository_trust.script_files(target):
+        expected_scripts = repository_trust.script_files(root)
+        if expected_scripts != repository_trust.script_files(target):
             reason = f"the scripts in {target} are not those of {entry['repository']} at {entry['commit'][:12]}"
             _record_refusal(target, entry, scripts, reason)
             raise GameRepositoryError(reason)
@@ -1143,6 +1148,7 @@ def _reverify(game_id: str, catalog: Mapping[str, Any], entry: Mapping[str, Any]
             commit=entry["commit"],
             content_sha256=entry["content_sha256"],
             url=repository_url(catalog, entry),
+            expected_scripts=expected_scripts,
         )
         try:
             (target / REFUSAL).unlink(missing_ok=True)
@@ -1165,6 +1171,8 @@ def ensure_repository_verified(base: Path) -> None:
     catalog = repository_catalog()
     base = base.resolve()
     for folder in (base, *base.parents):
+        if (folder / ".git").exists():
+            return  # User checkouts require the explicit unverified override.
         for game_id, entry in catalog["games"].items():
             if (folder / entry["descriptor"]).is_file():
                 _reverify(game_id, catalog, entry, folder)
@@ -1207,6 +1215,7 @@ def fetch_repository(game_id: str, games: Path, *, source: str | None = None) ->
         if not (root / entry["descriptor"]).is_file():
             raise GameRepositoryError(f"the archive has no {entry['descriptor']} at its top")
         verified = repository_trust.tree_digest(root) == entry["content_sha256"]
+        expected_scripts = repository_trust.script_files(root) if verified else {}
         if not verified:
             overridden = source is not None or bool(os.environ.get("RETROLARIUM_GAMES_SOURCE"))
             if not (overridden and repository_trust.unverified_allowed()):
@@ -1228,6 +1237,7 @@ def fetch_repository(game_id: str, games: Path, *, source: str | None = None) ->
             commit=entry["commit"],
             content_sha256=entry["content_sha256"],
             url=repository_url(catalog, entry),
+            expected_scripts=expected_scripts,
         )
     return descriptor
 

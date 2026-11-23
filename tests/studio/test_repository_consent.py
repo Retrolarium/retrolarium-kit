@@ -58,6 +58,14 @@ class ConsentFixture(unittest.TestCase):
             {"revision": "base", "check": ["scripts/check.py", "{rom}"], "command": ["scripts/split.py", "{rom}"]},
             {"tabs": []},
         )
+        self.environment({repository_trust.VERIFIED_HOME_VARIABLE: str(Path(folder.name) / "verified")})
+        catalog = {
+            "organization": "https://github.com/ExampleLab",
+            "games": {"probe": {"repository": "probe_src", "commit": COMMIT, "content_sha256": CONTENT}},
+        }
+        patcher = mock.patch.object(repository_trust.catalog, "repository_catalog", return_value=catalog)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         repository_trust.write_marker(
             self.root,
             game="probe",
@@ -65,6 +73,7 @@ class ConsentFixture(unittest.TestCase):
             commit=COMMIT,
             content_sha256=CONTENT,
             url=f"https://github.com/ExampleLab/probe_src/tree/{COMMIT}",
+            expected_scripts=repository_trust.script_files(self.root),
         )
         self.environment({"RETROLARIUM_UNVERIFIED_GAMES": "", "RETROLARIUM_ALLOW_REPOSITORY_SCRIPTS": ""})
 
@@ -118,7 +127,7 @@ class ConsentTests(ConsentFixture):
         self.assertEqual([], self.trace())
 
     def test_an_unverified_repository_needs_consent_for_all(self) -> None:
-        (self.root / repository_trust.MARKER).unlink()
+        repository_trust.record_path(self.root).unlink()
         self.environment({"RETROLARIUM_UNVERIFIED_GAMES": "1", "RETROLARIUM_ALLOW_REPOSITORY_SCRIPTS": CONTENT})
         with (
             mock.patch("sys.stderr"),
@@ -222,6 +231,7 @@ class SplitStatusMarkerTests(ConsentFixture):
             commit=COMMIT,
             content_sha256=CONTENT,
             url=f"https://github.com/ExampleLab/probe_src/tree/{COMMIT}",
+            expected_scripts=repository_trust.script_files(self.root),
         )
         self.assertEqual("failed", repository._split_status(self.descriptor, run=True)["status"])
         self.assertFalse(self.marker.exists())
