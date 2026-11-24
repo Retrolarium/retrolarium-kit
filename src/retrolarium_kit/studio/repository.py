@@ -516,7 +516,13 @@ def _split_state(descriptor: GameDescriptor, reference: Revision) -> dict[str, s
     split = descriptor.split or {}
     commands = [split[key][0] for key in ("check", "command") if key in split]
     try:
-        scripts = repository_trust.script_files(descriptor.root, commands)
+        # Bytecode is disposable interpreter output, not split input. Keep the
+        # trust checks unchanged, but do not let a cache invalidate this marker.
+        scripts = {
+            name: digest
+            for name, digest in repository_trust.script_files(descriptor.root, commands).items()
+            if "__pycache__" not in PurePosixPath(name).parts
+        }
     except (repository_trust.RepositoryTrustError, OSError):
         return None
     return {

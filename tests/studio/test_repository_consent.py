@@ -209,6 +209,17 @@ class SplitStatusMarkerTests(ConsentFixture):
         self.assertEqual(["check", "split", "check"], self.trace())
         self.assertEqual("ok", repository.revision_statuses(self.descriptor)["split"]["status"])
 
+    def test_bytecode_cache_does_not_invalidate_or_change_during_status(self) -> None:
+        repository._split_status(self.descriptor, run=True)
+        recorded = self.marker.read_bytes()
+        cache = self.root / "scripts" / "__pycache__" / "split.pyc"
+        cache.parent.mkdir()
+        cache.write_bytes(b"old cache")
+        self.assertEqual("ok", repository._split_status(self.descriptor, run=False)["status"])
+        self.assertEqual(b"old cache", cache.read_bytes())
+        self.assertEqual(recorded, self.marker.read_bytes())
+        self.assertEqual(["check", "split"], self.trace())
+
     def test_another_rom_scripts_or_kit_make_the_split_needed_again(self) -> None:
         repository._split_status(self.descriptor, run=True)
         self.assertEqual("ok", repository._split_status(self.descriptor, run=False)["status"])
