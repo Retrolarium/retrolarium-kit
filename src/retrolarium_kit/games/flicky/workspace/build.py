@@ -11,12 +11,12 @@ layout the kit keeps beside the documents are staged after it.
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 import subprocess
 import sys
 
 from retrolarium_kit.core.errors import BUILD_TIMEOUT
+from retrolarium_kit.core.self_command import child_environment
 from retrolarium_kit.games.flicky.bonus_motion import stage_bonus_motion
 from retrolarium_kit.games.flicky.demo import stage_attract_demos
 from retrolarium_kit.games.flicky.title_layout import stage_title_layout
@@ -67,7 +67,7 @@ def build_content(root: Path, *, as_bin: Path, p2bin: Path, level_writer: Path, 
     """Build the snapshot's documents into build/content/flicky.bin."""
     root = root.resolve()
     validate_workspace(root)
-    env = os.environ.copy()
+    env = child_environment()
     env["AS_MSGPATH"] = str(as_bin.parent)
     sound = artifact("z80_sound_banks")
     build_dir = root / "build" / "content"

@@ -127,6 +127,56 @@ def _regular_files(root: Path, skip_made: bool) -> list[str]:
     return sorted(found)
 
 
+def clear_bytecode_caches(root: Path) -> None:
+    """Remove disposable __pycache__ folders before checking scripts.
+
+    Scan first without following links, then remove only cache contents inside
+    this root. Git metadata and the kit's generated top-level folders stay put.
+    A cache that cannot be cleared stops the run, rather than being ignored.
+    """
+    root = root.resolve()
+    files: list[Path] = []
+    folders: list[Path] = []
+    pending = [root]
+
+    def check_path(path: Path) -> None:
+        info = path.lstat()
+        if stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0) & 0x20000000:
+            raise RepositoryTrustError(f"{path.relative_to(root)} is a link or a special file")
+        if not path.resolve().is_relative_to(root):
+            raise RepositoryTrustError(f"bytecode cache {path} is outside the repository")
+
+    try:
+        while pending:
+            with os.scandir(pending.pop()) as entries:
+                for entry in entries:
+                    path = Path(entry.path)
+                    relative = path.relative_to(root)
+                    if entry.name in _MADE_ANYWHERE or (len(relative.parts) == 1 and entry.name in _MADE_AT_TOP):
+                        continue
+                    info = entry.stat(follow_symlinks=False)
+                    if getattr(info, "st_reparse_tag", 0) & 0x20000000:
+                        raise RepositoryTrustError(f"{relative.as_posix()} is a link or a special file")
+                    cached = "__pycache__" in relative.parts
+                    if stat.S_ISDIR(info.st_mode):
+                        pending.append(path)
+                        if cached:
+                            folders.append(path)
+                    elif stat.S_ISREG(info.st_mode):
+                        if "__pycache__" in relative.parts[:-1]:
+                            files.append(path)
+                    else:
+                        raise RepositoryTrustError(f"{relative.as_posix()} is a link or a special file")
+        for path in files:
+            check_path(path)
+            path.unlink()
+        for path in sorted(folders, key=lambda path: len(path.parts), reverse=True):
+            check_path(path)
+            path.rmdir()
+    except OSError as exc:
+        raise RepositoryTrustError(f"cannot clear bytecode caches in {root}: {exc}") from exc
+
+
 def tree_digest(root: Path) -> str:
     """The digest of a tree's content: sha256 over one line per regular file,
     sorted by POSIX relative path, `<path>\\0<sha256 of the file>\\n`. Empty
@@ -315,7 +365,9 @@ def consented(content_sha256: str | None) -> bool:
 def authorize_scripts(base: Path, executed: Iterable[str] = ()) -> dict[str, Any] | None:
     """Everything before a repository's script runs: its scripts are those of
     the verified download (verify_scripts) and the user agreed to run them.
+    Disposable bytecode caches are removed first, not trusted or ignored.
     Raises ConsentNeeded for a verified repository without consent."""
+    clear_bytecode_caches(base)
     marker = verify_scripts(base, executed)
     if marker is None:
         if not consented(None):

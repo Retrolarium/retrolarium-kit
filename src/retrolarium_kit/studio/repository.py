@@ -1118,6 +1118,7 @@ def _reverify(game_id: str, catalog: Mapping[str, Any], entry: Mapping[str, Any]
     verified. Anything else leaves it unverified (its scripts do not run).
     Changed scripts are remembered, so later builds refuse them at once; a
     failed download is not, so the next build tries again."""
+    repository_trust.clear_bytecode_caches(target)
     scripts = repository_trust.scripts_digest(repository_trust.script_files(target))
     reason = _refusal(target, entry, scripts)
     if reason is not None:

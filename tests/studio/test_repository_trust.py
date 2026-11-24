@@ -339,6 +339,28 @@ class FetchTests(unittest.TestCase):
             fetch_repository("probe", self.games)
         self.assertEqual(COMMIT, repository_trust.read_marker(target)["commit"])
 
+    def test_an_older_download_with_bytecode_is_verified_and_clears_its_old_refusal(self) -> None:
+        target = write_tree(
+            self.games / "probe_src",
+            {
+                **FILES,
+                "scripts/build/__pycache__/helper.pyc": b"old cache",
+                "hack/v1/edits.json": b"edited",
+            },
+        )
+        entry = catalog(expected_digest(FILES))["games"]["probe"]
+        scripts = repository_trust.scripts_digest(repository_trust.script_files(target))
+        repository._record_refusal(target, entry, scripts, "old cache was not in the archive")
+        archive = write_archive(self.root / "pinned.zip", FILES)
+        with mock.patch("urllib.request.urlopen", side_effect=self.serving(archive)) as download:
+            repository.ensure_repository_verified(target)
+            repository.ensure_repository_verified(target)
+        self.assertEqual(1, download.call_count)
+        self.assertIsNotNone(repository_trust.read_marker(target))
+        self.assertFalse((target / "scripts/build/__pycache__").exists())
+        self.assertFalse((target / repository.REFUSAL).exists())
+        self.assertEqual(b"edited", (target / "hack/v1/edits.json").read_bytes())
+
     def test_an_older_download_with_other_scripts_stays_unverified(self) -> None:
         target = write_tree(
             self.games / "probe_src",
@@ -556,6 +578,126 @@ class ScriptVerificationTests(unittest.TestCase):
             },
         )
         self.assertEqual(1, self.run_split().call_count)
+
+    def test_a_manual_python_run_does_not_prevent_the_next_authorized_run(self) -> None:
+        environment = dict(os.environ)
+        environment.pop("PYTHONDONTWRITEBYTECODE", None)
+        environment.pop("PYTHONPYCACHEPREFIX", None)
+        subprocess.run(
+            [sys.executable, "-c", "import sys; sys.path.insert(0, 'scripts'); import build"],
+            cwd=self.root,
+            env=environment,
+            check=True,
+            capture_output=True,
+        )
+        cache = self.root / "scripts/build/__pycache__"
+        self.assertTrue(list(cache.glob("*.pyc")))
+        self.assertEqual(1, self.run_split().call_count)
+        self.assertFalse(cache.exists())
+        self.assertEqual(1, self.run_split().call_count)
+
+    def test_snapshot_bytecode_is_removed_before_authorization(self) -> None:
+        snapshot = write_tree(
+            self.root / ".retrolarium/base/source",
+            {
+                "scripts/split.py": FILES["scripts/split.py"],
+                "scripts/__pycache__/split.pyc": b"old cache",
+                "__pycache__/nested/extra.pyc": b"old cache",
+            },
+        )
+        repository_trust.authorize_scripts(snapshot, ["scripts/split.py"])
+        self.assertFalse((snapshot / "scripts/__pycache__").exists())
+        self.assertFalse((snapshot / "__pycache__").exists())
+
+    def test_a_bytecode_cache_that_cannot_be_cleared_stops_the_run(self) -> None:
+        write_tree(self.root, {"scripts/__pycache__/split.pyc": b"old cache"})
+        with (
+            mock.patch.object(Path, "unlink", side_effect=PermissionError("cache is read-only")),
+            mock.patch.object(repository.subprocess, "run") as run,
+            self.assertRaisesRegex(RepositoryTrustError, "cache.*read-only"),
+        ):
+            repository._run(self.descriptor, ["scripts/split.py"], self.root / "image.bin")
+        run.assert_not_called()
+
+    def test_only_disposable_bytecode_caches_are_removed(self) -> None:
+        kept = {f"{folder}/__pycache__/kept.pyc": b"kept" for folder in (".git", "hack", "build", ".retrolarium")}
+        kept["notes/__pycache__"] = b"an ordinary file, not a cache folder"
+        write_tree(self.root, {**kept, "scripts/__pycache__/old.pyc": b"old cache"})
+        repository_trust.authorize_scripts(self.root, ["scripts/split.py"])
+        self.assertFalse((self.root / "scripts/__pycache__").exists())
+        for name, content in kept.items():
+            self.assertEqual(content, (self.root / name).read_bytes())
+
+    def test_bytecode_outside_a_cache_still_prevents_authorization(self) -> None:
+        path = write_tree(self.root, {"tools/helper.pyc": b"standalone bytecode"}) / "tools/helper.pyc"
+        with self.assertRaisesRegex(RepositoryTrustError, "is not part of"):
+            repository_trust.authorize_scripts(self.root, ["scripts/split.py"])
+        self.assertEqual(b"standalone bytecode", path.read_bytes())
+
+    def test_a_linked_bytecode_cache_is_refused_without_touching_its_target(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            outside = Path(folder)
+            sentinel = outside / "keep.txt"
+            sentinel.write_bytes(b"kept")
+            cache = self.root / "scripts/__pycache__"
+            if os.name == "nt":
+                import _winapi
+
+                _winapi.CreateJunction(str(outside), str(cache))
+                self.addCleanup(cache.rmdir)
+            else:
+                cache.symlink_to(outside, target_is_directory=True)
+                self.addCleanup(cache.unlink)
+            with self.assertRaisesRegex(RepositoryTrustError, "link|special file"):
+                repository_trust.authorize_scripts(self.root, ["scripts/split.py"])
+            self.assertEqual(b"kept", sentinel.read_bytes())
+
+    def test_flicky_build_steps_can_run_twice_without_creating_bytecode(self) -> None:
+        from retrolarium_kit.games.flicky.workspace import build
+
+        write_tree(self.root, {"scripts/run.py": b"import build\n"})
+        marker = repository_trust.read_marker(self.root)
+        repository_trust.write_marker(
+            self.root,
+            game="probe",
+            repository="probe_src",
+            commit=COMMIT,
+            content_sha256=marker["content_sha256"],
+            url=marker["url"],
+            expected_scripts=repository_trust.script_files(self.root),
+        )
+        staged = self.root / "build/content/src"
+        staged.mkdir(parents=True)
+        levels = self.root / "levels.json"
+        levels.write_text("{}", encoding="utf-8")
+        writer = self.root / "writer"
+        actual_process = build._process
+
+        def process(command, root, env=None):
+            if command[0] == str(writer):
+                return subprocess.CompletedProcess(command, 0, "")
+            self.assertEqual("1", env.get("PYTHONDONTWRITEBYTECODE"))
+            self.assertEqual(str(self.root), env.get("AS_MSGPATH"))
+            return actual_process(command, root, env)
+
+        with contextlib.ExitStack() as patches:
+            patches.enter_context(mock.patch.dict(os.environ, {"PYTHONDONTWRITEBYTECODE": "0"}))
+            patches.enter_context(mock.patch.object(build, "_process", side_effect=process))
+            patches.enter_context(mock.patch.object(build, "validate_workspace"))
+            patches.enter_context(mock.patch.object(build, "stage_sources", return_value=staged / "main.s"))
+            patches.enter_context(mock.patch.object(build, "workspace_path", return_value=levels))
+            for module, names in (
+                (build, ("stage_attract_demos", "stage_title_layout", "stage_bonus_motion")),
+                (build.graphics, ("load_document", "build_assets", "redirect_includes")),
+                (build.semantics, ("load_document", "apply_document")),
+                (build.sequences, ("load_document", "apply_document")),
+            ):
+                for name in names:
+                    patches.enter_context(mock.patch.object(module, name))
+            for _ in range(2):
+                repository_trust.authorize_scripts(self.root, ["scripts/run.py"])
+                build.build_content(self.root, as_bin=self.root / "asl", p2bin=self.root / "p2bin", level_writer=writer)
+                self.assertFalse((self.root / "scripts/build/__pycache__").exists())
 
     def test_a_changed_script_does_not_run(self) -> None:
         (self.root / "scripts" / "build" / "__init__.py").write_text("import os\n", encoding="utf-8")

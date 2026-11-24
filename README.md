@@ -220,6 +220,13 @@ The same variable lets a `--source` or `RETROLARIUM_GAMES_SOURCE` archive whose
 content differs from the catalog be used, unverified, for development; the
 default download is never accepted unverified.
 
+Before checking scripts or comparing an older download, the kit removes
+`__pycache__` folders inside the source tree. Links are not followed, and a
+cache that cannot be cleared stops the command. Standalone `.pyc` files remain
+subject to verification. Repository scripts run without writing new bytecode,
+including Flicky's build steps, so repeated builds do not change the verified
+script set.
+
 #### Consent before a repository's scripts run
 
 Even a verified repository's scripts run only with your consent, given per
